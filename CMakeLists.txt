@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.30)
-project(screenshoter)
+project(screenshooter)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_AUTOMOC ON)
@@ -22,12 +22,12 @@ find_package(Qt6 COMPONENTS
         Widgets
         REQUIRED)
 
-add_executable(screenshoter main.cpp
+add_executable(screenshooter main.cpp
         navbar/navbar.cpp
         navbar/navbar.h
         navbar/Navbar.ui
 )
-target_link_libraries(screenshoter
+target_link_libraries(screenshooter
         Qt::Core
         Qt::Gui
         Qt::Widgets

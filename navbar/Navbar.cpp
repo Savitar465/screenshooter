@@ -4,7 +4,7 @@
 
 // You may need to build the project (run Qt uic code generator) to get "ui_Navbar.h" resolved
 
-#include "navbar.h"
+#include "Navbar.h"
 #include "ui_Navbar.h"
 
 

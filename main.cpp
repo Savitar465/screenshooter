@@ -1,6 +1,6 @@
 #include <QApplication>
 
-#include "navbar/navbar.h"
+#include "navbar/Navbar.h"
 
 int main(int argc, char* argv[])
 {

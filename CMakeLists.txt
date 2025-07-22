@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 3.31)
 project(screenshooter)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -8,11 +8,6 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 #set(CMAKE_PREFIX_PATH "/home/jmaidana/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake")
-
-set(CMAKE_CXX_STANDARD 26)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
 
 set(CMAKE_PREFIX_PATH "C:/Qt/6.9.1/mingw_64")
 

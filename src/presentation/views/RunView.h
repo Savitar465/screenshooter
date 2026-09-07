@@ -1,0 +1,60 @@
+#pragma once
+
+#include <QWidget>
+
+class QLabel;
+class QVBoxLayout;
+class QFrame;
+class QPushButton;
+
+namespace qaflow {
+
+class TestCaseStore;
+class RunController;
+class SettingsStore;
+class ProgressCells;
+class TextArea;
+
+/// Pantalla "Ejecución": paso actual con veredicto P/F/B, registro y capturas del caso.
+class RunView : public QWidget {
+    Q_OBJECT
+public:
+    RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, QWidget* parent = nullptr);
+
+signals:
+    void captureRequested();
+    void reportBugRequested();
+    void finishedAndBack();
+    void toast(const QString& message, const QString& color);
+
+private:
+    void refresh();
+    void refreshLog();
+    void refreshShots();
+
+    TestCaseStore& m_cases;
+    RunController& m_run;
+    SettingsStore& m_settings;
+
+    QLabel* m_eyebrow;
+    QLabel* m_title;
+    QLabel* m_shortcut;
+    ProgressCells* m_progress;
+    QFrame* m_stepCard;
+    QLabel* m_stepCounter;
+    QLabel* m_action;
+    QLabel* m_expected;
+    TextArea* m_note;
+    QFrame* m_doneCard;
+    QLabel* m_verdict;
+    QLabel* m_summary;
+    QPushButton* m_reportBug;
+    QVBoxLayout* m_logLayout;
+    QLabel* m_shotsHeader;
+    QLabel* m_shotFolder;
+    QVBoxLayout* m_shotsLayout;
+    QPushButton* m_sortShots;
+    QLabel* m_empty;
+};
+
+} // namespace qaflow

@@ -1,0 +1,96 @@
+#include "RunHistoryStore.h"
+
+#include "application/TestCaseStore.h"
+
+#include <algorithm>
+
+namespace qaflow {
+
+namespace {
+/// Siguiente id "PREFIX-0001" a partir del mayor número ya usado.
+template <typename T>
+QString nextId(const QList<T>& items, const QString& prefix) {
+    int maxNum = 0;
+    for (const auto& it : items) {
+        bool ok = false;
+        const int n = it.id.mid(prefix.size()).toInt(&ok);
+        if (ok) maxNum = std::max(maxNum, n);
+    }
+    return prefix + QStringLiteral("%1").arg(maxNum + 1, 4, 10, QLatin1Char('0'));
+}
+} // namespace
+
+RunHistoryStore::RunHistoryStore(std::shared_ptr<IRunHistoryRepository> repo, TestCaseStore& cases, QObject* parent)
+    : QObject(parent), m_repo(std::move(repo)), m_cases(cases) {}
+
+void RunHistoryStore::load() {
+    auto loaded = m_repo ? m_repo->loadHistory() : std::nullopt;
+    m_history = loaded ? *loaded : RunHistory{};
+    emit historyChanged();
+}
+
+const RunRecord* RunHistoryStore::findRun(const QString& id) const {
+    auto it = std::find_if(m_history.runs.cbegin(), m_history.runs.cend(), [&](const RunRecord& r) { return r.id == id; });
+    return it == m_history.runs.cend() ? nullptr : &*it;
+}
+
+const PlanRun* RunHistoryStore::findPlan(const QString& id) const {
+    auto it = std::find_if(m_history.plans.cbegin(), m_history.plans.cend(), [&](const PlanRun& p) { return p.id == id; });
+    return it == m_history.plans.cend() ? nullptr : &*it;
+}
+
+QList<RunRecord> RunHistoryStore::runsForCase(const QString& caseId) const {
+    QList<RunRecord> out;
+    for (const auto& r : m_history.runs) if (r.caseId == caseId) out.prepend(r);
+    return out;
+}
+
+QList<RunRecord> RunHistoryStore::runsForPlan(const QString& planRunId) const {
+    QList<RunRecord> out;
+    for (const auto& r : m_history.runs) if (r.planRunId == planRunId) out.append(r);
+    return out;
+}
+
+PlanReport RunHistoryStore::report(const QString& planRunId) const {
+    const PlanRun* plan = findPlan(planRunId);
+    if (!plan) return PlanReport{};
+    return PlanReport::build(*plan, runsForPlan(planRunId), [this](const QString& caseId) {
+        const TestCase* c = m_cases.find(caseId);
+        return c ? c->title : QString();
+    });
+}
+
+QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseIds) {
+    if (caseIds.isEmpty()) return {};
+    PlanRun p;
+    p.id = nextId(m_history.plans, QStringLiteral("PR-"));
+    p.name = name;
+    p.caseIds = caseIds;
+    p.startedAt = QDateTime::currentDateTime();
+    m_history.plans.append(p);
+    persist();
+    return p.id;
+}
+
+void RunHistoryStore::finishPlan(const QString& planRunId) {
+    for (auto& p : m_history.plans) {
+        if (p.id != planRunId || p.isFinished()) continue;
+        p.finishedAt = QDateTime::currentDateTime();
+        persist();
+        return;
+    }
+}
+
+RunRecord RunHistoryStore::addRun(RunRecord record) {
+    record.id = nextId(m_history.runs, QStringLiteral("R-"));
+    m_history.runs.append(record);
+    persist();
+    return record;
+}
+
+void RunHistoryStore::persist() {
+    if (m_repo) m_repo->saveHistory(m_history);
+    emit historyChanged();
+}
+
+} // namespace qaflow

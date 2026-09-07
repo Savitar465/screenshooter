@@ -8,7 +8,7 @@ namespace qaflow {
 
 enum class Priority { Alta, Media, Baja };
 enum class CaseStatus { Listo, Borrador, Obsoleto };
-enum class RunOutcome { None, Passed, Failed };
+enum class RunOutcome { None, Passed, Failed, Blocked };
 
 QString toString(Priority p);
 QString toString(CaseStatus s);
@@ -33,7 +33,7 @@ struct LastRun {
     RunOutcome outcome = RunOutcome::None;
     QDateTime at;
 
-    /// "Pasó · hace 2 d", "Falló · ayer", "Sin ejecutar"
+    /// "Pasó · hace 2 d", "Falló · ayer", "Bloqueado · hace 3 h", "Sin ejecutar"
     QString label(const QDateTime& now = QDateTime::currentDateTime()) const;
 };
 

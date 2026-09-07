@@ -24,7 +24,8 @@ public:
 signals:
     void captureRequested();
     void reportBugRequested();
-    void finishedAndBack();
+    /// El usuario pulsó "Finalizar": la ventana decide si sigue el plan, muestra el informe o vuelve.
+    void finishRequested();
     void toast(const QString& message, const QString& color);
 
 private:
@@ -49,6 +50,7 @@ private:
     QLabel* m_verdict;
     QLabel* m_summary;
     QPushButton* m_reportBug;
+    QPushButton* m_finish;
     QVBoxLayout* m_logLayout;
     QLabel* m_shotsHeader;
     QLabel* m_shotFolder;

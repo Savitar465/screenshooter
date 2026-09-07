@@ -13,6 +13,8 @@ namespace qaflow::devsnapshot {
 
 bool requested() { return qEnvironmentVariableIsSet("QAFLOW_SNAPSHOT_DIR"); }
 
+QString dataDir() { return QDir(qEnvironmentVariable("QAFLOW_SNAPSHOT_DIR")).filePath(QStringLiteral("data")); }
+
 void run(MainWindow& window, AppContext& ctx) {
     const QString dir = qEnvironmentVariable("QAFLOW_SNAPSHOT_DIR");
     QDir().mkpath(dir);
@@ -34,6 +36,20 @@ void run(MainWindow& window, AppContext& ctx) {
             window.navigate(Screen::Run);
         }},
         {"04-bug", [&] { window.navigate(Screen::Bug); }},
+        {"07-historial-plan", [&] {
+            ctx.run->finish();   // archiva TC-104 como ejecución suelta
+            ctx.run->startSequence({QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión Sprint 14"));
+            ctx.run->mark(StepResult::Pass);
+            ctx.run->setNote(QStringLiteral("El descuento no se refleja en el resumen"));
+            ctx.run->mark(StepResult::Fail);
+            ctx.run->finish();
+            ctx.run->mark(StepResult::Pass);
+            ctx.run->finish();
+            ctx.run->setNote(QStringLiteral("El servicio de notificaciones está caído en staging"));
+            ctx.run->mark(StepResult::Block);
+            window.finishRun();   // termina el plan y abre su informe
+        }},
+        {"08-historial-caso", [&] { window.navigate(Screen::Casos); ctx.cases->select(QStringLiteral("TC-102")); }},
         {"05-ajustes", [&] { window.navigate(Screen::Ajustes); window.showToast(QStringLiteral("Captura guardada en ~/QAflow/capturas"), QStringLiteral("#06b6d4")); }},
         {"06-casos-en-ejecucion", [&] { window.navigate(Screen::Casos); }},
     };

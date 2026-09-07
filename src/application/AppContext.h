@@ -4,6 +4,7 @@
 #include "application/EvidenceService.h"
 #include "application/PlanStore.h"
 #include "application/RunController.h"
+#include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
 
@@ -15,6 +16,7 @@ struct AppContext {
     TestCaseStore* cases = nullptr;
     PlanStore* plan = nullptr;
     RunController* run = nullptr;
+    RunHistoryStore* history = nullptr;
     SettingsStore* settings = nullptr;
     EvidenceService* evidence = nullptr;
     BugReportService* bugs = nullptr;

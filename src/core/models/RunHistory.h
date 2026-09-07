@@ -1,0 +1,63 @@
+#pragma once
+
+#include "core/models/TestRun.h"
+
+#include <QDateTime>
+#include <QList>
+#include <QString>
+#include <QStringList>
+
+namespace qaflow {
+
+QString toString(StepResult r);
+QString toString(Verdict v);
+StepResult stepResultFromString(const QString& s);
+Verdict verdictFromString(const QString& s);
+
+/// "45 s", "4 min 12 s", "1 h 05 min".
+QString formatDuration(qint64 secs);
+
+/// Un paso tal y como se ejecutó: el texto de ese momento, su resultado y la nota del tester.
+struct RunRecordStep {
+    QString action;
+    QString expected;
+    StepResult result = StepResult::Pass;
+    QString note;
+};
+
+/// Ejecución terminada de un caso. Es una instantánea: no cambia aunque el caso se edite después.
+struct RunRecord {
+    QString id;               // R-0001
+    QString caseId;           // TC-104
+    QString caseTitle;
+    QString suite;
+    QString planRunId;        // vacío si el caso se ejecutó suelto
+    QDateTime startedAt;
+    QDateTime finishedAt;
+    Verdict verdict = Verdict::Superado;
+    QList<RunRecordStep> steps;   // sólo los pasos que llegaron a ejecutarse
+    int plannedSteps = 0;         // pasos que tenía el caso ("3 de 5" cuando se bloquea)
+
+    int count(StepResult r) const;
+    qint64 durationSecs() const { return startedAt.isValid() && finishedAt.isValid() ? startedAt.secsTo(finishedAt) : 0; }
+    bool hasNotes() const;
+};
+
+/// Ejecución de un plan de pruebas: agrupa los RunRecord con el mismo planRunId.
+struct PlanRun {
+    QString id;               // PR-0001
+    QString name;
+    QStringList caseIds;      // composición del plan al arrancar, en orden de ejecución
+    QDateTime startedAt;
+    QDateTime finishedAt;     // inválida mientras el plan sigue en curso
+
+    bool isFinished() const { return finishedAt.isValid(); }
+};
+
+/// Todo el historial. Un único agregado para que la persistencia sea trivial.
+struct RunHistory {
+    QList<RunRecord> runs;
+    QList<PlanRun> plans;
+};
+
+} // namespace qaflow

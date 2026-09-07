@@ -15,17 +15,19 @@ namespace qaflow {
 
 class TestCaseStore;
 class RunController;
+class RunHistoryStore;
 class TextArea;
 
 /// Pantalla "Casos de prueba": lista filtrable a la izquierda y editor del caso a la derecha.
 class CasesView : public QWidget {
     Q_OBJECT
 public:
-    CasesView(TestCaseStore& store, RunController& run, QWidget* parent = nullptr);
+    CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, QWidget* parent = nullptr);
 
 signals:
     void runRequested(const QString& caseId);
     void captureRequested();
+    void historyRequested(const QString& caseId);
     void toast(const QString& message, const QString& color);
 
 private:
@@ -36,11 +38,13 @@ private:
     void loadEditor();
     void refreshSteps();
     void refreshShots();
+    void refreshHistory();
     void onCaseChanged(const QString& id);
     void edit(const std::function<void()>& mutation);
 
     TestCaseStore& m_store;
     RunController& m_run;
+    RunHistoryStore& m_history;
     QString m_search;
     QString m_suite = QStringLiteral("Todas");
     bool m_selfEdit = false;
@@ -64,6 +68,8 @@ private:
     QPushButton* m_sortShots = nullptr;
     QGridLayout* m_shotsGrid = nullptr;
     QWidget* m_shotsContainer = nullptr;
+    QLabel* m_historyHeader = nullptr;
+    QVBoxLayout* m_historyLayout = nullptr;
 };
 
 } // namespace qaflow

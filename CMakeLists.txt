@@ -20,7 +20,12 @@ set(CORE_SOURCES
         src/core/models/BugReport.cpp
         src/core/models/Settings.h
         src/core/models/Settings.cpp
+        src/core/models/RunHistory.h
+        src/core/models/RunHistory.cpp
+        src/core/models/PlanReport.h
+        src/core/models/PlanReport.cpp
         src/core/services/ITestCaseRepository.h
+        src/core/services/IRunHistoryRepository.h
         src/core/services/ISettingsRepository.h
         src/core/services/IScreenCapture.h
         src/core/services/IIssueTracker.h
@@ -35,6 +40,8 @@ set(APPLICATION_SOURCES
         src/application/TestCaseStore.cpp
         src/application/RunController.h
         src/application/RunController.cpp
+        src/application/RunHistoryStore.h
+        src/application/RunHistoryStore.cpp
         src/application/PlanStore.h
         src/application/PlanStore.cpp
         src/application/SettingsStore.h
@@ -49,6 +56,8 @@ set(APPLICATION_SOURCES
 set(INFRASTRUCTURE_SOURCES
         src/infrastructure/persistence/JsonTestCaseRepository.h
         src/infrastructure/persistence/JsonTestCaseRepository.cpp
+        src/infrastructure/persistence/JsonRunHistoryRepository.h
+        src/infrastructure/persistence/JsonRunHistoryRepository.cpp
         src/infrastructure/persistence/QSettingsRepository.h
         src/infrastructure/persistence/QSettingsRepository.cpp
         src/infrastructure/capture/ScreenCaptureService.h
@@ -89,6 +98,8 @@ set(PRESENTATION_SOURCES
         src/presentation/views/CasesView.cpp
         src/presentation/views/RunView.h
         src/presentation/views/RunView.cpp
+        src/presentation/views/HistoryView.h
+        src/presentation/views/HistoryView.cpp
         src/presentation/views/BugView.h
         src/presentation/views/BugView.cpp
         src/presentation/views/PlanView.h

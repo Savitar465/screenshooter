@@ -1,6 +1,7 @@
 #include "CasesView.h"
 
 #include "application/RunController.h"
+#include "application/RunHistoryStore.h"
 #include "application/TestCaseStore.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/FlowLayout.h"
@@ -29,6 +30,7 @@ QString statusColor(CaseStatus s) {
 QString lastRunColor(const LastRun& lr) {
     if (lr.outcome == RunOutcome::Passed) return theme::Green;
     if (lr.outcome == RunOutcome::Failed) return theme::Red;
+    if (lr.outcome == RunOutcome::Blocked) return theme::Amber;
     return theme::Muted;
 }
 QWidget* fieldCell(const QString& title, QWidget* field) {
@@ -41,7 +43,8 @@ QWidget* fieldCell(const QString& title, QWidget* field) {
 }
 } // namespace
 
-CasesView::CasesView(TestCaseStore& store, RunController& run, QWidget* parent) : QWidget(parent), m_store(store), m_run(run) {
+CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, QWidget* parent)
+    : QWidget(parent), m_store(store), m_run(run), m_history(history) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildEditor(root);
@@ -50,6 +53,7 @@ CasesView::CasesView(TestCaseStore& store, RunController& run, QWidget* parent) 
     connect(&m_store, &TestCaseStore::selectionChanged, this, [this](const QString&) { refreshList(); loadEditor(); });
     connect(&m_store, &TestCaseStore::caseChanged, this, &CasesView::onCaseChanged);
     connect(&m_run, &RunController::runChanged, this, &CasesView::refreshList);
+    connect(&m_history, &RunHistoryStore::historyChanged, this, &CasesView::refreshHistory);
     refreshFilters();
     refreshList();
     loadEditor();
@@ -217,6 +221,23 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     shv->addWidget(m_shotsContainer);
     v->addWidget(shotsBlock);
 
+    // Últimas ejecuciones
+    auto* histBlock = new QWidget;
+    auto* hv2 = ui::vbox(histBlock, 0, 8);
+    auto* histHead = new QWidget;
+    auto* hhh = ui::hbox(histHead, 0, 8);
+    m_historyHeader = ui::label(QString(), "eyebrow");
+    hhh->addWidget(m_historyHeader, 1);
+    auto* all = ui::button(QStringLiteral("Ver historial"), "outline");
+    all->setStyleSheet(QStringLiteral("padding:5px 10px;font-size:12px;border-radius:8px;"));
+    connect(all, &QPushButton::clicked, this, [this]() { if (!m_store.selectedId().isEmpty()) emit historyRequested(m_store.selectedId()); });
+    hhh->addWidget(all);
+    hv2->addWidget(histHead);
+    auto* histList = new QWidget;
+    m_historyLayout = ui::vbox(histList, 0, 6);
+    hv2->addWidget(histList);
+    v->addWidget(histBlock);
+
     root->addWidget(sa, 1);
 }
 
@@ -312,6 +333,7 @@ void CasesView::loadEditor() {
     m_selfEdit = false;
     refreshSteps();
     refreshShots();
+    refreshHistory();
 }
 
 void CasesView::refreshSteps() {
@@ -372,6 +394,33 @@ void CasesView::refreshShots() {
         m_shotsGrid->addWidget(card, i / columns, i % columns);
     }
     for (int col = 0; col < columns; ++col) m_shotsGrid->setColumnStretch(col, 1);
+}
+
+void CasesView::refreshHistory() {
+    ui::clearLayout(m_historyLayout);
+    const TestCase* c = m_store.selected();
+    if (!c) return;
+    const auto runs = m_history.runsForCase(c->id);
+    m_historyHeader->setText(QStringLiteral("ÚLTIMAS EJECUCIONES · %1").arg(runs.size()));
+    if (runs.isEmpty()) {
+        m_historyLayout->addWidget(ui::label(QStringLiteral("Este caso todavía no se ha ejecutado."), "muted-sm"));
+        return;
+    }
+    constexpr int kMax = 5;
+    for (int i = 0; i < runs.size() && i < kMax; ++i) {
+        const RunRecord& r = runs[i];
+        auto* row = ui::card("card-flat");
+        auto* h = ui::hbox(row, 0, 10);
+        h->setContentsMargins(10, 7, 10, 7);
+        const QString color = r.verdict == Verdict::Superado ? theme::Green : r.verdict == Verdict::Fallido ? theme::Red : theme::Amber;
+        h->addWidget(ui::pill(toString(r.verdict).toUpper(), color, r.verdict == Verdict::Fallido ? QStringLiteral("#ffffff") : theme::Bg));
+        h->addWidget(ui::label(r.finishedAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")), "muted-sm"));
+        h->addWidget(ui::label(QStringLiteral("%1/%2 pasos · %3").arg(r.steps.size()).arg(r.plannedSteps).arg(formatDuration(r.durationSecs())), "muted-sm"));
+        h->addStretch(1);
+        const PlanRun* p = r.planRunId.isEmpty() ? nullptr : m_history.findPlan(r.planRunId);
+        h->addWidget(ui::label(p ? p->name : QStringLiteral("Ejecución suelta"), "muted-sm"));
+        m_historyLayout->addWidget(row);
+    }
 }
 
 void CasesView::onCaseChanged(const QString& id) {

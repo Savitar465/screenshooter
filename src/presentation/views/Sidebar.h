@@ -14,11 +14,12 @@ namespace qaflow {
 class TestCaseStore;
 class PlanStore;
 class RunController;
+class RunHistoryStore;
 
 class Sidebar : public QFrame {
     Q_OBJECT
 public:
-    Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, QWidget* parent = nullptr);
+    Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunHistoryStore& history, QWidget* parent = nullptr);
     void setActive(Screen s);
 
 signals:
@@ -31,6 +32,7 @@ private:
     TestCaseStore& m_cases;
     PlanStore& m_plan;
     RunController& m_run;
+    RunHistoryStore& m_history;
     Screen m_active = Screen::Casos;
 
     QMap<Screen, QPushButton*> m_buttons;

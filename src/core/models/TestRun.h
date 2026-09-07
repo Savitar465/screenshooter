@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QDateTime>
 #include <QList>
 #include <QString>
 
@@ -19,6 +20,7 @@ struct RunState {
     int idx = 0;             // paso actual (0-based)
     QList<StepRecord> results;
     QString note;            // observación del paso actual
+    QDateTime startedAt;
     bool finished = false;
 
     bool isActive() const { return !caseId.isEmpty() && !finished; }

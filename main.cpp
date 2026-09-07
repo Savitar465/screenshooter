@@ -5,6 +5,7 @@
 #include "application/AppContext.h"
 #include "infrastructure/capture/ScreenCaptureService.h"
 #include "infrastructure/jira/JiraClient.h"
+#include "infrastructure/persistence/JsonRunHistoryRepository.h"
 #include "infrastructure/persistence/JsonTestCaseRepository.h"
 #include "infrastructure/persistence/QSettingsRepository.h"
 #include "presentation/DevSnapshot.h"
@@ -40,8 +41,10 @@ int main(int argc, char* argv[]) {
     using namespace qaflow;
 
     // Infraestructura
-    const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QString dataDir = devsnapshot::requested() ? devsnapshot::dataDir()
+                                                     : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     auto caseRepo = std::make_shared<JsonTestCaseRepository>(dataDir);
+    auto historyRepo = std::make_shared<JsonRunHistoryRepository>(dataDir);
     auto settingsRepo = std::make_shared<QSettingsRepository>();
     auto jira = std::make_shared<JiraClient>();
     auto capture = std::make_shared<ScreenCaptureService>();
@@ -49,18 +52,21 @@ int main(int argc, char* argv[]) {
     // Aplicación
     TestCaseStore cases(caseRepo);
     SettingsStore settings(settingsRepo);
-    RunController run(cases);
+    RunHistoryStore history(historyRepo, cases);
+    RunController run(cases, history);
     PlanStore plan(caseRepo, cases);
     BugReportService bugs(jira, cases, run, settings);
     EvidenceService evidence(capture, cases, run, settings);
     cases.load();
     settings.load();
     plan.load();
+    history.load();
 
     AppContext ctx;
     ctx.cases = &cases;
     ctx.plan = &plan;
     ctx.run = &run;
+    ctx.history = &history;
     ctx.settings = &settings;
     ctx.bugs = &bugs;
     ctx.evidence = &evidence;

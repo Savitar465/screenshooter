@@ -33,12 +33,13 @@ ctest --test-dir build --output-on-failure
 | Casos de prueba   | Lista filtrable por suite y búsqueda; editor de título, metadatos, precondiciones, pasos y evidencias |
 | Plan de pruebas   | Selección de casos, estimación (3 min/paso) y arranque de la ejecución encadenada |
 | Ejecución         | Paso actual con Pasa / Falla / Bloqueado (teclas P / F / B), observaciones, registro y capturas |
+| Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración) e informes de plan con exportación a Markdown |
 | Reportar bug      | Formulario prellenado con el paso fallido; crea el issue en Jira y sube las capturas |
 | Ajustes           | Conexión Jira (URL, proyecto, correo, token) y preferencias de captura (atajo, formato, modo, carpeta) |
 
 ## Dónde se guardan los datos
 
-* Casos y plan: directorio de datos de la aplicación (`~/.local/share/QAflow/QAflow/` en Linux).
+* Casos, plan e historial de ejecuciones: directorio de datos de la aplicación (`~/.local/share/QAflow/QAflow/` en Linux).
 * Ajustes: `~/.config/QAflow/QAflow.conf`.
 * Capturas: carpeta configurable, por defecto `~/QAflow/capturas`.
 

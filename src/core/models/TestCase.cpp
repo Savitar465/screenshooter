@@ -34,7 +34,9 @@ CaseStatus statusFromString(const QString& s) {
 
 QString LastRun::label(const QDateTime& now) const {
     if (outcome == RunOutcome::None || !at.isValid()) return QStringLiteral("Sin ejecutar");
-    const QString verb = outcome == RunOutcome::Passed ? QStringLiteral("Pasó") : QStringLiteral("Falló");
+    const QString verb = outcome == RunOutcome::Passed ? QStringLiteral("Pasó")
+                       : outcome == RunOutcome::Failed ? QStringLiteral("Falló")
+                                                       : QStringLiteral("Bloqueado");
 
     const qint64 secs = at.secsTo(now);
     QString when;

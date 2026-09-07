@@ -13,6 +13,7 @@ struct AppContext;
 class Sidebar;
 class CasesView;
 class RunView;
+class HistoryView;
 class BugView;
 class PlanView;
 class SettingsView;
@@ -27,6 +28,8 @@ public:
     explicit MainWindow(AppContext& ctx, QWidget* parent = nullptr);
 
     void navigate(Screen s);
+    /// Acción "Finalizar" de la ejecución: sigue con el plan, muestra su informe o vuelve a los casos.
+    void finishRun();
     void showToast(const QString& message, const QString& color);
 
 protected:
@@ -42,6 +45,7 @@ private:
     CasesView* m_cases;
     PlanView* m_plan;
     RunView* m_run;
+    HistoryView* m_history;
     BugView* m_bug;
     SettingsView* m_settings;
     Toast* m_toast;

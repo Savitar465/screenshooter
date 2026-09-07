@@ -12,6 +12,8 @@ struct AppContext;
 /// Útil para revisar el diseño sin interacción (p. ej. con QT_QPA_PLATFORM=offscreen).
 namespace devsnapshot {
 bool requested();
+/// Directorio de datos aislado para que las capturas no toquen los datos reales del usuario.
+QString dataDir();
 void run(MainWindow& window, AppContext& ctx);
 } // namespace devsnapshot
 

@@ -22,7 +22,7 @@ QJsonObject toJson(const TestCase& c) {
         {"preconditions", c.preconditions}, {"steps", steps}, {"shots", shots},
     };
     if (c.lastRun.outcome != RunOutcome::None) {
-        o["lastRunOutcome"] = c.lastRun.outcome == RunOutcome::Passed ? "passed" : "failed";
+        o["lastRunOutcome"] = c.lastRun.outcome == RunOutcome::Passed ? "passed" : c.lastRun.outcome == RunOutcome::Blocked ? "blocked" : "failed";
         o["lastRunAt"] = c.lastRun.at.toString(Qt::ISODate);
     }
     return o;
@@ -46,7 +46,7 @@ TestCase fromJson(const QJsonObject& o) {
     }
     const QString outcome = o["lastRunOutcome"].toString();
     if (!outcome.isEmpty()) {
-        c.lastRun.outcome = outcome == "passed" ? RunOutcome::Passed : RunOutcome::Failed;
+        c.lastRun.outcome = outcome == "passed" ? RunOutcome::Passed : outcome == "blocked" ? RunOutcome::Blocked : RunOutcome::Failed;
         c.lastRun.at = QDateTime::fromString(o["lastRunAt"].toString(), Qt::ISODate);
     }
     return c;

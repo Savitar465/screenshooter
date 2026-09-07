@@ -5,11 +5,15 @@ set(QAFLOW_TESTABLE_SOURCES
         ${CMAKE_SOURCE_DIR}/src/core/models/TestCase.cpp
         ${CMAKE_SOURCE_DIR}/src/core/models/BugReport.cpp
         ${CMAKE_SOURCE_DIR}/src/core/models/Settings.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/models/RunHistory.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/models/PlanReport.cpp
         ${CMAKE_SOURCE_DIR}/src/application/SeedData.cpp
         ${CMAKE_SOURCE_DIR}/src/application/TestCaseStore.h
         ${CMAKE_SOURCE_DIR}/src/application/TestCaseStore.cpp
         ${CMAKE_SOURCE_DIR}/src/application/RunController.h
         ${CMAKE_SOURCE_DIR}/src/application/RunController.cpp
+        ${CMAKE_SOURCE_DIR}/src/application/RunHistoryStore.h
+        ${CMAKE_SOURCE_DIR}/src/application/RunHistoryStore.cpp
         ${CMAKE_SOURCE_DIR}/src/application/PlanStore.h
         ${CMAKE_SOURCE_DIR}/src/application/PlanStore.cpp
 )

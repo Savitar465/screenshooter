@@ -160,11 +160,11 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     connect(m_reportBug, &QPushButton::clicked, this, &RunView::reportBugRequested);
     auto* repeat = ui::button(QStringLiteral("Repetir"), "outline");
     connect(repeat, &QPushButton::clicked, this, [this]() { m_run.restart(); });
-    auto* back = ui::button(QStringLiteral("Finalizar y volver"), "outline");
-    connect(back, &QPushButton::clicked, this, [this]() { m_run.finish(); emit finishedAndBack(); });
+    m_finish = ui::button(QStringLiteral("Finalizar y volver"), "outline");
+    connect(m_finish, &QPushButton::clicked, this, &RunView::finishRequested);
     dh->addWidget(m_reportBug);
     dh->addWidget(repeat);
-    dh->addWidget(back);
+    dh->addWidget(m_finish);
     v->addWidget(m_doneCard);
 
     m_empty = ui::label(QStringLiteral("No hay ninguna ejecución activa. Abre un caso y pulsa ▶ Ejecutar."), "muted");
@@ -266,6 +266,9 @@ void RunView::refresh() {
         m_summary->setText(QStringLiteral("%1 pasan · %2 fallan · %3 bloqueados")
                                .arg(r.count(StepResult::Pass)).arg(r.count(StepResult::Fail)).arg(r.count(StepResult::Block)));
         m_reportBug->setVisible(r.count(StepResult::Fail) > 0);
+        m_finish->setText(m_run.queuedCount() > 0 ? QStringLiteral("Siguiente caso · quedan %1").arg(m_run.queuedCount())
+                          : !m_run.planRunId().isEmpty() ? QStringLiteral("Terminar plan y ver informe")
+                                                          : QStringLiteral("Finalizar y volver"));
     }
     refreshLog();
     refreshShots();

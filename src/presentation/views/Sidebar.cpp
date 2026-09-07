@@ -2,6 +2,7 @@
 
 #include "application/PlanStore.h"
 #include "application/RunController.h"
+#include "application/RunHistoryStore.h"
 #include "application/TestCaseStore.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/Ui.h"
@@ -12,8 +13,8 @@
 
 namespace qaflow {
 
-Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, QWidget* parent)
-    : QFrame(parent), m_cases(cases), m_plan(plan), m_run(run) {
+Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunHistoryStore& history, QWidget* parent)
+    : QFrame(parent), m_cases(cases), m_plan(plan), m_run(run), m_history(history) {
     ui::setRole(this, "sidebar");
     setFixedWidth(220);
     auto* v = ui::vbox(this, 12, 6);
@@ -40,6 +41,7 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, QWid
     v->addWidget(navButton(Screen::Casos, QStringLiteral("Casos de prueba"), theme::Violet));
     v->addWidget(navButton(Screen::Plan, QStringLiteral("Plan de pruebas"), theme::Amber));
     v->addWidget(navButton(Screen::Run, QStringLiteral("Ejecución"), theme::Green));
+    v->addWidget(navButton(Screen::Historial, QStringLiteral("Historial"), theme::Blue));
     v->addWidget(navButton(Screen::Bug, QStringLiteral("Reportar bug"), theme::Red));
     v->addWidget(navButton(Screen::Ajustes, QStringLiteral("Ajustes"), theme::Cyan));
     v->addStretch(1);
@@ -85,6 +87,7 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, QWid
     connect(&m_cases, &TestCaseStore::caseChanged, this, &Sidebar::refresh);
     connect(&m_plan, &PlanStore::planChanged, this, &Sidebar::refresh);
     connect(&m_run, &RunController::runChanged, this, &Sidebar::refresh);
+    connect(&m_history, &RunHistoryStore::historyChanged, this, &Sidebar::refresh);
     refresh();
 }
 
@@ -122,6 +125,7 @@ void Sidebar::refresh() {
     const int total = m_cases.cases().size();
     m_counts[Screen::Casos]->setText(QString::number(total));
     m_counts[Screen::Plan]->setText(QString::number(m_plan.orderedCaseIds().size()));
+    m_counts[Screen::Historial]->setText(m_history.runs().isEmpty() ? QString() : QString::number(m_history.runs().size()));
     const RunState& r = m_run.state();
     m_counts[Screen::Run]->setText(r.caseId.isEmpty() || r.results.isEmpty() ? QString()
                                    : QStringLiteral("%1/%2").arg(r.results.size()).arg(m_run.totalSteps()));

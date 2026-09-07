@@ -20,7 +20,7 @@ PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOf
         if (run.planRunId != plan.id) continue;
         const auto it = latest.constFind(run.caseId);
         if (it == latest.cend() || (*it)->finishedAt < run.finishedAt) latest[run.caseId] = &run;
-        r.durationSecs += run.durationSecs();
+        r.durationSecs += run.durationSecs;
     }
 
     for (const auto& caseId : plan.caseIds) {
@@ -67,7 +67,7 @@ QString PlanReport::toMarkdown() const {
         out << QStringLiteral("| %1 | %2 | %3 | %4 | %5/%6 | %7 |")
                    .arg(row.caseId, row.title, row.suite, toString(row.run.verdict))
                    .arg(row.run.steps.size()).arg(row.run.plannedSteps)
-                   .arg(formatDuration(row.run.durationSecs()));
+                   .arg(formatDuration(row.run.durationSecs));
     }
 
     for (const auto& row : rows) {

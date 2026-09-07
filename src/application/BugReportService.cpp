@@ -29,6 +29,7 @@ BugReport BugReportService::draftFromCurrentContext() const {
         b.actual = r.results[failIdx].note;
     }
     for (const auto& s : c->shots) b.attachmentPaths << s.path;
+    b.linkedStoryKey = c->jiraKey;
     return b;
 }
 

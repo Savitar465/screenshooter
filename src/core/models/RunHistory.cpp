@@ -7,6 +7,7 @@ QString toString(StepResult r) {
         case StepResult::Pass: return QStringLiteral("Pasa");
         case StepResult::Fail: return QStringLiteral("Falla");
         case StepResult::Block: return QStringLiteral("Bloqueado");
+        case StepResult::Skip: return QStringLiteral("N/A");
     }
     return {};
 }
@@ -23,6 +24,7 @@ QString toString(Verdict v) {
 StepResult stepResultFromString(const QString& s) {
     if (s.compare(QStringLiteral("Falla"), Qt::CaseInsensitive) == 0) return StepResult::Fail;
     if (s.compare(QStringLiteral("Bloqueado"), Qt::CaseInsensitive) == 0) return StepResult::Block;
+    if (s.compare(QStringLiteral("N/A"), Qt::CaseInsensitive) == 0) return StepResult::Skip;
     return StepResult::Pass;
 }
 

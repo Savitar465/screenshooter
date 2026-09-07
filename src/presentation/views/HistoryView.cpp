@@ -41,6 +41,7 @@ QString resultColor(StepResult r) {
         case StepResult::Pass: return theme::Green;
         case StepResult::Fail: return theme::Red;
         case StepResult::Block: return theme::Amber;
+        case StepResult::Skip: return theme::Muted;
     }
     return theme::Muted;
 }
@@ -333,7 +334,7 @@ void HistoryView::renderPlan(const PlanReport& report) {
         t->setStyleSheet(QStringLiteral("font-size:14px;font-weight:600;"));
         th->addWidget(t, 1);
         if (row.executed) {
-            th->addWidget(ui::label(QStringLiteral("%1/%2 pasos · %3").arg(row.run.steps.size()).arg(row.run.plannedSteps).arg(formatDuration(row.run.durationSecs())), "muted-sm"));
+            th->addWidget(ui::label(QStringLiteral("%1/%2 pasos · %3").arg(row.run.steps.size()).arg(row.run.plannedSteps).arg(formatDuration(row.run.durationSecs)), "muted-sm"));
             th->addWidget(verdictPill(row.run.verdict));
         } else {
             th->addWidget(ui::pill(QStringLiteral("PENDIENTE"), QStringLiteral("rgba(154,167,180,38)"), theme::Muted));
@@ -379,7 +380,8 @@ void HistoryView::renderRun(const RunRecord& run) {
     sg->addWidget(stat(QStringLiteral("Pasan"), QString::number(run.count(StepResult::Pass)), theme::Green));
     sg->addWidget(stat(QStringLiteral("Fallan"), QString::number(run.count(StepResult::Fail)), theme::Red));
     sg->addWidget(stat(QStringLiteral("Bloqueados"), QString::number(run.count(StepResult::Block)), theme::Amber));
-    sg->addWidget(stat(QStringLiteral("Duración"), formatDuration(run.durationSecs())));
+    sg->addWidget(stat(QStringLiteral("N/A"), QString::number(run.count(StepResult::Skip)), theme::Muted));
+    sg->addWidget(stat(QStringLiteral("Duración"), formatDuration(run.durationSecs)));
     sg->addStretch(1);
     m_detailLayout->addWidget(stats);
 
@@ -412,12 +414,15 @@ QWidget* HistoryView::stepsList(const RunRecord& run) const {
         a->setWordWrap(true);
         a->setStyleSheet(QStringLiteral("color:#d0d8e0;"));
         g->addWidget(a, 0, 1);
-        g->addWidget(ui::pill(toString(s.result).toUpper(), resultColor(s.result), s.result == StepResult::Fail ? QStringLiteral("#ffffff") : theme::Bg), 0, 2, Qt::AlignTop);
+        auto* secs = ui::label(formatDuration(s.durationSecs), "muted-sm");
+        secs->setStyleSheet(QStringLiteral("font-size:11px;"));
+        g->addWidget(secs, 0, 2, Qt::AlignTop);
+        g->addWidget(ui::pill(toString(s.result).toUpper(), resultColor(s.result), s.result == StepResult::Fail ? QStringLiteral("#ffffff") : theme::Bg), 0, 3, Qt::AlignTop);
         if (!s.note.trimmed().isEmpty()) {
             auto* note = new QLabel(s.note.trimmed());
             note->setWordWrap(true);
             note->setStyleSheet(QStringLiteral("font-style:italic;color:%1;").arg(theme::Muted));
-            g->addWidget(note, 1, 1, 1, 2);
+            g->addWidget(note, 1, 1, 1, 3);
         }
         g->setColumnStretch(1, 1);
         lv->addWidget(row);

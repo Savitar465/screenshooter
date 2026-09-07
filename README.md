@@ -30,16 +30,16 @@ ctest --test-dir build --output-on-failure
 
 | Pantalla          | Qué hace                                                                   |
 |-------------------|----------------------------------------------------------------------------|
-| Casos de prueba   | Lista filtrable por suite y búsqueda; editor de título, metadatos, precondiciones, pasos y evidencias |
-| Plan de pruebas   | Selección de casos, estimación (3 min/paso) y arranque de la ejecución encadenada |
-| Ejecución         | Paso actual con Pasa / Falla / Bloqueado (teclas P / F / B), observaciones, registro y capturas |
+| Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira, pasos reordenables e insertables, evidencias e historial; duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
+| Planes            | Varios planes (crear, duplicar, archivar, eliminar), casos en orden de ejecución propio, progreso del ciclo actual con enlace a su informe, estimación basada en las duraciones reales del historial (3 min/paso si no hay datos) y arranque de un ciclo nuevo |
+| Ejecución         | Paso actual con Pasa / Falla / Bloqueado / Saltar (teclas P / F / B / S), paso anterior (Retroceso), corrección de veredictos desde el registro, cronómetro por paso y por caso, observaciones y capturas. Sobrevive al cierre de la aplicación |
 | Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración) e informes de plan con exportación a Markdown |
 | Reportar bug      | Formulario prellenado con el paso fallido; crea el issue en Jira y sube las capturas |
 | Ajustes           | Conexión Jira (URL, proyecto, correo, token) y preferencias de captura (atajo, formato, modo, carpeta) |
 
 ## Dónde se guardan los datos
 
-* Casos, plan e historial de ejecuciones: directorio de datos de la aplicación (`~/.local/share/QAflow/QAflow/` en Linux).
+* Casos, planes, historial y ejecución en curso: directorio de datos de la aplicación (`~/.local/share/QAflow/QAflow/` en Linux).
 * Ajustes: `~/.config/QAflow/QAflow.conf`.
 * Capturas: carpeta configurable, por defecto `~/QAflow/capturas`.
 

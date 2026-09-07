@@ -32,7 +32,7 @@ QString defaultSelection(const QList<TestCase>& cases) {
 }
 
 QList<TestCase> sampleCases() {
-    return {
+    QList<TestCase> cases = {
         make("TC-101", "Inicio de sesión con credenciales válidas", "Autenticación", Priority::Alta, CaseStatus::Listo, RunOutcome::Passed, 2,
              "Usuario registrado y verificado. Navegador sin sesión activa.", {
                  {"Abrir la pantalla de inicio de sesión", "Se muestran los campos correo y contraseña"},
@@ -60,6 +60,13 @@ QList<TestCase> sampleCases() {
         make("TC-107", "Preferencias de notificaciones por correo", "Notificaciones", Priority::Baja, CaseStatus::Borrador, RunOutcome::None, 0, "", {
                  {"Desactivar \"Novedades\" y guardar", "Preferencia persistida tras recargar"}}),
     };
+    // Metadatos de ejemplo: etiquetas, componente e historia enlazada.
+    for (auto& c : cases) {
+        if (c.id == QStringLiteral("TC-101")) { c.tags = {QStringLiteral("smoke"), QStringLiteral("regresión")}; c.component = QStringLiteral("Login"); c.jiraKey = QStringLiteral("SHOP-3"); }
+        if (c.id == QStringLiteral("TC-104")) { c.tags = {QStringLiteral("regresión"), QStringLiteral("pagos")}; c.component = QStringLiteral("Carrito"); c.jiraKey = QStringLiteral("SHOP-12"); }
+        if (c.id == QStringLiteral("TC-105")) { c.tags = {QStringLiteral("regresión")}; c.component = QStringLiteral("Carrito"); }
+    }
+    return cases;
 }
 
 } // namespace qaflow::seed

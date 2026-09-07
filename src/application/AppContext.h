@@ -1,6 +1,7 @@
 #pragma once
 
 #include "application/BugReportService.h"
+#include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
 #include "application/PlanStore.h"
 #include "application/RunController.h"
@@ -20,6 +21,7 @@ struct AppContext {
     SettingsStore* settings = nullptr;
     EvidenceService* evidence = nullptr;
     BugReportService* bugs = nullptr;
+    CaseTransferService* transfer = nullptr;
 };
 
 } // namespace qaflow

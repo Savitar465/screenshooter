@@ -54,6 +54,19 @@ int TestCase::unassignedShots() const {
     return n;
 }
 
+QString TestCase::searchText() const {
+    return (QStringList{id, title, suite, component, jiraKey} + tags).join(QLatin1Char(' ')).toLower();
+}
+
+QStringList parseTags(const QString& text) {
+    QStringList out;
+    for (const auto& part : text.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+        const QString t = part.trimmed();
+        if (!t.isEmpty() && !out.contains(t, Qt::CaseInsensitive)) out << t;
+    }
+    return out;
+}
+
 bool TestCase::readyToBeMarkedListo() const {
     if (title.trimmed().isEmpty() || steps.isEmpty()) return false;
     for (const auto& s : steps) if (!s.isComplete()) return false;

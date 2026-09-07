@@ -17,11 +17,11 @@ QString isoOrEmpty(const QDateTime& dt) { return dt.isValid() ? dt.toString(Qt::
 QJsonObject toJson(const RunRecord& r) {
     QJsonArray steps;
     for (const auto& s : r.steps)
-        steps.append(QJsonObject{{"action", s.action}, {"expected", s.expected}, {"result", toString(s.result)}, {"note", s.note}});
+        steps.append(QJsonObject{{"action", s.action}, {"expected", s.expected}, {"result", toString(s.result)}, {"note", s.note}, {"durationSecs", s.durationSecs}});
     return QJsonObject{
         {"id", r.id}, {"caseId", r.caseId}, {"caseTitle", r.caseTitle}, {"suite", r.suite},
         {"planRunId", r.planRunId}, {"startedAt", isoOrEmpty(r.startedAt)}, {"finishedAt", isoOrEmpty(r.finishedAt)},
-        {"verdict", toString(r.verdict)}, {"plannedSteps", r.plannedSteps}, {"steps", steps},
+        {"verdict", toString(r.verdict)}, {"plannedSteps", r.plannedSteps}, {"durationSecs", r.durationSecs}, {"steps", steps},
     };
 }
 
@@ -38,14 +38,17 @@ RunRecord runFromJson(const QJsonObject& o) {
     r.plannedSteps = o["plannedSteps"].toInt();
     for (const auto& v : o["steps"].toArray()) {
         const auto s = v.toObject();
-        r.steps.append(RunRecordStep{s["action"].toString(), s["expected"].toString(), stepResultFromString(s["result"].toString()), s["note"].toString()});
+        r.steps.append(RunRecordStep{s["action"].toString(), s["expected"].toString(), stepResultFromString(s["result"].toString()), s["note"].toString(), s["durationSecs"].toInt()});
     }
+    // Registros anteriores a la medición por pasos: usar inicio → fin.
+    r.durationSecs = o.contains("durationSecs") ? static_cast<qint64>(o["durationSecs"].toDouble())
+                     : (r.startedAt.isValid() && r.finishedAt.isValid() ? r.startedAt.secsTo(r.finishedAt) : 0);
     return r;
 }
 
 QJsonObject toJson(const PlanRun& p) {
     return QJsonObject{
-        {"id", p.id}, {"name", p.name}, {"caseIds", QJsonArray::fromStringList(p.caseIds)},
+        {"id", p.id}, {"planId", p.planId}, {"name", p.name}, {"caseIds", QJsonArray::fromStringList(p.caseIds)},
         {"startedAt", isoOrEmpty(p.startedAt)}, {"finishedAt", isoOrEmpty(p.finishedAt)},
     };
 }
@@ -53,6 +56,7 @@ QJsonObject toJson(const PlanRun& p) {
 PlanRun planFromJson(const QJsonObject& o) {
     PlanRun p;
     p.id = o["id"].toString();
+    p.planId = o["planId"].toString();
     p.name = o["name"].toString();
     for (const auto& v : o["caseIds"].toArray()) p.caseIds << v.toString();
     p.startedAt = QDateTime::fromString(o["startedAt"].toString(), Qt::ISODate);

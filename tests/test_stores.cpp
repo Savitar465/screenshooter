@@ -12,12 +12,12 @@ namespace {
 class MemoryRepo : public ITestCaseRepository {
 public:
     std::optional<QList<TestCase>> cases;
-    std::optional<TestPlan> plan;
+    std::optional<PlanCollection> plans;
     int saves = 0;
     std::optional<QList<TestCase>> loadCases() override { return cases; }
     bool saveCases(const QList<TestCase>& c) override { cases = c; ++saves; return true; }
-    std::optional<TestPlan> loadPlan() override { return plan; }
-    bool savePlan(const TestPlan& p) override { plan = p; return true; }
+    std::optional<PlanCollection> loadPlans() override { return plans; }
+    bool savePlans(const PlanCollection& p) override { plans = p; return true; }
 };
 
 class MemoryHistoryRepo : public IRunHistoryRepository {
@@ -28,13 +28,22 @@ public:
     bool saveHistory(const RunHistory& h) override { history = h; ++saves; return true; }
 };
 
+class MemorySessionRepo : public IRunSessionRepository {
+public:
+    std::optional<RunSession> session;
+    std::optional<RunSession> loadSession() override { return session; }
+    bool saveSession(const RunSession& s) override { session = s; return true; }
+    void clearSession() override { session.reset(); }
+};
+
 /// Todo lo necesario para ejecutar casos en memoria.
 struct Fixture {
     std::shared_ptr<MemoryRepo> repo = std::make_shared<MemoryRepo>();
     std::shared_ptr<MemoryHistoryRepo> historyRepo = std::make_shared<MemoryHistoryRepo>();
+    std::shared_ptr<MemorySessionRepo> sessionRepo = std::make_shared<MemorySessionRepo>();
     TestCaseStore store{repo};
     RunHistoryStore history{historyRepo, store};
-    RunController run{store, history};
+    RunController run{store, history, sessionRepo};
     Fixture() { store.load(); history.load(); }
 };
 } // namespace
@@ -234,11 +243,330 @@ private slots:
         QCOMPARE(again.runs().last().id, QStringLiteral("R-0002")); // los ids continúan
     }
 
+    void skipDoesNotAffectVerdict() {
+        Fixture f;
+        f.run.start(QStringLiteral("TC-102")); // 2 pasos
+        f.run.mark(StepResult::Skip);
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.state().finished);
+        QCOMPARE(static_cast<int>(f.run.state().verdict()), static_cast<int>(Verdict::Superado));
+        QCOMPARE(f.run.state().count(StepResult::Skip), 1);
+        f.run.finish();
+        QCOMPARE(f.history.runs().first().count(StepResult::Skip), 1);
+    }
+
+    void backReopensPreviousStep() {
+        Fixture f;
+        f.run.start(QStringLiteral("TC-104")); // 4 pasos
+        f.run.mark(StepResult::Pass);
+        f.run.setNote(QStringLiteral("dudoso"));
+        f.run.mark(StepResult::Fail);
+        QCOMPARE(f.run.state().idx, 2);
+        f.run.back();
+        QCOMPARE(f.run.state().idx, 1);
+        QCOMPARE(f.run.state().results.size(), 1);
+        QCOMPARE(f.run.state().note, QStringLiteral("dudoso")); // la nota vuelve al campo
+        QVERIFY(f.run.isRunning());
+        // También reabre una ejecución terminada.
+        f.run.mark(StepResult::Pass); f.run.mark(StepResult::Pass); f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.state().finished);
+        f.run.back();
+        QVERIFY(!f.run.state().finished);
+        QCOMPARE(f.run.state().idx, 3);
+        QCOMPARE(f.history.runs().size(), 0); // nada archivado todavía
+    }
+
+    void correctingAVerdictUnblocksTheRun() {
+        Fixture f;
+        f.run.start(QStringLiteral("TC-104"));
+        f.run.mark(StepResult::Pass);
+        f.run.mark(StepResult::Block);
+        QVERIFY(f.run.state().finished);
+        f.run.setResult(1, StepResult::Pass);
+        QVERIFY(!f.run.state().finished);
+        QCOMPARE(f.run.state().idx, 2);
+        f.run.setResult(0, StepResult::Fail);
+        QCOMPARE(static_cast<int>(f.run.state().verdict()), static_cast<int>(Verdict::Fallido));
+        f.run.setResult(9, StepResult::Pass); // índice inválido: se ignora
+        QCOMPARE(f.run.state().results.size(), 2);
+    }
+
+    void sessionSurvivesRestart() {
+        Fixture f;
+        f.run.startSequence({QStringLiteral("TC-104"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        f.run.mark(StepResult::Pass);
+        f.run.setNote(QStringLiteral("a medias"));
+        f.run.persistSessionNow();
+        QVERIFY(f.sessionRepo->session.has_value());
+
+        // "Nueva sesión": otro controlador sobre los mismos repositorios.
+        RunController again(f.store, f.history, f.sessionRepo);
+        again.load();
+        QVERIFY(again.isRunning());
+        QCOMPARE(again.state().caseId, QStringLiteral("TC-104"));
+        QCOMPARE(again.state().idx, 1);
+        QCOMPARE(again.state().results.size(), 1);
+        QCOMPARE(again.state().note, QStringLiteral("a medias"));
+        QCOMPARE(again.queuedCount(), 1);
+        QCOMPARE(again.planRunId(), f.run.planRunId());
+        QCOMPARE(f.store.selectedId(), QStringLiteral("TC-104"));
+
+        again.mark(StepResult::Pass); again.mark(StepResult::Pass); again.mark(StepResult::Pass);
+        QVERIFY(again.finish());          // sigue con TC-107 del plan restaurado
+        again.mark(StepResult::Pass);
+        QVERIFY(!again.finish());
+        QVERIFY(!f.sessionRepo->session.has_value()); // sin ejecución → sesión borrada
+        QCOMPARE(f.history.report(f.run.planRunId().isEmpty() ? QStringLiteral("PR-0001") : f.run.planRunId()).executed, 2);
+    }
+
+    void sessionForMissingCaseIsDiscarded() {
+        Fixture f;
+        RunSession s;
+        s.run.caseId = QStringLiteral("TC-999");
+        f.sessionRepo->session = s;
+        f.run.load();
+        QVERIFY(!f.run.isRunning());
+        QVERIFY(!f.sessionRepo->session.has_value());
+    }
+
+    void estimateUsesRealDurations() {
+        Fixture f;
+        PlanStore plan(f.repo, f.store, f.history);
+        plan.load();
+        QCOMPARE(plan.estimatedTime(), QStringLiteral("33 min")); // 11 pasos × 3 min, sin historial
+        QVERIFY(plan.estimateBasis().contains(QStringLiteral("sin historial")));
+
+        RunRecord r;   // TC-104 (4 pasos) tardó 2 min → 30 s/paso
+        r.caseId = QStringLiteral("TC-104");
+        r.durationSecs = 120;
+        for (int i = 0; i < 4; ++i) r.steps.append(RunRecordStep{{}, {}, StepResult::Pass, {}, 30});
+        f.history.addRun(r);
+        // TC-104 por su propia media (120 s); los otros 7 pasos por la media global (30 s) = 210 s.
+        QCOMPARE(plan.estimatedSecs(), 330);
+        QCOMPARE(plan.estimatedTime(), QStringLiteral("6 min"));
+        QCOMPARE(plan.estimateBasis(), QStringLiteral("según 1 ejecución"));
+    }
+
+    void removeCaseSelectsNeighbourAndCanBeUndone() {
+        Fixture f;
+        QSignalSpy undoSpy(&f.store, &TestCaseStore::undoAvailable);
+        QSignalSpy filesSpy(&f.store, &TestCaseStore::filesReleased);
+        f.store.addShot(QStringLiteral("TC-104"), Screenshot{1, 1, QStringLiteral("a.png"), QStringLiteral("/tmp/a.png")});
+        f.store.select(QStringLiteral("TC-104"));
+        f.store.removeCase(QStringLiteral("TC-104"));
+        QCOMPARE(f.store.cases().size(), 6);
+        QVERIFY(!f.store.find(QStringLiteral("TC-104")));
+        QCOMPARE(f.store.selectedId(), QStringLiteral("TC-105")); // el siguiente en la lista
+        QCOMPARE(undoSpy.count(), 1);
+        QVERIFY(f.store.canUndo());
+        QCOMPARE(filesSpy.count(), 0);            // el fichero espera al deshacer
+        QVERIFY(f.store.undo());
+        QCOMPARE(f.store.cases().size(), 7);
+        QCOMPARE(f.store.selectedId(), QStringLiteral("TC-104"));
+        QCOMPARE(f.store.find(QStringLiteral("TC-104"))->shots.size(), 1);
+        QVERIFY(!f.store.canUndo());
+        QCOMPARE(filesSpy.count(), 0);
+    }
+
+    void committingUndoReleasesFiles() {
+        Fixture f;
+        QSignalSpy filesSpy(&f.store, &TestCaseStore::filesReleased);
+        f.store.addShot(QStringLiteral("TC-104"), Screenshot{1, 1, QStringLiteral("a.png"), QStringLiteral("/tmp/a.png")});
+        f.store.removeShot(QStringLiteral("TC-104"), 1);
+        QVERIFY(f.store.canUndo());
+        // Cualquier otra edición invalida el deshacer y libera el fichero.
+        f.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) { c.title = QStringLiteral("x"); });
+        QVERIFY(!f.store.canUndo());
+        QCOMPARE(filesSpy.count(), 1);
+        QCOMPARE(filesSpy.first().first().toStringList(), QStringList{QStringLiteral("/tmp/a.png")});
+    }
+
+    void removeStepIsUndoable() {
+        Fixture f;
+        f.store.removeStep(QStringLiteral("TC-104"), 0);
+        QCOMPARE(f.store.find(QStringLiteral("TC-104"))->steps.size(), 3);
+        QVERIFY(f.store.undo());
+        QCOMPARE(f.store.find(QStringLiteral("TC-104"))->steps.size(), 4);
+    }
+
+    void duplicateCaseCopiesContentNotResults() {
+        Fixture f;
+        f.store.addShot(QStringLiteral("TC-104"), Screenshot{1, 1, QStringLiteral("a.png"), {}});
+        const QString id = f.store.duplicateCase(QStringLiteral("TC-104"));
+        QCOMPARE(id, QStringLiteral("TC-108"));
+        const TestCase* c = f.store.find(id);
+        QVERIFY(c);
+        QVERIFY(c->title.endsWith(QStringLiteral("(copia)")));
+        QCOMPARE(c->steps.size(), 4);
+        QCOMPARE(c->suite, QStringLiteral("Checkout"));
+        QCOMPARE(static_cast<int>(c->status), static_cast<int>(CaseStatus::Borrador));
+        QCOMPARE(static_cast<int>(c->lastRun.outcome), static_cast<int>(RunOutcome::None));
+        QVERIFY(c->shots.isEmpty());
+        QCOMPARE(f.store.cases()[4].id, id); // justo después del original (índice 3)
+        QCOMPARE(f.store.selectedId(), id);
+    }
+
+    void moveAndInsertStepsKeepShotAssignments() {
+        Fixture f;
+        const QString id = QStringLiteral("TC-104"); // 4 pasos
+        f.store.addShot(id, Screenshot{1, 1, QStringLiteral("a.png"), {}});
+        f.store.addShot(id, Screenshot{2, 3, QStringLiteral("b.png"), {}});
+        const QString first = f.store.find(id)->steps[0].action;
+        f.store.moveStep(id, 0, +2); // paso 1 → posición 3
+        const TestCase* c = f.store.find(id);
+        QCOMPARE(c->steps[2].action, first);
+        QCOMPARE(c->shots[0].step, 3); // sigue a su paso
+        QCOMPARE(c->shots[1].step, 2); // el antiguo paso 3 subió una posición
+        f.store.insertStep(id, 1);      // paso vacío en la posición 2
+        c = f.store.find(id);
+        QCOMPARE(c->steps.size(), 5);
+        QVERIFY(c->steps[1].action.isEmpty());
+        QCOMPARE(c->shots[0].step, 4);
+        QCOMPARE(c->shots[1].step, 3);
+        f.store.moveStep(id, 0, -1);    // sin efecto
+        QCOMPARE(f.store.find(id)->steps.size(), 5);
+    }
+
+    void suitesComeFromCases() {
+        Fixture f;
+        QCOMPARE(f.store.suites(), (QStringList{QStringLiteral("Autenticación"), QStringLiteral("Checkout"), QStringLiteral("Notificaciones"), QStringLiteral("Perfil")}));
+        f.store.updateCase(QStringLiteral("TC-106"), [](TestCase& c) { c.suite = QStringLiteral("Facturación"); });
+        QVERIFY(f.store.suites().contains(QStringLiteral("Facturación")));
+        QVERIFY(!f.store.suites().contains(QStringLiteral("Perfil"))); // ya nadie la usa
+        f.store.select(QStringLiteral("TC-106"));
+        const QString id = f.store.createCase();
+        QCOMPARE(f.store.find(id)->suite, QStringLiteral("Facturación")); // hereda la del seleccionado
+    }
+
+    void mergeCasesAddsAndUpdatesKeepingLocalData() {
+        Fixture f;
+        f.store.addShot(QStringLiteral("TC-104"), Screenshot{1, 1, QStringLiteral("a.png"), {}});
+        TestCase updated = *f.store.find(QStringLiteral("TC-104"));
+        updated.title = QStringLiteral("Nuevo título");
+        updated.shots.clear();
+        updated.lastRun = LastRun{};
+        TestCase fresh;
+        fresh.id = QStringLiteral("TC-500");
+        fresh.title = QStringLiteral("Importado");
+        const auto [added, upd] = f.store.mergeCases({updated, fresh});
+        QCOMPARE(added, 1);
+        QCOMPARE(upd, 1);
+        const TestCase* c = f.store.find(QStringLiteral("TC-104"));
+        QCOMPARE(c->title, QStringLiteral("Nuevo título"));
+        QCOMPARE(c->shots.size(), 1);                                   // capturas locales conservadas
+        QCOMPARE(static_cast<int>(c->lastRun.outcome), static_cast<int>(RunOutcome::Passed));
+        QVERIFY(f.store.find(QStringLiteral("TC-500")));
+        QCOMPARE(f.store.nextCaseId(), QStringLiteral("TC-501"));
+    }
+
+    void planDropsDeletedCases() {
+        Fixture f;
+        PlanStore plan(f.repo, f.store, f.history);
+        plan.load();
+        QVERIFY(plan.active()->contains(QStringLiteral("TC-104")));
+        f.store.removeCase(QStringLiteral("TC-104"));
+        QVERIFY(!plan.active()->contains(QStringLiteral("TC-104")));
+        QCOMPARE(plan.orderedCaseIds().size(), 3);
+    }
+
+    void plansCanBeCreatedArchivedAndRemoved() {
+        Fixture f;
+        PlanStore plans(f.repo, f.store, f.history);
+        plans.load();
+        QCOMPARE(plans.plans().size(), 1);
+        QCOMPARE(plans.activeId(), QStringLiteral("PL-0001"));
+        QCOMPARE(plans.active()->name, QStringLiteral("Regresión Sprint 14"));
+
+        QSignalSpy changed(&plans, &PlanStore::plansChanged);
+        const QString id = plans.createPlan(QStringLiteral("Smoke"));
+        QCOMPARE(id, QStringLiteral("PL-0002"));
+        QCOMPARE(plans.activeId(), id);           // el nuevo pasa a ser el activo
+        QVERIFY(plans.orderedCaseIds().isEmpty());
+        QVERIFY(changed.count() >= 1);
+        plans.toggle(QStringLiteral("TC-103"));
+        QCOMPARE(plans.orderedCaseIds(), QStringList{QStringLiteral("TC-103")});
+
+        const QString copy = plans.duplicatePlan(id);
+        QCOMPARE(plans.active()->name, QStringLiteral("Smoke (copia)"));
+        QCOMPARE(plans.orderedCaseIds(), QStringList{QStringLiteral("TC-103")});
+
+        plans.setArchived(copy, true);
+        QVERIFY(plans.find(copy)->archived);
+        plans.removePlan(copy);
+        QVERIFY(!plans.find(copy));
+        QVERIFY(!plans.activeId().isEmpty());
+        QVERIFY(plans.find(plans.activeId()));
+
+        // Persistencia: activo y colección viajan juntos.
+        QVERIFY(f.repo->plans.has_value());
+        QCOMPARE(f.repo->plans->plans.size(), 2);
+        QCOMPARE(f.repo->plans->activeId, plans.activeId());
+        PlanStore again(f.repo, f.store, f.history);
+        again.load();
+        QCOMPARE(again.plans().size(), 2);
+        QCOMPARE(again.activeId(), plans.activeId());
+    }
+
+    void planKeepsItsOwnOrder() {
+        Fixture f;
+        PlanStore plans(f.repo, f.store, f.history);
+        plans.load();
+        plans.selectNone();
+        plans.toggle(QStringLiteral("TC-105"));
+        plans.toggle(QStringLiteral("TC-101"));
+        plans.toggle(QStringLiteral("TC-104"));
+        QCOMPARE(plans.orderedCaseIds(), (QStringList{QStringLiteral("TC-105"), QStringLiteral("TC-101"), QStringLiteral("TC-104")})); // orden de inserción
+        plans.moveCase(QStringLiteral("TC-104"), -2);
+        QCOMPARE(plans.orderedCaseIds(), (QStringList{QStringLiteral("TC-104"), QStringLiteral("TC-105"), QStringLiteral("TC-101")}));
+        plans.moveCase(QStringLiteral("TC-104"), -1); // sin efecto en el extremo
+        QCOMPARE(plans.orderedCaseIds().first(), QStringLiteral("TC-104"));
+        plans.sortByPriority(); // TC-105 es Media; TC-104 y TC-101 Alta (orden estable)
+        QCOMPARE(plans.orderedCaseIds(), (QStringList{QStringLiteral("TC-104"), QStringLiteral("TC-101"), QStringLiteral("TC-105")}));
+        // Los obsoletos no se ejecutan pero siguen en el plan por si vuelven.
+        f.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) { c.status = CaseStatus::Obsoleto; });
+        QCOMPARE(plans.orderedCaseIds().size(), 2);
+        QVERIFY(plans.active()->contains(QStringLiteral("TC-101")));
+    }
+
+    void cyclesAreLinkedToTheirPlan() {
+        Fixture f;
+        PlanStore plans(f.repo, f.store, f.history);
+        plans.load();
+        const QString planId = plans.activeId();
+        QVERIFY(!plans.latestCycle(planId).has_value());
+        QCOMPARE(plans.cycleCount(planId), 0);
+
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, plans.active()->name, planId);
+        auto cycle = plans.latestCycle(planId);
+        QVERIFY(cycle.has_value());
+        QVERIFY(!cycle->plan.isFinished());
+        QCOMPARE(cycle->executed, 0);
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        cycle = plans.latestCycle(planId);
+        QCOMPARE(cycle->executed, 1);      // progreso del ciclo en curso
+        QCOMPARE(cycle->pending(), 1);
+        f.run.mark(StepResult::Fail);
+        f.run.finish();
+        cycle = plans.latestCycle(planId);
+        QVERIFY(cycle->plan.isFinished());
+        QCOMPARE(cycle->successRate(), 50);
+        QCOMPARE(plans.cycleCount(planId), 1);
+
+        // Un segundo ciclo es el nuevo "último"; el otro plan no tiene ciclos.
+        f.run.startSequence({QStringLiteral("TC-103")}, plans.active()->name, planId);
+        QCOMPARE(plans.cycleCount(planId), 2);
+        QCOMPARE(plans.latestCycle(planId)->executed, 0);
+        const QString other = plans.createPlan(QStringLiteral("Otro"));
+        QVERIFY(!plans.latestCycle(other).has_value());
+        QCOMPARE(f.history.findPlan(f.run.planRunId())->planId, planId);
+    }
+
     void planEstimate() {
-        auto repo = std::make_shared<MemoryRepo>();
-        TestCaseStore store(repo);
-        store.load();
-        PlanStore plan(repo, store);
+        Fixture f;
+        TestCaseStore& store = f.store;
+        auto repo = f.repo;
+        PlanStore plan(repo, store, f.history);
         plan.load();
         QCOMPARE(plan.orderedCaseIds().size(), 4);
         QCOMPARE(plan.totalSteps(), 11);

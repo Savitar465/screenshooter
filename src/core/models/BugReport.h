@@ -10,6 +10,7 @@ struct BugReport {
     QString severity = QStringLiteral("Mayor");   // Bloqueante, Crítica, Mayor, Menor, Trivial
     QString environment = QStringLiteral("Staging"); // Staging, QA, Producción
     QString linkedCaseId;
+    QString linkedStoryKey;   // historia de Jira enlazada al caso (opcional)
     QString stepsToReproduce;
     QString expected;
     QString actual;

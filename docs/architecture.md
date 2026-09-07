@@ -10,23 +10,26 @@ casos de prueba, planes de regresión, ejecuciones manuales paso a paso con evid
 src/
 ├── core/            Modelos y contratos. Sin Qt Widgets, sin red, sin disco.
 │   ├── models/      TestCase, TestRun, TestPlan, BugReport, Settings,
-│   │                RunHistory (RunRecord, PlanRun), PlanReport (informe calculado + Markdown)
-│   └── services/    ITestCaseRepository, IRunHistoryRepository, ISettingsRepository,
-│                    IScreenCapture, IIssueTracker
+│   │                RunHistory (RunRecord, PlanRun), PlanReport (informe calculado + Markdown),
+│   │                CaseFilter (criterios de la lista), CaseFormats (JSON / CSV / Markdown)
+│   └── services/    ITestCaseRepository, IRunHistoryRepository, IRunSessionRepository,
+│                    ISettingsRepository, IScreenCapture, IIssueTracker
 ├── application/     Casos de uso y estado observable (QObject + señales). Sin UI.
-│   ├── TestCaseStore      fuente de verdad de los casos; toda mutación pasa por aquí
+│   ├── TestCaseStore      fuente de verdad de los casos; toda mutación pasa por aquí;
+│   │                      deshacer de un nivel para borrados
+│   ├── CaseTransferService importación y exportación de casos a ficheros
 │   ├── RunController      ejecución paso a paso (y cola de casos para el plan); archiva cada
-│   │                      ejecución terminada en el historial
+│   │                      ejecución terminada en el historial y guarda la que está en curso
 │   ├── RunHistoryStore    historial de ejecuciones y de planes; genera el PlanReport
-│   ├── PlanStore          selección de casos y estimación
+│   ├── PlanStore          colección de planes, plan activo, orden de ejecución, ciclos y estimación
 │   ├── SettingsStore      ajustes de Jira y de captura
 │   ├── EvidenceService    captura → guarda fichero → adjunta al caso/paso activo
 │   ├── BugReportService   borrador de bug desde la ejecución y envío al tracker
 │   ├── SeedData           datos de ejemplo del primer arranque
 │   └── AppContext         agrupa los servicios ya construidos para la presentación
 ├── infrastructure/  Implementaciones concretas de las interfaces de core.
-│   ├── persistence/ JsonTestCaseRepository (cases.json, plan.json), JsonRunHistoryRepository
-│   │                (history.json), QSettingsRepository
+│   ├── persistence/ JsonTestCaseRepository (cases.json, plans.json), JsonRunHistoryRepository
+│   │                (history.json), JsonRunSessionRepository (session.json), QSettingsRepository
 │   ├── capture/     ScreenCaptureService (QScreen::grabWindow), RegionSelector (overlay)
 │   └── jira/        JiraClient (REST API v2: myself, issue, attachments)
 └── presentation/    Widgets Qt. Depende de application; nunca de infrastructure.
@@ -69,10 +72,70 @@ dependen de datos (prioridad, veredicto), que salen de `theme::`.
 | Dato                   | Dónde                                                       |
 |------------------------|-------------------------------------------------------------|
 | Casos y capturas       | `$XDG_DATA_HOME/QAflow/QAflow/cases.json` (guardado diferido 400 ms) |
-| Plan                   | `$XDG_DATA_HOME/QAflow/QAflow/plan.json`                    |
+| Planes                 | `$XDG_DATA_HOME/QAflow/QAflow/plans.json` (colección + plan activo; migra `plan.json` antiguo) |
 | Historial              | `$XDG_DATA_HOME/QAflow/QAflow/history.json` (se escribe al cerrar cada ejecución) |
+| Ejecución en curso     | `$XDG_DATA_HOME/QAflow/QAflow/session.json` (se borra al terminar; notas con retardo de 300 ms) |
 | Ajustes Jira/captura   | QSettings (`~/.config/QAflow/QAflow.conf`)                  |
 | Imágenes de capturas   | Carpeta configurable (por defecto `~/QAflow/capturas`)      |
+
+## Gestión de casos
+
+* **Suites** no son una lista aparte: `TestCaseStore::suites()` devuelve las que usa algún caso.
+  Crear una suite es asignar un nombre nuevo al caso seleccionado; desaparece cuando ningún caso
+  la usa. Los datos de ejemplo sólo se cargan en el primer arranque.
+* **Metadatos**: `tags`, `component` y `jiraKey` viven en `TestCase` y viajan en todos los
+  formatos. `TestCase::searchText()` es lo que consulta la búsqueda libre. `CaseFilter` (core)
+  combina texto, suite, estado, prioridad y resultado de la última ejecución; la vista sólo
+  rellena la estructura y pregunta `matches()`.
+* **Pasos**: `insertStep`, `moveStep` y `removeStep` renumeran las capturas asignadas para que
+  sigan a su paso (`remapShotSteps`).
+* **Duplicar** copia contenido y metadatos, no capturas ni resultado; el nuevo caso queda en
+  Borrador justo después del original.
+* **Deshacer**: borrar un caso, un paso o una captura guarda una instantánea de la lista
+  (`pushUndo`). `undo()` la restaura mientras no haya otra mutación ni pasen 20 s; después
+  `commitUndo()` emite `filesReleased()` con los ficheros de capturas que ya nadie referencia y
+  `EvidenceService` los borra del disco. El store nunca toca ficheros. La ventana muestra el
+  aviso «Deshacer»; borrar un caso pide además confirmación.
+* **Importar / exportar** (`CaseTransferService`): JSON (nativo, sin capturas al compartir),
+  CSV (una fila por paso, RFC 4180) y Markdown (sólo exportación). Al importar, los ids
+  existentes se actualizan conservando capturas y última ejecución locales; el resto se añaden.
+  La serialización está en `core/models/CaseFormats` y la reutiliza `JsonTestCaseRepository`.
+
+## Planes y ciclos
+
+`TestPlan` es una lista **ordenada** de ids de caso con nombre, fecha y bandera `archived`.
+`PlanStore` guarda la colección completa y el plan activo (`PlanCollection`) en `plans.json`;
+las mutaciones de contenido (`toggle`, `moveCase`, `sortByPriority`, …) actúan sobre el activo y
+`orderedCaseIds()` devuelve su orden saltando obsoletos e inexistentes (los obsoletos siguen en
+el plan por si vuelven a estar listos; los borrados se retiran de todos los planes).
+
+Un **ciclo** es una ejecución del plan: `RunController::startSequence()` abre un `PlanRun` en el
+historial con el `planId` del plan. `PlanStore::latestCycle(planId)` devuelve el `PlanReport` del
+ciclo más reciente (terminado o en curso), que es lo que muestran la pantalla de planes y la
+tarjeta «Plan activo» del sidebar como progreso. Archivar un plan sólo lo oculta y bloquea
+«Iniciar ciclo»; eliminarlo no toca el historial. Sin planes guardados se crea uno por defecto con
+los casos de ejemplo.
+
+## Ejecución paso a paso
+
+`RunState` guarda el caso, el índice del paso actual, un `StepRecord` por paso marcado (resultado,
+nota y segundos que estuvo en pantalla) y el cronómetro del paso actual. Resultados: `Pass`,
+`Fail`, `Block` (termina la ejecución en ese punto) y `Skip` (N/A: no cuenta para el veredicto).
+
+* `mark()` registra el paso y avanza; `back()` deshace el último veredicto y devuelve su nota al
+  campo (también reabre una ejecución ya terminada); `setResult(i, r)` corrige un veredicto
+  anterior y, si con ello desaparece el bloqueo, la ejecución continúa. Nada se archiva hasta que
+  la ejecución termina y se cierra, así que estas correcciones no dejan rastro en el historial.
+* **Persistencia de la sesión.** Tras cada cambio (`changed()`) el controlador guarda un
+  `RunSession` (estado, cola del plan, id del plan) mediante `IRunSessionRepository`. Al arrancar,
+  `load()` la restaura si el caso sigue existiendo, recorta resultados si el caso perdió pasos y
+  reinicia el cronómetro del paso actual: el tiempo con la aplicación cerrada no cuenta, pero lo
+  acumulado antes (`stepElapsedSecs`) sí. `MainWindow` abre directamente la pantalla de ejecución.
+* **Duración real.** Cada `StepRecord` mide su tiempo; `RunRecord::durationSecs` es la suma. La
+  vista muestra un reloj por paso y por caso (un `QTimer` de un segundo sólo actualiza etiquetas).
+* **Estimación del plan.** `PlanStore::estimatedSecs()` usa la media real por paso de cada caso
+  según su historial; para los casos sin historial, la media global; sin datos, 3 min por paso.
+  `estimateBasis()` explica en la vista de qué datos sale.
 
 ## Historial de ejecuciones e informes de plan
 
@@ -124,8 +187,12 @@ si no → `Bearer token` (PAT de Jira Server/Data Center).
 
 `tests/` compila sólo `core` + `application` contra un repositorio en memoria
 (`MemoryRepo`, `MemoryHistoryRepo`), sin UI ni red: modelos, etiquetas de última ejecución, flujo de
-ejecución/veredictos, cola del plan, reasignación de capturas al borrar pasos, archivado en el
-historial, informe de plan (conteos, pendientes, Markdown) y continuidad de ids entre sesiones.
+ejecución/veredictos, paso anterior y corrección de veredictos, saltos N/A, cola del plan,
+reasignación de capturas al borrar pasos, archivado en el historial, informe de plan (conteos,
+pendientes, Markdown), continuidad de ids entre sesiones, restauración de la sesión, estimación
+con duraciones reales, borrar/duplicar/deshacer, reordenación de pasos con capturas, filtros y
+formatos JSON/CSV/Markdown (ida y vuelta), colección de planes (crear, duplicar, archivar,
+borrar, persistir), orden propio del plan y ciclos enlazados a su plan.
 
 ```
 cmake -S . -B build && cmake --build build && ctest --test-dir build

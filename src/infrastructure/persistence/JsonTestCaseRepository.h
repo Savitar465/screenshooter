@@ -13,14 +13,15 @@ public:
 
     std::optional<QList<TestCase>> loadCases() override;
     bool saveCases(const QList<TestCase>& cases) override;
-    std::optional<TestPlan> loadPlan() override;
-    bool savePlan(const TestPlan& plan) override;
+    std::optional<PlanCollection> loadPlans() override;
+    bool savePlans(const PlanCollection& plans) override;
 
     QString casesPath() const { return m_casesPath; }
 
 private:
     QString m_casesPath;
-    QString m_planPath;
+    QString m_plansPath;
+    QString m_legacyPlanPath;   // plan.json de versiones con un único plan
 };
 
 } // namespace qaflow

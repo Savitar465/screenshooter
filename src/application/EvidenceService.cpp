@@ -5,13 +5,19 @@
 #include "application/TestCaseStore.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 
 namespace qaflow {
 
 EvidenceService::EvidenceService(std::shared_ptr<IScreenCapture> capture, TestCaseStore& cases, RunController& run,
                                  SettingsStore& settings, QObject* parent)
-    : QObject(parent), m_capture(std::move(capture)), m_cases(cases), m_run(run), m_settings(settings) {}
+    : QObject(parent), m_capture(std::move(capture)), m_cases(cases), m_run(run), m_settings(settings) {
+    // Cuando una captura deja de estar referenciada (y ya no se puede deshacer), su fichero se borra.
+    connect(&m_cases, &TestCaseStore::filesReleased, this, [](const QStringList& paths) {
+        for (const auto& p : paths) if (QFileInfo::exists(p)) QFile::remove(p);
+    });
+}
 
 void EvidenceService::captureForSelectedCase() {
     if (m_busy || !m_capture) return;

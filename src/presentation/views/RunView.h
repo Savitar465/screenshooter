@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QTimer>
 #include <QWidget>
 
 class QLabel;
@@ -32,6 +33,7 @@ private:
     void refresh();
     void refreshLog();
     void refreshShots();
+    void tick();   // cronómetros (cada segundo)
 
     TestCaseStore& m_cases;
     RunController& m_run;
@@ -43,6 +45,9 @@ private:
     ProgressCells* m_progress;
     QFrame* m_stepCard;
     QLabel* m_stepCounter;
+    QLabel* m_stepClock;
+    QLabel* m_caseClock;
+    QPushButton* m_back;
     QLabel* m_action;
     QLabel* m_expected;
     TextArea* m_note;
@@ -50,6 +55,7 @@ private:
     QLabel* m_verdict;
     QLabel* m_summary;
     QPushButton* m_reportBug;
+    QPushButton* m_reopen;
     QPushButton* m_finish;
     QVBoxLayout* m_logLayout;
     QLabel* m_shotsHeader;
@@ -57,6 +63,7 @@ private:
     QVBoxLayout* m_shotsLayout;
     QPushButton* m_sortShots;
     QLabel* m_empty;
+    QTimer m_clock;
 };
 
 } // namespace qaflow

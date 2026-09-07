@@ -13,7 +13,10 @@
 #include "presentation/widgets/Toast.h"
 #include "presentation/widgets/Ui.h"
 
+#include <QDesktopServices>
 #include <QShortcut>
+#include <QUrl>
+#include <QTimer>
 #include <QStackedWidget>
 
 namespace qaflow {
@@ -31,7 +34,7 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     h->addWidget(m_sidebar);
 
     m_stack = new QStackedWidget;
-    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history);
+    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer);
     m_plan = new PlanView(*ctx.cases, *ctx.plan);
     m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings);
     m_history = new HistoryView(*ctx.cases, *ctx.history);
@@ -53,7 +56,14 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
 
     wireSignals();
     updateCaptureShortcut();
-    navigate(Screen::Casos);
+    if (m_ctx.run->isRunning()) {
+        // Ejecución restaurada de la sesión anterior.
+        navigate(Screen::Run);
+        const QString id = m_ctx.run->state().caseId;
+        QTimer::singleShot(0, this, [this, id]() { showToast(QStringLiteral("Ejecución de %1 recuperada de la sesión anterior").arg(id), theme::Blue); });
+    } else {
+        navigate(Screen::Casos);
+    }
 }
 
 void MainWindow::wireSignals() {
@@ -71,13 +81,26 @@ void MainWindow::wireSignals() {
     connect(m_cases, &CasesView::runRequested, this, [this](const QString& id) { m_ctx.run->start(id); navigate(Screen::Run); });
     connect(m_cases, &CasesView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
     connect(m_cases, &CasesView::historyRequested, this, [this](const QString& id) { m_history->showCase(id); navigate(Screen::Historial); });
+    connect(m_cases, &CasesView::openJiraRequested, this, [this](const QString& key) {
+        QString base = m_ctx.settings->jira().url.trimmed();
+        while (base.endsWith(QLatin1Char('/'))) base.chop(1);
+        if (base.isEmpty()) { showToast(QStringLiteral("Configura la URL de Jira en Ajustes"), theme::Amber); return; }
+        QDesktopServices::openUrl(QUrl(base + QStringLiteral("/browse/") + key));
+    });
+    // Deshacer borrados (caso, paso o captura) desde el aviso
+    connect(m_ctx.cases, &TestCaseStore::undoAvailable, this, [this](const QString& label) {
+        m_toast->show(label, theme::Amber, QStringLiteral("Deshacer"), [this]() {
+            if (m_ctx.cases->undo()) showToast(QStringLiteral("Restaurado"), theme::Green);
+        });
+    });
 
     // Plan
-    connect(m_plan, &PlanView::startPlanRequested, this, [this](const QStringList& ids, const QString& name) {
-        m_ctx.run->startSequence(ids, name);
+    connect(m_plan, &PlanView::startPlanRequested, this, [this](const QStringList& ids, const QString& name, const QString& planId) {
+        m_ctx.run->startSequence(ids, name, planId);
         navigate(Screen::Run);
-        showToast(QStringLiteral("Plan \"%1\" iniciado · %2 casos").arg(name).arg(ids.size()), theme::Green);
+        showToast(QStringLiteral("Ciclo de \"%1\" iniciado · %2 casos").arg(name).arg(ids.size()), theme::Green);
     });
+    connect(m_plan, &PlanView::cycleReportRequested, this, [this](const QString& planRunId) { m_history->showPlan(planRunId); navigate(Screen::Historial); });
 
     // Ejecución
     connect(m_run, &RunView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);

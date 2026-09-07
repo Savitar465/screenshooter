@@ -23,6 +23,7 @@ struct RunRecordStep {
     QString expected;
     StepResult result = StepResult::Pass;
     QString note;
+    int durationSecs = 0;
 };
 
 /// Ejecución terminada de un caso. Es una instantánea: no cambia aunque el caso se edite después.
@@ -37,15 +38,16 @@ struct RunRecord {
     Verdict verdict = Verdict::Superado;
     QList<RunRecordStep> steps;   // sólo los pasos que llegaron a ejecutarse
     int plannedSteps = 0;         // pasos que tenía el caso ("3 de 5" cuando se bloquea)
+    qint64 durationSecs = 0;      // tiempo real de ejecución (suma de los pasos; excluye el tiempo con la app cerrada)
 
     int count(StepResult r) const;
-    qint64 durationSecs() const { return startedAt.isValid() && finishedAt.isValid() ? startedAt.secsTo(finishedAt) : 0; }
     bool hasNotes() const;
 };
 
 /// Ejecución de un plan de pruebas: agrupa los RunRecord con el mismo planRunId.
 struct PlanRun {
     QString id;               // PR-0001
+    QString planId;           // TestPlan del que es ciclo (vacío en registros antiguos)
     QString name;
     QStringList caseIds;      // composición del plan al arrancar, en orden de ejecución
     QDateTime startedAt;

@@ -24,8 +24,12 @@ set(CORE_SOURCES
         src/core/models/RunHistory.cpp
         src/core/models/PlanReport.h
         src/core/models/PlanReport.cpp
+        src/core/models/CaseFilter.h
+        src/core/models/CaseFormats.h
+        src/core/models/CaseFormats.cpp
         src/core/services/ITestCaseRepository.h
         src/core/services/IRunHistoryRepository.h
+        src/core/services/IRunSessionRepository.h
         src/core/services/ISettingsRepository.h
         src/core/services/IScreenCapture.h
         src/core/services/IIssueTracker.h
@@ -50,6 +54,8 @@ set(APPLICATION_SOURCES
         src/application/EvidenceService.cpp
         src/application/BugReportService.h
         src/application/BugReportService.cpp
+        src/application/CaseTransferService.h
+        src/application/CaseTransferService.cpp
 )
 
 # infrastructure: implementaciones concretas de las interfaces de core.
@@ -58,6 +64,8 @@ set(INFRASTRUCTURE_SOURCES
         src/infrastructure/persistence/JsonTestCaseRepository.cpp
         src/infrastructure/persistence/JsonRunHistoryRepository.h
         src/infrastructure/persistence/JsonRunHistoryRepository.cpp
+        src/infrastructure/persistence/JsonRunSessionRepository.h
+        src/infrastructure/persistence/JsonRunSessionRepository.cpp
         src/infrastructure/persistence/QSettingsRepository.h
         src/infrastructure/persistence/QSettingsRepository.cpp
         src/infrastructure/capture/ScreenCaptureService.h

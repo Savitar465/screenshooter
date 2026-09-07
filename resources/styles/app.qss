@@ -127,3 +127,6 @@ QProgressBar::chunk { background: #10b981; border-radius: 3px; }
 /* ---- Toast ---- */
 QFrame[role="toast"] { background: #1c232d; border: 1px solid #2a3441; border-radius: 10px; }
 QFrame[role="toast"] QLabel { font-weight: 600; font-size: 13px; }
+
+/* Botones con menú desplegable: sin flecha indicadora (el "⋯" ya lo sugiere). */
+QPushButton::menu-indicator { image: none; width: 0px; }

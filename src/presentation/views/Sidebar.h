@@ -41,6 +41,8 @@ private:
     QLabel* m_runId;
     QLabel* m_runTitle;
     QLabel* m_runStep;
+    QLabel* m_planName;
+    QLabel* m_planCycle;
     QLabel* m_sprintCount;
     QProgressBar* m_sprintBar;
 };

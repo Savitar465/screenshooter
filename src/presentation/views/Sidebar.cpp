@@ -66,13 +66,19 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunH
     connect(m_runningCard, &QPushButton::clicked, this, [this]() { emit navigate(Screen::Run); });
     v->addWidget(m_runningCard);
 
-    // Sprint
-    auto* sprint = ui::card("card-elevated");
-    auto* sv = ui::vbox(sprint, 12, 6);
-    sv->addWidget(ui::label(QStringLiteral("SPRINT 14"), "eyebrow"));
+    // Plan activo y progreso de su ciclo actual
+    auto* planCard = ui::button(QString(), "running-card");
+    planCard->setToolTip(QStringLiteral("Abrir el plan activo"));
+    auto* sv = ui::vbox(planCard, 12, 6);
+    sv->addWidget(ui::label(QStringLiteral("PLAN ACTIVO"), "eyebrow"));
+    m_planName = new QLabel;
+    m_planName->setWordWrap(true);
+    m_planName->setStyleSheet(QStringLiteral("font-weight:700;font-size:12.5px;"));
+    sv->addWidget(m_planName);
     auto* row = new QWidget;
     auto* rowH = ui::hbox(row, 0, 0);
-    rowH->addWidget(new QLabel(QStringLiteral("Ejecutados")), 1);
+    m_planCycle = ui::label(QString(), "muted-sm");
+    rowH->addWidget(m_planCycle, 1);
     m_sprintCount = new QLabel;
     m_sprintCount->setStyleSheet(QStringLiteral("font-weight:700;"));
     rowH->addWidget(m_sprintCount);
@@ -81,11 +87,14 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunH
     m_sprintBar->setTextVisible(false);
     m_sprintBar->setRange(0, 100);
     sv->addWidget(m_sprintBar);
-    v->addWidget(sprint);
+    for (auto* child : planCard->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+    connect(planCard, &QPushButton::clicked, this, [this]() { emit navigate(Screen::Plan); });
+    v->addWidget(planCard);
 
     connect(&m_cases, &TestCaseStore::casesChanged, this, &Sidebar::refresh);
     connect(&m_cases, &TestCaseStore::caseChanged, this, &Sidebar::refresh);
     connect(&m_plan, &PlanStore::planChanged, this, &Sidebar::refresh);
+    connect(&m_plan, &PlanStore::plansChanged, this, &Sidebar::refresh);
     connect(&m_run, &RunController::runChanged, this, &Sidebar::refresh);
     connect(&m_history, &RunHistoryStore::historyChanged, this, &Sidebar::refresh);
     refresh();
@@ -138,9 +147,18 @@ void Sidebar::refresh() {
         m_runStep->setText(QStringLiteral("Paso %1 de %2").arg(r.idx + 1).arg(running->steps.size()));
     }
 
-    const int done = m_cases.executedCount();
-    m_sprintCount->setText(QStringLiteral("%1/%2").arg(done).arg(total));
-    m_sprintBar->setValue(total ? done * 100 / total : 0);
+    const TestPlan* plan = m_plan.active();
+    m_planName->setText(plan ? ui::elide(plan->name, 40) : QStringLiteral("—"));
+    const auto cycle = plan ? m_plan.latestCycle(plan->id) : std::nullopt;
+    if (cycle) {
+        m_planCycle->setText(cycle->plan.isFinished() ? QStringLiteral("Último ciclo") : QStringLiteral("Ciclo en curso"));
+        m_sprintCount->setText(QStringLiteral("%1/%2").arg(cycle->executed).arg(cycle->total()));
+        m_sprintBar->setValue(cycle->total() ? cycle->executed * 100 / cycle->total() : 0);
+    } else {
+        m_planCycle->setText(QStringLiteral("Sin ciclos"));
+        m_sprintCount->setText(QStringLiteral("%1 casos").arg(plan ? m_plan.orderedCaseIds().size() : 0));
+        m_sprintBar->setValue(0);
+    }
     setActive(m_active);
 }
 

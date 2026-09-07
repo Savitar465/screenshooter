@@ -60,10 +60,11 @@ PlanReport RunHistoryStore::report(const QString& planRunId) const {
     });
 }
 
-QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseIds) {
+QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseIds, const QString& planId) {
     if (caseIds.isEmpty()) return {};
     PlanRun p;
     p.id = nextId(m_history.plans, QStringLiteral("PR-"));
+    p.planId = planId;
     p.name = name;
     p.caseIds = caseIds;
     p.startedAt = QDateTime::currentDateTime();

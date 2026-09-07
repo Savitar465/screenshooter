@@ -28,6 +28,8 @@ void run(MainWindow& window, AppContext& ctx) {
             ctx.run->mark(StepResult::Pass);
             ctx.run->setNote(QStringLiteral("El total no cambia al aplicar el cupón"));
             ctx.run->mark(StepResult::Fail);
+            ctx.run->mark(StepResult::Skip);
+            ctx.run->back();   // reabre el paso 3
             window.navigate(Screen::Run);
         }},
         {"03b-ejecucion-fin", [&] {
@@ -38,7 +40,7 @@ void run(MainWindow& window, AppContext& ctx) {
         {"04-bug", [&] { window.navigate(Screen::Bug); }},
         {"07-historial-plan", [&] {
             ctx.run->finish();   // archiva TC-104 como ejecución suelta
-            ctx.run->startSequence({QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión Sprint 14"));
+            ctx.run->startSequence({QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión Sprint 14"), ctx.plan->activeId());
             ctx.run->mark(StepResult::Pass);
             ctx.run->setNote(QStringLiteral("El descuento no se refleja en el resumen"));
             ctx.run->mark(StepResult::Fail);
@@ -50,6 +52,7 @@ void run(MainWindow& window, AppContext& ctx) {
             window.finishRun();   // termina el plan y abre su informe
         }},
         {"08-historial-caso", [&] { window.navigate(Screen::Casos); ctx.cases->select(QStringLiteral("TC-102")); }},
+        {"09-planes", [&] { ctx.plan->createPlan(QStringLiteral("Smoke release 2.3")); ctx.plan->toggle(QStringLiteral("TC-101")); ctx.plan->setActive(QStringLiteral("PL-0001")); window.navigate(Screen::Plan); }},
         {"05-ajustes", [&] { window.navigate(Screen::Ajustes); window.showToast(QStringLiteral("Captura guardada en ~/QAflow/capturas"), QStringLiteral("#06b6d4")); }},
         {"06-casos-en-ejecucion", [&] { window.navigate(Screen::Casos); }},
     };

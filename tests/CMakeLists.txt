@@ -7,6 +7,7 @@ set(QAFLOW_TESTABLE_SOURCES
         ${CMAKE_SOURCE_DIR}/src/core/models/Settings.cpp
         ${CMAKE_SOURCE_DIR}/src/core/models/RunHistory.cpp
         ${CMAKE_SOURCE_DIR}/src/core/models/PlanReport.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/models/CaseFormats.cpp
         ${CMAKE_SOURCE_DIR}/src/application/SeedData.cpp
         ${CMAKE_SOURCE_DIR}/src/application/TestCaseStore.h
         ${CMAKE_SOURCE_DIR}/src/application/TestCaseStore.cpp

@@ -8,7 +8,7 @@
 
 namespace qaflow {
 
-/// Persistencia de casos de prueba y del plan. La implementación concreta vive en infrastructure/.
+/// Persistencia de casos de prueba y de los planes. La implementación concreta vive en infrastructure/.
 class ITestCaseRepository {
 public:
     virtual ~ITestCaseRepository() = default;
@@ -16,8 +16,8 @@ public:
     virtual std::optional<QList<TestCase>> loadCases() = 0;
     virtual bool saveCases(const QList<TestCase>& cases) = 0;
 
-    virtual std::optional<TestPlan> loadPlan() = 0;
-    virtual bool savePlan(const TestPlan& plan) = 0;
+    virtual std::optional<PlanCollection> loadPlans() = 0;
+    virtual bool savePlans(const PlanCollection& plans) = 0;
 };
 
 } // namespace qaflow

@@ -7,15 +7,29 @@
 
 namespace qaflow {
 
+namespace {
+constexpr int kUndoWindowMs = 20000;
+
+/// Renumera las capturas asignadas a pasos según una función índice antiguo → nuevo (0 = sin asignar).
+template <typename F>
+void remapShotSteps(TestCase& c, F newStepFor) {
+    for (auto& s : c.shots) if (s.step > 0) s.step = newStepFor(s.step);
+}
+} // namespace
+
 TestCaseStore::TestCaseStore(std::shared_ptr<ITestCaseRepository> repo, QObject* parent)
     : QObject(parent), m_repo(std::move(repo)) {
     // Las ediciones de texto llegan tecla a tecla; agrupamos las escrituras a disco.
     m_saveTimer.setSingleShot(true);
     m_saveTimer.setInterval(400);
     connect(&m_saveTimer, &QTimer::timeout, this, [this]() { save(); });
+    m_undoTimer.setSingleShot(true);
+    m_undoTimer.setInterval(kUndoWindowMs);
+    connect(&m_undoTimer, &QTimer::timeout, this, &TestCaseStore::commitUndo);
 }
 
 TestCaseStore::~TestCaseStore() {
+    commitUndo();
     if (m_dirty) save();
 }
 
@@ -51,8 +65,16 @@ TestCase* TestCaseStore::find(const QString& id) {
 }
 
 QStringList TestCaseStore::suites() const {
-    QStringList out = seed::defaultSuites();
-    for (const auto& c : m_cases) if (!out.contains(c.suite)) out << c.suite;
+    QStringList out;
+    for (const auto& c : m_cases) if (!c.suite.trimmed().isEmpty() && !out.contains(c.suite)) out << c.suite;
+    std::sort(out.begin(), out.end(), [](const QString& a, const QString& b) { return a.localeAwareCompare(b) < 0; });
+    return out;
+}
+
+QStringList TestCaseStore::tags() const {
+    QStringList out;
+    for (const auto& c : m_cases) for (const auto& t : c.tags) if (!out.contains(t, Qt::CaseInsensitive)) out << t;
+    std::sort(out.begin(), out.end(), [](const QString& a, const QString& b) { return a.localeAwareCompare(b) < 0; });
     return out;
 }
 
@@ -62,16 +84,23 @@ void TestCaseStore::select(const QString& id) {
     emit selectionChanged(id);
 }
 
-QString TestCaseStore::createCase() {
+QString TestCaseStore::nextCaseId() const {
     int maxNum = 100;
     for (const auto& c : m_cases) {
         bool ok = false;
         const int n = c.id.mid(3).toInt(&ok);
         if (ok) maxNum = std::max(maxNum, n);
     }
+    return QStringLiteral("TC-%1").arg(maxNum + 1);
+}
+
+QString TestCaseStore::createCase() {
+    commitUndo();
     TestCase c;
-    c.id = QStringLiteral("TC-%1").arg(maxNum + 1);
-    c.suite = seed::defaultSuites().first();
+    c.id = nextCaseId();
+    const TestCase* cur = selected();
+    const QStringList existing = suites();
+    c.suite = cur && !cur->suite.isEmpty() ? cur->suite : existing.isEmpty() ? QStringLiteral("General") : existing.first();
     c.priority = Priority::Media;
     c.status = CaseStatus::Borrador;
     c.steps.append(TestStep{});
@@ -82,22 +111,110 @@ QString TestCaseStore::createCase() {
     return c.id;
 }
 
+QString TestCaseStore::duplicateCase(const QString& id) {
+    const TestCase* src = find(id);
+    if (!src) return {};
+    commitUndo();
+    TestCase c = *src;
+    c.id = nextCaseId();
+    c.title = src->title.trimmed().isEmpty() ? QString() : src->title + QStringLiteral(" (copia)");
+    c.status = CaseStatus::Borrador;
+    c.lastRun = LastRun{};
+    c.shots.clear();
+    // Justo después del original, para que se vea de dónde sale.
+    const int pos = static_cast<int>(src - m_cases.constData()) + 1;
+    m_cases.insert(pos, c);
+    scheduleSave();
+    emit casesChanged();
+    select(c.id);
+    return c.id;
+}
+
+void TestCaseStore::removeCase(const QString& id) {
+    const TestCase* c = find(id);
+    if (!c) return;
+    QStringList files;
+    for (const auto& s : c->shots) files << s.path;
+    pushUndo(QStringLiteral("%1 eliminado").arg(id), files);
+
+    const int pos = static_cast<int>(c - m_cases.constData());
+    m_cases.removeAt(pos);
+    scheduleSave();
+    if (m_selectedId == id) {
+        m_selectedId.clear();
+        if (!m_cases.isEmpty()) m_selectedId = m_cases[std::min(pos, static_cast<int>(m_cases.size()) - 1)].id;
+    }
+    emit casesChanged();
+    emit selectionChanged(m_selectedId);
+}
+
 void TestCaseStore::updateCase(const QString& id, const std::function<void(TestCase&)>& mutate) {
     if (auto* c = find(id)) { mutate(*c); touch(id); }
+}
+
+std::pair<int, int> TestCaseStore::mergeCases(const QList<TestCase>& incoming) {
+    commitUndo();
+    int added = 0, updated = 0;
+    for (const auto& in : incoming) {
+        if (TestCase* existing = find(in.id)) {
+            // Lo local que no viaja en el intercambio se conserva.
+            TestCase merged = in;
+            merged.shots = existing->shots;
+            merged.lastRun = existing->lastRun;
+            *existing = merged;
+            ++updated;
+        } else {
+            TestCase fresh = in;
+            fresh.shots.clear();
+            m_cases.append(fresh);
+            ++added;
+        }
+    }
+    if (added || updated) {
+        scheduleSave();
+        emit casesChanged();
+        if (m_selectedId.isEmpty() && !m_cases.isEmpty()) select(m_cases.first().id);
+    }
+    return {added, updated};
 }
 
 void TestCaseStore::addStep(const QString& id) {
     updateCase(id, [](TestCase& c) { c.steps.append(TestStep{}); });
 }
 
-void TestCaseStore::removeStep(const QString& id, int index) {
+void TestCaseStore::insertStep(const QString& id, int index) {
     updateCase(id, [index](TestCase& c) {
-        if (index < 0 || index >= c.steps.size()) return;
-        c.steps.removeAt(index);
-        for (auto& s : c.shots) {
-            if (s.step == index + 1) s.step = 0;
-            else if (s.step > index + 1) --s.step;
-        }
+        const int at = std::clamp(index, 0, static_cast<int>(c.steps.size()));
+        c.steps.insert(at, TestStep{});
+        remapShotSteps(c, [at](int step) { return step > at ? step + 1 : step; });
+    });
+}
+
+void TestCaseStore::removeStep(const QString& id, int index) {
+    const TestCase* c = find(id);
+    if (!c || index < 0 || index >= c->steps.size()) return;
+    pushUndo(QStringLiteral("Paso %1 de %2 eliminado").arg(index + 1).arg(id));
+    m_applyingDestructive = true;
+    updateCase(id, [index](TestCase& tc) {
+        tc.steps.removeAt(index);
+        remapShotSteps(tc, [index](int step) { return step == index + 1 ? 0 : step > index + 1 ? step - 1 : step; });
+    });
+    m_applyingDestructive = false;
+}
+
+void TestCaseStore::moveStep(const QString& id, int index, int delta) {
+    updateCase(id, [index, delta](TestCase& c) {
+        const int j = index + delta;
+        if (index < 0 || index >= c.steps.size() || j < 0 || j >= c.steps.size() || j == index) return;
+        c.steps.move(index, j);
+        // Las capturas siguen a su paso: los pasos entre medias se desplazan una posición.
+        const int from = index + 1, to = j + 1;
+        remapShotSteps(c, [from, to](int step) {
+            if (step == from) return to;
+            if (from < to && step > from && step <= to) return step - 1;
+            if (from > to && step >= to && step < from) return step + 1;
+            return step;
+        });
     });
 }
 
@@ -114,9 +231,16 @@ void TestCaseStore::addShot(const QString& id, const Screenshot& shot) {
 }
 
 void TestCaseStore::removeShot(const QString& id, int shotId) {
-    updateCase(id, [shotId](TestCase& c) {
-        c.shots.erase(std::remove_if(c.shots.begin(), c.shots.end(), [&](const Screenshot& s) { return s.id == shotId; }), c.shots.end());
+    const TestCase* c = find(id);
+    if (!c) return;
+    auto it = std::find_if(c->shots.cbegin(), c->shots.cend(), [&](const Screenshot& s) { return s.id == shotId; });
+    if (it == c->shots.cend()) return;
+    pushUndo(QStringLiteral("Captura %1 eliminada").arg(it->fileName), {it->path});
+    m_applyingDestructive = true;
+    updateCase(id, [shotId](TestCase& tc) {
+        tc.shots.erase(std::remove_if(tc.shots.begin(), tc.shots.end(), [&](const Screenshot& s) { return s.id == shotId; }), tc.shots.end());
     });
+    m_applyingDestructive = false;
 }
 
 void TestCaseStore::assignShotStep(const QString& id, int shotId, int step) {
@@ -145,12 +269,45 @@ void TestCaseStore::sortShotsByStep(const QString& id) {
 
 int TestCaseStore::nextShotSequence() { return ++m_shotSeq; }
 
+// ---- Deshacer ------------------------------------------------------------------------------
+
+void TestCaseStore::pushUndo(const QString& label, const QStringList& releasedFiles) {
+    commitUndo();
+    m_undo = UndoEntry{label, m_cases, m_selectedId, releasedFiles};
+    m_undoTimer.start();
+    emit undoAvailable(label);
+}
+
+bool TestCaseStore::undo() {
+    if (!m_undo) return false;
+    m_undoTimer.stop();
+    UndoEntry e = std::move(*m_undo);
+    m_undo.reset();
+    m_cases = e.snapshot;
+    m_selectedId = find(e.selectedId) ? e.selectedId : (m_cases.isEmpty() ? QString() : m_cases.first().id);
+    scheduleSave();
+    emit casesChanged();
+    emit selectionChanged(m_selectedId);
+    return true;
+}
+
+void TestCaseStore::commitUndo() {
+    if (!m_undo) return;
+    m_undoTimer.stop();
+    QStringList files;
+    for (const auto& f : m_undo->releasedFiles) if (!f.isEmpty()) files << f;
+    m_undo.reset();
+    if (!files.isEmpty()) emit filesReleased(files);
+}
+
 int TestCaseStore::executedCount() const {
     return static_cast<int>(std::count_if(m_cases.cbegin(), m_cases.cend(),
         [](const TestCase& c) { return c.lastRun.outcome != RunOutcome::None; }));
 }
 
 void TestCaseStore::touch(const QString& id) {
+    // Cualquier edición posterior invalida el deshacer: sólo cubre la última operación destructiva.
+    if (!m_applyingDestructive) commitUndo();
     scheduleSave();
     emit caseChanged(id);
 }

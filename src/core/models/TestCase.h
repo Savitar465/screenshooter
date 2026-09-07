@@ -3,6 +3,7 @@
 #include <QDateTime>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 namespace qaflow {
 
@@ -47,9 +48,17 @@ struct TestCase {
     QString preconditions;
     QList<TestStep> steps;
     QList<Screenshot> shots;
+    QStringList tags;           // etiquetas libres: "regresión", "smoke"…
+    QString component;          // módulo o componente del producto
+    QString jiraKey;            // historia o épica enlazada: SHOP-12
 
     int unassignedShots() const;
     bool readyToBeMarkedListo() const;
+    /// Texto en el que buscan los filtros (id, título, suite, etiquetas, componente, historia).
+    QString searchText() const;
 };
+
+/// "a, b ,c" → ["a", "b", "c"] sin vacíos ni duplicados.
+QStringList parseTags(const QString& text);
 
 } // namespace qaflow

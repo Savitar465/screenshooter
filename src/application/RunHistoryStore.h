@@ -32,7 +32,7 @@ public:
     PlanReport report(const QString& planRunId) const;
 
     /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos).
-    QString startPlan(const QString& name, const QStringList& caseIds);
+    QString startPlan(const QString& name, const QStringList& caseIds, const QString& planId = QString());
     void finishPlan(const QString& planRunId);
     /// Añade una ejecución terminada. Asigna el id y devuelve el registro guardado.
     RunRecord addRun(RunRecord record);

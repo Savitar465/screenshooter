@@ -1,9 +1,13 @@
 #include "core/models/BugReport.h"
+#include "core/models/CaseFilter.h"
+#include "core/models/CaseFormats.h"
 #include "core/models/PlanReport.h"
 #include "core/models/RunHistory.h"
 #include "core/models/TestCase.h"
 #include "core/models/TestRun.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QtTest>
 
 using namespace qaflow;
@@ -69,14 +73,14 @@ private slots:
 
         RunRecord a;
         a.id = QStringLiteral("R-1"); a.caseId = QStringLiteral("TC-1"); a.caseTitle = QStringLiteral("Login"); a.planRunId = plan.id;
-        a.startedAt = plan.startedAt; a.finishedAt = a.startedAt.addSecs(60); a.verdict = Verdict::Fallido; a.plannedSteps = 2;
+        a.startedAt = plan.startedAt; a.finishedAt = a.startedAt.addSecs(60); a.durationSecs = 60; a.verdict = Verdict::Fallido; a.plannedSteps = 2;
         a.steps = {RunRecordStep{QStringLiteral("abrir"), {}, StepResult::Pass, {}}, RunRecordStep{QStringLiteral("entrar"), {}, StepResult::Fail, QStringLiteral("500")}};
         RunRecord a2 = a; // repetición posterior del mismo caso: cuenta la última
-        a2.id = QStringLiteral("R-2"); a2.startedAt = a.finishedAt; a2.finishedAt = a2.startedAt.addSecs(30); a2.verdict = Verdict::Superado;
+        a2.id = QStringLiteral("R-2"); a2.startedAt = a.finishedAt; a2.finishedAt = a2.startedAt.addSecs(30); a2.durationSecs = 30; a2.verdict = Verdict::Superado;
         a2.steps[1].result = StepResult::Pass; a2.steps[1].note.clear();
         RunRecord b;
         b.id = QStringLiteral("R-3"); b.caseId = QStringLiteral("TC-2"); b.caseTitle = QStringLiteral("Pago"); b.planRunId = plan.id;
-        b.startedAt = a2.finishedAt; b.finishedAt = b.startedAt.addSecs(90); b.verdict = Verdict::Bloqueado; b.plannedSteps = 3;
+        b.startedAt = a2.finishedAt; b.finishedAt = b.startedAt.addSecs(90); b.durationSecs = 90; b.verdict = Verdict::Bloqueado; b.plannedSteps = 3;
         b.steps = {RunRecordStep{QStringLiteral("pagar"), {}, StepResult::Block, QStringLiteral("pasarela caída")}};
         RunRecord other; // de otro plan: se ignora
         other.caseId = QStringLiteral("TC-3"); other.planRunId = QStringLiteral("PR-0002"); other.verdict = Verdict::Superado;
@@ -101,6 +105,96 @@ private slots:
         QVERIFY(md.contains(QStringLiteral("| TC-3 | Título de TC-3 |  | Pendiente |")));
         QVERIFY(md.contains(QStringLiteral("1. [Bloqueado] pagar — _pasarela caída_")));
         QVERIFY(md.contains(QStringLiteral("**Tasa de éxito:** 50 %")));
+    }
+
+    void tagsParsing() {
+        QCOMPARE(parseTags(QStringLiteral(" smoke, regresión ,, Smoke ,api")), (QStringList{QStringLiteral("smoke"), QStringLiteral("regresión"), QStringLiteral("api")}));
+        QVERIFY(parseTags(QString()).isEmpty());
+    }
+
+    void caseFilter() {
+        TestCase c;
+        c.id = QStringLiteral("TC-7"); c.title = QStringLiteral("Pago con tarjeta"); c.suite = QStringLiteral("Checkout");
+        c.priority = Priority::Alta; c.status = CaseStatus::Listo; c.tags = {QStringLiteral("smoke")}; c.component = QStringLiteral("Carrito");
+        c.jiraKey = QStringLiteral("SHOP-12"); c.lastRun = LastRun{RunOutcome::Failed, QDateTime::currentDateTime()};
+        CaseFilter f;
+        QVERIFY(f.isEmpty());
+        QVERIFY(f.matches(c));
+        f.text = QStringLiteral("SMOKE");  QVERIFY(f.matches(c));
+        f.text = QStringLiteral("carrito"); QVERIFY(f.matches(c));
+        f.text = QStringLiteral("shop-12"); QVERIFY(f.matches(c));
+        f.text = QStringLiteral("perfil"); QVERIFY(!f.matches(c));
+        f.text.clear();
+        f.suite = QStringLiteral("Perfil"); QVERIFY(!f.matches(c));
+        f.suite = QStringLiteral("Checkout"); QVERIFY(f.matches(c));
+        f.status = CaseStatus::Borrador; QVERIFY(!f.matches(c));
+        f.status = CaseStatus::Listo; QVERIFY(f.matches(c));
+        f.priority = Priority::Baja; QVERIFY(!f.matches(c));
+        f.priority.reset();
+        f.outcome = RunOutcome::None; QVERIFY(!f.matches(c));
+        f.outcome = RunOutcome::Failed; QVERIFY(f.matches(c));
+        QVERIFY(!f.isEmpty());
+    }
+
+    void jsonRoundTripKeepsMetadata() {
+        TestCase c;
+        c.id = QStringLiteral("TC-1"); c.title = QStringLiteral("T"); c.suite = QStringLiteral("S");
+        c.tags = {QStringLiteral("a"), QStringLiteral("b")}; c.component = QStringLiteral("Comp"); c.jiraKey = QStringLiteral("SHOP-1");
+        c.steps = {TestStep{QStringLiteral("acción"), QStringLiteral("esperado")}};
+        c.shots = {Screenshot{3, 1, QStringLiteral("cap.png"), QStringLiteral("/x/cap.png")}};
+        c.lastRun = LastRun{RunOutcome::Blocked, QDateTime(QDate(2026, 9, 7), QTime(10, 0))};
+        const QByteArray bytes = QJsonDocument(formats::casesToJson({c})).toJson();
+        const auto back = formats::casesFromJson(bytes);
+        QVERIFY(back.has_value());
+        QCOMPARE(back->size(), 1);
+        const TestCase& r = back->first();
+        QCOMPARE(r.tags, c.tags);
+        QCOMPARE(r.component, c.component);
+        QCOMPARE(r.jiraKey, c.jiraKey);
+        QCOMPARE(r.shots.size(), 1);
+        QCOMPARE(static_cast<int>(r.lastRun.outcome), static_cast<int>(RunOutcome::Blocked));
+        // Exportación para compartir: sin capturas; acepta también {"cases": [...]}.
+        const QByteArray shared = QJsonDocument(QJsonObject{{"cases", formats::casesToJson({c}, false)}}).toJson();
+        QVERIFY(formats::casesFromJson(shared)->first().shots.isEmpty());
+        QString err;
+        QVERIFY(!formats::casesFromJson("{not json", &err).has_value());
+        QVERIFY(!err.isEmpty());
+    }
+
+    void csvRoundTrip() {
+        TestCase a;
+        a.id = QStringLiteral("TC-1"); a.title = QStringLiteral("Título, con coma"); a.suite = QStringLiteral("S"); a.priority = Priority::Alta;
+        a.status = CaseStatus::Listo; a.tags = {QStringLiteral("smoke"), QStringLiteral("api")}; a.component = QStringLiteral("C"); a.jiraKey = QStringLiteral("SHOP-9");
+        a.preconditions = QStringLiteral("línea 1\nlínea 2");
+        a.steps = {TestStep{QStringLiteral("Pulsar \"OK\""), QStringLiteral("Cierra")}, TestStep{QStringLiteral("Otro"), QStringLiteral("Más")}};
+        TestCase b;
+        b.id = QStringLiteral("TC-2"); b.title = QStringLiteral("Sin pasos");
+        const QString csv = formats::casesToCsv({a, b});
+        QVERIFY(csv.startsWith(QStringLiteral("id,title,suite,priority,status,tags,component,jira,preconditions,step,action,expected\n")));
+        const auto back = formats::casesFromCsv(csv);
+        QVERIFY(back.has_value());
+        QCOMPARE(back->size(), 2);
+        const TestCase& r = back->first();
+        QCOMPARE(r.title, a.title);
+        QCOMPARE(r.tags, a.tags);
+        QCOMPARE(r.preconditions, a.preconditions);
+        QCOMPARE(r.steps.size(), 2);
+        QCOMPARE(r.steps[0].action, QStringLiteral("Pulsar \"OK\""));
+        QCOMPARE(static_cast<int>(r.priority), static_cast<int>(Priority::Alta));
+        QVERIFY(back->last().steps.isEmpty());
+        QString err;
+        QVERIFY(!formats::casesFromCsv(QStringLiteral("foo,bar\n1,2\n"), &err).has_value());
+        QVERIFY(err.contains(QStringLiteral("id")));
+    }
+
+    void markdownExport() {
+        TestCase c;
+        c.id = QStringLiteral("TC-1"); c.title = QStringLiteral("Login"); c.suite = QStringLiteral("Auth"); c.jiraKey = QStringLiteral("SHOP-3");
+        c.steps = {TestStep{QStringLiteral("Abrir | pantalla"), QStringLiteral("Se ve")}};
+        const QString md = formats::casesToMarkdown({c});
+        QVERIFY(md.contains(QStringLiteral("## TC-1 · Login")));
+        QVERIFY(md.contains(QStringLiteral("**Historia:** SHOP-3")));
+        QVERIFY(md.contains(QStringLiteral("| 1 | Abrir \\| pantalla | Se ve |")));
     }
 
     void enumRoundTrip() {

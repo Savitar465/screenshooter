@@ -185,17 +185,36 @@ si no → `Bearer token` (PAT de Jira Server/Data Center).
 
 ## Tests
 
-`tests/` compila sólo `core` + `application` contra un repositorio en memoria
-(`MemoryRepo`, `MemoryHistoryRepo`), sin UI ni red: modelos, etiquetas de última ejecución, flujo de
-ejecución/veredictos, paso anterior y corrección de veredictos, saltos N/A, cola del plan,
-reasignación de capturas al borrar pasos, archivado en el historial, informe de plan (conteos,
-pendientes, Markdown), continuidad de ids entre sesiones, restauración de la sesión, estimación
-con duraciones reales, borrar/duplicar/deshacer, reordenación de pasos con capturas, filtros y
-formatos JSON/CSV/Markdown (ida y vuelta), colección de planes (crear, duplicar, archivar,
-borrar, persistir), orden propio del plan y ciclos enlazados a su plan.
+`tests/` compila sólo `core` + `application` (sin UI ni red) en una biblioteca estática
+`qaflow_testable` y construye **un ejecutable por clase bajo prueba**:
 
 ```
-cmake -S . -B build && cmake --build build && ctest --test-dir build
+tests/
+├── support/
+│   ├── MemoryRepositories.h   ITestCaseRepository, IRunHistoryRepository e IRunSessionRepository en memoria
+│   └── AppFixture.h           TestCaseStore + RunHistoryStore + RunController + PlanStore ya cargados con los datos de ejemplo
+├── core/                      modelos y funciones puras
+│   ├── test_test_case.cpp     LastRun, readyToBeMarkedListo, searchText, parseTags, enums
+│   ├── test_test_run.cpp      veredicto, saltos N/A, cronómetros, formatDuration, enums
+│   ├── test_bug_report.cpp    validación y descripción para Jira
+│   ├── test_plan_report.cpp   conteos por caso, pendientes, veredicto, Markdown
+│   ├── test_case_filter.cpp   búsqueda libre y filtros por campo
+│   └── test_case_formats.cpp  JSON, CSV y Markdown (ida y vuelta, errores)
+└── application/               stores y controlador sobre repositorios en memoria
+    ├── test_test_case_store.cpp    carga, alta, duplicar, fusión, pasos, borrar y deshacer
+    ├── test_run_controller.cpp     flujo, correcciones, archivado, cola del plan, sesión
+    ├── test_run_history_store.cpp  ids, informes, cierre de planes, persistencia
+    └── test_plan_store.cpp         colección, orden, ciclos, estimación
+```
+
+Cada fichero es una clase QtTest con los slots agrupados por tema (`// ---- …`). Los tests se
+registran como `<capa>/<nombre>` y llevan la capa como etiqueta:
+
+```
+cmake -S . -B build && cmake --build build
+ctest --test-dir build                 # todo
+ctest --test-dir build -L core         # sólo modelos
+ctest --test-dir build -R run_controller --output-on-failure
 ```
 
 ## Herramienta de desarrollo: capturas de pantallas

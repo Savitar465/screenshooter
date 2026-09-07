@@ -20,10 +20,12 @@ cmake --build build -j
 ./build/qaflow
 ```
 
-Tests unitarios:
+Tests unitarios (un ejecutable por clase, etiquetados por capa):
 
 ```bash
 ctest --test-dir build --output-on-failure
+ctest --test-dir build -L core           # sólo core/
+ctest --test-dir build -L application    # sólo application/
 ```
 
 ## Pantallas

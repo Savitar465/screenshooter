@@ -198,15 +198,17 @@ void RunController::changed() {
     persistSession();
 }
 
-void RunController::persistSession() {
+bool RunController::persistSession() {
     m_saveTimer.stop();
-    if (!m_session) return;
-    if (m_run.caseId.isEmpty()) { m_session->clearSession(); return; }
+    if (!m_session) return false;
+    if (m_run.caseId.isEmpty()) { m_session->clearSession(); return true; }
     RunSession s{m_run, m_queue, m_planRunId};
     // Lo transcurrido en este paso se consolida para que al restaurar siga desde aquí.
     s.run.stepElapsedSecs = m_run.currentStepSecs();
     s.run.stepStartedAt = QDateTime();
-    m_session->saveSession(s);
+    if (m_session->saveSession(s)) return true;
+    emit saveFailed(tr("la ejecución en curso"));
+    return false;
 }
 
 } // namespace qaflow

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "application/CaseTransferService.h"
 #include "core/models/CaseFilter.h"
 
 #include <QWidget>
@@ -19,6 +20,7 @@ class TestCaseStore;
 class RunController;
 class RunHistoryStore;
 class CaseTransferService;
+class BugStore;
 class TextArea;
 
 /// Pantalla "Casos de prueba": lista filtrable a la izquierda y editor del caso a la derecha.
@@ -26,7 +28,14 @@ class CasesView : public QWidget {
     Q_OBJECT
 public:
     CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer,
-              QWidget* parent = nullptr);
+              BugStore& bugs, QWidget* parent = nullptr);
+
+    // Acciones también accesibles desde el menú de la ventana
+    void focusSearch();
+    void duplicateSelected();
+    void removeSelected();
+    void importCases();
+    void exportCases(CaseTransferService::Format format);
 
 signals:
     void runRequested(const QString& caseId);
@@ -34,6 +43,8 @@ signals:
     void historyRequested(const QString& caseId);
     /// Abrir en el navegador la historia de Jira enlazada al caso.
     void openJiraRequested(const QString& key);
+    /// Abrir en el navegador un issue ya creado.
+    void openIssueRequested(const QString& url);
     void toast(const QString& message, const QString& color);
 
 private:
@@ -45,23 +56,22 @@ private:
     void refreshSteps();
     void refreshShots();
     void refreshHistory();
+    void refreshBugs();
     void onCaseChanged(const QString& id);
     void edit(const std::function<void()>& mutation);
 
     void newSuite();
-    void duplicateSelected();
-    void removeSelected();
-    void importCases();
-    void exportCases(int format);
 
     TestCaseStore& m_store;
     RunController& m_run;
     RunHistoryStore& m_history;
     CaseTransferService& m_transfer;
+    BugStore& m_bugs;
     CaseFilter m_filter;
     bool m_selfEdit = false;
 
     // lista
+    QLineEdit* m_search = nullptr;
     QLayout* m_filterRow = nullptr;
     QComboBox* m_statusFilter = nullptr;
     QComboBox* m_priorityFilter = nullptr;
@@ -90,6 +100,8 @@ private:
     QWidget* m_shotsContainer = nullptr;
     QLabel* m_historyHeader = nullptr;
     QVBoxLayout* m_historyLayout = nullptr;
+    QLabel* m_bugsHeader = nullptr;
+    QVBoxLayout* m_bugsLayout = nullptr;
 };
 
 } // namespace qaflow

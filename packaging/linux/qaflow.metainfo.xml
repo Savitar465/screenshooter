@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.savitar47.qaflow</id>
+  <name>QAflow</name>
+  <summary>Casos de prueba, planes, ejecución manual con evidencias y reporte de bugs</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>Aplicación de escritorio para equipos de QA: gestiona casos de prueba, planes de regresión con ciclos, ejecución manual paso a paso con capturas de pantalla y reporte de bugs a Jira, GitHub, GitLab o Azure DevOps.</p>
+  </description>
+  <launchable type="desktop-id">qaflow.desktop</launchable>
+  <provides><binary>qaflow</binary></provides>
+</component>

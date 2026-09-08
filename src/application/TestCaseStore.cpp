@@ -45,8 +45,14 @@ void TestCaseStore::load() {
 
 bool TestCaseStore::save() {
     m_saveTimer.stop();
+    if (!m_repo) { m_dirty = false; return false; }
+    if (!m_repo->saveCases(m_cases)) {
+        m_dirty = true;   // se reintenta en el siguiente guardado
+        emit saveFailed(tr("los casos de prueba"));
+        return false;
+    }
     m_dirty = false;
-    return m_repo && m_repo->saveCases(m_cases);
+    return true;
 }
 
 void TestCaseStore::scheduleSave() {
@@ -117,7 +123,7 @@ QString TestCaseStore::duplicateCase(const QString& id) {
     commitUndo();
     TestCase c = *src;
     c.id = nextCaseId();
-    c.title = src->title.trimmed().isEmpty() ? QString() : src->title + QStringLiteral(" (copia)");
+    c.title = src->title.trimmed().isEmpty() ? QString() : src->title + tr(" (copia)");
     c.status = CaseStatus::Borrador;
     c.lastRun = LastRun{};
     c.shots.clear();
@@ -135,7 +141,7 @@ void TestCaseStore::removeCase(const QString& id) {
     if (!c) return;
     QStringList files;
     for (const auto& s : c->shots) files << s.path;
-    pushUndo(QStringLiteral("%1 eliminado").arg(id), files);
+    pushUndo(tr("%1 eliminado").arg(id), files);
 
     const int pos = static_cast<int>(c - m_cases.constData());
     m_cases.removeAt(pos);
@@ -193,7 +199,7 @@ void TestCaseStore::insertStep(const QString& id, int index) {
 void TestCaseStore::removeStep(const QString& id, int index) {
     const TestCase* c = find(id);
     if (!c || index < 0 || index >= c->steps.size()) return;
-    pushUndo(QStringLiteral("Paso %1 de %2 eliminado").arg(index + 1).arg(id));
+    pushUndo(tr("Paso %1 de %2 eliminado").arg(index + 1).arg(id));
     m_applyingDestructive = true;
     updateCase(id, [index](TestCase& tc) {
         tc.steps.removeAt(index);
@@ -235,7 +241,7 @@ void TestCaseStore::removeShot(const QString& id, int shotId) {
     if (!c) return;
     auto it = std::find_if(c->shots.cbegin(), c->shots.cend(), [&](const Screenshot& s) { return s.id == shotId; });
     if (it == c->shots.cend()) return;
-    pushUndo(QStringLiteral("Captura %1 eliminada").arg(it->fileName), {it->path});
+    pushUndo(tr("Captura %1 eliminada").arg(it->fileName), {it->path});
     m_applyingDestructive = true;
     updateCase(id, [shotId](TestCase& tc) {
         tc.shots.erase(std::remove_if(tc.shots.begin(), tc.shots.end(), [&](const Screenshot& s) { return s.id == shotId; }), tc.shots.end());

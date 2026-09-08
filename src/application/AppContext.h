@@ -1,6 +1,7 @@
 #pragma once
 
 #include "application/BugReportService.h"
+#include "application/BugStore.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
 #include "application/PlanStore.h"
@@ -8,6 +9,8 @@
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
+
+#include <QString>
 
 namespace qaflow {
 
@@ -21,7 +24,10 @@ struct AppContext {
     SettingsStore* settings = nullptr;
     EvidenceService* evidence = nullptr;
     BugReportService* bugs = nullptr;
+    BugStore* bugLedger = nullptr;
     CaseTransferService* transfer = nullptr;
+    /// Directorio de datos (cases.json, history.json…), para mostrarlo o abrirlo desde la UI.
+    QString dataDir;
 };
 
 } // namespace qaflow

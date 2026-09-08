@@ -5,6 +5,8 @@
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/Ui.h"
 
+#include <QCoreApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QFileDialog>
 #include <QGridLayout>
@@ -16,14 +18,16 @@
 namespace qaflow {
 
 namespace {
-QWidget* field(const QString& title, QWidget* w) {
+QWidget* field(const QString& title, QWidget* w, QLabel** titleOut = nullptr) {
     auto* box = new QWidget;
     auto* v = ui::vbox(box, 0, 6);
-    v->addWidget(ui::label(title.toUpper(), "eyebrow"));
+    auto* l = ui::label(title.toUpper(), "eyebrow");
+    v->addWidget(l);
     v->addWidget(w);
+    if (titleOut) *titleOut = l;
     return box;
 }
-QFrame* section(const QString& accent, const QString& title, const QString& subtitle, QWidget* headerRight, QVBoxLayout** body) {
+QFrame* section(const QString& accent, const QString& title, const QString& subtitle, QWidget* headerRight, QVBoxLayout** body, QLabel** subtitleOut = nullptr) {
     auto* card = ui::card("card-lg");
     auto* h = ui::hbox(card, 0, 0);
     h->addWidget(ui::accentBar(accent));
@@ -39,12 +43,23 @@ QFrame* section(const QString& accent, const QString& title, const QString& subt
     sub->setTextFormat(Qt::RichText);
     sub->setWordWrap(true);
     tv->addWidget(sub);
+    if (subtitleOut) *subtitleOut = sub;
     hh->addWidget(text, 1);
     if (headerRight) hh->addWidget(headerRight, 0, Qt::AlignTop);
     v->addWidget(head);
     h->addWidget(content, 1);
     *body = v;
     return card;
+}
+
+QString hintFor(TrackerKind k) {
+    switch (k) {
+        case TrackerKind::Jira: return QCoreApplication::translate("SettingsView", "Los bugs se crean como issues del tipo elegido en el proyecto indicado. Con correo → Jira Cloud (API token); sin correo → PAT de Jira Server/Data Center.");
+        case TrackerKind::GitHub: return QCoreApplication::translate("SettingsView", "Los bugs se crean como issues del repositorio. URL de la API: <b>https://api.github.com</b> (o https://host/api/v3 en Enterprise). Token: PAT con permiso <i>issues</i>. La API no admite adjuntos.");
+        case TrackerKind::GitLab: return QCoreApplication::translate("SettingsView", "Los bugs se crean como issues del proyecto y las capturas se suben como adjuntos. Token: PAT con ámbito <i>api</i>.");
+        case TrackerKind::AzureDevOps: return QCoreApplication::translate("SettingsView", "Los bugs se crean como work items del tipo elegido. URL: <b>https://dev.azure.com/organización</b>. Token: PAT con permiso <i>Work Items (read &amp; write)</i>.");
+    }
+    return {};
 }
 } // namespace
 
@@ -63,74 +78,143 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, QWid
 
     auto* head = new QWidget;
     auto* hv = ui::vbox(head, 0, 0);
-    hv->addWidget(ui::label(QStringLiteral("CONFIGURACIÓN"), "eyebrow"));
-    hv->addWidget(ui::label(QStringLiteral("Ajustes e integraciones"), "h1"));
+    hv->addWidget(ui::label(tr("CONFIGURACIÓN"), "eyebrow"));
+    hv->addWidget(ui::label(tr("Ajustes e integraciones"), "h1"));
     v->addWidget(head);
 
-    // Jira
+    // General: idioma, tema y bandeja
+    QVBoxLayout* gb;
+    auto* general = section(theme::Violet, QStringLiteral("General"),
+                            tr("El idioma y el tema se aplican al instante reconstruyendo la ventana."), nullptr, &gb);
+    auto* grow = new QWidget;
+    auto* gg = new QGridLayout(grow);
+    gg->setContentsMargins(0, 0, 0, 0);
+    gg->setHorizontalSpacing(12);
+    m_language = new QComboBox;
+    m_language->addItem(tr("Como el sistema"), static_cast<int>(AppLanguage::System));
+    m_language->addItem(QStringLiteral("Español"), static_cast<int>(AppLanguage::Spanish));
+    m_language->addItem(QStringLiteral("English"), static_cast<int>(AppLanguage::English));
+    m_theme = new QComboBox;
+    m_theme->addItem(tr("Oscuro"), static_cast<int>(AppTheme::Dark));
+    m_theme->addItem(tr("Claro"), static_cast<int>(AppTheme::Light));
+    m_theme->addItem(tr("Como el sistema"), static_cast<int>(AppTheme::System));
+    gg->addWidget(field(tr("Idioma"), m_language), 0, 0);
+    gg->addWidget(field(tr("Tema"), m_theme), 0, 1);
+    gg->setColumnStretch(0, 1);
+    gg->setColumnStretch(1, 1);
+    gb->addWidget(grow);
+    m_closeToTray = new QCheckBox(tr("Al cerrar la ventana, seguir en la bandeja del sistema"));
+    gb->addWidget(m_closeToTray);
+    v->addWidget(general);
+    connect(m_language, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (m_selfEdit) return;
+        const auto l = static_cast<AppLanguage>(m_language->currentData().toInt());
+        m_settings.updateApp([l](AppSettings& a) { a.language = l; });
+    });
+    connect(m_theme, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (m_selfEdit) return;
+        const auto t = static_cast<AppTheme>(m_theme->currentData().toInt());
+        m_settings.updateApp([t](AppSettings& a) { a.theme = t; });
+    });
+    connect(m_closeToTray, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_selfEdit) return;
+        m_selfEdit = true;
+        m_settings.updateApp([on](AppSettings& a) { a.closeToTray = on; });
+        m_selfEdit = false;
+    });
+
+    // Gestor de incidencias
     m_badge = ui::button(QString(), "badge");
-    m_badge->setToolTip(QStringLiteral("Probar la conexión con Jira"));
+    m_badge->setToolTip(tr("Probar la conexión"));
     connect(m_badge, &QPushButton::clicked, this, &SettingsView::testConnection);
-    QVBoxLayout* jb;
-    auto* jira = section(QStringLiteral("#3b82f6"), QStringLiteral("Jira"),
-                         QStringLiteral("Los bugs se crean como issues tipo <b style=\"color:#e6edf3\">Bug</b> en el proyecto indicado."), m_badge, &jb);
-    auto* jrow = new QWidget;
-    auto* jg = new QGridLayout(jrow);
-    jg->setContentsMargins(0, 0, 0, 0);
-    jg->setHorizontalSpacing(12);
+    QVBoxLayout* tb;
+    auto* tracker = section(theme::Blue, tr("Gestor de incidencias"), QString(), m_badge, &tb, &m_kindHint);
+
+    auto* krow = new QWidget;
+    auto* kg = new QGridLayout(krow);
+    kg->setContentsMargins(0, 0, 0, 0);
+    kg->setHorizontalSpacing(12);
+    m_kind = new QComboBox;
+    for (auto k : {TrackerKind::Jira, TrackerKind::GitHub, TrackerKind::GitLab, TrackerKind::AzureDevOps}) m_kind->addItem(toString(k));
+    connect(m_kind, &QComboBox::currentTextChanged, this, [this](const QString& t) {
+        if (m_selfEdit) return;
+        const TrackerKind kind = trackerKindFromString(t);
+        m_selfEdit = true;
+        m_settings.updateTracker([&](TrackerSettings& s) {
+            const TrackerSettings defaults;
+            // Al cambiar de gestor, URL y proyecto vuelven a un valor razonable si eran los de otro gestor.
+            TrackerSettings prev = s;
+            prev.kind = s.kind;
+            if (s.url.trimmed().isEmpty() || s.url == prev.defaultUrl()) { s.kind = kind; s.url = s.defaultUrl(); }
+            else s.kind = kind;
+            if (s.project.trimmed().isEmpty() || s.project == defaults.project) s.project = QString();
+            s.connected = false;
+        });
+        m_selfEdit = false;
+        refreshTracker();
+    });
     m_url = new QLineEdit;
+    kg->addWidget(field(tr("Gestor"), m_kind), 0, 0);
+    kg->addWidget(field(tr("URL"), m_url), 0, 1);
+    kg->setColumnStretch(0, 1);
+    kg->setColumnStretch(1, 2);
+    tb->addWidget(krow);
+
+    auto* prow = new QWidget;
+    auto* pg = new QGridLayout(prow);
+    pg->setContentsMargins(0, 0, 0, 0);
+    pg->setHorizontalSpacing(12);
     m_project = new QLineEdit;
     m_project->setProperty("role", QStringLiteral("mono"));
-    jg->addWidget(field(QStringLiteral("URL de la instancia"), m_url), 0, 0);
-    jg->addWidget(field(QStringLiteral("Proyecto"), m_project), 0, 1);
-    jg->setColumnStretch(0, 2);
-    jg->setColumnStretch(1, 1);
-    jb->addWidget(jrow);
-    auto* arow = new QWidget;
-    auto* ag = new QGridLayout(arow);
-    ag->setContentsMargins(0, 0, 0, 0);
-    ag->setHorizontalSpacing(12);
     m_email = new QLineEdit;
-    m_email->setPlaceholderText(QStringLiteral("Sólo Jira Cloud · vacío para usar un PAT"));
+    m_email->setPlaceholderText(tr("Sólo Jira Cloud · vacío para usar un PAT"));
+    m_emailField = field(tr("Correo de la cuenta"), m_email);
+    pg->addWidget(field(tr("Proyecto"), m_project, &m_projectLabel), 0, 0);
+    pg->addWidget(m_emailField, 0, 1);
+    pg->setColumnStretch(0, 1);
+    pg->setColumnStretch(1, 1);
+    tb->addWidget(prow);
+
     m_token = new QLineEdit;
     m_token->setEchoMode(QLineEdit::Password);
-    ag->addWidget(field(QStringLiteral("Correo de la cuenta"), m_email), 0, 0);
-    ag->addWidget(field(QStringLiteral("Token de API"), m_token), 0, 1);
-    ag->setColumnStretch(0, 1);
-    ag->setColumnStretch(1, 2);
-    jb->addWidget(arow);
-    v->addWidget(jira);
+    tb->addWidget(field(tr("Token de API"), m_token));
+    m_secretNote = ui::label(QString(), "muted-sm");
+    m_secretNote->setWordWrap(true);
+    tb->addWidget(m_secretNote);
+    v->addWidget(tracker);
 
-    auto bindJira = [this](QLineEdit* e, void (*apply)(JiraSettings&, const QString&)) {
+    auto bind = [this](QLineEdit* e, void (*apply)(TrackerSettings&, const QString&)) {
         connect(e, &QLineEdit::textEdited, this, [this, apply](const QString& t) {
             m_selfEdit = true;
-            m_settings.updateJira([&](JiraSettings& j) { apply(j, t); j.connected = false; });
+            m_settings.updateTracker([&](TrackerSettings& s) { apply(s, t); s.connected = false; });
             m_selfEdit = false;
+            ui::setFlag(m_badge, "active", false);
+            m_badge->setText(tr("●  Desconectado"));
         });
     };
-    bindJira(m_url, [](JiraSettings& j, const QString& t) { j.url = t; });
-    bindJira(m_project, [](JiraSettings& j, const QString& t) { j.project = t; });
-    bindJira(m_email, [](JiraSettings& j, const QString& t) { j.email = t; });
-    bindJira(m_token, [](JiraSettings& j, const QString& t) { j.token = t; });
+    bind(m_url, [](TrackerSettings& s, const QString& t) { s.url = t; });
+    bind(m_project, [](TrackerSettings& s, const QString& t) { s.project = t; });
+    bind(m_email, [](TrackerSettings& s, const QString& t) { s.email = t; });
+    bind(m_token, [](TrackerSettings& s, const QString& t) { s.token = t; });
 
     // Capturas
     QVBoxLayout* cb;
-    auto* cap = section(theme::Cyan, QStringLiteral("Capturas de pantalla"),
-                        QStringLiteral("Se guardan localmente y se adjuntan al paso activo de la ejecución."), nullptr, &cb);
+    auto* cap = section(theme::Cyan, tr("Capturas de pantalla"),
+                        tr("Se guardan localmente y se adjuntan al paso activo de la ejecución."), nullptr, &cb);
     auto* crow = new QWidget;
     auto* cg = new QGridLayout(crow);
     cg->setContentsMargins(0, 0, 0, 0);
     cg->setHorizontalSpacing(12);
     m_shortcut = new QLineEdit;
     m_shortcut->setProperty("role", QStringLiteral("mono"));
-    m_shortcut->setToolTip(QStringLiteral("Atajo activo mientras QAflow tiene el foco"));
+    m_shortcut->setToolTip(tr("Atajo activo mientras QAflow tiene el foco"));
     m_format = new QComboBox;
     m_format->addItems({QStringLiteral("PNG"), QStringLiteral("JPG"), QStringLiteral("WebP")});
     m_mode = new QComboBox;
-    m_mode->addItems({toString(CaptureMode::FullScreen), toString(CaptureMode::ActiveWindow), toString(CaptureMode::Region)});
-    cg->addWidget(field(QStringLiteral("Atajo"), m_shortcut), 0, 0);
-    cg->addWidget(field(QStringLiteral("Formato"), m_format), 0, 1);
-    cg->addWidget(field(QStringLiteral("Modo"), m_mode), 0, 2);
+    for (auto m : {CaptureMode::FullScreen, CaptureMode::ActiveWindow, CaptureMode::Region}) m_mode->addItem(label(m), static_cast<int>(m));
+    cg->addWidget(field(tr("Atajo"), m_shortcut), 0, 0);
+    cg->addWidget(field(tr("Formato"), m_format), 0, 1);
+    cg->addWidget(field(tr("Modo"), m_mode), 0, 2);
     for (int i = 0; i < 3; ++i) cg->setColumnStretch(i, 1);
     cb->addWidget(crow);
     auto* frow = new QWidget;
@@ -138,13 +222,13 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, QWid
     m_folder = new QLineEdit;
     m_folder->setProperty("role", QStringLiteral("mono"));
     fh->addWidget(m_folder, 1);
-    auto* browse = ui::button(QStringLiteral("Elegir…"), "outline");
+    auto* browse = ui::button(tr("Elegir…"), "outline");
     connect(browse, &QPushButton::clicked, this, [this]() {
-        const QString dir = QFileDialog::getExistingDirectory(this, QStringLiteral("Carpeta de capturas"), m_folder->text());
+        const QString dir = QFileDialog::getExistingDirectory(this, tr("Carpeta de capturas"), m_folder->text());
         if (!dir.isEmpty()) m_settings.updateCapture([&](CaptureSettings& c) { c.folder = dir; });
     });
     fh->addWidget(browse);
-    cb->addWidget(field(QStringLiteral("Carpeta"), frow));
+    cb->addWidget(field(tr("Carpeta"), frow));
     v->addWidget(cap);
 
     connect(m_shortcut, &QLineEdit::editingFinished, this, [this]() {
@@ -156,29 +240,55 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, QWid
         if (m_selfEdit) return;
         m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { c.format = t; }); m_selfEdit = false;
     });
-    connect(m_mode, &QComboBox::currentTextChanged, this, [this](const QString& t) {
+    connect(m_mode, &QComboBox::currentIndexChanged, this, [this](int) {
         if (m_selfEdit) return;
-        m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { c.mode = captureModeFromString(t); }); m_selfEdit = false;
+        const auto mode = static_cast<CaptureMode>(m_mode->currentData().toInt());
+        m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { c.mode = mode; }); m_selfEdit = false;
     });
     connect(m_folder, &QLineEdit::textEdited, this, [this](const QString& t) {
         m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { c.folder = t; }); m_selfEdit = false;
     });
 
-    connect(&m_settings, &SettingsStore::jiraChanged, this, &SettingsView::refreshJira);
+    connect(&m_settings, &SettingsStore::trackerChanged, this, &SettingsView::refreshTracker);
     connect(&m_settings, &SettingsStore::captureChanged, this, &SettingsView::refreshCapture);
-    refreshJira();
+    connect(&m_settings, &SettingsStore::appChanged, this, &SettingsView::refreshGeneral);
+    refreshGeneral();
+    refreshTracker();
     refreshCapture();
 }
 
-void SettingsView::refreshJira() {
-    const JiraSettings& j = m_settings.jira();
-    ui::setFlag(m_badge, "active", j.connected);
-    m_badge->setText((j.connected ? QStringLiteral("●  Conectado") : QStringLiteral("●  Desconectado")));
+void SettingsView::refreshGeneral() {
     if (m_selfEdit) return;
-    m_url->setText(j.url);
-    m_project->setText(j.project);
-    m_email->setText(j.email);
-    m_token->setText(j.token);
+    const AppSettings& a = m_settings.app();
+    m_selfEdit = true;
+    m_language->setCurrentIndex(std::max(0, m_language->findData(static_cast<int>(a.language))));
+    m_theme->setCurrentIndex(std::max(0, m_theme->findData(static_cast<int>(a.theme))));
+    m_closeToTray->setChecked(a.closeToTray);
+    m_selfEdit = false;
+}
+
+void SettingsView::refreshTracker() {
+    const TrackerSettings& t = m_settings.tracker();
+    ui::setFlag(m_badge, "active", t.connected);
+    m_badge->setText(t.connected ? tr("●  Conectado") : tr("●  Desconectado"));
+    m_kindHint->setText(hintFor(t.kind));
+    m_projectLabel->setText(t.projectLabel().toUpper());
+    m_project->setPlaceholderText(t.projectPlaceholder());
+    m_url->setPlaceholderText(t.defaultUrl());
+    m_emailField->setVisible(t.kind == TrackerKind::Jira);
+    m_token->setPlaceholderText(t.kind == TrackerKind::Jira ? tr("API token (Cloud) o PAT (Server)") : tr("Personal access token"));
+    const bool secure = m_settings.secretsAreSecure();
+    m_secretNote->setText(secure ? tr("🔒 Token guardado en: %1").arg(m_settings.secretBackend())
+                                 : tr("⚠ Token guardado %1. Instala un llavero (secret-tool / libsecret en Linux) para cifrarlo.").arg(m_settings.secretBackend()));
+    m_secretNote->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;").arg(secure ? theme::Muted : theme::AmberSoft));
+    if (m_selfEdit) return;
+    m_selfEdit = true;
+    m_kind->setCurrentText(toString(t.kind));
+    m_url->setText(t.url);
+    m_project->setText(t.project);
+    m_email->setText(t.email);
+    m_token->setText(t.token);
+    m_selfEdit = false;
 }
 
 void SettingsView::refreshCapture() {
@@ -187,19 +297,20 @@ void SettingsView::refreshCapture() {
     m_selfEdit = true;
     m_shortcut->setText(c.shortcut);
     m_format->setCurrentText(c.format);
-    m_mode->setCurrentText(toString(c.mode));
+    m_mode->setCurrentIndex(std::max(0, m_mode->findData(static_cast<int>(c.mode))));
     m_folder->setText(c.folder);
     m_selfEdit = false;
 }
 
 void SettingsView::testConnection() {
     m_badge->setEnabled(false);
-    m_badge->setText(QStringLiteral("●  Probando…"));
-    m_bugs.testConnection([this](const ConnectionResult& r) {
+    m_badge->setText(tr("●  Probando…"));
+    const QString name = toString(m_settings.tracker().kind);
+    m_bugs.testConnection([this, name](const ConnectionResult& r) {
         m_badge->setEnabled(true);
-        m_settings.updateJira([&](JiraSettings& j) { j.connected = r.ok; });
-        if (r.ok) emit toast(QStringLiteral("Conectado a Jira como %1").arg(r.displayName), theme::Green);
-        else emit toast(QStringLiteral("No se pudo conectar · %1").arg(r.error), theme::Red);
+        m_settings.updateTracker([&](TrackerSettings& s) { s.connected = r.ok; });
+        if (r.ok) emit toast(tr("Conectado a %1 como %2").arg(name, r.displayName), theme::Green);
+        else emit toast(tr("No se pudo conectar · %1").arg(r.error), theme::Red);
     });
 }
 

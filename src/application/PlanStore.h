@@ -60,11 +60,15 @@ public:
     std::optional<PlanReport> latestCycle(const QString& planId) const;
     int cycleCount(const QString& planId) const;
 
+    /// Escribe la colección en disco. Falso (y `saveFailed`) si no se pudo.
+    bool save();
+
 signals:
     /// Cambió el contenido del plan activo (o cuál es el activo).
     void planChanged();
     /// Cambió la colección: alta, baja, archivado, nombre.
     void plansChanged();
+    void saveFailed(const QString& what);
 
 private:
     TestPlan* activePlan();

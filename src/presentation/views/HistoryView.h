@@ -14,6 +14,7 @@ namespace qaflow {
 
 class TestCaseStore;
 class RunHistoryStore;
+class TrendChart;
 struct PlanReport;
 
 /// Pantalla "Historial": lista de ejecuciones de planes y de casos a la izquierda;
@@ -27,13 +28,15 @@ public:
     void showRun(const QString& runId);
     /// Filtra la lista a las ejecuciones de un caso.
     void showCase(const QString& caseId);
+    /// Panel de métricas: tasa de éxito por suite y evolución entre ciclos.
+    void showMetrics();
 
 signals:
     void openCaseRequested(const QString& caseId);
     void toast(const QString& message, const QString& color);
 
 private:
-    enum class Mode { All, Plans, Runs };
+    enum class Mode { All, Plans, Runs, Metrics };
 
     void buildListPane(QHBoxLayout* root);
     void buildDetailPane(QHBoxLayout* root);
@@ -42,6 +45,7 @@ private:
     void refreshDetail();
     void renderPlan(const PlanReport& report);
     void renderRun(const RunRecord& run);
+    void renderMetrics();
     QWidget* stepsList(const RunRecord& run) const;
     void exportMarkdown(const PlanReport& report);
     void copyMarkdown(const PlanReport& report);
@@ -52,6 +56,7 @@ private:
     QString m_search;
     QString m_selectedPlan;
     QString m_selectedRun;
+    QString m_metricsPlan;   // plan cuya evolución se muestra (vacío = todos)
 
     QLineEdit* m_searchBox = nullptr;
     QLayout* m_filterRow = nullptr;

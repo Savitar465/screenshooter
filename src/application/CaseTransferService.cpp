@@ -40,15 +40,15 @@ CaseTransferService::Result CaseTransferService::exportTo(const QString& path, F
     }
 
     QSaveFile f(path);
-    if (!f.open(QIODevice::WriteOnly)) return {false, QStringLiteral("No se pudo escribir %1").arg(path)};
+    if (!f.open(QIODevice::WriteOnly)) return {false, tr("No se pudo escribir %1").arg(path)};
     f.write(bytes);
-    if (!f.commit()) return {false, QStringLiteral("No se pudo escribir %1").arg(path)};
-    return {true, QStringLiteral("%1 casos exportados a %2").arg(selected.size()).arg(QFileInfo(path).fileName())};
+    if (!f.commit()) return {false, tr("No se pudo escribir %1").arg(path)};
+    return {true, tr("%1 casos exportados a %2").arg(selected.size()).arg(QFileInfo(path).fileName())};
 }
 
 CaseTransferService::Result CaseTransferService::importFrom(const QString& path) {
     QFile f(path);
-    if (!f.open(QIODevice::ReadOnly)) return {false, QStringLiteral("No se pudo leer %1").arg(path)};
+    if (!f.open(QIODevice::ReadOnly)) return {false, tr("No se pudo leer %1").arg(path)};
     const QByteArray bytes = f.readAll();
 
     QString error;
@@ -56,17 +56,17 @@ CaseTransferService::Result CaseTransferService::importFrom(const QString& path)
     switch (formatForPath(path)) {
         case Format::Csv: parsed = formats::casesFromCsv(QString::fromUtf8(bytes), &error); break;
         case Format::Json: parsed = formats::casesFromJson(bytes, &error); break;
-        case Format::Markdown: error = QStringLiteral("Markdown es sólo de exportación; importa JSON o CSV"); break;
+        case Format::Markdown: error = tr("Markdown es sólo de exportación; importa JSON o CSV"); break;
     }
-    if (!parsed) return {false, error.isEmpty() ? QStringLiteral("Formato no reconocido") : error};
-    if (parsed->isEmpty()) return {false, QStringLiteral("El archivo no contiene casos")};
+    if (!parsed) return {false, error.isEmpty() ? tr("Formato no reconocido") : error};
+    if (parsed->isEmpty()) return {false, tr("El archivo no contiene casos")};
 
     const auto [added, updated] = m_cases.mergeCases(*parsed);
     Result r;
     r.ok = true;
     r.added = added;
     r.updated = updated;
-    r.message = QStringLiteral("Importado: %1 añadidos · %2 actualizados").arg(added).arg(updated);
+    r.message = tr("Importado: %1 añadidos · %2 actualizados").arg(added).arg(updated);
     return r;
 }
 

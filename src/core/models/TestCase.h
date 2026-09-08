@@ -11,10 +11,15 @@ enum class Priority { Alta, Media, Baja };
 enum class CaseStatus { Listo, Borrador, Obsoleto };
 enum class RunOutcome { None, Passed, Failed, Blocked };
 
+/// Valores canónicos (se persisten y viajan en JSON/CSV): "Alta", "Listo"… No traducir.
 QString toString(Priority p);
 QString toString(CaseStatus s);
 Priority priorityFromString(const QString& s);
 CaseStatus statusFromString(const QString& s);
+/// Texto para mostrar en el idioma de la interfaz.
+QString label(Priority p);
+QString label(CaseStatus s);
+QString label(RunOutcome o);
 
 struct TestStep {
     QString action;

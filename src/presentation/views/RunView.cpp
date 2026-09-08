@@ -10,6 +10,7 @@
 #include "presentation/widgets/TextArea.h"
 #include "presentation/widgets/Ui.h"
 
+#include <QCoreApplication>
 #include <QGridLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -30,9 +31,9 @@ QString resultColor(StepResult r) {
 }
 QString resultLabel(StepResult r) {
     switch (r) {
-        case StepResult::Pass: return QStringLiteral("PASA");
-        case StepResult::Fail: return QStringLiteral("FALLA");
-        case StepResult::Block: return QStringLiteral("BLOQ.");
+        case StepResult::Pass: return QCoreApplication::translate("RunView", "PASA");
+        case StepResult::Fail: return QCoreApplication::translate("RunView", "FALLA");
+        case StepResult::Block: return QCoreApplication::translate("RunView", "BLOQ.");
         case StepResult::Skip: return QStringLiteral("N/A");
     }
     return {};
@@ -90,7 +91,7 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     icon->setFixedSize(14, 14);
     icon->setStyleSheet(QStringLiteral("border:2px solid %1;border-radius:3px;background:transparent;").arg(theme::Text));
     ch->addWidget(icon);
-    auto* capText = new QLabel(QStringLiteral("Capturar pantalla"));
+    auto* capText = new QLabel(tr("Capturar pantalla"));
     capText->setStyleSheet(QStringLiteral("font-weight:700;background:transparent;"));
     ch->addWidget(capText);
     m_shortcut = ui::label(QString(), "muted-sm");
@@ -117,11 +118,11 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     m_stepCounter->setStyleSheet(QStringLiteral("font-size:12px;"));
     crh->addWidget(m_stepCounter);
     m_stepClock = ui::label(QString(), "mono-muted");
-    m_stepClock->setToolTip(QStringLiteral("Tiempo en este paso"));
+    m_stepClock->setToolTip(tr("Tiempo en este paso"));
     crh->addWidget(m_stepClock);
     crh->addStretch(1);
-    m_back = ui::button(QStringLiteral("← Paso anterior"), "ghost");
-    m_back->setToolTip(QStringLiteral("Deshace el último veredicto y vuelve a ese paso (Retroceso)"));
+    m_back = ui::button(tr("← Paso anterior"), "ghost");
+    m_back->setToolTip(tr("Deshace el último veredicto y vuelve a ese paso (Retroceso)"));
     m_back->setStyleSheet(QStringLiteral("padding:4px 10px;font-size:12px;border-radius:8px;"));
     connect(m_back, &QPushButton::clicked, this, [this]() { m_run.back(); });
     crh->addWidget(m_back);
@@ -130,30 +131,30 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     auto* cg = new QGridLayout(cols);
     cg->setContentsMargins(0, 0, 0, 0);
     cg->setHorizontalSpacing(16);
-    cg->addWidget(ui::label(QStringLiteral("ACCIÓN"), "eyebrow"), 0, 0);
-    cg->addWidget(ui::label(QStringLiteral("RESULTADO ESPERADO"), "eyebrow"), 0, 1);
+    cg->addWidget(ui::label(tr("ACCIÓN"), "eyebrow"), 0, 0);
+    cg->addWidget(ui::label(tr("RESULTADO ESPERADO"), "eyebrow"), 0, 1);
     m_action = new QLabel;
     m_action->setWordWrap(true);
     m_action->setStyleSheet(QStringLiteral("font-size:17px;font-weight:600;"));
     m_expected = new QLabel;
     m_expected->setWordWrap(true);
-    m_expected->setStyleSheet(QStringLiteral("font-size:15px;color:#d0d8e0;"));
+    m_expected->setStyleSheet(QStringLiteral("font-size:15px;color:%1;").arg(theme::TextSoft));
     cg->addWidget(m_action, 1, 0, Qt::AlignTop);
     cg->addWidget(m_expected, 1, 1, Qt::AlignTop);
     cg->setColumnStretch(0, 1);
     cg->setColumnStretch(1, 1);
     sc->addWidget(cols);
     m_note = new TextArea(2);
-    m_note->setPlaceholderText(QStringLiteral("Observaciones de este paso (opcional)…"));
+    m_note->setPlaceholderText(tr("Observaciones de este paso (opcional)…"));
     connect(m_note, &TextArea::edited, this, [this](const QString& t) { m_run.setNote(t); });
     sc->addWidget(m_note);
     auto* verdicts = new QWidget;
     auto* vh = ui::hbox(verdicts, 0, 10);
-    auto* pass = verdictButton(QStringLiteral("Pasa"), QStringLiteral("P"), "success");
-    auto* fail = verdictButton(QStringLiteral("Falla"), QStringLiteral("F"), "danger");
-    auto* block = verdictButton(QStringLiteral("Bloqueado"), QStringLiteral("B"), "warning-outline");
-    auto* skip = verdictButton(QStringLiteral("Saltar"), QStringLiteral("S"), "ghost");
-    skip->setToolTip(QStringLiteral("No aplica: el paso no cuenta para el veredicto"));
+    auto* pass = verdictButton(tr("Pasa"), tr("P"), "success");
+    auto* fail = verdictButton(tr("Falla"), tr("F"), "danger");
+    auto* block = verdictButton(tr("Bloqueado"), tr("B"), "warning-outline");
+    auto* skip = verdictButton(tr("Saltar"), tr("S"), "ghost");
+    skip->setToolTip(tr("No aplica: el paso no cuenta para el veredicto"));
     connect(pass, &QPushButton::clicked, this, [this]() { m_run.mark(StepResult::Pass); });
     connect(fail, &QPushButton::clicked, this, [this]() { m_run.mark(StepResult::Fail); });
     connect(block, &QPushButton::clicked, this, [this]() { m_run.mark(StepResult::Block); });
@@ -183,22 +184,22 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     dh->setContentsMargins(24, 22, 24, 22);
     auto* dText = new QWidget;
     auto* dv = ui::vbox(dText, 0, 2);
-    dv->addWidget(ui::label(QStringLiteral("EJECUCIÓN TERMINADA"), "eyebrow"));
+    dv->addWidget(ui::label(tr("EJECUCIÓN TERMINADA"), "eyebrow"));
     m_verdict = new QLabel;
     m_verdict->setStyleSheet(QStringLiteral("font-size:22px;font-weight:800;"));
     dv->addWidget(m_verdict);
     m_summary = ui::label(QString(), "muted");
     dv->addWidget(m_summary);
     dh->addWidget(dText, 1);
-    m_reportBug = ui::button(QStringLiteral("Reportar bug"), "danger");
+    m_reportBug = ui::button(tr("Reportar bug"), "danger");
     connect(m_reportBug, &QPushButton::clicked, this, &RunView::reportBugRequested);
-    m_reopen = ui::button(QStringLiteral("← Último paso"), "outline");
-    m_reopen->setToolTip(QStringLiteral("Reabre el último paso para cambiar su veredicto"));
+    m_reopen = ui::button(tr("← Último paso"), "outline");
+    m_reopen->setToolTip(tr("Reabre el último paso para cambiar su veredicto"));
     connect(m_reopen, &QPushButton::clicked, this, [this]() { m_run.back(); });
-    auto* repeat = ui::button(QStringLiteral("Repetir"), "outline");
-    repeat->setToolTip(QStringLiteral("Vuelve a ejecutar el caso desde el primer paso"));
+    auto* repeat = ui::button(tr("Repetir"), "outline");
+    repeat->setToolTip(tr("Vuelve a ejecutar el caso desde el primer paso"));
     connect(repeat, &QPushButton::clicked, this, [this]() { m_run.restart(); });
-    m_finish = ui::button(QStringLiteral("Finalizar y volver"), "outline");
+    m_finish = ui::button(tr("Finalizar y volver"), "outline");
     connect(m_finish, &QPushButton::clicked, this, &RunView::finishRequested);
     dh->addWidget(m_reportBug);
     dh->addWidget(m_reopen);
@@ -206,7 +207,7 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     dh->addWidget(m_finish);
     v->addWidget(m_doneCard);
 
-    m_empty = ui::label(QStringLiteral("No hay ninguna ejecución activa. Abre un caso y pulsa ▶ Ejecutar."), "muted");
+    m_empty = ui::label(tr("No hay ninguna ejecución activa. Abre un caso y pulsa ▶ Ejecutar."), "muted");
     v->addWidget(m_empty);
 
     // Registro + Capturas
@@ -216,7 +217,7 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     bg->setHorizontalSpacing(16);
     auto* log = ui::card("card");
     auto* lv = ui::vbox(log, 16, 10);
-    lv->addWidget(ui::label(QStringLiteral("REGISTRO"), "eyebrow"));
+    lv->addWidget(ui::label(tr("REGISTRO"), "eyebrow"));
     auto* logList = new QWidget;
     m_logLayout = ui::vbox(logList, 0, 6);
     lv->addWidget(logList);
@@ -238,11 +239,11 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     shv->addWidget(shotList);
     auto* shActions = new QWidget;
     auto* sah = ui::hbox(shActions, 0, 8);
-    auto* capture2 = ui::button(QStringLiteral("+ Capturar"), "dashed");
+    auto* capture2 = ui::button(tr("+ Capturar"), "dashed");
     capture2->setStyleSheet(QStringLiteral("padding:10px;font-size:12.5px;"));
     connect(capture2, &QPushButton::clicked, this, &RunView::captureRequested);
     sah->addWidget(capture2, 1);
-    m_sortShots = ui::button(QStringLiteral("Ordenar por paso"), "outline");
+    m_sortShots = ui::button(tr("Ordenar por paso"), "outline");
     m_sortShots->setStyleSheet(QStringLiteral("padding:10px 12px;font-size:12px;border-radius:8px;"));
     connect(m_sortShots, &QPushButton::clicked, this, [this]() { m_cases.sortShotsByStep(m_run.state().caseId); });
     sah->addWidget(m_sortShots);
@@ -265,7 +266,7 @@ void RunView::tick() {
     const RunState& r = m_run.state();
     if (r.caseId.isEmpty()) { m_clock.stop(); return; }
     m_stepClock->setText(formatDuration(r.currentStepSecs()));
-    m_caseClock->setText(QStringLiteral("⏱ %1 en este caso").arg(formatDuration(r.elapsedSecs())));
+    m_caseClock->setText(tr("⏱ %1 en este caso").arg(formatDuration(r.elapsedSecs())));
 }
 
 void RunView::refresh() {
@@ -280,18 +281,18 @@ void RunView::refresh() {
     m_doneCard->setVisible(hasRun && r.finished);
     if (!hasRun) {
         m_clock.stop();
-        m_eyebrow->setText(QStringLiteral("EJECUCIÓN MANUAL"));
-        m_title->setText(QStringLiteral("Sin ejecución"));
+        m_eyebrow->setText(tr("EJECUCIÓN MANUAL"));
+        m_title->setText(tr("Sin ejecución"));
         m_caseClock->clear();
         m_progress->setColors({});
         ui::clearLayout(m_logLayout);
         ui::clearLayout(m_shotsLayout);
-        m_shotsHeader->setText(QStringLiteral("CAPTURAS · 0"));
+        m_shotsHeader->setText(tr("CAPTURAS · 0"));
         m_sortShots->hide();
         return;
     }
 
-    m_eyebrow->setText(QStringLiteral("%1 · %2 · EJECUCIÓN MANUAL").arg(c->id, c->suite.toUpper()));
+    m_eyebrow->setText(tr("%1 · %2 · EJECUCIÓN MANUAL").arg(c->id, c->suite.toUpper()));
     m_title->setText(c->title);
     if (!m_clock.isActive()) m_clock.start();
     tick();
@@ -305,7 +306,7 @@ void RunView::refresh() {
     m_progress->setColors(colors);
 
     if (!r.finished && r.idx < c->steps.size()) {
-        m_stepCounter->setText(QStringLiteral("PASO %1 DE %2").arg(r.idx + 1).arg(c->steps.size()));
+        m_stepCounter->setText(tr("PASO %1 DE %2").arg(r.idx + 1).arg(c->steps.size()));
         m_action->setText(c->steps[r.idx].action);
         m_expected->setText(c->steps[r.idx].expected);
         m_note->setTextSilently(r.note);
@@ -313,19 +314,19 @@ void RunView::refresh() {
     } else {
         const Verdict v = r.verdict();
         const QString color = v == Verdict::Bloqueado ? theme::Amber : v == Verdict::Fallido ? theme::Red : theme::Green;
-        const QString text = v == Verdict::Bloqueado ? QStringLiteral("Bloqueado") : v == Verdict::Fallido ? QStringLiteral("Fallido") : QStringLiteral("Superado");
+        const QString text = v == Verdict::Bloqueado ? tr("Bloqueado") : v == Verdict::Fallido ? tr("Fallido") : tr("Superado");
         m_verdict->setText(text);
         m_verdict->setStyleSheet(QStringLiteral("font-size:22px;font-weight:800;color:%1;").arg(color));
-        QString summary = QStringLiteral("%1 pasan · %2 fallan · %3 bloqueados")
+        QString summary = tr("%1 pasan · %2 fallan · %3 bloqueados")
                               .arg(r.count(StepResult::Pass)).arg(r.count(StepResult::Fail)).arg(r.count(StepResult::Block));
-        if (r.count(StepResult::Skip) > 0) summary += QStringLiteral(" · %1 N/A").arg(r.count(StepResult::Skip));
+        if (r.count(StepResult::Skip) > 0) summary += tr(" · %1 N/A").arg(r.count(StepResult::Skip));
         summary += QStringLiteral(" · %1").arg(formatDuration(r.elapsedSecs()));
         m_summary->setText(summary);
         m_reportBug->setVisible(r.count(StepResult::Fail) > 0);
         m_reopen->setVisible(!r.results.isEmpty());
-        m_finish->setText(m_run.queuedCount() > 0 ? QStringLiteral("Siguiente caso · quedan %1").arg(m_run.queuedCount())
-                          : !m_run.planRunId().isEmpty() ? QStringLiteral("Terminar plan y ver informe")
-                                                          : QStringLiteral("Finalizar y volver"));
+        m_finish->setText(m_run.queuedCount() > 0 ? tr("Siguiente caso · quedan %1").arg(m_run.queuedCount())
+                          : !m_run.planRunId().isEmpty() ? tr("Terminar plan y ver informe")
+                                                          : tr("Finalizar y volver"));
     }
     refreshLog();
     refreshShots();
@@ -337,7 +338,7 @@ void RunView::refreshLog() {
     const TestCase* c = m_cases.find(r.caseId);
     if (!c) return;
     if (r.results.isEmpty()) {
-        auto* e = ui::label(QStringLiteral("Aún no hay pasos registrados."), "muted");
+        auto* e = ui::label(tr("Aún no hay pasos registrados."), "muted");
         e->setContentsMargins(10, 8, 10, 8);
         m_logLayout->addWidget(e);
         return;
@@ -351,7 +352,7 @@ void RunView::refreshLog() {
         h->addWidget(n, 0, Qt::AlignTop);
         auto* a = new QLabel(c->steps[i].action);
         a->setWordWrap(true);
-        a->setStyleSheet(QStringLiteral("color:#d0d8e0;"));
+        a->setStyleSheet(QStringLiteral("color:%1;").arg(theme::TextSoft));
         h->addWidget(a, 1);
         const StepResult res = r.results[i].result;
         if (r.results[i].durationSecs > 0) {
@@ -364,7 +365,7 @@ void RunView::refreshLog() {
         auto* ch = ui::hbox(chips, 0, 3);
         for (StepResult alt : kAllResults) {
             auto* b = ui::button(resultLabel(alt), "chip");
-            b->setToolTip(QStringLiteral("Cambiar a %1").arg(toString(alt)));
+            b->setToolTip(tr("Cambiar a %1").arg(label(alt)));
             b->setStyleSheet(QStringLiteral("padding:1px 6px;font-size:10.5px;") + (alt == res ? QStringLiteral("background:%1;color:%2;border-color:%1;").arg(resultColor(alt), alt == StepResult::Fail ? QStringLiteral("#ffffff") : theme::Bg) : QString()));
             connect(b, &QPushButton::clicked, this, [this, i, alt]() { m_run.setResult(i, alt); });
             ch->addWidget(b);
@@ -378,7 +379,7 @@ void RunView::refreshShots() {
     ui::clearLayout(m_shotsLayout);
     const TestCase* c = m_cases.find(m_run.state().caseId);
     if (!c) return;
-    m_shotsHeader->setText(QStringLiteral("CAPTURAS · %1").arg(c->shots.size()));
+    m_shotsHeader->setText(tr("CAPTURAS · %1").arg(c->shots.size()));
     m_sortShots->setVisible(!c->shots.isEmpty());
     const QString id = c->id;
     for (const auto& s : c->shots) {

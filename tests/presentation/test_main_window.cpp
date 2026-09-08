@@ -1,0 +1,182 @@
+// MainWindow (presentation/views/MainWindow.h) con toda la capa de aplicación sobre repositorios
+// en memoria y una captura de pantalla falsa. Se ejecuta con la plataforma "offscreen".
+// Cubre: navegación (sidebar, menú, atajos), acciones de menú, teclas de la ejecución, filtros de
+// la lista de casos, métricas y el aviso con «Reintentar» cuando falla el guardado.
+
+#include "support/AppFixture.h"
+
+#include "application/AppContext.h"
+#include "application/CaseTransferService.h"
+#include "application/EvidenceService.h"
+#include "presentation/views/MainWindow.h"
+#include "presentation/widgets/Toast.h"
+
+#include <QAction>
+#include <QLabel>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QtTest>
+
+using namespace qaflow;
+using qaflow::testing::AppFixture;
+
+namespace {
+class FakeScreenCapture : public IScreenCapture {
+public:
+    void capture(CaptureMode, Callback done) override {
+        QImage img(4, 4, QImage::Format_ARGB32);
+        img.fill(Qt::green);
+        done(CaptureResult{true, img, {}});
+    }
+};
+
+/// Fixture de aplicación + servicios que la ventana necesita + la ventana ya mostrada.
+struct WindowFixture {
+    AppFixture app;
+    QTemporaryDir captures;
+    std::shared_ptr<FakeScreenCapture> capture = std::make_shared<FakeScreenCapture>();
+    EvidenceService evidence{capture, app.store, app.run, app.settings};
+    CaseTransferService transfer{app.store};
+    AppContext ctx;
+    std::unique_ptr<MainWindow> window;
+
+    WindowFixture() {
+        app.settings.updateCapture([&](CaptureSettings& c) { c.folder = captures.path(); });
+        ctx.cases = &app.store; ctx.plan = &app.plans; ctx.run = &app.run; ctx.history = &app.history;
+        ctx.settings = &app.settings; ctx.bugs = &app.bugs; ctx.bugLedger = &app.bugLedger;
+        ctx.evidence = &evidence; ctx.transfer = &transfer; ctx.dataDir = captures.path();
+        window = std::make_unique<MainWindow>(ctx);
+        window->show();
+        QApplication::setActiveWindow(window.get());
+        QVERIFY(QTest::qWaitForWindowExposed(window.get()));
+    }
+    QAction* action(const char* name) const { return window->findChild<QAction*>(QString::fromLatin1(name)); }
+    QPushButton* nav(Screen s) const { return window->findChild<QPushButton*>(QStringLiteral("nav-%1").arg(static_cast<int>(s))); }
+    /// Filas visibles de la lista de casos.
+    int visibleCaseRows() const {
+        int n = 0;
+        for (auto* b : window->findChildren<QPushButton*>())
+            if (b->property("role").toString() == QStringLiteral("row") && b->isVisible() && b->window() == window.get()) ++n;
+        return n;
+    }
+    Toast* toast() const { return window->findChild<Toast*>(); }
+    QString toastText() const {
+        Toast* t = toast();
+        return t ? t->findChild<QLabel*>()->text() : QString();
+    }
+};
+} // namespace
+
+class MainWindowTest : public QObject {
+    Q_OBJECT
+private slots:
+    void opensOnCasesAndSidebarNavigates() {
+        WindowFixture f;
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Casos));
+        QVERIFY(f.nav(Screen::Historial));
+        QTest::mouseClick(f.nav(Screen::Historial), Qt::LeftButton);
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Historial));
+        QTest::mouseClick(f.nav(Screen::Ajustes), Qt::LeftButton);
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Ajustes));
+    }
+
+    void menuActionsHaveStandardShortcuts() {
+        WindowFixture f;
+        QCOMPARE(f.action("actNewCase")->shortcut(), QKeySequence(QKeySequence::New));
+        QCOMPARE(f.action("actFind")->shortcut(), QKeySequence(QKeySequence::Find));
+        QCOMPARE(f.action("actUndo")->shortcut(), QKeySequence(QKeySequence::Undo));
+        QCOMPARE(f.action("actQuit")->shortcut(), QKeySequence(QKeySequence::Quit));
+        QCOMPARE(f.action("actRun")->shortcut(), QKeySequence(Qt::Key_F5));
+        QCOMPARE(f.action("actCapture")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Shift+S")));   // el de Ajustes
+        f.app.settings.updateCapture([](CaptureSettings& c) { c.shortcut = QStringLiteral("F9"); });
+        QCOMPARE(f.action("actCapture")->shortcut(), QKeySequence(Qt::Key_F9));
+    }
+
+    void newCaseActionCreatesAndSelectsACase() {
+        WindowFixture f;
+        f.window->navigate(Screen::Plan);
+        const int before = f.app.store.cases().size();
+        f.action("actNewCase")->trigger();
+        QCOMPARE(f.app.store.cases().size(), before + 1);
+        QCOMPARE(f.app.store.selectedId(), QStringLiteral("TC-108"));
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Casos));
+    }
+
+    void ctrlFFocusesTheSearchBoxAndFiltersTheList() {
+        WindowFixture f;
+        f.window->navigate(Screen::Historial);
+        QTest::keyClick(f.window.get(), Qt::Key_F, Qt::ControlModifier);
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Casos));
+        auto* search = f.window->findChild<QLineEdit*>(QStringLiteral("caseSearch"));
+        QVERIFY(search);
+        QTRY_VERIFY(search->hasFocus());
+        QCOMPARE(f.visibleCaseRows(), 7);
+        QTest::keyClicks(search, QStringLiteral("tarjeta"));   // sólo ASCII: QTest::keyClicks no admite tildes
+        QTRY_COMPARE(f.visibleCaseRows(), 1);                  // las filas nuevas se muestran al procesar eventos
+        search->clear();
+        QTRY_COMPARE(f.visibleCaseRows(), 7);
+    }
+
+    void runScreenAcceptsVerdictKeys() {
+        WindowFixture f;
+        f.action("actRun")->trigger();   // TC-104 (seleccionado al cargar)
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Run));
+        QVERIFY(f.app.run.isRunning());
+        QTest::keyClick(f.window.get(), Qt::Key_P);
+        QCOMPARE(f.app.run.state().results.size(), 1);
+        QTest::keyClick(f.window.get(), Qt::Key_F);
+        QCOMPARE(f.app.run.state().results.size(), 2);
+        QCOMPARE(static_cast<int>(f.app.run.state().results[1].result), static_cast<int>(StepResult::Fail));
+        QTest::keyClick(f.window.get(), Qt::Key_Backspace);
+        QCOMPARE(f.app.run.state().results.size(), 1);
+    }
+
+    void captureActionAttachesScreenshotToSelectedCase() {
+        WindowFixture f;
+        const QString id = f.app.store.selectedId();
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
+        QVERIFY(QFile::exists(f.app.store.find(id)->shots[0].path));
+        QTRY_VERIFY(f.toast()->isVisible());
+    }
+
+    void undoActionFollowsTheStore() {
+        WindowFixture f;
+        QVERIFY(!f.action("actUndo")->isEnabled());
+        f.app.store.removeCase(QStringLiteral("TC-107"));
+        QVERIFY(f.action("actUndo")->isEnabled());
+        QVERIFY(f.action("actUndo")->text().contains(QStringLiteral("TC-107")));
+        QVERIFY(f.toast()->isVisible());   // aviso con «Deshacer»
+        f.action("actUndo")->trigger();
+        QVERIFY(f.app.store.find(QStringLiteral("TC-107")));
+        QVERIFY(!f.action("actUndo")->isEnabled());
+    }
+
+    void metricsCardOpensHistoryMetrics() {
+        WindowFixture f;
+        auto* card = f.window->findChild<QPushButton*>(QStringLiteral("metricCard"));
+        QVERIFY(card);
+        QTest::mouseClick(card, Qt::LeftButton);
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Historial));
+        bool found = false;
+        for (auto* l : f.window->findChildren<QLabel*>()) if (l->text() == QStringLiteral("TASA DE ÉXITO POR SUITE")) found = true;
+        QVERIFY(found);
+    }
+
+    void failedSaveShowsPersistentToastWithRetry() {
+        WindowFixture f;
+        f.app.repo->failWrites = true;
+        f.app.store.createCase();
+        QTRY_VERIFY_WITH_TIMEOUT(f.toast()->isVisible() && f.toastText().contains(QStringLiteral("casos")), 2000);   // guardado diferido (400 ms)
+        QVERIFY(f.app.store.hasUnsavedChanges());
+        auto* retry = f.toast()->findChild<QPushButton*>();
+        QVERIFY(retry && retry->isVisible());
+        f.app.repo->failWrites = false;
+        QTest::mouseClick(retry, Qt::LeftButton);
+        QVERIFY(!f.app.store.hasUnsavedChanges());
+        QTRY_VERIFY(f.toastText().contains(QStringLiteral("Guardado")));
+    }
+};
+
+QTEST_MAIN(MainWindowTest)
+#include "test_main_window.moc"

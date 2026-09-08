@@ -22,7 +22,7 @@ EvidenceService::EvidenceService(std::shared_ptr<IScreenCapture> capture, TestCa
 void EvidenceService::captureForSelectedCase() {
     if (m_busy || !m_capture) return;
     const QString caseId = m_cases.selectedId();
-    if (caseId.isEmpty()) { emit failed(QStringLiteral("No hay ningún caso seleccionado")); return; }
+    if (caseId.isEmpty()) { emit failed(tr("No hay ningún caso seleccionado")); return; }
 
     m_busy = true;
     const CaptureSettings cfg = m_settings.capture();
@@ -35,7 +35,7 @@ void EvidenceService::captureForSelectedCase() {
 
         QDir dir(cfg.folder);
         if (!dir.exists() && !dir.mkpath(QStringLiteral("."))) {
-            emit failed(QStringLiteral("No se pudo crear la carpeta %1").arg(cfg.folder));
+            emit failed(tr("No se pudo crear la carpeta %1").arg(cfg.folder));
             return;
         }
         const int seq = m_cases.nextShotSequence();
@@ -43,7 +43,7 @@ void EvidenceService::captureForSelectedCase() {
         const QString path = dir.filePath(name);
         const char* fmt = cfg.extension() == QStringLiteral("jpg") ? "JPG" : cfg.extension() == QStringLiteral("webp") ? "WEBP" : "PNG";
         if (!r.image.save(path, fmt)) {
-            emit failed(QStringLiteral("No se pudo guardar %1").arg(path));
+            emit failed(tr("No se pudo guardar %1").arg(path));
             return;
         }
         m_cases.addShot(caseId, Screenshot{seq, step, name, path});

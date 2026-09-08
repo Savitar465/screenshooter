@@ -2,18 +2,18 @@
 
 QAflow es una aplicación de escritorio (Qt 6 Widgets, C++20) para equipos de QA: gestiona
 casos de prueba, planes de regresión, ejecuciones manuales paso a paso con evidencias
-(capturas de pantalla) y reporte de defectos a Jira.
+(capturas de pantalla) y reporte de defectos a Jira, GitHub, GitLab o Azure DevOps.
 
 ## Capas
 
 ```
 src/
 ├── core/            Modelos y contratos. Sin Qt Widgets, sin red, sin disco.
-│   ├── models/      TestCase, TestRun, TestPlan, BugReport, Settings,
+│   ├── models/      TestCase, TestRun, TestPlan, BugReport, Settings (TrackerSettings, AppSettings), IssueLink,
 │   │                RunHistory (RunRecord, PlanRun), PlanReport (informe calculado + Markdown),
-│   │                CaseFilter (criterios de la lista), CaseFormats (JSON / CSV / Markdown)
-│   └── services/    ITestCaseRepository, IRunHistoryRepository, IRunSessionRepository,
-│                    ISettingsRepository, IScreenCapture, IIssueTracker
+│   │                Metrics (tasa por suite, evolución entre ciclos), CaseFilter, CaseFormats (JSON / CSV / Markdown)
+│   └── services/    ITestCaseRepository, IRunHistoryRepository, IRunSessionRepository, IBugRepository,
+│                    ISettingsRepository, ISecretStore, IScreenCapture, IIssueTracker
 ├── application/     Casos de uso y estado observable (QObject + señales). Sin UI.
 │   ├── TestCaseStore      fuente de verdad de los casos; toda mutación pasa por aquí;
 │   │                      deshacer de un nivel para borrados
@@ -22,22 +22,26 @@ src/
 │   │                      ejecución terminada en el historial y guarda la que está en curso
 │   ├── RunHistoryStore    historial de ejecuciones y de planes; genera el PlanReport
 │   ├── PlanStore          colección de planes, plan activo, orden de ejecución, ciclos y estimación
-│   ├── SettingsStore      ajustes de Jira y de captura
+│   ├── SettingsStore      ajustes del gestor (token en ISecretStore), de captura y generales (idioma, tema, bandeja)
 │   ├── EvidenceService    captura → guarda fichero → adjunta al caso/paso activo
-│   ├── BugReportService   borrador de bug desde la ejecución y envío al tracker
+│   ├── BugReportService   borrador de bug, envío al gestor, cola offline, estados y metadatos
+│   ├── BugStore           libro de bugs: issues enlazados a su caso y cola de pendientes
 │   ├── SeedData           datos de ejemplo del primer arranque
 │   └── AppContext         agrupa los servicios ya construidos para la presentación
 ├── infrastructure/  Implementaciones concretas de las interfaces de core.
 │   ├── persistence/ JsonTestCaseRepository (cases.json, plans.json), JsonRunHistoryRepository
-│   │                (history.json), JsonRunSessionRepository (session.json), QSettingsRepository
+│   │                (history.json), JsonRunSessionRepository (session.json), JsonBugRepository (bugs.json),
+│   │                QSettingsRepository (tracker, captura y app; sin token)
 │   ├── capture/     ScreenCaptureService (QScreen::grabWindow), RegionSelector (overlay)
-│   └── jira/        JiraClient (REST API v2: myself, issue, attachments)
+│   ├── secrets/     SecretStores: secret-tool (Linux), Keychain (macOS), DPAPI (Windows), fichero en claro
+│   └── tracker/     HttpTrackerClient (base) → JiraClient, GitHubClient, GitLabClient, AzureDevOpsClient;
+│                    TrackerRouter despacha por TrackerSettings::kind
 └── presentation/    Widgets Qt. Depende de application; nunca de infrastructure.
-    ├── theme/       Paleta (Theme.h) — los mismos valores viven en resources/styles/app.qss
-    ├── widgets/     Piezas reutilizables: Ui (fábricas), LayoutButton, FlowLayout, Toast,
-    │                FlashOverlay, ProgressCells, Thumbnail, TextArea, ShotCard
+    ├── theme/       Paletas oscura y clara (Theme.h); resources/styles/app.qss usa tokens (@bg, @tint(green,30))
+    ├── widgets/     Piezas reutilizables: Ui (fábricas, icono), LayoutButton, FlowLayout, Toast,
+    │                FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard
     ├── views/       Una clase por pantalla: Sidebar, CasesView, PlanView, RunView, HistoryView,
-    │                BugView, SettingsView y MainWindow (navegación + avisos globales)
+    │                BugView, SettingsView y MainWindow (menú, atajos, bandeja, navegación, avisos)
     └── DevSnapshot  herramienta de desarrollo (renderiza cada pantalla a PNG)
 ```
 
@@ -49,23 +53,71 @@ presentation ──► application ──► core ◄── infrastructure
                       └──────── main.cpp ────────┘   (raíz de composición)
 ```
 
+Cada capa es una biblioteca estática en `CMakeLists.txt` (`qaflow_core`, `qaflow_application`,
+`qaflow_infrastructure`, `qaflow_presentation`) que sólo enlaza con las capas de las que puede
+depender: una dependencia en sentido contrario (p. ej. una vista que incluya un repositorio JSON)
+falla al enlazar. El ejecutable `qaflow` es sólo `main.cpp` + recursos.
+
 * `main.cpp` es el único sitio que conoce las clases de `infrastructure/`: crea los
-  repositorios, el cliente Jira y el servicio de captura, y los inyecta en los servicios
+  repositorios, el router de gestores, el llavero y el servicio de captura, y los inyecta en los servicios
   de `application/` a través de las interfaces de `core/services/`.
 * Las vistas reciben referencias a los stores por `AppContext` y **nunca** mutan el modelo
   directamente: llaman a métodos del store y se redibujan al recibir su señal.
 * Los stores emiten señales de grano fino (`caseChanged(id)`, `runChanged()`,
-  `planChanged()`, `historyChanged()`, `jiraChanged()`, `captureChanged()`) para que cada vista refresque
+  `planChanged()`, `historyChanged()`, `bugsChanged()`, `trackerChanged()`, `captureChanged()`) para que cada vista refresque
   sólo lo que le afecta. Las vistas usan una bandera `m_selfEdit` para no reconstruir
   campos que el usuario está escribiendo.
 
-## Estilo visual
+## Estilo visual, tema e idioma
 
-El tema oscuro está en `resources/styles/app.qss` y se selecciona por **roles**:
-propiedades dinámicas (`role`, `active`, `running`, `invalid`) que se fijan con
-`ui::setRole()` / `ui::setFlag()` y que el QSS resuelve con selectores
-`QPushButton[role="primary"]`. Así las vistas no contienen colores salvo los que
-dependen de datos (prioridad, veredicto), que salen de `theme::`.
+`resources/styles/app.qss` selecciona los estilos por **roles**: propiedades dinámicas (`role`,
+`active`, `running`, `invalid`) que se fijan con `ui::setRole()` / `ui::setFlag()` y que el QSS
+resuelve con selectores `QPushButton[role="primary"]`. Los colores del QSS son **tokens**
+(`@bg`, `@text`, `@tint(green,30)`…) que `theme::stylesheet()` sustituye por la paleta activa.
+
+`theme::` tiene dos paletas (`darkPalette()`, la del diseño de referencia, y `lightPalette()`);
+`theme::apply()` fija la activa antes de construir las vistas, que leen `theme::Green`, etc. para
+los colores que dependen de datos. Con `AppTheme::System` se consulta el esquema del sistema
+(`QStyleHints::colorScheme` en Qt ≥ 6.5; antes, la luminosidad de la paleta de la plataforma).
+
+**Idioma.** El código fuente está en español y todas las cadenas visibles pasan por `tr()` (vistas y
+stores) o `QCoreApplication::translate("core"/"infrastructure", …)` (funciones libres y modelos).
+Los valores que se persisten (`toString(Priority)` → "Alta", `toString(Verdict)`, `toString(CaptureMode)`,
+severidades del bug) **no** se traducen: cada enum tiene además `label()` para mostrar. Los combos
+guardan el enum como dato del ítem y muestran la etiqueta traducida. `resources/i18n/qaflow_en.ts`
+es la traducción al inglés; `qt_add_lrelease` la compila e incrusta en `:/i18n` y el target
+`qaflow_lupdate` la actualiza con las cadenas nuevas.
+
+Cambiar idioma o tema emite `SettingsStore::appChanged`; `main.cpp` instala los traductores, aplica
+la paleta y **reconstruye la ventana** (diferido con `QTimer::singleShot(0)` porque la señal sale de
+un widget de la ventana anterior), conservando geometría y pantalla. Así ninguna vista necesita
+implementar retraducción dinámica.
+
+## Menú, atajos y bandeja
+
+`MainWindow::buildMenus()` crea el menú (Archivo, Editar, Ver, Ejecución, Ayuda) con `QAction`
+y los atajos estándar (`QKeySequence::New`, `Find`, `Undo`, `Quit`, F5, Ctrl+1…6). El atajo de
+captura es una acción de ámbito aplicación cuya tecla sigue a Ajustes. Las acciones que operan
+sobre el caso seleccionado se habilitan según `TestCaseStore::selectedId()` y «Deshacer» sigue a
+`canUndo()`. Con `QSystemTrayIcon` disponible hay icono en la bandeja (mostrar/ocultar, capturar,
+salir); si `AppSettings::closeToTray` está activo, cerrar la ventana la oculta en lugar de salir.
+
+## Errores de guardado
+
+Todos los repositorios devuelven `bool` y los stores lo comprueban: `TestCaseStore::save()`,
+`PlanStore::save()`, `RunHistoryStore::save()`, `BugStore::save()` y
+`RunController::persistSessionNow()` emiten `saveFailed(what)` si el disco no acepta la escritura.
+`TestCaseStore` mantiene `m_dirty` para que el siguiente guardado diferido lo reintente. `MainWindow`
+muestra un aviso persistente con «Reintentar» que llama al `save()` correspondiente.
+
+## Métricas
+
+`core/models/Metrics` calcula al vuelo, sin persistir nada: `metrics::summary()` y
+`metrics::bySuite()` a partir de la última ejecución de cada caso, y `metrics::cycles()` como la
+lista cronológica de ciclos terminados (un `CycleMetrics` por `PlanRun` cerrado, construido con
+`PlanReport::build`). `metrics::trend()` es la diferencia de tasa entre los dos últimos ciclos. El
+sidebar muestra la tasa global y la tendencia del plan activo; el panel «Métricas» del historial
+muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`, con un chip por plan).
 
 ## Persistencia
 
@@ -75,7 +127,9 @@ dependen de datos (prioridad, veredicto), que salen de `theme::`.
 | Planes                 | `$XDG_DATA_HOME/QAflow/QAflow/plans.json` (colección + plan activo; migra `plan.json` antiguo) |
 | Historial              | `$XDG_DATA_HOME/QAflow/QAflow/history.json` (se escribe al cerrar cada ejecución) |
 | Ejecución en curso     | `$XDG_DATA_HOME/QAflow/QAflow/session.json` (se borra al terminar; notas con retardo de 300 ms) |
-| Ajustes Jira/captura   | QSettings (`~/.config/QAflow/QAflow.conf`)                  |
+| Ajustes gestor/captura | QSettings (`~/.config/QAflow/QAflow.conf`), sin el token                  |
+| Token del gestor       | `ISecretStore`: llavero del sistema; si no hay, QSettings en claro con aviso en Ajustes |
+| Bugs y cola offline    | `$XDG_DATA_HOME/QAflow/QAflow/bugs.json`                    |
 | Imágenes de capturas   | Carpeta configurable (por defecto `~/QAflow/capturas`)      |
 
 ## Gestión de casos
@@ -171,32 +225,57 @@ El atajo configurado (por defecto `Ctrl+Shift+S`) es un `QShortcut` de ámbito a
 funciona mientras QAflow tiene el foco. Un atajo global de sistema requeriría código
 específico por plataforma (X11/Wayland portal) y queda fuera de esta versión.
 
-## Jira
+## Bugs y gestores de incidencias
 
-`JiraClient` habla con la REST API v2:
+`IIssueTracker` (core) tiene cuatro operaciones asíncronas: probar conexión, crear issue,
+consultar estado y leer metadatos del proyecto (tipos, prioridades, componentes, versiones,
+asignables). `TrackerSettings` describe la conexión y su `kind` elige el gestor; `TrackerRouter`
+(infrastructure) despacha al cliente correspondiente, todos sobre `HttpTrackerClient`, que
+centraliza peticiones JSON/multipart, mensajes de error y la detección de fallos **reintentables**
+(errores de red y 5xx, no rechazos del contenido).
 
-* `GET /rest/api/2/myself` para probar la conexión (botón Conectado/Desconectado).
-* `POST /rest/api/2/issue` con `issuetype=Bug`, descripción en formato wiki y etiquetas.
-* `POST /rest/api/2/issue/{key}/attachments` (multipart, `X-Atlassian-Token: no-check`)
-  por cada captura del caso.
+| Gestor        | Crear                                   | Adjuntos                       | Campos mapeados |
+|---------------|-----------------------------------------|--------------------------------|-----------------|
+| Jira (v2)     | `POST /rest/api/2/issue`                | `/issue/{key}/attachments`     | issuetype, priority, assignee (accountId en Cloud, name en Server), components, versions, labels |
+| GitHub        | `POST /repos/{owner}/{repo}/issues`     | no (se listan por nombre)      | labels (componentes + prioridad), assignees |
+| GitLab (v4)   | `POST /projects/{id}/issues`            | `/uploads` antes, enlazados en Markdown | labels, assignee_ids, issue_type |
+| Azure DevOps  | `POST /{proj}/_apis/wit/workitems/$Tipo` (JSON Patch) | `/_apis/wit/attachments` + relación AttachedFile | Priority (1-4), AssignedTo, Tags, FoundIn |
 
-Autenticación: si hay correo configurado → `Basic email:token` (Jira Cloud);
-si no → `Bearer token` (PAT de Jira Server/Data Center).
+**Libro de bugs.** `BugReportService::submit()` crea el issue y guarda un `IssueLink` (clave,
+url, título, caso, gestor, fecha) en `BugStore`; el editor de casos y la pantalla de bugs lo
+muestran con su último estado. «Actualizar estados» recorre los issues del gestor actual con
+`fetchStatus()` y marca los resueltos.
+
+**Cola offline.** Si `createIssue()` falla de forma reintentable, el bug entra en
+`BugStore::pending()` con su error. «Reintentar envío» (o el arranque de la app con el gestor
+conectado) vuelve a enviarlos en orden: un rechazo del contenido deja el bug en la cola con el
+error y sigue con el siguiente; un fallo de red detiene la ronda.
+
+**Metadatos.** `loadMetadata()` cachea por gestor+proyecto y se invalida al cambiar los ajustes.
+Los combos del formulario son editables: funcionan sin cargar nada.
+
+**Secretos.** `SettingsStore` guarda el token en `ISecretStore` bajo `tracker/<gestor>/token`,
+uno por gestor, y nunca lo pasa al repositorio de ajustes. `makeSecretStore()` elige el llavero
+disponible comprobándolo con una escritura de prueba (`secret-tool` en Linux, `security` en
+macOS, DPAPI en Windows) y, si no hay ninguno, cae a QSettings en claro; Ajustes muestra cuál se
+usa. Un token que quedara en claro de una versión anterior se migra al llavero en la primera carga.
 
 ## Tests
 
-`tests/` compila sólo `core` + `application` (sin UI ni red) en una biblioteca estática
-`qaflow_testable` y construye **un ejecutable por clase bajo prueba**:
+`tests/` construye **un ejecutable por clase bajo prueba**, enlazado con la biblioteca de su capa:
 
 ```
 tests/
 ├── support/
-│   ├── MemoryRepositories.h   ITestCaseRepository, IRunHistoryRepository e IRunSessionRepository en memoria
-│   └── AppFixture.h           TestCaseStore + RunHistoryStore + RunController + PlanStore ya cargados con los datos de ejemplo
+│   ├── MemoryRepositories.h   repositorios, ajustes y llavero en memoria (con `failWrites` para simular fallos de disco)
+│   ├── FakeIssueTracker.h     IIssueTracker con modos Succeed / RejectContent / NetworkDown
+│   ├── FakeHttpServer.h       servidor HTTP mínimo en localhost que guarda las peticiones y responde lo que se le diga
+│   └── AppFixture.h           toda la capa de aplicación ya cargada con los datos de ejemplo
 ├── core/                      modelos y funciones puras
 │   ├── test_test_case.cpp     LastRun, readyToBeMarkedListo, searchText, parseTags, enums
 │   ├── test_test_run.cpp      veredicto, saltos N/A, cronómetros, formatDuration, enums
-│   ├── test_bug_report.cpp    validación y descripción para Jira
+│   ├── test_bug_report.cpp    validación y descripciones Jira / Markdown / HTML
+│   ├── test_settings.cpp      TrackerSettings (URLs de issue por gestor) y CaptureSettings
 │   ├── test_plan_report.cpp   conteos por caso, pendientes, veredicto, Markdown
 │   ├── test_case_filter.cpp   búsqueda libre y filtros por campo
 │   └── test_case_formats.cpp  JSON, CSV y Markdown (ida y vuelta, errores)
@@ -204,8 +283,22 @@ tests/
     ├── test_test_case_store.cpp    carga, alta, duplicar, fusión, pasos, borrar y deshacer
     ├── test_run_controller.cpp     flujo, correcciones, archivado, cola del plan, sesión
     ├── test_run_history_store.cpp  ids, informes, cierre de planes, persistencia
-    └── test_plan_store.cpp         colección, orden, ciclos, estimación
+    ├── test_plan_store.cpp         colección, orden, ciclos, estimación
+    ├── test_settings_store.cpp     token en el llavero, migración, un token por gestor
+    ├── test_bug_store.cpp          issues por caso, estados, cola de pendientes
+    └── test_bug_report_service.cpp borrador, envío, cola offline, reintentos, estados, metadatos
+├── infrastructure/            disco y red reales, en directorios temporales y localhost
+│   ├── test_json_repositories.cpp   ida y vuelta de casos, planes (y migración de plan.json), historial, sesión, bugs;
+│   │                                ficheros corruptos y directorio sin permisos
+│   ├── test_settings_repository.cpp QSettingsRepository (grupo "tracker", migración del grupo "jira"), PlainSettingsSecretStore
+│   └── test_tracker_clients.cpp     JiraClient y GitHubClient contra FakeHttpServer: cabeceras, cuerpo, adjuntos multipart,
+│                                    4xx no reintentable, 5xx y conexión rechazada reintentables, estados, metadatos, TrackerRouter
+└── presentation/              ventana completa con plataforma offscreen
+    └── test_main_window.cpp   navegación, atajos del menú, Ctrl+F y filtro, teclas de veredicto, captura,
+                               deshacer, métricas y el aviso «Reintentar» al fallar el guardado
 ```
+
+`core/test_metrics.cpp` cubre `metrics::` (por suite, ciclos, tendencia).
 
 Cada fichero es una clase QtTest con los slots agrupados por tema (`// ---- …`). Los tests se
 registran como `<capa>/<nombre>` y llevan la capa como etiqueta:
@@ -223,6 +316,16 @@ ctest --test-dir build -R run_controller --output-on-failure
 QT_QPA_PLATFORM=offscreen QAFLOW_SNAPSHOT_DIR=/tmp/qaflow-shots ./build/qaflow
 ```
 
-Renderiza cada pantalla (incluida una ejecución con un paso fallido, el bug prellenado y el
-informe de un plan) a PNG y cierra. Usa un directorio de datos aislado (`$QAFLOW_SNAPSHOT_DIR/data`)
-para no tocar los datos reales. Útil para revisar el diseño sin interacción.
+Renderiza cada pantalla (incluida una ejecución con un paso fallido, el bug prellenado, el
+informe de un plan y el panel de métricas con dos ciclos) a PNG y cierra. Usa un directorio de
+datos y unos ajustes aislados (`$QAFLOW_SNAPSHOT_DIR/data` y `/config`) para no tocar los reales.
+`QAFLOW_SNAPSHOT_LANG=es|en` y `QAFLOW_SNAPSHOT_THEME=dark|light` eligen idioma y tema; sin
+`LANG` se usa el del sistema. Útil para revisar el diseño sin interacción; CI lo ejecuta como humo.
+
+## Empaquetado
+
+`packaging/CMakeLists.txt` define la instalación (`install(TARGETS)`, `.desktop`, icono y
+metainfo en Linux) y CPack: `.deb` + `.tar.gz` en Linux, NSIS + `.zip` en Windows (con
+`windeployqt` en la instalación) y `.dmg` en macOS (`macdeployqt`). `packaging/linux/build-appimage.sh`
+instala en un AppDir y llama a linuxdeploy con su plugin de Qt. El workflow de GitHub Actions
+(`.github/workflows/ci.yml`) compila y pasa los tests en los tres sistemas y sube los paquetes.

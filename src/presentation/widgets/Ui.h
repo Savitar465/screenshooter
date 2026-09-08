@@ -2,6 +2,7 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -31,5 +32,8 @@ QScrollArea* scrollArea(QWidget** content, QVBoxLayout** layout, QWidget* parent
 
 void clearLayout(QLayout* layout);
 QString elide(const QString& s, int max);
+
+/// Icono de la aplicación (ventana y bandeja), dibujado al vuelo para no depender del plugin SVG.
+QIcon appIcon();
 
 } // namespace qaflow::ui

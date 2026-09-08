@@ -4,26 +4,34 @@
 
 namespace qaflow {
 
-JiraSettings QSettingsRepository::loadJira() {
+TrackerSettings QSettingsRepository::loadTracker() {
     QSettings s;
-    s.beginGroup(QStringLiteral("jira"));
-    JiraSettings j;
-    j.url = s.value(QStringLiteral("url"), j.url).toString();
-    j.project = s.value(QStringLiteral("project"), j.project).toString();
-    j.email = s.value(QStringLiteral("email"), j.email).toString();
-    j.token = s.value(QStringLiteral("token"), j.token).toString();
-    j.connected = s.value(QStringLiteral("connected"), false).toBool();
-    return j;
+    TrackerSettings t;
+    // Versiones anteriores guardaban un único gestor (Jira) en el grupo "jira".
+    const QString group = s.contains(QStringLiteral("tracker/url")) ? QStringLiteral("tracker") : QStringLiteral("jira");
+    s.beginGroup(group);
+    t.kind = trackerKindFromString(s.value(QStringLiteral("kind"), toString(TrackerKind::Jira)).toString());
+    t.url = s.value(QStringLiteral("url"), t.url).toString();
+    t.project = s.value(QStringLiteral("project"), t.project).toString();
+    t.email = s.value(QStringLiteral("email"), t.email).toString();
+    t.token = s.value(QStringLiteral("token")).toString();   // sólo heredado: SettingsStore lo migra al llavero
+    t.connected = s.value(QStringLiteral("connected"), false).toBool();
+    return t;
 }
 
-void QSettingsRepository::saveJira(const JiraSettings& j) {
+void QSettingsRepository::saveTracker(const TrackerSettings& t) {
     QSettings s;
-    s.beginGroup(QStringLiteral("jira"));
-    s.setValue(QStringLiteral("url"), j.url);
-    s.setValue(QStringLiteral("project"), j.project);
-    s.setValue(QStringLiteral("email"), j.email);
-    s.setValue(QStringLiteral("token"), j.token);
-    s.setValue(QStringLiteral("connected"), j.connected);
+    s.beginGroup(QStringLiteral("tracker"));
+    s.setValue(QStringLiteral("kind"), toString(t.kind));
+    s.setValue(QStringLiteral("url"), t.url);
+    s.setValue(QStringLiteral("project"), t.project);
+    s.setValue(QStringLiteral("email"), t.email);
+    s.setValue(QStringLiteral("connected"), t.connected);
+    if (t.token.isEmpty()) s.remove(QStringLiteral("token"));
+    else s.setValue(QStringLiteral("token"), t.token);   // sólo llega aquí sin llavero disponible
+    s.endGroup();
+    // El token en claro de versiones anteriores desaparece del fichero.
+    s.remove(QStringLiteral("jira/token"));
 }
 
 CaptureSettings QSettingsRepository::loadCapture() {
@@ -44,6 +52,24 @@ void QSettingsRepository::saveCapture(const CaptureSettings& c) {
     s.setValue(QStringLiteral("format"), c.format);
     s.setValue(QStringLiteral("mode"), toString(c.mode));
     s.setValue(QStringLiteral("folder"), c.folder);
+}
+
+AppSettings QSettingsRepository::loadApp() {
+    QSettings s;
+    s.beginGroup(QStringLiteral("app"));
+    AppSettings a;
+    a.language = appLanguageFromString(s.value(QStringLiteral("language"), toString(a.language)).toString());
+    a.theme = appThemeFromString(s.value(QStringLiteral("theme"), toString(a.theme)).toString());
+    a.closeToTray = s.value(QStringLiteral("closeToTray"), a.closeToTray).toBool();
+    return a;
+}
+
+void QSettingsRepository::saveApp(const AppSettings& a) {
+    QSettings s;
+    s.beginGroup(QStringLiteral("app"));
+    s.setValue(QStringLiteral("language"), toString(a.language));
+    s.setValue(QStringLiteral("theme"), toString(a.theme));
+    s.setValue(QStringLiteral("closeToTray"), a.closeToTray);
 }
 
 } // namespace qaflow

@@ -40,7 +40,8 @@ public:
     void restart();
     /// La nota se guarda en disco con retardo; `persistSessionNow()` fuerza la escritura.
     void setNote(const QString& note);
-    void persistSessionNow() { persistSession(); }
+    /// Fuerza la escritura de la sesión. Falso (y `saveFailed`) si no se pudo.
+    bool persistSessionNow() { return persistSession(); }
     void mark(StepResult result);
     /// Deshace el último veredicto y vuelve a ese paso (también reabre una ejecución terminada).
     void back();
@@ -54,6 +55,7 @@ signals:
     void runChanged();
     /// Se terminó (o se abandonó) la ejecución de un plan; el informe ya está en el historial.
     void planCompleted(const QString& planRunId);
+    void saveFailed(const QString& what);
 
 private:
     void begin(const QString& caseId);
@@ -64,7 +66,7 @@ private:
     void closePlan();
     /// Emite runChanged() y programa el guardado de la sesión.
     void changed();
-    void persistSession();
+    bool persistSession();
 
     TestCaseStore& m_store;
     RunHistoryStore& m_history;

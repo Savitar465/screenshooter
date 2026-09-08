@@ -2,6 +2,10 @@
 
 #include "presentation/widgets/LayoutButton.h"
 
+#include <QCoreApplication>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
 #include <QStyle>
 
 namespace qaflow::ui {
@@ -110,6 +114,32 @@ void clearLayout(QLayout* layout) {
 
 QString elide(const QString& s, int max) {
     return s.size() > max ? s.left(max) + QStringLiteral("…") : s;
+}
+
+QIcon appIcon() {
+    static QIcon icon;
+    if (!icon.isNull()) return icon;
+    for (int size : {16, 24, 32, 48, 64, 128, 256}) {
+        QPixmap pm(size, size);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        const qreal s = size / 128.0;
+        QPainterPath rect;
+        rect.addRoundedRect(QRectF(8 * s, 8 * s, 112 * s, 112 * s), 26 * s, 26 * s);
+        p.fillPath(rect, QColor(QStringLiteral("#0e1116")));
+        p.setPen(QPen(QColor(QStringLiteral("#10b981")), 6 * s));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(rect);
+        QPainterPath check;
+        check.moveTo(34 * s, 66 * s);
+        check.lineTo(54 * s, 86 * s);
+        check.lineTo(94 * s, 42 * s);
+        p.setPen(QPen(QColor(QStringLiteral("#10b981")), 12 * s, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPath(check);
+        icon.addPixmap(pm);
+    }
+    return icon;
 }
 
 } // namespace qaflow::ui

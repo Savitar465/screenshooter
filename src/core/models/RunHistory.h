@@ -9,10 +9,14 @@
 
 namespace qaflow {
 
+/// Valores canónicos (se persisten en history.json): "Pasa", "Superado"… No traducir.
 QString toString(StepResult r);
 QString toString(Verdict v);
 StepResult stepResultFromString(const QString& s);
 Verdict verdictFromString(const QString& s);
+/// Texto para mostrar en el idioma de la interfaz.
+QString label(StepResult r);
+QString label(Verdict v);
 
 /// "45 s", "4 min 12 s", "1 h 05 min".
 QString formatDuration(qint64 secs);

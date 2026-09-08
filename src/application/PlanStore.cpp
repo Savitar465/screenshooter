@@ -95,7 +95,7 @@ QString PlanStore::nextId() const {
 QString PlanStore::createPlan(const QString& name) {
     TestPlan p;
     p.id = nextId();
-    p.name = name.trimmed().isEmpty() ? QStringLiteral("Plan sin nombre") : name.trimmed();
+    p.name = name.trimmed().isEmpty() ? tr("Plan sin nombre") : name.trimmed();
     p.createdAt = QDateTime::currentDateTime();
     m_plans.append(p);
     m_activeId = p.id;
@@ -109,7 +109,7 @@ QString PlanStore::duplicatePlan(const QString& id) {
     if (!src) return {};
     TestPlan p = *src;
     p.id = nextId();
-    p.name = src->name + QStringLiteral(" (copia)");
+    p.name = src->name + tr(" (copia)");
     p.archived = false;
     p.createdAt = QDateTime::currentDateTime();
     m_plans.insert(static_cast<int>(src - m_plans.constData()) + 1, p);
@@ -137,7 +137,7 @@ void PlanStore::removePlan(const QString& id) {
     if (m_plans.isEmpty()) {
         TestPlan fresh;
         fresh.id = QStringLiteral("PL-0001");
-        fresh.name = QStringLiteral("Nuevo plan");
+        fresh.name = tr("Nuevo plan");
         fresh.createdAt = QDateTime::currentDateTime();
         m_plans.append(fresh);
     }
@@ -237,15 +237,15 @@ int PlanStore::estimatedSecs() const {
 
 QString PlanStore::estimatedTime() const {
     const int mins = (estimatedSecs() + 30) / 60;
-    if (mins >= 60) return QStringLiteral("%1 h %2 min").arg(mins / 60).arg(mins % 60);
-    return QStringLiteral("%1 min").arg(mins);
+    if (mins >= 60) return tr("%1 h %2 min").arg(mins / 60).arg(mins % 60);
+    return tr("%1 min").arg(mins);
 }
 
 QString PlanStore::estimateBasis() const {
     int used = 0;
     averageSecsPerStep(m_history.runs(), &used);
-    if (used == 0) return QStringLiteral("3 min por paso · sin historial");
-    return used == 1 ? QStringLiteral("según 1 ejecución") : QStringLiteral("según %1 ejecuciones").arg(used);
+    if (used == 0) return tr("3 min por paso · sin historial");
+    return used == 1 ? tr("según 1 ejecución") : tr("según %1 ejecuciones").arg(used);
 }
 
 // ---- Ciclos --------------------------------------------------------------------------------
@@ -264,8 +264,15 @@ int PlanStore::cycleCount(const QString& planId) const {
     return n;
 }
 
+bool PlanStore::save() {
+    if (!m_repo) return false;
+    if (m_repo->savePlans(PlanCollection{m_activeId, m_plans})) return true;
+    emit saveFailed(tr("los planes"));
+    return false;
+}
+
 void PlanStore::persist() {
-    if (m_repo) m_repo->savePlans(PlanCollection{m_activeId, m_plans});
+    save();
     emit planChanged();
 }
 

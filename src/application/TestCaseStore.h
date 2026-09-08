@@ -26,8 +26,10 @@ public:
     ~TestCaseStore() override;
 
     void load();
-    /// Escribe en disco inmediatamente (normalmente se usa el guardado diferido).
+    /// Escribe en disco inmediatamente (normalmente se usa el guardado diferido). Si falla, emite
+    /// `saveFailed()` y los cambios quedan pendientes: el siguiente guardado vuelve a intentarlo.
     bool save();
+    bool hasUnsavedChanges() const { return m_dirty; }
 
     const QList<TestCase>& cases() const { return m_cases; }
     const TestCase* find(const QString& id) const;
@@ -88,6 +90,8 @@ signals:
     void undoAvailable(const QString& label);
     /// Ficheros de capturas que ya no referencia ningún caso y pueden borrarse del disco.
     void filesReleased(const QStringList& paths);
+    /// No se pudo escribir en disco (`what` describe qué: "los casos de prueba").
+    void saveFailed(const QString& what);
 
 private:
     struct UndoEntry {

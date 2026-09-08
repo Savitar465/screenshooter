@@ -37,8 +37,12 @@ public:
     /// Añade una ejecución terminada. Asigna el id y devuelve el registro guardado.
     RunRecord addRun(RunRecord record);
 
+    /// Escribe el historial en disco. Falso (y `saveFailed`) si no se pudo.
+    bool save();
+
 signals:
     void historyChanged();
+    void saveFailed(const QString& what);
 
 private:
     void persist();

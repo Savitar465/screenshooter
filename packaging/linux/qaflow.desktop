@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=QAflow
+Comment=Casos de prueba, planes, ejecución manual con evidencias y reporte de bugs
+Comment[en]=Test cases, plans, manual execution with evidence and bug reporting
+Exec=qaflow
+Icon=qaflow
+Terminal=false
+Categories=Development;Qt;
+Keywords=QA;testing;test cases;jira;bugs;
+StartupWMClass=qaflow

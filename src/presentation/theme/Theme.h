@@ -1,32 +1,46 @@
 #pragma once
 
+#include "core/models/Settings.h"
+
 #include <QColor>
 #include <QString>
 
-/// Paleta del diseño de referencia (tema oscuro). Los mismos valores viven en resources/styles/app.qss.
+/// Paleta de la interfaz. Hay dos (oscura, la del diseño de referencia, y clara); la activa se
+/// fija con `apply()` antes de construir las vistas, que leen los colores de los nombres de abajo.
+/// `resources/styles/app.qss` usa los mismos nombres como tokens (`@bg`, `@tint(green,30)`…)
+/// y `stylesheet()` los sustituye por la paleta activa.
 namespace qaflow::theme {
 
-inline const char* Bg        = "#0e1116";
-inline const char* Panel     = "#161b22";
-inline const char* Elevated  = "#1c232d";
-inline const char* Border    = "#2a3441";
-inline const char* Text      = "#e6edf3";
-inline const char* Muted     = "#9aa7b4";
-inline const char* Blue      = "#6ea8fe";
-inline const char* Green     = "#10b981";
-inline const char* Red       = "#ef4444";
-inline const char* RedSoft   = "#ff8f8f";
-inline const char* Amber     = "#f59e0b";
-inline const char* AmberSoft = "#fbbf24";
-inline const char* Cyan      = "#06b6d4";
-inline const char* Violet    = "#8b5cf6";
+struct Palette {
+    QString bg, panel, elevated, field, border;
+    QString text, textSoft, muted, disabled, onAccent;
+    QString blue, blueHover, green, greenHover, red, redHover, redSoft, amber, amberSoft, cyan, violet;
+    QString gradientTop, scrollHover, panelTranslucent;
+};
+
+const Palette& darkPalette();
+const Palette& lightPalette();
+/// Paleta que corresponde a un ajuste (`System` consulta al sistema).
+const Palette& paletteFor(AppTheme t);
+bool systemPrefersDark();
+
+/// Fija la paleta activa. Las vistas ya construidas no cambian: hay que reconstruirlas.
+void apply(const Palette& p);
+const Palette& current();
+bool isDark();
+
+/// app.qss con los tokens sustituidos por la paleta activa.
+QString stylesheet();
+/// "rgba(r,g,b,alpha)" a partir de un color de la paleta (alpha 0-255).
+QString tint(const QString& color, int alpha);
+
+// Colores de la paleta activa, por nombre corto (las vistas los usan en estilos dependientes de datos).
+inline QString Bg, Panel, Elevated, Field, Border, Text, TextSoft, Muted, Disabled, OnAccent;
+inline QString Blue, Green, Red, RedSoft, Amber, AmberSoft, Cyan, Violet;
 
 struct Pill { QString bg; QString fg; };
 
-inline Pill priorityPill(const QString& priority) {
-    if (priority == QStringLiteral("Alta")) return {QStringLiteral("rgba(239,68,68,38)"), RedSoft};
-    if (priority == QStringLiteral("Media")) return {QStringLiteral("rgba(245,158,11,38)"), AmberSoft};
-    return {QStringLiteral("rgba(154,167,180,38)"), Muted};
-}
+/// Colores de la etiqueta de prioridad (valor canónico: Alta / Media / Baja).
+Pill priorityPill(const QString& priority);
 
 } // namespace qaflow::theme

@@ -2,6 +2,7 @@
 
 #include "infrastructure/capture/RegionSelector.h"
 
+#include <QCoreApplication>
 #include <QApplication>
 #include <QCursor>
 #include <QProcess>
@@ -44,7 +45,7 @@ void ScreenCaptureService::grabFullScreen(Callback done) {
     withWindowHidden([done](std::function<void()> restore) {
         const QPixmap pm = grabScreenUnderCursor();
         restore();
-        if (pm.isNull()) done(CaptureResult{false, {}, QStringLiteral("No se pudo capturar la pantalla")});
+        if (pm.isNull()) done(CaptureResult{false, {}, QCoreApplication::translate("infrastructure", "No se pudo capturar la pantalla")});
         else done(CaptureResult{true, pm.toImage(), {}});
     });
 }
@@ -56,7 +57,7 @@ void ScreenCaptureService::grabActiveWindow(Callback done) {
         QRect screenGeo;
         const QPixmap full = grabScreenUnderCursor(&screenGeo);
         restore();
-        if (full.isNull()) { done(CaptureResult{false, {}, QStringLiteral("No se pudo capturar la pantalla")}); return; }
+        if (full.isNull()) { done(CaptureResult{false, {}, QCoreApplication::translate("infrastructure", "No se pudo capturar la pantalla")}); return; }
 
         QRect win;
         QProcess p;
@@ -83,7 +84,7 @@ void ScreenCaptureService::grabRegion(Callback done) {
     withWindowHidden([done](std::function<void()> restore) {
         QRect screenGeo;
         const QPixmap full = grabScreenUnderCursor(&screenGeo);
-        if (full.isNull()) { restore(); done(CaptureResult{false, {}, QStringLiteral("No se pudo capturar la pantalla")}); return; }
+        if (full.isNull()) { restore(); done(CaptureResult{false, {}, QCoreApplication::translate("infrastructure", "No se pudo capturar la pantalla")}); return; }
 
         auto* selector = new RegionSelector(full);
         selector->setGeometry(screenGeo);

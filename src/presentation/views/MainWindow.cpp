@@ -13,16 +13,24 @@
 #include "presentation/widgets/Toast.h"
 #include "presentation/widgets/Ui.h"
 
+#include <QAction>
+#include <QActionGroup>
+#include <QApplication>
+#include <QCloseEvent>
 #include <QDesktopServices>
-#include <QShortcut>
-#include <QUrl>
-#include <QTimer>
+#include <QMenu>
+#include <QMenuBar>
+#include <QMessageBox>
 #include <QStackedWidget>
+#include <QSystemTrayIcon>
+#include <QTimer>
+#include <QUrl>
 
 namespace qaflow {
 
 MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), m_ctx(ctx) {
     setWindowTitle(QStringLiteral("QAflow"));
+    setWindowIcon(ui::appIcon());
     setMinimumSize(1100, 720);
     resize(1360, 860);
 
@@ -30,15 +38,15 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     central->setObjectName(QStringLiteral("central"));
     auto* h = ui::hbox(central, 0, 0);
 
-    m_sidebar = new Sidebar(*ctx.cases, *ctx.plan, *ctx.run, *ctx.history);
+    m_sidebar = new Sidebar(*ctx.cases, *ctx.plan, *ctx.run, *ctx.history, *ctx.bugLedger);
     h->addWidget(m_sidebar);
 
     m_stack = new QStackedWidget;
-    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer);
+    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger);
     m_plan = new PlanView(*ctx.cases, *ctx.plan);
     m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings);
     m_history = new HistoryView(*ctx.cases, *ctx.history);
-    m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs);
+    m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger);
     m_settings = new SettingsView(*ctx.settings, *ctx.bugs);
     m_stack->insertWidget(static_cast<int>(Screen::Casos), m_cases);
     m_stack->insertWidget(static_cast<int>(Screen::Plan), m_plan);
@@ -51,23 +59,192 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
 
     m_toast = new Toast(central);
     m_flash = new FlashOverlay(central);
-    m_captureShortcut = new QShortcut(this);
-    m_captureShortcut->setContext(Qt::ApplicationShortcut);
 
+    buildMenus();
+    buildTray();
     wireSignals();
     updateCaptureShortcut();
+    updateActions();
     if (m_ctx.run->isRunning()) {
         // Ejecución restaurada de la sesión anterior.
         navigate(Screen::Run);
         const QString id = m_ctx.run->state().caseId;
-        QTimer::singleShot(0, this, [this, id]() { showToast(QStringLiteral("Ejecución de %1 recuperada de la sesión anterior").arg(id), theme::Blue); });
+        QTimer::singleShot(0, this, [this, id]() { showToast(tr("Ejecución de %1 recuperada de la sesión anterior").arg(id), theme::Blue); });
     } else {
         navigate(Screen::Casos);
     }
 }
 
+// ---- Menú y atajos ---------------------------------------------------------------------------
+
+void MainWindow::buildMenus() {
+    QMenuBar* bar = menuBar();
+    bar->setNativeMenuBar(false);   // el QSS sólo se aplica a la barra propia
+
+    // Archivo
+    QMenu* file = bar->addMenu(tr("&Archivo"));
+    auto* newCase = file->addAction(tr("&Nuevo caso"), QKeySequence::New, this, [this]() { m_ctx.cases->createCase(); navigate(Screen::Casos); });
+    newCase->setObjectName(QStringLiteral("actNewCase"));
+    file->addAction(tr("&Importar casos…"), QKeySequence::Open, this, [this]() { navigate(Screen::Casos); m_cases->importCases(); });
+    QMenu* exportMenu = file->addMenu(tr("&Exportar casos"));
+    exportMenu->addAction(tr("A &JSON…"), this, [this]() { m_cases->exportCases(CaseTransferService::Format::Json); });
+    exportMenu->addAction(tr("A &CSV…"), this, [this]() { m_cases->exportCases(CaseTransferService::Format::Csv); });
+    exportMenu->addAction(tr("A &Markdown…"), this, [this]() { m_cases->exportCases(CaseTransferService::Format::Markdown); });
+    file->addSeparator();
+    file->addAction(tr("Abrir carpeta de &datos"), this, [this]() { QDesktopServices::openUrl(QUrl::fromLocalFile(m_ctx.dataDir)); });
+    file->addAction(tr("Abrir carpeta de &capturas"), this, [this]() { QDesktopServices::openUrl(QUrl::fromLocalFile(m_ctx.settings->capture().folder)); });
+    file->addSeparator();
+    auto* quit = file->addAction(tr("&Salir"), QKeySequence::Quit, this, &MainWindow::quitApplication);
+    quit->setObjectName(QStringLiteral("actQuit"));
+    quit->setMenuRole(QAction::QuitRole);
+
+    // Editar
+    QMenu* edit = bar->addMenu(tr("&Editar"));
+    m_actUndo = edit->addAction(tr("&Deshacer"), QKeySequence::Undo, this, [this]() {
+        if (m_ctx.cases->undo()) showToast(tr("Restaurado"), theme::Green);
+    });
+    m_actUndo->setObjectName(QStringLiteral("actUndo"));
+    edit->addSeparator();
+    auto* find = edit->addAction(tr("&Buscar caso"), QKeySequence::Find, this, [this]() { navigate(Screen::Casos); m_cases->focusSearch(); });
+    find->setObjectName(QStringLiteral("actFind"));
+    m_actDuplicate = edit->addAction(tr("D&uplicar caso"), QKeySequence(Qt::CTRL | Qt::Key_D), this, [this]() { navigate(Screen::Casos); m_cases->duplicateSelected(); });
+    m_actDuplicate->setObjectName(QStringLiteral("actDuplicate"));
+    m_actDelete = edit->addAction(tr("&Eliminar caso…"), QKeySequence(Qt::CTRL | Qt::Key_Delete), this, [this]() { navigate(Screen::Casos); m_cases->removeSelected(); });
+
+    // Ver
+    QMenu* view = bar->addMenu(tr("&Ver"));
+    const std::pair<Screen, QString> screens[] = {
+        {Screen::Casos, tr("&Casos de prueba")}, {Screen::Plan, tr("&Planes de pruebas")}, {Screen::Run, tr("&Ejecución")},
+        {Screen::Historial, tr("&Historial")}, {Screen::Bug, tr("&Reportar bug")}, {Screen::Ajustes, tr("&Ajustes")}};
+    auto* screenGroup = new QActionGroup(this);
+    int n = 1;
+    for (const auto& [screen, label] : screens) {
+        auto* a = view->addAction(label, QKeySequence(Qt::CTRL | (Qt::Key_0 + n++)), this, [this, screen]() { navigate(screen); });
+        a->setCheckable(true);
+        screenGroup->addAction(a);
+        m_screenActions[screen] = a;
+    }
+    view->addSeparator();
+    QMenu* themeMenu = view->addMenu(tr("&Tema"));
+    m_themeGroup = new QActionGroup(this);
+    const std::pair<AppTheme, QString> themes[] = {{AppTheme::Dark, tr("&Oscuro")}, {AppTheme::Light, tr("&Claro")}, {AppTheme::System, tr("Como el &sistema")}};
+    for (const auto& [t, label] : themes) {
+        auto* a = themeMenu->addAction(label, this, [this, t]() { m_ctx.settings->updateApp([t](AppSettings& s) { s.theme = t; }); });
+        a->setCheckable(true);
+        a->setChecked(m_ctx.settings->app().theme == t);
+        m_themeGroup->addAction(a);
+    }
+    QMenu* langMenu = view->addMenu(tr("&Idioma"));
+    m_languageGroup = new QActionGroup(this);
+    const std::pair<AppLanguage, QString> languages[] = {{AppLanguage::System, tr("Como el s&istema")}, {AppLanguage::Spanish, QStringLiteral("Español")}, {AppLanguage::English, QStringLiteral("English")}};
+    for (const auto& [l, label] : languages) {
+        auto* a = langMenu->addAction(label, this, [this, l]() { m_ctx.settings->updateApp([l](AppSettings& s) { s.language = l; }); });
+        a->setCheckable(true);
+        a->setChecked(m_ctx.settings->app().language == l);
+        m_languageGroup->addAction(a);
+    }
+
+    // Ejecución
+    QMenu* runMenu = bar->addMenu(tr("E&jecución"));
+    m_actRun = runMenu->addAction(tr("&Ejecutar caso seleccionado"), QKeySequence(Qt::Key_F5), this, [this]() {
+        const QString id = m_ctx.cases->selectedId();
+        if (id.isEmpty()) return;
+        m_ctx.run->start(id);
+        navigate(Screen::Run);
+    });
+    m_actRun->setObjectName(QStringLiteral("actRun"));
+    m_actCapture = runMenu->addAction(tr("&Capturar pantalla"), this, [this]() { m_ctx.evidence->captureForSelectedCase(); });
+    m_actCapture->setObjectName(QStringLiteral("actCapture"));
+    m_actCapture->setShortcutContext(Qt::ApplicationShortcut);
+    m_actReportBug = runMenu->addAction(tr("&Reportar bug"), QKeySequence(Qt::CTRL | Qt::Key_B), this, [this]() { navigate(Screen::Bug); });
+
+    // Ayuda
+    QMenu* help = bar->addMenu(tr("A&yuda"));
+    auto* about = help->addAction(tr("&Acerca de QAflow"), this, [this]() {
+        QMessageBox::about(this, tr("Acerca de QAflow"),
+                           tr("<b>QAflow</b> %1<br>Casos de prueba, planes, ejecución manual con evidencias y reporte de bugs.<br><br>"
+                              "Datos: %2<br>Ajustes: %3")
+                               .arg(QApplication::applicationVersion(), m_ctx.dataDir, m_ctx.settings->secretBackend()));
+    });
+    about->setMenuRole(QAction::AboutRole);
+    help->addAction(tr("Atajos de &teclado"), this, [this]() {
+        QMessageBox::information(this, tr("Atajos de teclado"),
+                                 tr("<table cellspacing='6'>"
+                                    "<tr><td><b>Ctrl+N</b></td><td>Nuevo caso</td></tr>"
+                                    "<tr><td><b>Ctrl+F</b></td><td>Buscar caso</td></tr>"
+                                    "<tr><td><b>Ctrl+D</b></td><td>Duplicar caso</td></tr>"
+                                    "<tr><td><b>Ctrl+Z</b></td><td>Deshacer el último borrado</td></tr>"
+                                    "<tr><td><b>F5</b></td><td>Ejecutar el caso seleccionado</td></tr>"
+                                    "<tr><td><b>%1</b></td><td>Capturar pantalla</td></tr>"
+                                    "<tr><td><b>Ctrl+B</b></td><td>Reportar bug</td></tr>"
+                                    "<tr><td><b>Ctrl+1 … Ctrl+6</b></td><td>Cambiar de pantalla</td></tr>"
+                                    "<tr><td><b>P / F / B / S</b></td><td>Veredicto del paso en ejecución</td></tr>"
+                                    "<tr><td><b>Retroceso</b></td><td>Volver al paso anterior</td></tr>"
+                                    "<tr><td><b>Ctrl+Q</b></td><td>Salir</td></tr></table>")
+                                     .arg(m_ctx.settings->capture().shortcut));
+    });
+}
+
+void MainWindow::buildTray() {
+    if (!QSystemTrayIcon::isSystemTrayAvailable()) return;
+    m_tray = new QSystemTrayIcon(ui::appIcon(), this);
+    m_tray->setToolTip(QStringLiteral("QAflow"));
+    auto* menu = new QMenu(this);
+    m_trayToggle = menu->addAction(tr("Ocultar QAflow"), this, [this]() {
+        if (isVisible()) hide();
+        else { show(); raise(); activateWindow(); }
+        updateActions();
+    });
+    menu->addAction(tr("Capturar pantalla"), this, [this]() { m_ctx.evidence->captureForSelectedCase(); });
+    menu->addSeparator();
+    menu->addAction(tr("Salir"), this, &MainWindow::quitApplication);
+    m_tray->setContextMenu(menu);
+    connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason != QSystemTrayIcon::Trigger && reason != QSystemTrayIcon::DoubleClick) return;
+        if (isVisible() && !isMinimized()) hide();
+        else { showNormal(); raise(); activateWindow(); }
+        updateActions();
+    });
+    m_tray->show();
+}
+
+void MainWindow::updateActions() {
+    m_actUndo->setEnabled(m_ctx.cases->canUndo());
+    m_actUndo->setText(m_ctx.cases->canUndo() ? tr("&Deshacer «%1»").arg(m_ctx.cases->undoLabel()) : tr("&Deshacer"));
+    const bool hasSelection = !m_ctx.cases->selectedId().isEmpty();
+    m_actRun->setEnabled(hasSelection);
+    m_actDuplicate->setEnabled(hasSelection);
+    m_actDelete->setEnabled(hasSelection);
+    m_actCapture->setEnabled(hasSelection);
+    m_actReportBug->setEnabled(hasSelection);
+    if (m_trayToggle) m_trayToggle->setText(isVisible() ? tr("Ocultar QAflow") : tr("Mostrar QAflow"));
+}
+
+void MainWindow::quitApplication() {
+    m_quitting = true;
+    close();
+    QApplication::quit();
+}
+
+void MainWindow::closeEvent(QCloseEvent* e) {
+    if (!m_quitting && m_tray && m_tray->isVisible() && m_ctx.settings->app().closeToTray) {
+        hide();
+        if (!m_trayHintShown) {
+            m_trayHintShown = true;
+            m_tray->showMessage(QStringLiteral("QAflow"), tr("Sigue en la bandeja del sistema. Pulsa el icono para volver a abrir la ventana."), ui::appIcon(), 4000);
+        }
+        updateActions();
+        e->ignore();
+        return;
+    }
+    QMainWindow::closeEvent(e);
+}
+
+// ---- Señales ---------------------------------------------------------------------------------
+
 void MainWindow::wireSignals() {
     connect(m_sidebar, &Sidebar::navigate, this, &MainWindow::navigate);
+    connect(m_sidebar, &Sidebar::metricsRequested, this, &MainWindow::showMetrics);
 
     // Toasts de todas las vistas
     connect(m_cases, &CasesView::toast, this, &MainWindow::showToast);
@@ -82,15 +259,19 @@ void MainWindow::wireSignals() {
     connect(m_cases, &CasesView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
     connect(m_cases, &CasesView::historyRequested, this, [this](const QString& id) { m_history->showCase(id); navigate(Screen::Historial); });
     connect(m_cases, &CasesView::openJiraRequested, this, [this](const QString& key) {
-        QString base = m_ctx.settings->jira().url.trimmed();
-        while (base.endsWith(QLatin1Char('/'))) base.chop(1);
-        if (base.isEmpty()) { showToast(QStringLiteral("Configura la URL de Jira en Ajustes"), theme::Amber); return; }
-        QDesktopServices::openUrl(QUrl(base + QStringLiteral("/browse/") + key));
+        const TrackerSettings& t = m_ctx.settings->tracker();
+        if (t.baseUrl().isEmpty()) { showToast(tr("Configura la URL del gestor en Ajustes"), theme::Amber); return; }
+        QDesktopServices::openUrl(QUrl(t.issueUrl(key)));
     });
+    connect(m_cases, &CasesView::openIssueRequested, this, [this](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_bug, &BugView::openIssueRequested, this, [this](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_ctx.cases, &TestCaseStore::selectionChanged, this, &MainWindow::updateActions);
+    connect(m_ctx.cases, &TestCaseStore::casesChanged, this, &MainWindow::updateActions);
     // Deshacer borrados (caso, paso o captura) desde el aviso
     connect(m_ctx.cases, &TestCaseStore::undoAvailable, this, [this](const QString& label) {
-        m_toast->show(label, theme::Amber, QStringLiteral("Deshacer"), [this]() {
-            if (m_ctx.cases->undo()) showToast(QStringLiteral("Restaurado"), theme::Green);
+        updateActions();
+        m_toast->show(label, theme::Amber, tr("Deshacer"), [this]() {
+            if (m_ctx.cases->undo()) showToast(tr("Restaurado"), theme::Green);
         });
     });
 
@@ -98,7 +279,7 @@ void MainWindow::wireSignals() {
     connect(m_plan, &PlanView::startPlanRequested, this, [this](const QStringList& ids, const QString& name, const QString& planId) {
         m_ctx.run->startSequence(ids, name, planId);
         navigate(Screen::Run);
-        showToast(QStringLiteral("Ciclo de \"%1\" iniciado · %2 casos").arg(name).arg(ids.size()), theme::Green);
+        showToast(tr("Ciclo de \"%1\" iniciado · %2 casos").arg(name).arg(ids.size()), theme::Green);
     });
     connect(m_plan, &PlanView::cycleReportRequested, this, [this](const QString& planRunId) { m_history->showPlan(planRunId); navigate(Screen::Historial); });
 
@@ -114,21 +295,42 @@ void MainWindow::wireSignals() {
     connect(m_bug, &BugView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
     connect(m_bug, &BugView::cancelled, this, [this]() { navigate(Screen::Casos); });
     connect(m_bug, &BugView::submitted, this, [this](const QString&) { navigate(Screen::Casos); });
+    // Cola offline: al arrancar con conexión configurada y bugs pendientes, se reintenta en silencio.
+    if (!m_ctx.bugLedger->pending().isEmpty() && m_ctx.settings->tracker().connected) {
+        QTimer::singleShot(1500, this, [this]() {
+            m_ctx.bugs->retryPending([this](const BugReportService::RetryResult& r) {
+                if (r.sent > 0) showToast(tr("Enviados %1 bugs que estaban pendientes: %2").arg(r.sent).arg(r.keys.join(QStringLiteral(", "))), theme::Green);
+            });
+        });
+    }
 
     // Evidencias
     connect(m_ctx.evidence, &EvidenceService::captured, this, [this](const QString&) {
         m_flash->flash();
-        showToast(QStringLiteral("Captura guardada en %1").arg(m_ctx.settings->capture().folder), theme::Cyan);
+        showToast(tr("Captura guardada en %1").arg(m_ctx.settings->capture().folder), theme::Cyan);
     });
     connect(m_ctx.evidence, &EvidenceService::failed, this, [this](const QString& e) { showToast(e, theme::Amber); });
-    connect(m_captureShortcut, &QShortcut::activated, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
     connect(m_ctx.settings, &SettingsStore::captureChanged, this, &MainWindow::updateCaptureShortcut);
+
+    // Fallos de guardado: cada store avisa; aquí se muestra con la opción de reintentar.
+    connect(m_ctx.cases, &TestCaseStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.cases->save(); }); });
+    connect(m_ctx.plan, &PlanStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.plan->save(); }); });
+    connect(m_ctx.history, &RunHistoryStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.history->save(); }); });
+    connect(m_ctx.bugLedger, &BugStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.bugLedger->save(); }); });
+    connect(m_ctx.run, &RunController::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.run->persistSessionNow(); }); });
+}
+
+void MainWindow::showSaveError(const QString& what, const std::function<bool()>& retry) {
+    m_toast->show(tr("No se pudieron guardar %1 en disco. Comprueba el espacio y los permisos de %2").arg(what, m_ctx.dataDir),
+                  theme::Red, tr("Reintentar"), [this, retry]() {
+                      if (retry()) showToast(tr("Guardado"), theme::Green);
+                  });
 }
 
 void MainWindow::finishRun() {
     const QString planId = m_ctx.run->planRunId();
     if (m_ctx.run->finish()) {
-        showToast(QStringLiteral("Siguiente caso del plan · quedan %1").arg(m_ctx.run->queuedCount() + 1), theme::Green);
+        showToast(tr("Siguiente caso del plan · quedan %1").arg(m_ctx.run->queuedCount() + 1), theme::Green);
         return;
     }
     if (planId.isEmpty()) { navigate(Screen::Casos); return; }
@@ -136,20 +338,27 @@ void MainWindow::finishRun() {
     m_history->showPlan(planId);
     navigate(Screen::Historial);
     const QString color = report.blocked ? theme::Amber : report.failed ? theme::Red : theme::Green;
-    showToast(QStringLiteral("Plan terminado · %1 superados · %2 fallidos · %3 bloqueados").arg(report.passed).arg(report.failed).arg(report.blocked), color);
+    showToast(tr("Plan terminado · %1 superados · %2 fallidos · %3 bloqueados").arg(report.passed).arg(report.failed).arg(report.blocked), color);
 }
 
 void MainWindow::updateCaptureShortcut() {
-    m_captureShortcut->setKey(QKeySequence(m_ctx.settings->capture().shortcut));
+    m_actCapture->setShortcut(QKeySequence(m_ctx.settings->capture().shortcut));
 }
 
 void MainWindow::navigate(Screen s) {
     if (s == Screen::Bug) m_bug->loadDraft();
+    m_current = s;
     m_stack->setCurrentIndex(static_cast<int>(s));
     m_sidebar->setActive(s);
+    if (auto* a = m_screenActions.value(s)) a->setChecked(true);
 }
 
 void MainWindow::showToast(const QString& message, const QString& color) { m_toast->show(message, color); }
+
+void MainWindow::showMetrics() {
+    m_history->showMetrics();
+    navigate(Screen::Historial);
+}
 
 void MainWindow::resizeEvent(QResizeEvent* e) {
     QMainWindow::resizeEvent(e);

@@ -1,5 +1,6 @@
 #include "CasesView.h"
 
+#include "application/BugStore.h"
 #include "application/CaseTransferService.h"
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
@@ -48,10 +49,10 @@ QWidget* fieldCell(const QString& title, QWidget* field) {
     v->addWidget(field);
     return cell;
 }
-QComboBox* filterBox(const QString& all, const QStringList& items) {
+QComboBox* filterBox(const QString& all, const QList<std::pair<QString, int>>& items) {
     auto* b = new QComboBox;
-    b->addItem(all);
-    b->addItems(items);
+    b->addItem(all, -1);
+    for (const auto& [text, value] : items) b->addItem(text, value);
     b->setStyleSheet(QStringLiteral("font-size:11.5px;padding:3px 6px;"));
     return b;
 }
@@ -63,8 +64,8 @@ QPushButton* smallButton(const QString& text, const char* role, const QString& t
 }
 } // namespace
 
-CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer, QWidget* parent)
-    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer) {
+CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer, BugStore& bugs, QWidget* parent)
+    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_bugs(bugs) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildEditor(root);
@@ -74,6 +75,7 @@ CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& 
     connect(&m_store, &TestCaseStore::caseChanged, this, &CasesView::onCaseChanged);
     connect(&m_run, &RunController::runChanged, this, &CasesView::refreshList);
     connect(&m_history, &RunHistoryStore::historyChanged, this, &CasesView::refreshHistory);
+    connect(&m_bugs, &BugStore::bugsChanged, this, &CasesView::refreshBugs);
     refreshFilters();
     refreshList();
     loadEditor();
@@ -93,28 +95,29 @@ void CasesView::buildListPane(QHBoxLayout* root) {
     hv->setContentsMargins(16, 18, 16, 12);
     auto* titleRow = new QWidget;
     auto* th = ui::hbox(titleRow, 0, 6);
-    th->addWidget(ui::label(QStringLiteral("Casos"), "h1-sm"), 1);
-    auto* newBtn = smallButton(QStringLiteral("+ Nuevo"), "primary");
+    th->addWidget(ui::label(tr("Casos"), "h1-sm"), 1);
+    auto* newBtn = smallButton(tr("+ Nuevo"), "primary");
     connect(newBtn, &QPushButton::clicked, this, [this]() { m_store.createCase(); });
     th->addWidget(newBtn);
-    auto* more = smallButton(QStringLiteral("⋯"), "outline", QStringLiteral("Importar y exportar"));
+    auto* more = smallButton(QStringLiteral("⋯"), "outline", tr("Importar y exportar"));
     more->setStyleSheet(QStringLiteral("padding:6px 8px;font-size:13px;border-radius:8px;"));
     more->setFixedWidth(30);
     auto* menu = new QMenu(more);
-    menu->addAction(QStringLiteral("Importar casos (JSON o CSV)…"), this, &CasesView::importCases);
+    menu->addAction(tr("Importar casos (JSON o CSV)…"), this, &CasesView::importCases);
     menu->addSeparator();
-    menu->addAction(QStringLiteral("Exportar todo a JSON…"), this, [this]() { exportCases(static_cast<int>(CaseTransferService::Format::Json)); });
-    menu->addAction(QStringLiteral("Exportar todo a CSV…"), this, [this]() { exportCases(static_cast<int>(CaseTransferService::Format::Csv)); });
-    menu->addAction(QStringLiteral("Exportar todo a Markdown…"), this, [this]() { exportCases(static_cast<int>(CaseTransferService::Format::Markdown)); });
+    menu->addAction(tr("Exportar todo a JSON…"), this, [this]() { exportCases(CaseTransferService::Format::Json); });
+    menu->addAction(tr("Exportar todo a CSV…"), this, [this]() { exportCases(CaseTransferService::Format::Csv); });
+    menu->addAction(tr("Exportar todo a Markdown…"), this, [this]() { exportCases(CaseTransferService::Format::Markdown); });
     more->setMenu(menu);
     th->addWidget(more);
     hv->addWidget(titleRow);
 
-    auto* search = new QLineEdit;
-    search->setPlaceholderText(QStringLiteral("Buscar por título, ID, etiqueta, componente…"));
-    search->setClearButtonEnabled(true);
-    connect(search, &QLineEdit::textChanged, this, [this](const QString& t) { m_filter.text = t; refreshList(); });
-    hv->addWidget(search);
+    m_search = new QLineEdit;
+    m_search->setObjectName(QStringLiteral("caseSearch"));
+    m_search->setPlaceholderText(tr("Buscar por título, ID, etiqueta, componente…"));
+    m_search->setClearButtonEnabled(true);
+    connect(m_search, &QLineEdit::textChanged, this, [this](const QString& t) { m_filter.text = t; refreshList(); });
+    hv->addWidget(m_search);
 
     auto* filters = new QWidget;
     m_filterRow = new FlowLayout(filters, 0, 6, 6);
@@ -123,20 +126,27 @@ void CasesView::buildListPane(QHBoxLayout* root) {
     // Filtros por estado, prioridad y última ejecución
     auto* combos = new QWidget;
     auto* ch = ui::hbox(combos, 0, 6);
-    m_statusFilter = filterBox(QStringLiteral("Estado"), {QStringLiteral("Listo"), QStringLiteral("Borrador"), QStringLiteral("Obsoleto")});
-    m_priorityFilter = filterBox(QStringLiteral("Prioridad"), {QStringLiteral("Alta"), QStringLiteral("Media"), QStringLiteral("Baja")});
-    m_outcomeFilter = filterBox(QStringLiteral("Ejecución"), {QStringLiteral("Pasó"), QStringLiteral("Falló"), QStringLiteral("Bloqueado"), QStringLiteral("Sin ejecutar")});
+    // Cada opción lleva el valor del enum como dato: el texto se traduce, el filtro no.
+    m_statusFilter = filterBox(tr("Estado"), {{label(CaseStatus::Listo), static_cast<int>(CaseStatus::Listo)},
+                                              {label(CaseStatus::Borrador), static_cast<int>(CaseStatus::Borrador)},
+                                              {label(CaseStatus::Obsoleto), static_cast<int>(CaseStatus::Obsoleto)}});
+    m_priorityFilter = filterBox(tr("Prioridad"), {{label(Priority::Alta), static_cast<int>(Priority::Alta)},
+                                                   {label(Priority::Media), static_cast<int>(Priority::Media)},
+                                                   {label(Priority::Baja), static_cast<int>(Priority::Baja)}});
+    m_outcomeFilter = filterBox(tr("Ejecución"), {{label(RunOutcome::Passed), static_cast<int>(RunOutcome::Passed)},
+                                                  {label(RunOutcome::Failed), static_cast<int>(RunOutcome::Failed)},
+                                                  {label(RunOutcome::Blocked), static_cast<int>(RunOutcome::Blocked)},
+                                                  {label(RunOutcome::None), static_cast<int>(RunOutcome::None)}});
     connect(m_statusFilter, &QComboBox::currentIndexChanged, this, [this](int i) {
-        m_filter.status = i <= 0 ? std::nullopt : std::optional<CaseStatus>(statusFromString(m_statusFilter->currentText()));
+        m_filter.status = i <= 0 ? std::nullopt : std::optional<CaseStatus>(static_cast<CaseStatus>(m_statusFilter->currentData().toInt()));
         refreshList();
     });
     connect(m_priorityFilter, &QComboBox::currentIndexChanged, this, [this](int i) {
-        m_filter.priority = i <= 0 ? std::nullopt : std::optional<Priority>(priorityFromString(m_priorityFilter->currentText()));
+        m_filter.priority = i <= 0 ? std::nullopt : std::optional<Priority>(static_cast<Priority>(m_priorityFilter->currentData().toInt()));
         refreshList();
     });
     connect(m_outcomeFilter, &QComboBox::currentIndexChanged, this, [this](int i) {
-        static const RunOutcome map[] = {RunOutcome::Passed, RunOutcome::Failed, RunOutcome::Blocked, RunOutcome::None};
-        m_filter.outcome = i <= 0 ? std::nullopt : std::optional<RunOutcome>(map[i - 1]);
+        m_filter.outcome = i <= 0 ? std::nullopt : std::optional<RunOutcome>(static_cast<RunOutcome>(m_outcomeFilter->currentData().toInt()));
         refreshList();
     });
     ch->addWidget(m_statusFilter, 1);
@@ -159,10 +169,10 @@ void CasesView::refreshFilters() {
     ui::clearLayout(m_filterRow);
     const QStringList suites = m_store.suites();
     if (!suites.contains(m_filter.suite)) m_filter.suite.clear();
-    QStringList chips{QStringLiteral("Todas")};
+    QStringList chips{tr("Todas")};
     chips << suites;
     for (const auto& s : chips) {
-        const QString value = s == QStringLiteral("Todas") ? QString() : s;
+        const QString value = s == tr("Todas") ? QString() : s;
         auto* b = ui::button(s, "chip");
         ui::setFlag(b, "active", value == m_filter.suite);
         connect(b, &QPushButton::clicked, this, [this, value]() { m_filter.suite = value; refreshFilters(); refreshList(); });
@@ -197,24 +207,24 @@ void CasesView::refreshList() {
         auto* top = new QWidget;
         auto* th = ui::hbox(top, 0, 8);
         th->addWidget(ui::label(c.id, "mono-muted"));
-        th->addWidget(ui::label(QStringLiteral("· %1").arg(c.suite.isEmpty() ? QStringLiteral("sin suite") : c.suite), "mono-muted"));
+        th->addWidget(ui::label(QStringLiteral("· %1").arg(c.suite.isEmpty() ? tr("sin suite") : c.suite), "mono-muted"));
         th->addStretch(1);
         const auto pill = theme::priorityPill(toString(c.priority));
-        th->addWidget(ui::pill(toString(c.priority), pill.bg, pill.fg));
+        th->addWidget(ui::pill(label(c.priority), pill.bg, pill.fg));
         v->addWidget(top);
 
-        auto* title = new QLabel(c.title.isEmpty() ? QStringLiteral("(sin título)") : c.title);
+        auto* title = new QLabel(c.title.isEmpty() ? tr("(sin título)") : c.title);
         title->setWordWrap(true);
         title->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;color:%1;").arg(theme::Text));
         v->addWidget(title);
 
         auto* bottom = new QWidget;
         auto* bh = ui::hbox(bottom, 0, 8);
-        auto* status = new QLabel(QStringLiteral("%1 · %2 pasos · %3 capturas").arg(toString(c.status)).arg(c.steps.size()).arg(c.shots.size()));
+        auto* status = new QLabel(tr("%1 · %2 pasos · %3 capturas").arg(label(c.status)).arg(c.steps.size()).arg(c.shots.size()));
         status->setStyleSheet(QStringLiteral("font-size:11.5px;font-weight:600;color:%1;").arg(statusColor(c.status)));
         bh->addWidget(status, 1);
         if (c.id == runningId) {
-            auto* badge = ui::pill(QStringLiteral("● EN EJECUCIÓN"), theme::Green, theme::Bg);
+            auto* badge = ui::pill(tr("● EN EJECUCIÓN"), theme::Green, theme::Bg);
             badge->setStyleSheet(badge->styleSheet() + QStringLiteral("font-size:10.5px;font-weight:800;"));
             bh->addWidget(badge);
         }
@@ -236,13 +246,13 @@ void CasesView::refreshList() {
         m_listLayout->addWidget(row);
     }
     if (shown == 0) {
-        auto* e = ui::label(m_store.cases().isEmpty() ? QStringLiteral("No hay casos. Crea uno o importa un archivo.") : QStringLiteral("Ningún caso coincide con los filtros."), "muted");
+        auto* e = ui::label(m_store.cases().isEmpty() ? tr("No hay casos. Crea uno o importa un archivo.") : tr("Ningún caso coincide con los filtros."), "muted");
         e->setWordWrap(true);
         e->setContentsMargins(8, 8, 8, 8);
         m_listLayout->addWidget(e);
     }
-    m_listCount->setText(m_filter.isEmpty() ? QStringLiteral("%1 casos").arg(shown)
-                                            : QStringLiteral("%1 de %2 casos").arg(shown).arg(m_store.cases().size()));
+    m_listCount->setText(m_filter.isEmpty() ? tr("%1 casos").arg(shown)
+                                            : tr("%1 de %2 casos").arg(shown).arg(m_store.cases().size()));
     m_listLayout->addStretch(1);
 }
 
@@ -267,30 +277,30 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     tv->addWidget(m_idLabel);
     m_title = new QLineEdit;
     m_title->setProperty("role", QStringLiteral("title"));
-    m_title->setPlaceholderText(QStringLiteral("Título del caso"));
+    m_title->setPlaceholderText(tr("Título del caso"));
     connect(m_title, &QLineEdit::textEdited, this, [this](const QString& t) {
         edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.title = t; }); });
     });
     tv->addWidget(m_title);
     hh->addWidget(titleBlock, 1);
-    auto* save = ui::button(QStringLiteral("Guardar"), "outline");
+    auto* save = ui::button(tr("Guardar"), "outline");
     connect(save, &QPushButton::clicked, this, [this]() {
         const TestCase* c = m_store.selected();
         if (!c) return;
         const QString id = c->id;
         m_store.updateCase(id, [](TestCase& tc) { if (tc.status == CaseStatus::Borrador && tc.readyToBeMarkedListo()) tc.status = CaseStatus::Listo; });
-        emit toast(QStringLiteral("%1 guardado").arg(id), theme::Green);
+        emit toast(tr("%1 guardado").arg(id), theme::Green);
     });
-    auto* runBtn = ui::button(QStringLiteral("▶ Ejecutar"), "success");
+    auto* runBtn = ui::button(tr("▶ Ejecutar"), "success");
     connect(runBtn, &QPushButton::clicked, this, [this]() { if (!m_store.selectedId().isEmpty()) emit runRequested(m_store.selectedId()); });
     auto* more = ui::button(QStringLiteral("⋯"), "outline");
-    more->setToolTip(QStringLiteral("Más acciones"));
+    more->setToolTip(tr("Más acciones"));
     more->setFixedWidth(40);
     auto* menu = new QMenu(more);
-    menu->addAction(QStringLiteral("Duplicar caso"), this, &CasesView::duplicateSelected);
-    menu->addAction(QStringLiteral("Ver historial de ejecuciones"), this, [this]() { if (!m_store.selectedId().isEmpty()) emit historyRequested(m_store.selectedId()); });
+    menu->addAction(tr("Duplicar caso"), this, &CasesView::duplicateSelected);
+    menu->addAction(tr("Ver historial de ejecuciones"), this, [this]() { if (!m_store.selectedId().isEmpty()) emit historyRequested(m_store.selectedId()); });
     menu->addSeparator();
-    menu->addAction(QStringLiteral("Eliminar caso…"), this, &CasesView::removeSelected);
+    menu->addAction(tr("Eliminar caso…"), this, &CasesView::removeSelected);
     more->setMenu(menu);
     hh->addWidget(save, 0, Qt::AlignTop);
     hh->addWidget(runBtn, 0, Qt::AlignTop);
@@ -307,26 +317,32 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_suiteBox = new QComboBox;
     srh->addWidget(m_suiteBox, 1);
     auto* addSuite = ui::button(QStringLiteral("+"), "icon-move");
-    addSuite->setToolTip(QStringLiteral("Nueva suite"));
+    addSuite->setToolTip(tr("Nueva suite"));
     addSuite->setFixedWidth(24);
     connect(addSuite, &QPushButton::clicked, this, &CasesView::newSuite);
     srh->addWidget(addSuite);
     m_priorityBox = new QComboBox;
-    m_priorityBox->addItems({QStringLiteral("Alta"), QStringLiteral("Media"), QStringLiteral("Baja")});
+    for (auto p : {Priority::Alta, Priority::Media, Priority::Baja}) m_priorityBox->addItem(label(p), static_cast<int>(p));
     m_statusBox = new QComboBox;
-    m_statusBox->addItems({QStringLiteral("Listo"), QStringLiteral("Borrador"), QStringLiteral("Obsoleto")});
+    for (auto st : {CaseStatus::Listo, CaseStatus::Borrador, CaseStatus::Obsoleto}) m_statusBox->addItem(label(st), static_cast<int>(st));
     m_lastRun = new QLabel;
     m_lastRun->setStyleSheet(QStringLiteral("font-weight:600;padding:5px 0;"));
     connect(m_suiteBox, &QComboBox::currentTextChanged, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.suite = t; }); }); });
-    connect(m_priorityBox, &QComboBox::currentTextChanged, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.priority = priorityFromString(t); }); }); });
-    connect(m_statusBox, &QComboBox::currentTextChanged, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.status = statusFromString(t); }); }); });
-    mg->addWidget(fieldCell(QStringLiteral("Suite"), suiteRow), 0, 0);
-    mg->addWidget(fieldCell(QStringLiteral("Prioridad"), m_priorityBox), 0, 1);
-    mg->addWidget(fieldCell(QStringLiteral("Estado"), m_statusBox), 0, 2);
-    mg->addWidget(fieldCell(QStringLiteral("Última ejecución"), m_lastRun), 0, 3);
+    connect(m_priorityBox, &QComboBox::currentIndexChanged, this, [this](int) {
+        const auto p = static_cast<Priority>(m_priorityBox->currentData().toInt());
+        edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.priority = p; }); });
+    });
+    connect(m_statusBox, &QComboBox::currentIndexChanged, this, [this](int) {
+        const auto st = static_cast<CaseStatus>(m_statusBox->currentData().toInt());
+        edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.status = st; }); });
+    });
+    mg->addWidget(fieldCell(tr("Suite"), suiteRow), 0, 0);
+    mg->addWidget(fieldCell(tr("Prioridad"), m_priorityBox), 0, 1);
+    mg->addWidget(fieldCell(tr("Estado"), m_statusBox), 0, 2);
+    mg->addWidget(fieldCell(tr("Última ejecución"), m_lastRun), 0, 3);
 
     m_component = new QLineEdit;
-    m_component->setPlaceholderText(QStringLiteral("p. ej. Carrito"));
+    m_component->setPlaceholderText(tr("p. ej. Carrito"));
     connect(m_component, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.component = t.trimmed(); }); }); });
     auto* jiraRow = new QWidget;
     auto* jrh = ui::hbox(jiraRow, 0, 4);
@@ -339,27 +355,27 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     });
     jrh->addWidget(m_jiraKey, 1);
     m_openJira = ui::button(QStringLiteral("↗"), "icon-move");
-    m_openJira->setToolTip(QStringLiteral("Abrir en Jira"));
+    m_openJira->setToolTip(tr("Abrir en Jira"));
     m_openJira->setFixedWidth(24);
     connect(m_openJira, &QPushButton::clicked, this, [this]() { if (const TestCase* c = m_store.selected(); c && !c->jiraKey.isEmpty()) emit openJiraRequested(c->jiraKey); });
     jrh->addWidget(m_openJira);
     m_tags = new QLineEdit;
-    m_tags->setPlaceholderText(QStringLiteral("regresión, smoke…"));
-    m_tags->setToolTip(QStringLiteral("Etiquetas separadas por comas"));
+    m_tags->setPlaceholderText(tr("regresión, smoke…"));
+    m_tags->setToolTip(tr("Etiquetas separadas por comas"));
     connect(m_tags, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.tags = parseTags(t); }); }); });
-    mg->addWidget(fieldCell(QStringLiteral("Componente"), m_component), 1, 0);
-    mg->addWidget(fieldCell(QStringLiteral("Historia Jira"), jiraRow), 1, 1);
-    mg->addWidget(fieldCell(QStringLiteral("Etiquetas"), m_tags), 1, 2, 1, 2);
+    mg->addWidget(fieldCell(tr("Componente"), m_component), 1, 0);
+    mg->addWidget(fieldCell(tr("Historia Jira"), jiraRow), 1, 1);
+    mg->addWidget(fieldCell(tr("Etiquetas"), m_tags), 1, 2, 1, 2);
     for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
     v->addWidget(meta);
 
     // Precondiciones
     auto* preBlock = new QWidget;
     auto* pv = ui::vbox(preBlock, 0, 8);
-    pv->addWidget(ui::label(QStringLiteral("PRECONDICIONES"), "eyebrow"));
+    pv->addWidget(ui::label(tr("PRECONDICIONES"), "eyebrow"));
     m_pre = new TextArea(2);
     m_pre->setProperty("role", QStringLiteral("panel"));
-    m_pre->setPlaceholderText(QStringLiteral("Estado inicial del sistema, datos de prueba, cuenta…"));
+    m_pre->setPlaceholderText(tr("Estado inicial del sistema, datos de prueba, cuenta…"));
     connect(m_pre, &TextArea::edited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.preconditions = t; }); }); });
     pv->addWidget(m_pre);
     v->addWidget(preBlock);
@@ -371,7 +387,7 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     auto* sh = ui::hbox(stepsHead, 0, 8);
     m_stepsHeader = ui::label(QString(), "eyebrow");
     sh->addWidget(m_stepsHeader, 1);
-    auto* addStep = ui::button(QStringLiteral("+ Añadir paso"), "dashed");
+    auto* addStep = ui::button(tr("+ Añadir paso"), "dashed");
     connect(addStep, &QPushButton::clicked, this, [this]() { m_store.addStep(m_store.selectedId()); });
     sh->addWidget(addStep);
     sv->addWidget(stepsHead);
@@ -380,8 +396,8 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     cg->setContentsMargins(4, 0, 4, 0);
     cg->setHorizontalSpacing(8);
     cg->addWidget(ui::label(QStringLiteral("#"), "eyebrow"), 0, 0);
-    cg->addWidget(ui::label(QStringLiteral("ACCIÓN"), "eyebrow"), 0, 1);
-    cg->addWidget(ui::label(QStringLiteral("RESULTADO ESPERADO"), "eyebrow"), 0, 2);
+    cg->addWidget(ui::label(tr("ACCIÓN"), "eyebrow"), 0, 1);
+    cg->addWidget(ui::label(tr("RESULTADO ESPERADO"), "eyebrow"), 0, 2);
     cg->setColumnMinimumWidth(0, 28);
     cg->setColumnMinimumWidth(3, 60);
     cg->setColumnStretch(1, 1);
@@ -401,10 +417,10 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     shh->addWidget(m_shotsHeader, 1);
     m_unassigned = ui::label(QString(), "warn");
     shh->addWidget(m_unassigned);
-    m_sortShots = smallButton(QStringLiteral("Ordenar por paso"), "outline");
+    m_sortShots = smallButton(tr("Ordenar por paso"), "outline");
     connect(m_sortShots, &QPushButton::clicked, this, [this]() { m_store.sortShotsByStep(m_store.selectedId()); });
     shh->addWidget(m_sortShots);
-    auto* capture = ui::button(QStringLiteral("+ Capturar pantalla"), "dashed");
+    auto* capture = ui::button(tr("+ Capturar pantalla"), "dashed");
     connect(capture, &QPushButton::clicked, this, &CasesView::captureRequested);
     shh->addWidget(capture);
     shv->addWidget(shotsHead);
@@ -422,7 +438,7 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     auto* hhh = ui::hbox(histHead, 0, 8);
     m_historyHeader = ui::label(QString(), "eyebrow");
     hhh->addWidget(m_historyHeader, 1);
-    auto* all = smallButton(QStringLiteral("Ver historial"), "outline");
+    auto* all = smallButton(tr("Ver historial"), "outline");
     connect(all, &QPushButton::clicked, this, [this]() { if (!m_store.selectedId().isEmpty()) emit historyRequested(m_store.selectedId()); });
     hhh->addWidget(all);
     hv2->addWidget(histHead);
@@ -430,6 +446,16 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_historyLayout = ui::vbox(histList, 0, 6);
     hv2->addWidget(histList);
     v->addWidget(histBlock);
+
+    // Bugs reportados desde este caso
+    auto* bugsBlock = new QWidget;
+    auto* bv = ui::vbox(bugsBlock, 0, 8);
+    m_bugsHeader = ui::label(QString(), "eyebrow");
+    bv->addWidget(m_bugsHeader);
+    auto* bugsList = new QWidget;
+    m_bugsLayout = ui::vbox(bugsList, 0, 6);
+    bv->addWidget(bugsList);
+    v->addWidget(bugsBlock);
 
     root->addWidget(sa, 1);
 }
@@ -450,8 +476,8 @@ void CasesView::loadEditor() {
     if (m_title->text() != c->title) { m_title->setText(c->title); m_title->setCursorPosition(0); }
     if (!c->suite.isEmpty() && m_suiteBox->findText(c->suite) < 0) m_suiteBox->addItem(c->suite);
     m_suiteBox->setCurrentText(c->suite);
-    m_priorityBox->setCurrentText(toString(c->priority));
-    m_statusBox->setCurrentText(toString(c->status));
+    m_priorityBox->setCurrentIndex(std::max(0, m_priorityBox->findData(static_cast<int>(c->priority))));
+    m_statusBox->setCurrentIndex(std::max(0, m_statusBox->findData(static_cast<int>(c->status))));
     m_lastRun->setText(c->lastRun.label());
     m_lastRun->setStyleSheet(QStringLiteral("font-weight:600;padding:5px 0;color:%1;").arg(lastRunColor(c->lastRun)));
     if (m_component->text() != c->component) m_component->setText(c->component);
@@ -463,12 +489,13 @@ void CasesView::loadEditor() {
     refreshSteps();
     refreshShots();
     refreshHistory();
+    refreshBugs();
 }
 
 void CasesView::refreshSteps() {
     const TestCase* c = m_store.selected();
     if (!c) return;
-    m_stepsHeader->setText(QStringLiteral("PASOS · %1").arg(c->steps.size()));
+    m_stepsHeader->setText(tr("PASOS · %1").arg(c->steps.size()));
     ui::clearLayout(m_stepsLayout);
     const QString id = c->id;
     const int n = c->steps.size();
@@ -483,12 +510,12 @@ void CasesView::refreshSteps() {
         num->setFixedWidth(28);
         g->addWidget(num, 0, 0);
         auto* action = new TextArea(2);
-        action->setPlaceholderText(QStringLiteral("Qué hace el tester…"));
+        action->setPlaceholderText(tr("Qué hace el tester…"));
         action->setTextSilently(c->steps[i].action);
         connect(action, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.action = t; }); }); });
         g->addWidget(action, 0, 1);
         auto* expected = new TextArea(2);
-        expected->setPlaceholderText(QStringLiteral("Qué debe ocurrir…"));
+        expected->setPlaceholderText(tr("Qué debe ocurrir…"));
         expected->setTextSilently(c->steps[i].expected);
         connect(expected, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.expected = t; }); }); });
         g->addWidget(expected, 0, 2);
@@ -499,18 +526,18 @@ void CasesView::refreshSteps() {
         tg->setContentsMargins(0, 0, 0, 0);
         tg->setSpacing(2);
         auto* up = ui::button(QStringLiteral("▲"), "icon-move");
-        up->setToolTip(QStringLiteral("Subir paso"));
+        up->setToolTip(tr("Subir paso"));
         up->setEnabled(i > 0);
         connect(up, &QPushButton::clicked, this, [this, id, i]() { m_store.moveStep(id, i, -1); });
         auto* down = ui::button(QStringLiteral("▼"), "icon-move");
-        down->setToolTip(QStringLiteral("Bajar paso"));
+        down->setToolTip(tr("Bajar paso"));
         down->setEnabled(i < n - 1);
         connect(down, &QPushButton::clicked, this, [this, id, i]() { m_store.moveStep(id, i, +1); });
         auto* insert = ui::button(QStringLiteral("+"), "icon-move");
-        insert->setToolTip(QStringLiteral("Insertar paso debajo"));
+        insert->setToolTip(tr("Insertar paso debajo"));
         connect(insert, &QPushButton::clicked, this, [this, id, i]() { m_store.insertStep(id, i + 1); });
         auto* remove = ui::button(QStringLiteral("×"), "icon");
-        remove->setToolTip(QStringLiteral("Eliminar paso (se puede deshacer)"));
+        remove->setToolTip(tr("Eliminar paso (se puede deshacer)"));
         connect(remove, &QPushButton::clicked, this, [this, id, i]() { m_store.removeStep(id, i); });
         for (auto* b : {up, down, insert}) b->setFixedSize(26, 22);
         remove->setFixedSize(26, 22);
@@ -528,10 +555,10 @@ void CasesView::refreshSteps() {
 void CasesView::refreshShots() {
     const TestCase* c = m_store.selected();
     if (!c) return;
-    m_shotsHeader->setText(QStringLiteral("EVIDENCIAS · %1 CAPTURAS").arg(c->shots.size()));
+    m_shotsHeader->setText(tr("EVIDENCIAS · %1 CAPTURAS").arg(c->shots.size()));
     const int unassigned = c->unassignedShots();
     m_unassigned->setVisible(unassigned > 0);
-    m_unassigned->setText(QStringLiteral("%1 sin paso asignado").arg(unassigned));
+    m_unassigned->setText(tr("%1 sin paso asignado").arg(unassigned));
     m_sortShots->setVisible(!c->shots.isEmpty());
     ui::clearLayout(m_shotsGrid);
     m_shotsContainer->setVisible(!c->shots.isEmpty());
@@ -553,9 +580,9 @@ void CasesView::refreshHistory() {
     const TestCase* c = m_store.selected();
     if (!c) return;
     const auto runs = m_history.runsForCase(c->id);
-    m_historyHeader->setText(QStringLiteral("ÚLTIMAS EJECUCIONES · %1").arg(runs.size()));
+    m_historyHeader->setText(tr("ÚLTIMAS EJECUCIONES · %1").arg(runs.size()));
     if (runs.isEmpty()) {
-        m_historyLayout->addWidget(ui::label(QStringLiteral("Este caso todavía no se ha ejecutado."), "muted-sm"));
+        m_historyLayout->addWidget(ui::label(tr("Este caso todavía no se ha ejecutado."), "muted-sm"));
         return;
     }
     constexpr int kMax = 5;
@@ -565,13 +592,43 @@ void CasesView::refreshHistory() {
         auto* h = ui::hbox(row, 0, 10);
         h->setContentsMargins(10, 7, 10, 7);
         const QString color = r.verdict == Verdict::Superado ? theme::Green : r.verdict == Verdict::Fallido ? theme::Red : theme::Amber;
-        h->addWidget(ui::pill(toString(r.verdict).toUpper(), color, r.verdict == Verdict::Fallido ? QStringLiteral("#ffffff") : theme::Bg));
+        h->addWidget(ui::pill(label(r.verdict).toUpper(), color, r.verdict == Verdict::Fallido ? QStringLiteral("#ffffff") : theme::Bg));
         h->addWidget(ui::label(r.finishedAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")), "muted-sm"));
-        h->addWidget(ui::label(QStringLiteral("%1/%2 pasos · %3").arg(r.steps.size()).arg(r.plannedSteps).arg(formatDuration(r.durationSecs)), "muted-sm"));
+        h->addWidget(ui::label(tr("%1/%2 pasos · %3").arg(r.steps.size()).arg(r.plannedSteps).arg(formatDuration(r.durationSecs)), "muted-sm"));
         h->addStretch(1);
         const PlanRun* p = r.planRunId.isEmpty() ? nullptr : m_history.findPlan(r.planRunId);
-        h->addWidget(ui::label(p ? p->name : QStringLiteral("Ejecución suelta"), "muted-sm"));
+        h->addWidget(ui::label(p ? p->name : tr("Ejecución suelta"), "muted-sm"));
         m_historyLayout->addWidget(row);
+    }
+}
+
+void CasesView::refreshBugs() {
+    ui::clearLayout(m_bugsLayout);
+    const TestCase* c = m_store.selected();
+    if (!c) return;
+    const auto issues = m_bugs.issuesForCase(c->id);
+    m_bugsHeader->setText(tr("BUGS REPORTADOS · %1").arg(issues.size()));
+    if (issues.isEmpty()) {
+        m_bugsLayout->addWidget(ui::label(tr("Ningún bug reportado desde este caso."), "muted-sm"));
+        return;
+    }
+    for (const auto& i : issues) {
+        auto* row = ui::card("card-flat");
+        auto* h = ui::hbox(row, 0, 10);
+        h->setContentsMargins(10, 7, 10, 7);
+        auto* key = ui::button(i.key, "ghost");
+        key->setToolTip(tr("Abrir en %1").arg(i.tracker));
+        key->setStyleSheet(QStringLiteral("padding:2px 8px;font-size:12px;font-weight:700;font-family:'Consolas','DejaVu Sans Mono',monospace;color:%1;").arg(theme::Blue));
+        connect(key, &QPushButton::clicked, this, [this, url = i.url]() { emit openIssueRequested(url); });
+        h->addWidget(key);
+        auto* title = new QLabel(i.title);
+        title->setWordWrap(true);
+        h->addWidget(title, 1);
+        h->addWidget(ui::label(i.createdAt.toString(QStringLiteral("dd/MM/yyyy")), "muted-sm"));
+        const QString status = i.status.isEmpty() ? tr("SIN CONSULTAR") : i.status.toUpper();
+        h->addWidget(ui::pill(status, i.status.isEmpty() ? theme::tint(theme::Muted, 38) : i.resolved ? theme::Green : theme::tint(theme::Blue, 38),
+                              i.status.isEmpty() ? theme::Muted : i.resolved ? theme::Bg : theme::Blue));
+        m_bugsLayout->addWidget(row);
     }
 }
 
@@ -583,7 +640,7 @@ void CasesView::onCaseChanged(const QString& id) {
         // Edición desde este mismo editor: no reconstruir campos con foco; sólo derivados.
         const TestCase* c = m_store.selected();
         if (c) {
-            m_stepsHeader->setText(QStringLiteral("PASOS · %1").arg(c->steps.size()));
+            m_stepsHeader->setText(tr("PASOS · %1").arg(c->steps.size()));
             m_lastRun->setText(c->lastRun.label());
         }
         return;
@@ -593,35 +650,40 @@ void CasesView::onCaseChanged(const QString& id) {
 
 // ---- Acciones ------------------------------------------------------------------------------
 
+void CasesView::focusSearch() {
+    m_search->setFocus(Qt::ShortcutFocusReason);
+    m_search->selectAll();
+}
+
 void CasesView::newSuite() {
     const TestCase* c = m_store.selected();
     if (!c) return;
     bool ok = false;
-    const QString name = QInputDialog::getText(this, QStringLiteral("Nueva suite"), QStringLiteral("Nombre de la suite:"), QLineEdit::Normal, QString(), &ok).trimmed();
+    const QString name = QInputDialog::getText(this, tr("Nueva suite"), tr("Nombre de la suite:"), QLineEdit::Normal, QString(), &ok).trimmed();
     if (!ok || name.isEmpty()) return;
     const QString id = c->id;
     m_store.updateCase(id, [&](TestCase& tc) { tc.suite = name; });
-    emit toast(QStringLiteral("%1 movido a la suite \"%2\"").arg(id, name), theme::Green);
+    emit toast(tr("%1 movido a la suite \"%2\"").arg(id, name), theme::Green);
 }
 
 void CasesView::duplicateSelected() {
     const QString src = m_store.selectedId();
     if (src.isEmpty()) return;
     const QString id = m_store.duplicateCase(src);
-    if (!id.isEmpty()) emit toast(QStringLiteral("%1 duplicado como %2").arg(src, id), theme::Green);
+    if (!id.isEmpty()) emit toast(tr("%1 duplicado como %2").arg(src, id), theme::Green);
 }
 
 void CasesView::removeSelected() {
     const TestCase* c = m_store.selected();
     if (!c) return;
-    QString detail = QStringLiteral("Se eliminará el caso con sus %1 pasos").arg(c->steps.size());
-    if (!c->shots.isEmpty()) detail += QStringLiteral(" y sus %1 capturas (los ficheros se borran del disco)").arg(c->shots.size());
-    detail += QStringLiteral(". Podrás deshacerlo durante unos segundos.");
-    QMessageBox box(QMessageBox::Warning, QStringLiteral("Eliminar %1").arg(c->id),
-                    QStringLiteral("¿Eliminar \"%1\"?").arg(c->title.isEmpty() ? c->id : c->title), QMessageBox::NoButton, this);
+    QString detail = tr("Se eliminará el caso con sus %1 pasos").arg(c->steps.size());
+    if (!c->shots.isEmpty()) detail += tr(" y sus %1 capturas (los ficheros se borran del disco)").arg(c->shots.size());
+    detail += tr(". Podrás deshacerlo durante unos segundos.");
+    QMessageBox box(QMessageBox::Warning, tr("Eliminar %1").arg(c->id),
+                    tr("¿Eliminar \"%1\"?").arg(c->title.isEmpty() ? c->id : c->title), QMessageBox::NoButton, this);
     box.setInformativeText(detail);
-    auto* del = box.addButton(QStringLiteral("Eliminar"), QMessageBox::DestructiveRole);
-    box.addButton(QStringLiteral("Cancelar"), QMessageBox::RejectRole);
+    auto* del = box.addButton(tr("Eliminar"), QMessageBox::DestructiveRole);
+    box.addButton(tr("Cancelar"), QMessageBox::RejectRole);
     box.exec();
     if (box.clickedButton() != del) return;
     m_store.removeCase(c->id);
@@ -629,21 +691,20 @@ void CasesView::removeSelected() {
 
 void CasesView::importCases() {
     const QString start = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Importar casos"), start,
-                                                      QStringLiteral("Casos (*.json *.csv);;JSON (*.json);;CSV (*.csv)"));
+    const QString path = QFileDialog::getOpenFileName(this, tr("Importar casos"), start,
+                                                      tr("Casos (*.json *.csv);;JSON (*.json);;CSV (*.csv)"));
     if (path.isEmpty()) return;
     const auto r = m_transfer.importFrom(path);
     emit toast(r.message, r.ok ? theme::Green : theme::Red);
 }
 
-void CasesView::exportCases(int format) {
-    const auto fmt = static_cast<CaseTransferService::Format>(format);
+void CasesView::exportCases(CaseTransferService::Format fmt) {
     const QString ext = CaseTransferService::extension(fmt);
-    const QString filter = fmt == CaseTransferService::Format::Json ? QStringLiteral("JSON (*.json)")
-                           : fmt == CaseTransferService::Format::Csv ? QStringLiteral("CSV (*.csv)")
-                                                                     : QStringLiteral("Markdown (*.md)");
+    const QString filter = fmt == CaseTransferService::Format::Json ? tr("JSON (*.json)")
+                           : fmt == CaseTransferService::Format::Csv ? tr("CSV (*.csv)")
+                                                                     : tr("Markdown (*.md)");
     const QString suggested = QDir(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)).filePath(QStringLiteral("casos-qaflow.") + ext);
-    QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Exportar casos"), suggested, filter);
+    QString path = QFileDialog::getSaveFileName(this, tr("Exportar casos"), suggested, filter);
     if (path.isEmpty()) return;
     if (!path.endsWith(QLatin1Char('.') + ext, Qt::CaseInsensitive)) path += QLatin1Char('.') + ext;
     const auto r = m_transfer.exportTo(path, fmt);

@@ -89,8 +89,15 @@ RunRecord RunHistoryStore::addRun(RunRecord record) {
     return record;
 }
 
+bool RunHistoryStore::save() {
+    if (!m_repo) return false;
+    if (m_repo->saveHistory(m_history)) return true;
+    emit saveFailed(tr("el historial de ejecuciones"));
+    return false;
+}
+
 void RunHistoryStore::persist() {
-    if (m_repo) m_repo->saveHistory(m_history);
+    save();
     emit historyChanged();
 }
 

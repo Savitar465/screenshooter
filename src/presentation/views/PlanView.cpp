@@ -7,6 +7,7 @@
 #include "presentation/widgets/ProgressCells.h"
 #include "presentation/widgets/Ui.h"
 
+#include <QCoreApplication>
 #include <QGridLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -37,9 +38,9 @@ QString verdictColor(Verdict v) {
     return theme::Muted;
 }
 QLabel* verdictPill(Verdict v) {
-    return ui::pill(toString(v).toUpper(), verdictColor(v), v == Verdict::Fallido ? QStringLiteral("#ffffff") : theme::Bg);
+    return ui::pill(label(v).toUpper(), verdictColor(v), v == Verdict::Fallido ? QStringLiteral("#ffffff") : theme::Bg);
 }
-QLabel* mutedPill(const QString& text) { return ui::pill(text, QStringLiteral("rgba(154,167,180,38)"), theme::Muted); }
+QLabel* mutedPill(const QString& text) { return ui::pill(text, theme::tint(theme::Muted, 38), theme::Muted); }
 QString when(const QDateTime& dt) { return dt.isValid() ? dt.toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QStringLiteral("—"); }
 } // namespace
 
@@ -69,8 +70,8 @@ void PlanView::buildListPane(QHBoxLayout* root) {
     hv->setContentsMargins(16, 18, 16, 12);
     auto* titleRow = new QWidget;
     auto* th = ui::hbox(titleRow, 0, 8);
-    th->addWidget(ui::label(QStringLiteral("Planes"), "h1-sm"), 1);
-    auto* newBtn = ui::button(QStringLiteral("+ Nuevo"), "primary");
+    th->addWidget(ui::label(tr("Planes"), "h1-sm"), 1);
+    auto* newBtn = ui::button(tr("+ Nuevo"), "primary");
     newBtn->setStyleSheet(QStringLiteral("padding:6px 12px;font-size:12.5px;border-radius:8px;"));
     connect(newBtn, &QPushButton::clicked, this, &PlanView::newPlan);
     th->addWidget(newBtn);
@@ -92,7 +93,7 @@ void PlanView::refreshList() {
     ui::clearLayout(m_filterRow);
     int activeCount = 0, archivedCount = 0;
     for (const auto& p : m_plans.plans()) (p.archived ? archivedCount : activeCount)++;
-    for (auto [archived, text] : {std::pair{false, QStringLiteral("Activos · %1").arg(activeCount)}, std::pair{true, QStringLiteral("Archivados · %1").arg(archivedCount)}}) {
+    for (auto [archived, text] : {std::pair{false, tr("Activos · %1").arg(activeCount)}, std::pair{true, tr("Archivados · %1").arg(archivedCount)}}) {
         auto* b = ui::button(text, "chip");
         ui::setFlag(b, "active", archived == m_showArchived);
         connect(b, &QPushButton::clicked, this, [this, archived]() { m_showArchived = archived; refreshList(); });
@@ -113,23 +114,23 @@ void PlanView::refreshList() {
         th->addWidget(ui::label(p.id, "mono-muted"));
         th->addStretch(1);
         const auto cycle = m_plans.latestCycle(p.id);
-        if (!cycle) th->addWidget(mutedPill(QStringLiteral("SIN CICLOS")));
-        else if (!cycle->plan.isFinished()) th->addWidget(mutedPill(QStringLiteral("EN CURSO")));
+        if (!cycle) th->addWidget(mutedPill(tr("SIN CICLOS")));
+        else if (!cycle->plan.isFinished()) th->addWidget(mutedPill(tr("EN CURSO")));
         else th->addWidget(verdictPill(cycle->verdict()));
         v->addWidget(top);
-        auto* title = new QLabel(p.name.isEmpty() ? QStringLiteral("(sin nombre)") : p.name);
+        auto* title = new QLabel(p.name.isEmpty() ? tr("(sin nombre)") : p.name);
         title->setWordWrap(true);
         title->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;color:%1;").arg(theme::Text));
         v->addWidget(title);
-        QString info = QStringLiteral("%1 casos · %2 ciclos").arg(m_plans.orderedCaseIds(p.id).size()).arg(m_plans.cycleCount(p.id));
-        if (cycle) info += QStringLiteral(" · último %1/%2 · %3 %").arg(cycle->executed).arg(cycle->total()).arg(cycle->successRate());
+        QString info = tr("%1 casos · %2 ciclos").arg(m_plans.orderedCaseIds(p.id).size()).arg(m_plans.cycleCount(p.id));
+        if (cycle) info += tr(" · último %1/%2 · %3 %").arg(cycle->executed).arg(cycle->total()).arg(cycle->successRate());
         v->addWidget(ui::label(info, "muted-sm"));
         for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
         connect(row, &QPushButton::clicked, this, [this, id = p.id]() { m_plans.setActive(id); });
         m_listLayout->addWidget(row);
     }
     if (shown == 0) {
-        auto* e = ui::label(m_showArchived ? QStringLiteral("No hay planes archivados.") : QStringLiteral("No hay planes activos."), "muted");
+        auto* e = ui::label(m_showArchived ? tr("No hay planes archivados.") : tr("No hay planes activos."), "muted");
         e->setContentsMargins(8, 8, 8, 8);
         m_listLayout->addWidget(e);
     }
@@ -160,19 +161,19 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     auto* nh = ui::hbox(nameRow, 0, 10);
     m_name = new QLineEdit;
     m_name->setProperty("role", QStringLiteral("title"));
-    m_name->setPlaceholderText(QStringLiteral("Nombre del plan"));
+    m_name->setPlaceholderText(tr("Nombre del plan"));
     connect(m_name, &QLineEdit::textEdited, this, [this](const QString& t) { m_selfEdit = true; m_plans.setName(t); m_selfEdit = false; });
     nh->addWidget(m_name, 1);
-    m_archivedBadge = mutedPill(QStringLiteral("ARCHIVADO"));
+    m_archivedBadge = mutedPill(tr("ARCHIVADO"));
     nh->addWidget(m_archivedBadge);
     auto* more = ui::button(QStringLiteral("⋯"), "outline");
     more->setFixedWidth(40);
-    more->setToolTip(QStringLiteral("Más acciones"));
+    more->setToolTip(tr("Más acciones"));
     auto* menu = new QMenu(more);
-    menu->addAction(QStringLiteral("Duplicar plan"), this, &PlanView::duplicateActive);
-    menu->addAction(QStringLiteral("Archivar / desarchivar"), this, &PlanView::toggleArchiveActive);
+    menu->addAction(tr("Duplicar plan"), this, &PlanView::duplicateActive);
+    menu->addAction(tr("Archivar / desarchivar"), this, &PlanView::toggleArchiveActive);
     menu->addSeparator();
-    menu->addAction(QStringLiteral("Eliminar plan…"), this, &PlanView::removeActive);
+    menu->addAction(tr("Eliminar plan…"), this, &PlanView::removeActive);
     more->setMenu(menu);
     nh->addWidget(more);
     tv->addWidget(nameRow);
@@ -186,9 +187,9 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     m_time->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Amber));
     m_basis = ui::label(QString(), "muted-sm");
     m_basis->setStyleSheet(QStringLiteral("font-size:10.5px;"));
-    sh->addWidget(stat(QStringLiteral("Casos"), m_count));
-    sh->addWidget(stat(QStringLiteral("Pasos"), m_steps));
-    sh->addWidget(stat(QStringLiteral("Estimado"), m_time, m_basis));
+    sh->addWidget(stat(tr("Casos"), m_count));
+    sh->addWidget(stat(tr("Pasos"), m_steps));
+    sh->addWidget(stat(tr("Estimado"), m_time, m_basis));
     hh->addWidget(stats, 0, Qt::AlignTop);
     v->addWidget(head);
 
@@ -203,7 +204,7 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     auto* cth = ui::hbox(ctop, 0, 10);
     m_cycleTitle = ui::label(QString(), "eyebrow");
     cth->addWidget(m_cycleTitle, 1);
-    m_cycleReport = ui::button(QStringLiteral("Ver informe"), "outline");
+    m_cycleReport = ui::button(tr("Ver informe"), "outline");
     m_cycleReport->setStyleSheet(QStringLiteral("padding:5px 10px;font-size:12px;border-radius:8px;"));
     cth->addWidget(m_cycleReport);
     cv->addWidget(ctop);
@@ -223,10 +224,10 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     // Acciones rápidas
     auto* quick = new QWidget;
     auto* qh = ui::hbox(quick, 0, 8);
-    auto* all = ui::button(QStringLiteral("Añadir todos"), "chip-lg");
-    auto* none = ui::button(QStringLiteral("Vaciar"), "chip-lg");
-    auto* high = ui::button(QStringLiteral("Solo prioridad alta"), "chip-lg");
-    auto* sort = ui::button(QStringLiteral("Ordenar por prioridad"), "chip-lg");
+    auto* all = ui::button(tr("Añadir todos"), "chip-lg");
+    auto* none = ui::button(tr("Vaciar"), "chip-lg");
+    auto* high = ui::button(tr("Solo prioridad alta"), "chip-lg");
+    auto* sort = ui::button(tr("Ordenar por prioridad"), "chip-lg");
     connect(all, &QPushButton::clicked, this, [this]() { m_plans.selectAll(); });
     connect(none, &QPushButton::clicked, this, [this]() { m_plans.selectNone(); });
     connect(high, &QPushButton::clicked, this, [this]() { m_plans.selectHighPriority(); });
@@ -253,13 +254,13 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     auto* footer = new QWidget;
     auto* fh = ui::hbox(footer, 0, 0);
     fh->addStretch(1);
-    m_start = ui::button(QStringLiteral("▶ Iniciar ciclo"), "success");
+    m_start = ui::button(tr("▶ Iniciar ciclo"), "success");
     m_start->setStyleSheet(QStringLiteral("padding:10px 18px;font-size:13.5px;font-weight:800;"));
     connect(m_start, &QPushButton::clicked, this, [this]() {
         const TestPlan* p = m_plans.active();
         if (!p) return;
         const QStringList ids = m_plans.orderedCaseIds();
-        if (ids.isEmpty()) { emit toast(QStringLiteral("Añade al menos un caso al plan"), theme::Amber); return; }
+        if (ids.isEmpty()) { emit toast(tr("Añade al menos un caso al plan"), theme::Amber); return; }
         emit startPlanRequested(ids, p->name, p->id);
     });
     fh->addWidget(m_start);
@@ -271,8 +272,8 @@ void PlanView::refreshEditor() {
     m_editor->setVisible(p != nullptr);
     if (!p) return;
     const int cycles = m_plans.cycleCount(p->id);
-    m_eyebrow->setText(QStringLiteral("%1 · CREADO %2 · %3").arg(p->id, p->createdAt.isValid() ? p->createdAt.toString(QStringLiteral("dd/MM/yyyy")) : QStringLiteral("—"),
-                                                                 cycles == 1 ? QStringLiteral("1 CICLO") : QStringLiteral("%1 CICLOS").arg(cycles)));
+    m_eyebrow->setText(tr("%1 · CREADO %2 · %3").arg(p->id, p->createdAt.isValid() ? p->createdAt.toString(QStringLiteral("dd/MM/yyyy")) : QStringLiteral("—"),
+                                                                 cycles == 1 ? tr("1 CICLO") : tr("%1 CICLOS").arg(cycles)));
     if (!m_selfEdit && m_name->text() != p->name) { m_name->setText(p->name); m_name->setCursorPosition(0); }
     m_archivedBadge->setVisible(p->archived);
     m_count->setText(QString::number(m_plans.orderedCaseIds().size()));
@@ -280,7 +281,7 @@ void PlanView::refreshEditor() {
     m_time->setText(m_plans.estimatedTime());
     m_basis->setText(m_plans.estimateBasis());
     m_start->setEnabled(!p->archived);
-    m_start->setToolTip(p->archived ? QStringLiteral("Desarchiva el plan para ejecutarlo") : QString());
+    m_start->setToolTip(p->archived ? tr("Desarchiva el plan para ejecutarlo") : QString());
     refreshCycle();
     refreshRows();
 }
@@ -291,15 +292,15 @@ void PlanView::refreshCycle() {
     const auto cycle = m_plans.latestCycle(p->id);
     m_cycleReport->disconnect();
     if (!cycle) {
-        m_cycleTitle->setText(QStringLiteral("CICLO ACTUAL"));
-        m_cycleSummary->setText(QStringLiteral("Este plan aún no se ha ejecutado. Pulsa «Iniciar ciclo» para empezar."));
+        m_cycleTitle->setText(tr("CICLO ACTUAL"));
+        m_cycleSummary->setText(tr("Este plan aún no se ha ejecutado. Pulsa «Iniciar ciclo» para empezar."));
         m_cycleCells->setColors({});
         m_cycleCells->hide();
         m_cycleReport->hide();
         return;
     }
     const PlanReport& r = *cycle;
-    m_cycleTitle->setText(QStringLiteral("%1 · %2 · %3").arg(r.plan.isFinished() ? QStringLiteral("ÚLTIMO CICLO") : QStringLiteral("CICLO EN CURSO"), r.plan.id, when(r.plan.startedAt)));
+    m_cycleTitle->setText(QStringLiteral("%1 · %2 · %3").arg(r.plan.isFinished() ? tr("ÚLTIMO CICLO") : tr("CICLO EN CURSO"), r.plan.id, when(r.plan.startedAt)));
     m_cycleSummary->setText(QStringLiteral("<b>%1/%2 ejecutados</b> · <span style=\"color:%7\">%3 ✓</span> · <span style=\"color:%8\">%4 ✗</span> · <span style=\"color:%9\">%5 bloq.</span> · %6 % de éxito")
                                 .arg(r.executed).arg(r.total()).arg(r.passed).arg(r.failed).arg(r.blocked).arg(r.successRate())
                                 .arg(theme::Green, theme::Red, theme::Amber));
@@ -318,8 +319,8 @@ void PlanView::refreshRows() {
     const auto cycle = m_plans.latestCycle(p->id);
 
     ui::clearLayout(m_inPlan);
-    m_inPlanHeader->setText(QStringLiteral("EN EL PLAN · %1 · EN ORDEN DE EJECUCIÓN").arg(ordered.size()));
-    if (ordered.isEmpty()) m_inPlan->addWidget(ui::label(QStringLiteral("Ningún caso todavía. Añade casos de la lista de abajo."), "muted-sm"));
+    m_inPlanHeader->setText(tr("EN EL PLAN · %1 · EN ORDEN DE EJECUCIÓN").arg(ordered.size()));
+    if (ordered.isEmpty()) m_inPlan->addWidget(ui::label(tr("Ningún caso todavía. Añade casos de la lista de abajo."), "muted-sm"));
     for (int i = 0; i < ordered.size(); ++i) {
         const TestCase* c = m_cases.find(ordered[i]);
         if (!c) continue;
@@ -332,7 +333,7 @@ void PlanView::refreshRows() {
         auto* id = ui::label(c->id, "mono-muted");
         id->setFixedWidth(54);
         g->addWidget(id);
-        auto* title = new QLabel(c->title.isEmpty() ? QStringLiteral("(sin título)") : c->title);
+        auto* title = new QLabel(c->title.isEmpty() ? tr("(sin título)") : c->title);
         title->setWordWrap(true);
         title->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;"));
         g->addWidget(title, 1);
@@ -340,28 +341,28 @@ void PlanView::refreshRows() {
         suite->setFixedWidth(96);
         g->addWidget(suite);
         const auto pill = theme::priorityPill(toString(c->priority));
-        auto* prio = ui::pill(toString(c->priority), pill.bg, pill.fg);
+        auto* prio = ui::pill(label(c->priority), pill.bg, pill.fg);
         prio->setFixedWidth(54);
         g->addWidget(prio);
-        auto* steps = ui::label(QStringLiteral("%1 pasos").arg(c->steps.size()), "muted-sm");
+        auto* steps = ui::label(tr("%1 pasos").arg(c->steps.size()), "muted-sm");
         steps->setFixedWidth(52);
         g->addWidget(steps);
         // Resultado en el último ciclo
         QLabel* res = nullptr;
-        if (cycle) for (const auto& r : cycle->rows) if (r.caseId == c->id) res = r.executed ? verdictPill(r.run.verdict) : mutedPill(QStringLiteral("PENDIENTE"));
+        if (cycle) for (const auto& r : cycle->rows) if (r.caseId == c->id) res = r.executed ? verdictPill(r.run.verdict) : mutedPill(tr("PENDIENTE"));
         if (!res) res = mutedPill(QStringLiteral("—"));
         res->setFixedWidth(78);
         g->addWidget(res);
         auto* up = ui::button(QStringLiteral("▲"), "icon-move");
         up->setEnabled(i > 0);
-        up->setToolTip(QStringLiteral("Ejecutar antes"));
+        up->setToolTip(tr("Ejecutar antes"));
         connect(up, &QPushButton::clicked, this, [this, cid = c->id]() { m_plans.moveCase(cid, -1); });
         auto* down = ui::button(QStringLiteral("▼"), "icon-move");
         down->setEnabled(i < ordered.size() - 1);
-        down->setToolTip(QStringLiteral("Ejecutar después"));
+        down->setToolTip(tr("Ejecutar después"));
         connect(down, &QPushButton::clicked, this, [this, cid = c->id]() { m_plans.moveCase(cid, +1); });
         auto* remove = ui::button(QStringLiteral("×"), "icon");
-        remove->setToolTip(QStringLiteral("Quitar del plan"));
+        remove->setToolTip(tr("Quitar del plan"));
         connect(remove, &QPushButton::clicked, this, [this, cid = c->id]() { m_plans.toggle(cid); });
         for (auto* b : {up, down, remove}) b->setFixedSize(24, 22);
         g->addWidget(up);
@@ -376,7 +377,7 @@ void PlanView::refreshRows() {
         if (c.status == CaseStatus::Obsoleto || p->contains(c.id)) continue;
         ++available;
         auto* row = ui::button(QString(), "plan-row");
-        row->setToolTip(QStringLiteral("Añadir al plan"));
+        row->setToolTip(tr("Añadir al plan"));
         auto* g = ui::hbox(row, 0, 8);
         g->setContentsMargins(14, 8, 14, 8);
         auto* plus = ui::label(QStringLiteral("+"), "mono-muted");
@@ -386,36 +387,36 @@ void PlanView::refreshRows() {
         auto* id = ui::label(c.id, "mono-muted");
         id->setFixedWidth(54);
         g->addWidget(id);
-        auto* title = new QLabel(c.title.isEmpty() ? QStringLiteral("(sin título)") : c.title);
+        auto* title = new QLabel(c.title.isEmpty() ? tr("(sin título)") : c.title);
         title->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;color:%1;").arg(theme::Text));
         g->addWidget(title, 1);
         auto* suite = ui::label(c.suite, "muted-sm");
         suite->setFixedWidth(96);
         g->addWidget(suite);
         const auto pill = theme::priorityPill(toString(c.priority));
-        auto* prio = ui::pill(toString(c.priority), pill.bg, pill.fg);
+        auto* prio = ui::pill(label(c.priority), pill.bg, pill.fg);
         prio->setFixedWidth(54);
         g->addWidget(prio);
-        auto* steps = ui::label(QStringLiteral("%1 pasos").arg(c.steps.size()), "muted-sm");
+        auto* steps = ui::label(tr("%1 pasos").arg(c.steps.size()), "muted-sm");
         steps->setFixedWidth(52);
         g->addWidget(steps);
         for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
         connect(row, &QPushButton::clicked, this, [this, cid = c.id]() { m_plans.toggle(cid); });
         m_available->addWidget(row);
     }
-    m_availableHeader->setText(QStringLiteral("DISPONIBLES · %1").arg(available));
-    if (available == 0) m_available->addWidget(ui::label(QStringLiteral("Todos los casos están en el plan."), "muted-sm"));
+    m_availableHeader->setText(tr("DISPONIBLES · %1").arg(available));
+    if (available == 0) m_available->addWidget(ui::label(tr("Todos los casos están en el plan."), "muted-sm"));
 }
 
 // ---- Acciones ------------------------------------------------------------------------------
 
 void PlanView::newPlan() {
     bool ok = false;
-    const QString name = QInputDialog::getText(this, QStringLiteral("Nuevo plan"), QStringLiteral("Nombre del plan:"), QLineEdit::Normal, QStringLiteral("Regresión Sprint 15"), &ok).trimmed();
+    const QString name = QInputDialog::getText(this, tr("Nuevo plan"), tr("Nombre del plan:"), QLineEdit::Normal, tr("Regresión Sprint 15"), &ok).trimmed();
     if (!ok || name.isEmpty()) return;
     m_showArchived = false;
     m_plans.createPlan(name);
-    emit toast(QStringLiteral("Plan \"%1\" creado").arg(name), theme::Green);
+    emit toast(tr("Plan \"%1\" creado").arg(name), theme::Green);
 }
 
 void PlanView::duplicateActive() {
@@ -424,7 +425,7 @@ void PlanView::duplicateActive() {
     const QString name = p->name;
     m_showArchived = false;
     m_plans.duplicatePlan(p->id);
-    emit toast(QStringLiteral("Plan \"%1\" duplicado").arg(name), theme::Green);
+    emit toast(tr("Plan \"%1\" duplicado").arg(name), theme::Green);
 }
 
 void PlanView::toggleArchiveActive() {
@@ -433,16 +434,16 @@ void PlanView::toggleArchiveActive() {
     const bool archive = !p->archived;
     m_showArchived = archive;
     m_plans.setArchived(p->id, archive);
-    emit toast(archive ? QStringLiteral("Plan archivado · sus ciclos siguen en el historial") : QStringLiteral("Plan desarchivado"), theme::Cyan);
+    emit toast(archive ? tr("Plan archivado · sus ciclos siguen en el historial") : tr("Plan desarchivado"), theme::Cyan);
 }
 
 void PlanView::removeActive() {
     const TestPlan* p = m_plans.active();
     if (!p) return;
-    QMessageBox box(QMessageBox::Warning, QStringLiteral("Eliminar plan"), QStringLiteral("¿Eliminar el plan \"%1\"?").arg(p->name), QMessageBox::NoButton, this);
-    box.setInformativeText(QStringLiteral("Los ciclos ya ejecutados se conservan en el historial. Si quieres guardarlo sin ejecutarlo, archívalo."));
-    auto* del = box.addButton(QStringLiteral("Eliminar"), QMessageBox::DestructiveRole);
-    box.addButton(QStringLiteral("Cancelar"), QMessageBox::RejectRole);
+    QMessageBox box(QMessageBox::Warning, tr("Eliminar plan"), tr("¿Eliminar el plan \"%1\"?").arg(p->name), QMessageBox::NoButton, this);
+    box.setInformativeText(tr("Los ciclos ya ejecutados se conservan en el historial. Si quieres guardarlo sin ejecutarlo, archívalo."));
+    auto* del = box.addButton(tr("Eliminar"), QMessageBox::DestructiveRole);
+    box.addButton(tr("Cancelar"), QMessageBox::RejectRole);
     box.exec();
     if (box.clickedButton() != del) return;
     m_plans.removePlan(p->id);

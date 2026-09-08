@@ -1,10 +1,14 @@
 #include "DevSnapshot.h"
 
 #include "application/AppContext.h"
+#include "application/SettingsStore.h"
+#include "core/models/IssueLink.h"
+#include "presentation/theme/Theme.h"
 #include "presentation/views/MainWindow.h"
 
 #include <QApplication>
 #include <QDir>
+#include <QSettings>
 #include <QTimer>
 
 #include <functional>
@@ -14,6 +18,22 @@ namespace qaflow::devsnapshot {
 bool requested() { return qEnvironmentVariableIsSet("QAFLOW_SNAPSHOT_DIR"); }
 
 QString dataDir() { return QDir(qEnvironmentVariable("QAFLOW_SNAPSHOT_DIR")).filePath(QStringLiteral("data")); }
+
+void isolateSettings() {
+    const QString dir = QDir(qEnvironmentVariable("QAFLOW_SNAPSHOT_DIR")).filePath(QStringLiteral("config"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir);
+}
+
+void applyRequestedAppSettings(SettingsStore& settings) {
+    const QString theme = qEnvironmentVariable("QAFLOW_SNAPSHOT_THEME");
+    const QString lang = qEnvironmentVariable("QAFLOW_SNAPSHOT_LANG");
+    if (theme.isEmpty() && lang.isEmpty()) return;
+    settings.updateApp([&](AppSettings& a) {
+        if (!theme.isEmpty()) a.theme = appThemeFromString(theme);
+        if (!lang.isEmpty()) a.language = appLanguageFromString(lang);
+    });
+}
 
 void run(MainWindow& window, AppContext& ctx) {
     const QString dir = qEnvironmentVariable("QAFLOW_SNAPSHOT_DIR");
@@ -37,7 +57,19 @@ void run(MainWindow& window, AppContext& ctx) {
             ctx.run->mark(StepResult::Pass);
             window.navigate(Screen::Run);
         }},
-        {"04-bug", [&] { window.navigate(Screen::Bug); }},
+        {"04-bug", [&] {
+            IssueLink link;
+            link.key = QStringLiteral("SHOP-143"); link.url = QStringLiteral("https://acme.atlassian.net/browse/SHOP-143");
+            link.title = QStringLiteral("[Checkout] El cupón QA10 no descuenta"); link.caseId = QStringLiteral("TC-104");
+            link.tracker = QStringLiteral("Jira"); link.severity = QStringLiteral("Mayor"); link.status = QStringLiteral("In Progress");
+            link.createdAt = QDateTime::currentDateTime().addDays(-2);
+            ctx.bugLedger->recordIssue(link);
+            BugReport queued = ctx.bugs->draftFromCurrentContext();
+            queued.title = QStringLiteral("[Checkout] Error 500 al pagar con Amex");
+            queued.actual = QStringLiteral("Pantalla en blanco");
+            ctx.bugLedger->enqueue(queued, QStringLiteral("Host not found"));
+            window.navigate(Screen::Bug);
+        }},
         {"07-historial-plan", [&] {
             ctx.run->finish();   // archiva TC-104 como ejecución suelta
             ctx.run->startSequence({QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión Sprint 14"), ctx.plan->activeId());
@@ -52,8 +84,17 @@ void run(MainWindow& window, AppContext& ctx) {
             window.finishRun();   // termina el plan y abre su informe
         }},
         {"08-historial-caso", [&] { window.navigate(Screen::Casos); ctx.cases->select(QStringLiteral("TC-102")); }},
+        {"10-metricas", [&] {
+            // Segundo ciclo del mismo plan, mejor que el primero, para que haya evolución.
+            ctx.run->startSequence({QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión Sprint 14"), ctx.plan->activeId());
+            ctx.run->mark(StepResult::Pass); ctx.run->mark(StepResult::Pass); ctx.run->finish();
+            ctx.run->mark(StepResult::Pass); ctx.run->finish();
+            ctx.run->mark(StepResult::Pass);
+            window.finishRun();
+            window.showMetrics();
+        }},
         {"09-planes", [&] { ctx.plan->createPlan(QStringLiteral("Smoke release 2.3")); ctx.plan->toggle(QStringLiteral("TC-101")); ctx.plan->setActive(QStringLiteral("PL-0001")); window.navigate(Screen::Plan); }},
-        {"05-ajustes", [&] { window.navigate(Screen::Ajustes); window.showToast(QStringLiteral("Captura guardada en ~/QAflow/capturas"), QStringLiteral("#06b6d4")); }},
+        {"05-ajustes", [&] { window.navigate(Screen::Ajustes); window.showToast(QStringLiteral("Captura guardada en ~/QAflow/capturas"), theme::Cyan); }},
         {"06-casos-en-ejecucion", [&] { window.navigate(Screen::Casos); }},
     };
 

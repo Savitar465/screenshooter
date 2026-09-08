@@ -16,7 +16,7 @@ class BugReportService;
 class IGlobalHotkey;
 
 /// Pantalla "Ajustes": preferencias generales (idioma, tema, bandeja), gestor de incidencias
-/// (Jira, GitHub, GitLab, Azure DevOps) y preferencias de captura.
+/// (Jira, GitHub, GitLab, Azure DevOps), preferencias de captura y atajos de la ejecución.
 class SettingsView : public QWidget {
     Q_OBJECT
 public:
@@ -31,6 +31,7 @@ private:
     void refreshGeneral();
     void refreshTracker();
     void refreshCapture();
+    void refreshRunShortcuts();
     void refreshCaptureStatus();
     void testConnection();
 
@@ -65,6 +66,9 @@ private:
     QSpinBox* m_gifFps;
     QSpinBox* m_gifMaxSecs;
     QLabel* m_captureStatus;
+    QLineEdit* m_stepPass;
+    QLineEdit* m_stepFail;
+    QLineEdit* m_stepBack;
 };
 
 } // namespace qaflow

@@ -18,6 +18,9 @@ public:
 
     virtual AppSettings loadApp() = 0;
     virtual void saveApp(const AppSettings& s) = 0;
+
+    virtual RunShortcuts loadRunShortcuts() = 0;
+    virtual void saveRunShortcuts(const RunShortcuts& s) = 0;
 };
 
 } // namespace qaflow

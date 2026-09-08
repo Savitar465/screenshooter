@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "application/AppContext.h"
+#include "core/models/RunHistory.h"   // label(Verdict)
 #include "presentation/theme/Theme.h"
 #include "presentation/views/BugView.h"
 #include "presentation/views/CasesView.h"
@@ -74,7 +75,7 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     buildMenus();
     buildTray();
     wireSignals();
-    updateCaptureShortcut();
+    updateShortcuts();
     updateActions();
     if (m_ctx.run->isRunning()) {
         // Ejecución restaurada de la sesión anterior.
@@ -181,6 +182,16 @@ void MainWindow::buildMenus() {
     });
     m_actAttach->setObjectName(QStringLiteral("actAttach"));
     m_actReportBug = runMenu->addAction(tr("&Reportar bug"), QKeySequence(Qt::CTRL | Qt::Key_B), this, [this]() { navigate(Screen::Bug); });
+    runMenu->addSeparator();
+    // Avanzar de paso sin volver a la ventana: son atajos de ámbito aplicación y, además,
+    // main.cpp los registra en el sistema para que funcionen desde la aplicación que se prueba.
+    m_actStepPass = runMenu->addAction(tr("&Pasa y siguiente"), this, [this]() { m_ctx.run->mark(StepResult::Pass); announceRunStep(); });
+    m_actStepPass->setObjectName(QStringLiteral("actStepPass"));
+    m_actStepFail = runMenu->addAction(tr("Fa&lla y siguiente"), this, [this]() { m_ctx.run->mark(StepResult::Fail); announceRunStep(); });
+    m_actStepFail->setObjectName(QStringLiteral("actStepFail"));
+    m_actStepBack = runMenu->addAction(tr("Paso &anterior"), this, [this]() { m_ctx.run->back(); announceRunStep(); });
+    m_actStepBack->setObjectName(QStringLiteral("actStepBack"));
+    for (QAction* a : {m_actStepPass, m_actStepFail, m_actStepBack}) a->setShortcutContext(Qt::ApplicationShortcut);
 
     // Ayuda
     QMenu* help = bar->addMenu(tr("A&yuda"));
@@ -203,13 +214,18 @@ void MainWindow::buildMenus() {
                                     "<tr><td><b>%2</b></td><td>Iniciar o detener la grabación de GIF</td></tr>"
                                     "<tr><td><b>Ctrl+Shift+A</b></td><td>Adjuntar archivos como evidencia (o arrástralos a la ventana)</td></tr>"
                                     "<tr><td><b>Clic en una miniatura</b></td><td>Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)</td></tr>"
+                                    "<tr><td><b>%3</b></td><td>Pasa el paso actual y avanza al siguiente (global)</td></tr>"
+                                    "<tr><td><b>%4</b></td><td>Falla el paso actual y avanza al siguiente (global)</td></tr>"
+                                    "<tr><td><b>%5</b></td><td>Vuelve al paso anterior (global)</td></tr>"
                                     "<tr><td><b>Ctrl+B</b></td><td>Reportar bug</td></tr>"
                                     "<tr><td><b>Ctrl+1 … Ctrl+5</b></td><td>Cambiar de pantalla</td></tr>"
                                     "<tr><td><b>Ctrl+,</b></td><td>Abrir los ajustes</td></tr>"
                                     "<tr><td><b>P / F / B / S</b></td><td>Veredicto del paso en ejecución</td></tr>"
                                     "<tr><td><b>Retroceso</b></td><td>Volver al paso anterior</td></tr>"
                                     "<tr><td><b>Ctrl+Q</b></td><td>Salir</td></tr></table>")
-                                     .arg(m_ctx.settings->capture().shortcut, m_ctx.settings->capture().recordShortcut));
+                                     .arg(m_ctx.settings->capture().shortcut, m_ctx.settings->capture().recordShortcut,
+                                          m_ctx.settings->runShortcuts().passAndNext, m_ctx.settings->runShortcuts().failAndNext,
+                                          m_ctx.settings->runShortcuts().previous));
     });
 }
 
@@ -250,6 +266,10 @@ void MainWindow::updateActions() {
     m_actRecord->setEnabled(hasSelection || m_ctx.evidence->isRecording());
     m_actAttach->setEnabled(hasSelection);
     m_actReportBug->setEnabled(hasSelection);
+    const RunState& run = m_ctx.run->state();
+    m_actStepPass->setEnabled(m_ctx.run->isRunning());
+    m_actStepFail->setEnabled(m_ctx.run->isRunning());
+    m_actStepBack->setEnabled(!run.caseId.isEmpty() && !run.results.isEmpty());
     if (m_trayToggle) m_trayToggle->setText(isVisible() ? tr("Ocultar QAflow") : tr("Mostrar QAflow"));
 }
 
@@ -379,7 +399,9 @@ void MainWindow::wireSignals() {
         QTimer::singleShot(0, this, [this, caseId, shotId]() { evidence::annotate(this, *m_ctx.cases, *m_ctx.evidence, caseId, shotId); });
     });
     connect(m_ctx.evidence, &EvidenceService::failed, this, [this](const QString& e) { showToast(e, theme::Amber); });
-    connect(m_ctx.settings, &SettingsStore::captureChanged, this, &MainWindow::updateCaptureShortcut);
+    connect(m_ctx.settings, &SettingsStore::captureChanged, this, &MainWindow::updateShortcuts);
+    connect(m_ctx.settings, &SettingsStore::runShortcutsChanged, this, &MainWindow::updateShortcuts);
+    connect(m_ctx.run, &RunController::runChanged, this, &MainWindow::updateActions);
 
     // Fallos de guardado: cada store avisa; aquí se muestra con la opción de reintentar.
     connect(m_ctx.cases, &TestCaseStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.cases->save(); }); });
@@ -410,9 +432,29 @@ void MainWindow::finishRun() {
     showToast(tr("Plan terminado · %1 superados · %2 fallidos · %3 bloqueados").arg(report.passed).arg(report.failed).arg(report.blocked), color);
 }
 
-void MainWindow::updateCaptureShortcut() {
+void MainWindow::updateShortcuts() {
     m_actCapture->setShortcut(QKeySequence(m_ctx.settings->capture().shortcut));
     m_actRecord->setShortcut(QKeySequence(m_ctx.settings->capture().recordShortcut));
+    const RunShortcuts& r = m_ctx.settings->runShortcuts();
+    m_actStepPass->setShortcut(QKeySequence(r.passAndNext));
+    m_actStepFail->setShortcut(QKeySequence(r.failAndNext));
+    m_actStepBack->setShortcut(QKeySequence(r.previous));
+}
+
+void MainWindow::announceRunStep() {
+    const RunState& r = m_ctx.run->state();
+    const TestCase* c = m_ctx.cases->find(r.caseId);
+    if (!c) return;
+    const QString text = r.finished || r.idx >= c->steps.size()
+                             ? tr("%1 · ejecución terminada · %2").arg(c->id, label(r.verdict()))
+                             : tr("%1 · paso %2 de %3 · %4").arg(c->id).arg(r.idx + 1).arg(c->steps.size())
+                                   .arg(ui::elide(c->steps[r.idx].action, 46));
+    // Con la ventana al frente basta el aviso de siempre; si no, la bandeja lo enseña por encima
+    // de la aplicación que se está probando.
+    if (!isActiveWindow() && m_tray && m_tray->isVisible())
+        m_tray->showMessage(QStringLiteral("QAflow"), text, ui::appIcon(), 2500);
+    else
+        showToast(text, theme::Blue);
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* e) {

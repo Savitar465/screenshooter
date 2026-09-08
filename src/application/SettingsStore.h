@@ -21,10 +21,12 @@ public:
     const TrackerSettings& tracker() const { return m_tracker; }
     const CaptureSettings& capture() const { return m_capture; }
     const AppSettings& app() const { return m_app; }
+    const RunShortcuts& runShortcuts() const { return m_runShortcuts; }
 
     void updateTracker(const std::function<void(TrackerSettings&)>& mutate);
     void updateCapture(const std::function<void(CaptureSettings&)>& mutate);
     void updateApp(const std::function<void(AppSettings&)>& mutate);
+    void updateRunShortcuts(const std::function<void(RunShortcuts&)>& mutate);
 
     /// Dónde se guarda el token ("Llavero del sistema (secret-tool)", "Sin cifrar en QAflow.conf").
     QString secretBackend() const;
@@ -35,6 +37,8 @@ signals:
     void captureChanged();
     /// Idioma, tema o comportamiento de bandeja. Idioma y tema requieren reconstruir la ventana.
     void appChanged();
+    /// Atajos de la ejecución: hay que volver a registrarlos en el sistema.
+    void runShortcutsChanged();
 
 private:
     static QString tokenKey(TrackerKind kind);
@@ -44,6 +48,7 @@ private:
     TrackerSettings m_tracker;
     CaptureSettings m_capture;
     AppSettings m_app;
+    RunShortcuts m_runShortcuts;
 };
 
 } // namespace qaflow

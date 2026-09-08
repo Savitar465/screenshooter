@@ -34,17 +34,22 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
     remove->setToolTip(tr("Eliminar"));
     connect(remove, &QPushButton::clicked, this, [this, id]() { emit removeRequested(id); });
     m_thumb = new Thumbnail(shot.path, shot.step, id);
-    connect(m_thumb, &Thumbnail::clicked, this, [this, id]() { emit openRequested(id); });
+    // En la columna de capturas la miniatura elige la evidencia; en el resto la abre a tamaño completo.
+    connect(m_thumb, &Thumbnail::clicked, this, [this, id, film = layout == Layout::Film]() {
+        if (film) emit selectRequested(id);
+        else emit openRequested(id);
+    });
     auto* annotate = ui::button(QStringLiteral("✎"), "icon-move");
     annotate->setToolTip(tr("Anotar (flechas, rectángulos, texto, difuminado)"));
     annotate->setVisible(editable);
     connect(annotate, &QPushButton::clicked, this, [this, id]() { emit annotateRequested(id); });
 
-    if (layout == Layout::Compact) {
-        setStyleSheet(QStringLiteral("QFrame{background:%1;border:1px solid %2;border-radius:8px;}").arg(theme::Field, theme::Border));
-        setFixedWidth(140);
+    if (layout == Layout::Compact || layout == Layout::Film) {
+        setSelected(false);
+        // La tarjeta de la columna de capturas se estira con ella; la compacta (Reportar bug) es fija.
+        if (layout == Layout::Compact) setFixedWidth(140);
         auto* v = ui::vbox(this, 0, 0);
-        m_thumb->setWidthHint(138);
+        m_thumb->setWidthHint(layout == Layout::Film ? 244 : 138);
         v->addWidget(m_thumb);
         auto* bottom = new QWidget;
         auto* h = ui::hbox(bottom, 0, 4);
@@ -63,7 +68,7 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
     connect(combo, &QComboBox::currentIndexChanged, this, [this, combo, id](int) { emit stepChanged(id, combo->currentData().toInt()); });
 
     if (layout == Layout::Grid) {
-        setStyleSheet(QStringLiteral("QFrame{background:%1;border:1px solid %2;border-radius:10px;}").arg(theme::Panel, theme::Border));
+        setStyleSheet(QStringLiteral("ShotCard{background:%1;border:1px solid %2;border-radius:10px;}").arg(theme::Panel, theme::Border));
         auto* v = ui::vbox(this, 0, 0);
         m_thumb->setWidthHint(200);
         v->addWidget(m_thumb);
@@ -91,7 +96,7 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
     }
 
     // Layout::Row
-    setStyleSheet(QStringLiteral("QFrame{background:%1;border:1px solid %2;border-radius:8px;}").arg(theme::Field, theme::Border));
+    setStyleSheet(QStringLiteral("ShotCard{background:%1;border:1px solid %2;border-radius:8px;}").arg(theme::Field, theme::Border));
     auto* g = new QGridLayout(this);
     g->setContentsMargins(6, 6, 6, 6);
     g->setHorizontalSpacing(10);
@@ -123,6 +128,11 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
 
 void ShotCard::reloadThumbnail() { if (m_thumb) m_thumb->reload(); }
 
+void ShotCard::setSelected(bool on) {
+    setStyleSheet(QStringLiteral("ShotCard{background:%1;border:1px solid %2;border-radius:8px;}")
+                      .arg(theme::Field, on ? theme::Blue : theme::Border));
+}
+
 void ShotCard::contextMenuEvent(QContextMenuEvent* e) {
     const int id = m_shot.id;
     QMenu menu(this);
@@ -130,6 +140,10 @@ void ShotCard::contextMenuEvent(QContextMenuEvent* e) {
     if (m_shot.isImage() && !m_shot.isAnimation()) menu.addAction(tr("Anotar…"), this, [this, id]() { emit annotateRequested(id); });
     if (m_shot.isImage()) menu.addAction(tr("Copiar imagen"), this, [this, id]() { emit copyRequested(id); });
     menu.addAction(tr("Mostrar en la carpeta"), this, [this, id]() { emit openFolderRequested(id); });
+    menu.addSeparator();
+    // La columna de capturas no tiene flechas: el orden se cambia desde aquí.
+    menu.addAction(tr("Mover antes"), this, [this, id]() { emit moveRequested(id, -1); });
+    menu.addAction(tr("Mover después"), this, [this, id]() { emit moveRequested(id, +1); });
     menu.addSeparator();
     menu.addAction(tr("Eliminar"), this, [this, id]() { emit removeRequested(id); });
     menu.exec(e->globalPos());

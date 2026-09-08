@@ -61,6 +61,9 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 | F5                   | Ejecutar el caso seleccionado       |
 | Ctrl+Shift+S         | Capturar pantalla (configurable; global, funciona sin el foco en la app; una segunda pulsación cancela la cuenta atrás) |
 | Ctrl+Shift+G         | Iniciar o detener la grabación de GIF (configurable, global) |
+| Ctrl+Alt+P           | Pasa el paso actual y avanza al siguiente (configurable, global) |
+| Ctrl+Alt+F           | Falla el paso actual y avanza al siguiente (configurable, global) |
+| Ctrl+Alt+A           | Vuelve al paso anterior (configurable, global) |
 | Ctrl+Shift+A         | Adjuntar archivos como evidencia (o arrastrarlos a la ventana) |
 | Clic en una miniatura | Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia) |
 | Ctrl+B               | Reportar bug                        |
@@ -75,10 +78,10 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 |-------------------|----------------------------------------------------------------------------|
 | Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira, pasos reordenables e insertables, evidencias (capturar, grabar GIF, adjuntar archivos; abrir, anotar, copiar) e historial; duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
 | Planes            | Varios planes (crear, duplicar, archivar, eliminar), casos en orden de ejecución propio, progreso del ciclo actual con enlace a su informe, estimación basada en las duraciones reales del historial (3 min/paso si no hay datos) y arranque de un ciclo nuevo |
-| Ejecución         | Paso actual con Pasa / Falla / Bloqueado / Saltar (teclas P / F / B / S), paso anterior (Retroceso), corrección de veredictos desde el registro, cronómetro por paso y por caso, observaciones y capturas. Sobrevive al cierre de la aplicación |
+| Ejecución         | Tres columnas: el caso con su progreso y la lista de pasos (veredicto corregible en cada uno), el paso actual con Pasa / Falla / Bloq. / N/A (teclas P / F / B / S), paso anterior (Retroceso), **atajos globales** para avanzar de paso sin volver a la ventana (Ctrl+Alt+P / Ctrl+Alt+F / Ctrl+Alt+A), cronómetro por paso y por caso, visor grande de la evidencia elegida con «Asignar a» y observaciones, y la columna de capturas con todas las evidencias del caso. Sobrevive al cierre de la aplicación |
 | Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración), informes de plan con exportación a Markdown y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
 | Reportar bug      | Formulario prellenado con el paso fallido y campos reales del gestor (tipo, prioridad, asignado, componentes, versión, etiquetas) cargados del proyecto; crea el issue en Jira, GitHub, GitLab o Azure DevOps y sube las capturas; lista de bugs reportados con su estado y cola offline con reintento |
-| Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, token en el llavero del sistema) y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
+| Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; atajos de la ejecución; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, token en el llavero del sistema) y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
 
 ## Evidencias
 
@@ -100,6 +103,9 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
   cancela), fps y duración máxima configurables. Codificador GIF propio (median cut + LZW), sin dependencias.
   No disponible en Wayland (el portal no ofrece captura continua sin PipeWire).
 * **Copiar al portapapeles**: desde el visor, el menú contextual de la miniatura o automáticamente tras cada captura (Ajustes).
+* **Sin volver a la ventana**: mientras se prueba otra aplicación, `Ctrl+Alt+P` y `Ctrl+Alt+F` dan el veredicto del paso y pasan al
+  siguiente, y `Ctrl+Alt+A` vuelve al anterior; las capturas siguientes se asignan solas al paso nuevo. Son atajos del sistema, como
+  el de captura, y avisan en la bandeja de en qué paso ha quedado la ejecución. Se configuran en Ajustes.
 
 ## Dónde se guardan los datos
 

@@ -29,7 +29,7 @@ private slots:
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
         QVERIFY2(bound, qPrintable(hk.status()));
         QVERIFY(hk.isBound(QStringLiteral("capture")));
-        QVERIFY(hk.status().contains(QStringLiteral("Ctrl+Shift+F12")));
+        QVERIFY(!hk.status().isEmpty());   // con varios atajos el estado describe la plataforma, no uno concreto
 #else
         QCOMPARE(bound, hk.isBound(QStringLiteral("capture")));
 #endif

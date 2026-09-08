@@ -178,6 +178,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/TextArea.cpp
         src/presentation/widgets/ShotCard.h
         src/presentation/widgets/ShotCard.cpp
+        src/presentation/widgets/EvidencePreview.h
+        src/presentation/widgets/EvidencePreview.cpp
         src/presentation/widgets/ImageViewer.h
         src/presentation/widgets/ImageViewer.cpp
         src/presentation/widgets/AnnotationEditor.h

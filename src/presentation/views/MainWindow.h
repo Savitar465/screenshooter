@@ -44,6 +44,9 @@ public:
     void showToast(const QString& message, const QString& color);
     /// Abre el historial en el panel de métricas.
     void showMetrics();
+    /// Dice en qué paso ha quedado la ejecución tras usar uno de sus atajos globales. Con la ventana
+    /// en segundo plano (lo normal mientras se prueba otra aplicación) el aviso va a la bandeja.
+    void announceRunStep();
     /// Cierra la aplicación aunque esté configurado "cerrar a la bandeja".
     void quitApplication();
     /// Abre la ventana de ajustes («Archivo → Ajustes») o la trae al frente si ya estaba abierta.
@@ -66,7 +69,7 @@ private:
     void buildMenus();
     void buildTray();
     void wireSignals();
-    void updateCaptureShortcut();
+    void updateShortcuts();
     void updateActions();
     /// Aviso persistente con «Reintentar» cuando un store no pudo escribir en disco.
     void showSaveError(const QString& what, const std::function<bool()>& retry);
@@ -94,6 +97,9 @@ private:
     QAction* m_actDuplicate = nullptr;
     QAction* m_actDelete = nullptr;
     QAction* m_actReportBug = nullptr;
+    QAction* m_actStepPass = nullptr;
+    QAction* m_actStepFail = nullptr;
+    QAction* m_actStepBack = nullptr;
     QMap<Screen, QAction*> m_screenActions;
     QActionGroup* m_themeGroup = nullptr;
     QActionGroup* m_languageGroup = nullptr;

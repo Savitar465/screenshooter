@@ -18,6 +18,7 @@ void SettingsStore::load() {
         m_capture = m_repo->loadCapture();
         m_capture.clamp();
         m_app = m_repo->loadApp();
+        m_runShortcuts = m_repo->loadRunShortcuts();
     }
     if (m_secrets) {
         // Migración: si el repositorio aún traía el token en claro, pasa al llavero y desaparece del fichero.
@@ -36,6 +37,7 @@ void SettingsStore::load() {
     emit trackerChanged();
     emit captureChanged();
     emit appChanged();
+    emit runShortcutsChanged();
 }
 
 void SettingsStore::updateTracker(const std::function<void(TrackerSettings&)>& mutate) {
@@ -71,6 +73,12 @@ void SettingsStore::updateApp(const std::function<void(AppSettings&)>& mutate) {
     mutate(m_app);
     if (m_repo) m_repo->saveApp(m_app);
     emit appChanged();
+}
+
+void SettingsStore::updateRunShortcuts(const std::function<void(RunShortcuts&)>& mutate) {
+    mutate(m_runShortcuts);
+    if (m_repo) m_repo->saveRunShortcuts(m_runShortcuts);
+    emit runShortcutsChanged();
 }
 
 QString SettingsStore::secretBackend() const {

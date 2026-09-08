@@ -27,6 +27,18 @@ private slots:
         QVERIFY(!secrets->values.contains(QStringLiteral("tracker/jira/token")));        // borrado al vaciar
     }
 
+    void runShortcutsArePersistedAndAnnounced() {
+        auto repo = std::make_shared<MemorySettingsRepository>();
+        SettingsStore store(repo);
+        store.load();
+        QSignalSpy spy(&store, &SettingsStore::runShortcutsChanged);
+        store.updateRunShortcuts([](RunShortcuts& r) { r.passAndNext = QStringLiteral("F8"); });
+        QCOMPARE(spy.size(), 1);
+        QCOMPARE(store.runShortcuts().passAndNext, QStringLiteral("F8"));
+        QCOMPARE(repo->runShortcuts.passAndNext, QStringLiteral("F8"));
+        QCOMPARE(store.runShortcuts().previous, RunShortcuts{}.previous);   // el resto no se toca
+    }
+
     void legacyPlainTokenIsMigratedToSecretStore() {
         auto repo = std::make_shared<MemorySettingsRepository>();
         repo->tracker.token = QStringLiteral("legacy");

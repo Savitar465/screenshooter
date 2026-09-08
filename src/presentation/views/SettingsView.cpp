@@ -240,7 +240,7 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     cg->addWidget(field(tr("GIF · duración máxima"), m_gifMaxSecs), 1, 2);
     for (int i = 0; i < 4; ++i) cg->setColumnStretch(i, 1);
     cb->addWidget(crow);
-    m_globalShortcut = new QCheckBox(tr("Atajo global: capturar aunque QAflow no tenga el foco"));
+    m_globalShortcut = new QCheckBox(tr("Atajos globales: capturar y avanzar de paso aunque QAflow no tenga el foco"));
     cb->addWidget(m_globalShortcut);
     m_openEditor = new QCheckBox(tr("Abrir el editor de anotaciones después de cada captura"));
     cb->addWidget(m_openEditor);
@@ -263,6 +263,44 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     fh->addWidget(browse);
     cb->addWidget(field(tr("Carpeta"), frow));
     v->addWidget(cap);
+
+    // Atajos de la ejecución: avanzar de paso desde la aplicación que se está probando.
+    QVBoxLayout* rb;
+    auto* runCard = section(theme::Green, tr("Atajos de la ejecución"),
+                            tr("Marcan el paso actual y pasan al siguiente sin traer QAflow al frente, para no cortar la prueba entre captura y captura. "
+                               "Necesitan «atajos globales» activado; si el sistema rechaza alguno, sigue funcionando con la ventana en primer plano."),
+                            nullptr, &rb);
+    auto* rrow = new QWidget;
+    auto* rg = new QGridLayout(rrow);
+    rg->setContentsMargins(0, 0, 0, 0);
+    rg->setHorizontalSpacing(12);
+    const struct { QLineEdit** field; QString title; QString tip; } runFields[] = {
+        {&m_stepPass, tr("Pasa y siguiente"), tr("Marca el paso actual como superado y avanza al siguiente")},
+        {&m_stepFail, tr("Falla y siguiente"), tr("Marca el paso actual como fallido y avanza al siguiente")},
+        {&m_stepBack, tr("Paso anterior"), tr("Deshace el último veredicto y vuelve a ese paso")}};
+    int col = 0;
+    for (const auto& f : runFields) {
+        *f.field = new QLineEdit;
+        (*f.field)->setProperty("role", QStringLiteral("mono"));
+        (*f.field)->setToolTip(f.tip);
+        rg->addWidget(field(f.title, *f.field), 0, col);
+        rg->setColumnStretch(col++, 1);
+    }
+    rb->addWidget(rrow);
+    v->addWidget(runCard);
+    const struct { QLineEdit** field; void (*apply)(RunShortcuts&, const QString&); } runBindings[] = {
+        {&m_stepPass, [](RunShortcuts& r, const QString& t) { r.passAndNext = t; }},
+        {&m_stepFail, [](RunShortcuts& r, const QString& t) { r.failAndNext = t; }},
+        {&m_stepBack, [](RunShortcuts& r, const QString& t) { r.previous = t; }}};
+    for (const auto& b : runBindings) {
+        QLineEdit* edit = *b.field;
+        auto apply = b.apply;
+        connect(edit, &QLineEdit::editingFinished, this, [this, edit, apply]() {
+            m_selfEdit = true;
+            m_settings.updateRunShortcuts([&](RunShortcuts& r) { apply(r, edit->text().trimmed()); });
+            m_selfEdit = false;
+        });
+    }
 
     connect(m_shortcut, &QLineEdit::editingFinished, this, [this]() {
         m_selfEdit = true;
@@ -315,9 +353,11 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     connect(&m_settings, &SettingsStore::trackerChanged, this, &SettingsView::refreshTracker);
     connect(&m_settings, &SettingsStore::captureChanged, this, &SettingsView::refreshCapture);
     connect(&m_settings, &SettingsStore::appChanged, this, &SettingsView::refreshGeneral);
+    connect(&m_settings, &SettingsStore::runShortcutsChanged, this, &SettingsView::refreshRunShortcuts);
     refreshGeneral();
     refreshTracker();
     refreshCapture();
+    refreshRunShortcuts();
     refreshCaptureStatus();
 }
 
@@ -384,6 +424,16 @@ void SettingsView::refreshCapture() {
     m_folder->setText(c.folder);
     m_selfEdit = false;
     refreshCaptureStatus();
+}
+
+void SettingsView::refreshRunShortcuts() {
+    if (m_selfEdit) return;
+    const RunShortcuts& r = m_settings.runShortcuts();
+    m_selfEdit = true;
+    m_stepPass->setText(r.passAndNext);
+    m_stepFail->setText(r.failAndNext);
+    m_stepBack->setText(r.previous);
+    m_selfEdit = false;
 }
 
 void SettingsView::testConnection() {

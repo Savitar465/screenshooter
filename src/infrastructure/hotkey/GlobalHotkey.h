@@ -53,7 +53,8 @@ private:
     void installFilter();
 
     QList<Binding> m_bindings;
-    QString m_status;
+    QString m_platformStatus;   // cómo registra atajos esta plataforma
+    QString m_status;          // lo anterior o, si algún registro falló, por qué
     int m_nextId = 1;
     bool m_filterInstalled = false;
     void* m_platform = nullptr;   // manejador Carbon en macOS

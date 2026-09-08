@@ -10,12 +10,16 @@
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
 #include "presentation/views/MainWindow.h"
+#include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/Thumbnail.h"
 #include "presentation/widgets/Toast.h"
 
 #include <QAction>
 #include <QComboBox>
+#include <QFrame>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -240,6 +244,32 @@ private slots:
         QCOMPARE(f.app.run.state().results.size(), 1);
     }
 
+    /// Los atajos de la ejecución (los mismos que main.cpp registra en el sistema) avanzan y
+    /// retroceden de paso desde el menú, sin pasar por la pantalla.
+    void runStepActionsFollowTheSettings() {
+        WindowFixture f;
+        QCOMPARE(f.action("actStepPass")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+P")));
+        QCOMPARE(f.action("actStepFail")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+F")));
+        QCOMPARE(f.action("actStepBack")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+A")));
+        QVERIFY(!f.action("actStepPass")->isEnabled());   // sin ejecución no hacen nada
+        QVERIFY(!f.action("actStepBack")->isEnabled());
+
+        f.action("actRun")->trigger();   // TC-104
+        QVERIFY(f.action("actStepPass")->isEnabled());
+        f.action("actStepPass")->trigger();
+        QCOMPARE(f.app.run.state().results.size(), 1);
+        QCOMPARE(static_cast<int>(f.app.run.state().results[0].result), static_cast<int>(StepResult::Pass));
+        QCOMPARE(f.app.run.state().idx, 1);
+        f.action("actStepFail")->trigger();
+        QCOMPARE(static_cast<int>(f.app.run.state().results[1].result), static_cast<int>(StepResult::Fail));
+        f.action("actStepBack")->trigger();
+        QCOMPARE(f.app.run.state().results.size(), 1);
+        QCOMPARE(f.app.run.state().idx, 1);
+
+        f.app.settings.updateRunShortcuts([](RunShortcuts& r) { r.passAndNext = QStringLiteral("F8"); });
+        QCOMPARE(f.action("actStepPass")->shortcut(), QKeySequence(Qt::Key_F8));
+    }
+
     void captureActionAttachesScreenshotToSelectedCase() {
         WindowFixture f;
         const QString id = f.app.store.selectedId();
@@ -247,6 +277,59 @@ private slots:
         QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
         QVERIFY(QFile::exists(f.app.store.find(id)->shots[0].path));
         QTRY_VERIFY(f.toast()->isVisible());
+    }
+
+    /// Sin ejecución, la pantalla sólo enseña su mensaje: ni paneles laterales ni barra flotante.
+    void runScreenWithoutRunShowsOnlyItsMessage() {
+        WindowFixture f;
+        f.window->navigate(Screen::Run);
+        QVERIFY(!f.app.run.isRunning());
+        QVERIFY(!f.window->findChild<QFrame*>(QStringLiteral("shotBar"))->isVisible());
+        QVERIFY(!f.window->findChild<QFrame*>(QStringLiteral("casePanel"))->isVisible());
+        QVERIFY(!f.window->findChild<QFrame*>(QStringLiteral("filmPanel"))->isVisible());
+        QVERIFY(!f.window->findChild<EvidencePreview*>(QStringLiteral("evidencePreview"))->isVisible());
+    }
+
+    /// El visor de la pantalla de ejecución abre la última captura, la barra la reasigna de paso
+    /// y las flechas recorren el carrete.
+    void runScreenPreviewFollowsTheEvidence() {
+        WindowFixture f;
+        f.action("actRun")->trigger();   // TC-104
+        const QString id = f.app.run.state().caseId;
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 2);
+        const QList<Screenshot> shots = f.app.store.find(id)->shots;
+
+        auto* preview = f.window->findChild<EvidencePreview*>(QStringLiteral("evidencePreview"));
+        QVERIFY(preview);
+        QCOMPARE(preview->shotId(), shots[1].id);   // la captura recién hecha se abre sola
+        auto* assign = f.window->findChild<QComboBox*>(QStringLiteral("assignStep"));
+        QCOMPARE(assign->currentData().toInt(), shots[1].step);   // paso en ejecución
+        assign->setCurrentIndex(assign->findData(3));
+        QCOMPARE(f.app.store.find(id)->shots[1].step, 3);
+
+        QTest::mouseClick(f.window->findChild<QPushButton*>(QStringLiteral("shotPrev")), Qt::LeftButton);
+        QCOMPARE(preview->shotId(), shots[0].id);
+        QTest::mouseClick(f.window->findChild<QPushButton*>(QStringLiteral("shotNext")), Qt::LeftButton);
+        QCOMPARE(preview->shotId(), shots[1].id);
+    }
+
+    /// Con varias capturas, la última cae fuera de la parte visible del carrete: debe traerse a la vista.
+    void newScreenshotScrollsIntoViewInTheFilmStrip() {
+        WindowFixture f;
+        f.action("actRun")->trigger();   // TC-104
+        const QString id = f.app.run.state().caseId;
+        for (int i = 1; i <= 6; ++i) {
+            f.action("actCapture")->trigger();
+            QTRY_COMPARE(f.app.store.find(id)->shots.size(), i);
+        }
+        auto* scroll = f.window->findChild<QScrollArea*>(QStringLiteral("filmScroll"));
+        QVERIFY(scroll);
+        QScrollBar* bar = scroll->verticalScrollBar();
+        QTRY_VERIFY(bar->maximum() > 0);                 // hay más capturas de las que caben
+        QTRY_COMPARE(bar->value(), bar->maximum());      // desplazado hasta la última
     }
 
     void undoActionFollowsTheStore() {

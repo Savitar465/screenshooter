@@ -54,6 +54,15 @@ struct AppSettings {
     bool closeToTray = false;   // al cerrar la ventana, seguir en la bandeja del sistema
 };
 
+/// Atajos globales de la ejecución: avanzar al paso siguiente dando su veredicto y volver al
+/// anterior sin traer QAflow al frente, para no interrumpir la prueba entre captura y captura.
+/// Se registran en el sistema junto a los de captura (`CaptureSettings::globalShortcut`).
+struct RunShortcuts {
+    QString passAndNext = QStringLiteral("Ctrl+Alt+P");
+    QString failAndNext = QStringLiteral("Ctrl+Alt+F");
+    QString previous = QStringLiteral("Ctrl+Alt+A");
+};
+
 struct CaptureSettings {
     QString shortcut = QStringLiteral("Ctrl+Shift+S");
     QString recordShortcut = QStringLiteral("Ctrl+Shift+G");   // iniciar / detener la grabación de GIF

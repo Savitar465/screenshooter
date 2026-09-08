@@ -87,4 +87,22 @@ void QSettingsRepository::saveApp(const AppSettings& a) {
     s.setValue(QStringLiteral("closeToTray"), a.closeToTray);
 }
 
+RunShortcuts QSettingsRepository::loadRunShortcuts() {
+    QSettings s;
+    s.beginGroup(QStringLiteral("run"));
+    RunShortcuts r;
+    r.passAndNext = s.value(QStringLiteral("passAndNext"), r.passAndNext).toString();
+    r.failAndNext = s.value(QStringLiteral("failAndNext"), r.failAndNext).toString();
+    r.previous = s.value(QStringLiteral("previous"), r.previous).toString();
+    return r;
+}
+
+void QSettingsRepository::saveRunShortcuts(const RunShortcuts& s2) {
+    QSettings s;
+    s.beginGroup(QStringLiteral("run"));
+    s.setValue(QStringLiteral("passAndNext"), s2.passAndNext);
+    s.setValue(QStringLiteral("failAndNext"), s2.failAndNext);
+    s.setValue(QStringLiteral("previous"), s2.previous);
+}
+
 } // namespace qaflow

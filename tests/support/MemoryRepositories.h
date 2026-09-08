@@ -65,6 +65,7 @@ public:
     TrackerSettings tracker;
     CaptureSettings capture;
     AppSettings app;
+    RunShortcuts runShortcuts;
 
     TrackerSettings loadTracker() override { return tracker; }
     void saveTracker(const TrackerSettings& s) override { tracker = s; }
@@ -72,6 +73,8 @@ public:
     void saveCapture(const CaptureSettings& c) override { capture = c; }
     AppSettings loadApp() override { return app; }
     void saveApp(const AppSettings& a) override { app = a; }
+    RunShortcuts loadRunShortcuts() override { return runShortcuts; }
+    void saveRunShortcuts(const RunShortcuts& r) override { runShortcuts = r; }
 };
 
 class MemorySecretStore : public ISecretStore {

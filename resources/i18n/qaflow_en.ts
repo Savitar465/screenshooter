@@ -514,20 +514,12 @@
         <translation>The key in “%1” cannot be used as a system-wide shortcut</translation>
     </message>
     <message>
-        <source>Atajo global registrado: %1</source>
-        <translation>System-wide shortcut registered: %1</translation>
-    </message>
-    <message>
         <source>Windows rechazó «%1» (otra aplicación ya lo usa)</source>
         <translation>Windows rejected “%1” (another application already uses it)</translation>
     </message>
     <message>
         <source>macOS rechazó «%1»</source>
         <translation>macOS rejected “%1”</translation>
-    </message>
-    <message>
-        <source>Atajo pedido al portal de Wayland (el escritorio puede pedir confirmación)</source>
-        <translation>Shortcut requested from the Wayland portal (the desktop may ask for confirmation)</translation>
     </message>
     <message>
         <source>Sin conexión X11: el atajo sólo funciona con QAflow en primer plano</source>
@@ -540,6 +532,10 @@
     <message>
         <source>X11 rechazó «%1» (otra aplicación ya lo usa)</source>
         <translation>X11 rejected “%1” (another application already uses it)</translation>
+    </message>
+    <message>
+        <source>Atajos pedidos al portal de Wayland (el escritorio puede pedir confirmación)</source>
+        <translation>Shortcuts requested from the Wayland portal (the desktop may ask for confirmation)</translation>
     </message>
 </context>
 <context>
@@ -1281,6 +1277,25 @@
     </message>
 </context>
 <context>
+    <name>qaflow::EvidencePreview</name>
+    <message>
+        <source>%1 · clic para abrirla a tamaño completo</source>
+        <translation>%1 · click to open it at full size</translation>
+    </message>
+    <message>
+        <source>sin vista previa</source>
+        <translation>no preview</translation>
+    </message>
+    <message>
+        <source>Paso %1</source>
+        <translation>Step %1</translation>
+    </message>
+    <message>
+        <source>Sin paso</source>
+        <translation>No step</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::EvidenceService</name>
     <message>
         <source>No hay ningún caso seleccionado</source>
@@ -1896,8 +1911,28 @@
         <translation>&amp;Settings…</translation>
     </message>
     <message>
-        <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Iniciar o detener la grabación de GIF&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Adjuntar archivos como evidencia (o arrástralos a la ventana)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en una miniatura&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir los ajustes&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Volver al paso anterior&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
-        <translation>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicate case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take a screenshot (system-wide when the system allows it; press again to cancel the countdown)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Start or stop the GIF recording&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Attach files as evidence (or drag them onto the window)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a thumbnail&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the evidence at full size (← → navigate, Ctrl+E annotates, Ctrl+C copies)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the settings&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict of the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Back to the previous step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
+        <source>&amp;Pasa y siguiente</source>
+        <translation>&amp;Pass and next</translation>
+    </message>
+    <message>
+        <source>Fa&amp;lla y siguiente</source>
+        <translation>Fa&amp;il and next</translation>
+    </message>
+    <message>
+        <source>Paso &amp;anterior</source>
+        <translation>Previous &amp;step</translation>
+    </message>
+    <message>
+        <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Iniciar o detener la grabación de GIF&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Adjuntar archivos como evidencia (o arrástralos a la ventana)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en una miniatura&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Falla el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vuelve al paso anterior (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir los ajustes&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Volver al paso anterior&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
+        <translation>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicate case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take a screenshot (system-wide when the system allows it; press again to cancel the countdown)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Start or stop the GIF recording&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Attach files as evidence (or drag them onto the window)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a thumbnail&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the evidence at full size (← → navigate, Ctrl+E annotates, Ctrl+C copies)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pass the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Fail the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go back to the previous step (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the settings&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict of the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Back to the previous step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
+    </message>
+    <message>
+        <source>%1 · ejecución terminada · %2</source>
+        <translation>%1 · run finished · %2</translation>
+    </message>
+    <message>
+        <source>%1 · paso %2 de %3 · %4</source>
+        <translation>%1 · step %2 of %3 · %4</translation>
     </message>
 </context>
 <context>
@@ -2207,14 +2242,6 @@
         <translation>Undoes the last verdict and goes back to that step (Backspace)</translation>
     </message>
     <message>
-        <source>ACCIÓN</source>
-        <translation>ACTION</translation>
-    </message>
-    <message>
-        <source>RESULTADO ESPERADO</source>
-        <translation>EXPECTED RESULT</translation>
-    </message>
-    <message>
         <source>Observaciones de este paso (opcional)…</source>
         <translation>Notes for this step (optional)…</translation>
     </message>
@@ -2243,16 +2270,8 @@
         <translation>B</translation>
     </message>
     <message>
-        <source>Saltar</source>
-        <translation>Skip</translation>
-    </message>
-    <message>
         <source>S</source>
         <translation>S</translation>
-    </message>
-    <message>
-        <source>No aplica: el paso no cuenta para el veredicto</source>
-        <translation>Not applicable: the step does not count towards the verdict</translation>
     </message>
     <message>
         <source>EJECUCIÓN TERMINADA</source>
@@ -2283,40 +2302,12 @@
         <translation>Finish and go back</translation>
     </message>
     <message>
-        <source>No hay ninguna ejecución activa. Abre un caso y pulsa ▶ Ejecutar.</source>
-        <translation>There is no active run. Open a test case and click ▶ Run.</translation>
-    </message>
-    <message>
-        <source>REGISTRO</source>
-        <translation>LOG</translation>
-    </message>
-    <message>
         <source>+ Capturar</source>
         <translation>+ Capture</translation>
     </message>
     <message>
         <source>Ordenar por paso</source>
         <translation>Sort by step</translation>
-    </message>
-    <message>
-        <source>⏱ %1 en este caso</source>
-        <translation>⏱ %1 on this test case</translation>
-    </message>
-    <message>
-        <source>EJECUCIÓN MANUAL</source>
-        <translation>MANUAL EXECUTION</translation>
-    </message>
-    <message>
-        <source>Sin ejecución</source>
-        <translation>No run</translation>
-    </message>
-    <message>
-        <source>CAPTURAS · 0</source>
-        <translation>SCREENSHOTS · 0</translation>
-    </message>
-    <message>
-        <source>%1 · %2 · EJECUCIÓN MANUAL</source>
-        <translation>%1 · %2 · MANUAL EXECUTION</translation>
     </message>
     <message>
         <source>PASO %1 DE %2</source>
@@ -2347,18 +2338,6 @@
         <translation>Finish plan and view report</translation>
     </message>
     <message>
-        <source>Aún no hay pasos registrados.</source>
-        <translation>No steps logged yet.</translation>
-    </message>
-    <message>
-        <source>Cambiar a %1</source>
-        <translation>Switch to %1</translation>
-    </message>
-    <message>
-        <source>CAPTURAS · %1</source>
-        <translation>SCREENSHOTS · %1</translation>
-    </message>
-    <message>
         <source>● GIF</source>
         <translation>● GIF</translation>
     </message>
@@ -2377,6 +2356,128 @@
     <message>
         <source>Adjunta logs, vídeos o imágenes existentes</source>
         <translation>Attach existing logs, videos or images</translation>
+    </message>
+    <message>
+        <source>Cerrar ejecución</source>
+        <translation>Close run</translation>
+    </message>
+    <message>
+        <source>Cerrar la ejecución</source>
+        <translation>Close the run</translation>
+    </message>
+    <message>
+        <source>Quedan pasos sin marcar. Si la cierras ahora no se archivará en el historial.</source>
+        <translation>Some steps are still unmarked. If you close it now it will not be archived in the history.</translation>
+    </message>
+    <message>
+        <source>Bloq.</source>
+        <translation>Block.</translation>
+    </message>
+    <message>
+        <source>N/A</source>
+        <translation>N/A</translation>
+    </message>
+    <message>
+        <source>Saltar: el paso no cuenta para el veredicto</source>
+        <translation>Skip: the step does not count towards the verdict</translation>
+    </message>
+    <message>
+        <source>ASIGNAR A</source>
+        <translation>ASSIGN TO</translation>
+    </message>
+    <message>
+        <source>Evidencia anterior</source>
+        <translation>Previous evidence</translation>
+    </message>
+    <message>
+        <source>Evidencia siguiente</source>
+        <translation>Next evidence</translation>
+    </message>
+    <message>
+        <source>Eliminar esta evidencia</source>
+        <translation>Delete this evidence</translation>
+    </message>
+    <message>
+        <source>%1 de %2 pasos · %3 capturas · ⏱ %4</source>
+        <translation>%1 of %2 steps · %3 screenshots · ⏱ %4</translation>
+    </message>
+    <message>
+        <source>EJECUTANDO</source>
+        <translation>RUNNING</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Esperado:&lt;/b&gt; %1</source>
+        <translation>&lt;b&gt;Expected:&lt;/b&gt; %1</translation>
+    </message>
+    <message>
+        <source>Observaciones del paso %1…</source>
+        <translation>Notes for step %1…</translation>
+    </message>
+    <message>
+        <source>TERMINADA</source>
+        <translation>FINISHED</translation>
+    </message>
+    <message>
+        <source>PASO %1</source>
+        <translation>STEP %1</translation>
+    </message>
+    <message>
+        <source>Cambiar el veredicto de este paso</source>
+        <translation>Change the verdict of this step</translation>
+    </message>
+    <message>
+        <source>ACTIVO</source>
+        <translation>ACTIVE</translation>
+    </message>
+    <message>
+        <source>PENDIENTE</source>
+        <translation>PENDING</translation>
+    </message>
+    <message>
+        <source>sin evidencia</source>
+        <translation>no evidence</translation>
+    </message>
+    <message>
+        <source>1 captura</source>
+        <translation>1 screenshot</translation>
+    </message>
+    <message>
+        <source>%1 capturas</source>
+        <translation>%1 screenshots</translation>
+    </message>
+    <message>
+        <source>Aún no hay evidencias de este caso.
+Pulsa «Capturar pantalla» o arrastra un fichero a la ventana.</source>
+        <translation>This case has no evidence yet.
+Press “Take screenshot” or drag a file onto the window.</translation>
+    </message>
+    <message>
+        <source>Sin asignar</source>
+        <translation>Unassigned</translation>
+    </message>
+    <message>
+        <source>Paso %1 · %2</source>
+        <translation>Step %1 · %2</translation>
+    </message>
+    <message>
+        <source>CAPTURAS</source>
+        <translation>SCREENSHOTS</translation>
+    </message>
+    <message>
+        <source>CAPTURAS · %1</source>
+        <translation>SCREENSHOTS · %1</translation>
+    </message>
+    <message>
+        <source>EJECUCIÓN MANUAL</source>
+        <translation>MANUAL RUN</translation>
+    </message>
+    <message>
+        <source>No hay ninguna ejecución activa</source>
+        <translation>No run in progress</translation>
+    </message>
+    <message>
+        <source>Abre un caso en «Casos de prueba» y pulsa ▶ Ejecutar (F5) para empezar.</source>
+        <translation>Open a case in “Test cases” and press ▶ Run (F5) to start.</translation>
     </message>
 </context>
 <context>
@@ -2592,10 +2693,6 @@
         <translation>GIF · maximum length</translation>
     </message>
     <message>
-        <source>Atajo global: capturar aunque QAflow no tenga el foco</source>
-        <translation>System-wide shortcut: capture even when QAflow is not focused</translation>
-    </message>
-    <message>
         <source>Abrir el editor de anotaciones después de cada captura</source>
         <translation>Open the annotation editor after each screenshot</translation>
     </message>
@@ -2610,6 +2707,42 @@
     <message>
         <source>Atajo sólo con QAflow en primer plano</source>
         <translation>Shortcut only while QAflow is in the foreground</translation>
+    </message>
+    <message>
+        <source>Atajos globales: capturar y avanzar de paso aunque QAflow no tenga el foco</source>
+        <translation>System-wide shortcuts: capture and move between steps even when QAflow is not focused</translation>
+    </message>
+    <message>
+        <source>Atajos de la ejecución</source>
+        <translation>Run shortcuts</translation>
+    </message>
+    <message>
+        <source>Marcan el paso actual y pasan al siguiente sin traer QAflow al frente, para no cortar la prueba entre captura y captura. Necesitan «atajos globales» activado; si el sistema rechaza alguno, sigue funcionando con la ventana en primer plano.</source>
+        <translation>They mark the current step and move to the next one without bringing QAflow to the front, so the test is not interrupted between screenshots. They need “system-wide shortcuts” enabled; if the system rejects one, it still works with the window in the foreground.</translation>
+    </message>
+    <message>
+        <source>Pasa y siguiente</source>
+        <translation>Pass and next</translation>
+    </message>
+    <message>
+        <source>Marca el paso actual como superado y avanza al siguiente</source>
+        <translation>Marks the current step as passed and moves to the next one</translation>
+    </message>
+    <message>
+        <source>Falla y siguiente</source>
+        <translation>Fail and next</translation>
+    </message>
+    <message>
+        <source>Marca el paso actual como fallido y avanza al siguiente</source>
+        <translation>Marks the current step as failed and moves to the next one</translation>
+    </message>
+    <message>
+        <source>Paso anterior</source>
+        <translation>Previous step</translation>
+    </message>
+    <message>
+        <source>Deshace el último veredicto y vuelve a ese paso</source>
+        <translation>Undoes the last verdict and goes back to that step</translation>
     </message>
 </context>
 <context>

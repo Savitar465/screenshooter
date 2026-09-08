@@ -135,19 +135,33 @@ int main(int argc, char* argv[]) {
     ctx.dataDir = dataDir;
     ctx.captureBackend = capture->backendName();
 
-    // Atajos globales: capturar y grabar aunque la ventana no tenga el foco. Si el sistema los
-    // rechaza, siguen funcionando los QAction de la ventana (mismo atajo, ámbito aplicación).
+    // Atajos globales: capturar, grabar y avanzar de paso aunque la ventana no tenga el foco, para
+    // no interrumpir la prueba. Si el sistema los rechaza, siguen funcionando los QAction de la
+    // ventana (mismo atajo, ámbito aplicación).
+    std::unique_ptr<MainWindow> window;
+    auto stepFromHotkey = [&](bool needsActiveRun, const std::function<void()>& action) {
+        if (needsActiveRun ? !run.isRunning() : run.state().caseId.isEmpty()) return;
+        action();
+        if (window) window->announceRunStep();   // dónde ha quedado la ejecución, sin traerla al frente
+    };
     auto bindHotkeys = [&]() {
         const CaptureSettings& c = settings.capture();
-        if (!c.globalShortcut) { hotkey.unbind(QStringLiteral("capture")); hotkey.unbind(QStringLiteral("record")); return; }
+        const RunShortcuts& r = settings.runShortcuts();
+        for (const char* id : {"capture", "record", "step-pass", "step-fail", "step-back"}) {
+            if (!c.globalShortcut) hotkey.unbind(QString::fromLatin1(id));
+        }
+        if (!c.globalShortcut) return;
         hotkey.bind(QStringLiteral("capture"), c.shortcut, [&evidence]() { evidence.captureForSelectedCase(); });
         hotkey.bind(QStringLiteral("record"), c.recordShortcut, [&evidence]() { evidence.toggleRecording(); });
+        hotkey.bind(QStringLiteral("step-pass"), r.passAndNext, [&]() { stepFromHotkey(true, [&]() { run.mark(StepResult::Pass); }); });
+        hotkey.bind(QStringLiteral("step-fail"), r.failAndNext, [&]() { stepFromHotkey(true, [&]() { run.mark(StepResult::Fail); }); });
+        hotkey.bind(QStringLiteral("step-back"), r.previous, [&]() { stepFromHotkey(false, [&]() { run.back(); }); });
     };
     bindHotkeys();
     QObject::connect(&settings, &SettingsStore::captureChanged, &app, bindHotkeys);
+    QObject::connect(&settings, &SettingsStore::runShortcutsChanged, &app, bindHotkeys);
 
     // Presentación (la captura oculta la ventana principal mientras captura)
-    std::unique_ptr<MainWindow> window;
     auto buildWindow = [&]() {
         std::unique_ptr<MainWindow> previous = std::move(window);
         window = std::make_unique<MainWindow>(ctx);

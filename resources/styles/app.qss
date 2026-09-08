@@ -50,6 +50,9 @@ QFrame[role="status-strip"] { background: @panel; border-top: 1px solid @border;
 QFrame[role="list-pane"] { background: @panel-translucent; border-right: 1px solid @border; }
 QFrame[role="grid-cell"] { background: @elevated; border: 1px solid @border; border-radius: 8px; }
 QFrame[role="accent"] { border-radius: 2px; border: none; }
+/* Paso de la lista de la ejecución: el activo se resalta */
+QFrame[role="step-card"] { background: transparent; border: 1px solid transparent; border-radius: 10px; }
+QFrame[role="step-card"][active="true"] { background: @elevated; border-color: @blue; }
 /* Pie de un diálogo (Ajustes): separa el contenido de los botones de cierre. */
 QFrame[role="dialog-footer"] { background: @panel; border-top: 1px solid @border; }
 

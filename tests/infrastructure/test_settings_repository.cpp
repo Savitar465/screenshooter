@@ -23,6 +23,20 @@ private slots:
     }
     void init() { QSettings().clear(); }
 
+    void runShortcutsRoundTrip() {
+        QSettingsRepository repo;
+        QCOMPARE(repo.loadRunShortcuts().passAndNext, RunShortcuts{}.passAndNext);   // sin fichero: los de fábrica
+        RunShortcuts r;
+        r.passAndNext = QStringLiteral("Ctrl+Alt+1");
+        r.failAndNext = QStringLiteral("Ctrl+Alt+2");
+        r.previous = QStringLiteral("Ctrl+Alt+3");
+        repo.saveRunShortcuts(r);
+        const RunShortcuts loaded = repo.loadRunShortcuts();
+        QCOMPARE(loaded.passAndNext, r.passAndNext);
+        QCOMPARE(loaded.failAndNext, r.failAndNext);
+        QCOMPARE(loaded.previous, r.previous);
+    }
+
     void trackerRoundTripNeverWritesTokenUnlessGiven() {
         QSettingsRepository repo;
         TrackerSettings t;

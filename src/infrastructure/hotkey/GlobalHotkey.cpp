@@ -169,6 +169,7 @@ GlobalHotkey::GlobalHotkey(QObject* parent) : QObject(parent) {
 #else
     m_status = QCoreApplication::translate("infrastructure", "Atajo global no disponible en esta plataforma");
 #endif
+    m_platformStatus = m_status;
 }
 
 GlobalHotkey::~GlobalHotkey() {
@@ -232,7 +233,7 @@ bool GlobalHotkey::registerNative(Binding& b) {
     b.key = vk;
     installFilter();
     b.bound = RegisterHotKey(nullptr, b.nativeId, b.mods, b.key) != 0;
-    m_status = b.bound ? QCoreApplication::translate("infrastructure", "Atajo global registrado: %1").arg(b.sequence)
+    m_status = b.bound ? m_platformStatus
                        : QCoreApplication::translate("infrastructure", "Windows rechazó «%1» (otra aplicación ya lo usa)").arg(b.sequence);
     return b.bound;
 #elif defined(Q_OS_MACOS)
@@ -252,14 +253,14 @@ bool GlobalHotkey::registerNative(Binding& b) {
     EventHotKeyRef ref = nullptr;
     b.bound = RegisterEventHotKey(b.key, b.mods, hk, GetApplicationEventTarget(), 0, &ref) == noErr;
     b.handle = ref;
-    m_status = b.bound ? QCoreApplication::translate("infrastructure", "Atajo global registrado: %1").arg(b.sequence)
+    m_status = b.bound ? m_platformStatus
                        : QCoreApplication::translate("infrastructure", "macOS rechazó «%1»").arg(b.sequence);
     return b.bound;
 #elif defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
     if (m_portal) {
         const int nativeId = b.nativeId;
         b.bound = m_portal->bind(b.id, b.sequence, [this, nativeId]() { activate(nativeId); });
-        m_status = b.bound ? QCoreApplication::translate("infrastructure", "Atajo pedido al portal de Wayland (el escritorio puede pedir confirmación)")
+        m_status = b.bound ? QCoreApplication::translate("infrastructure", "Atajos pedidos al portal de Wayland (el escritorio puede pedir confirmación)")
                            : QCoreApplication::translate("infrastructure", "Wayland sin portal GlobalShortcuts: el atajo sólo funciona con QAflow en primer plano");
         return b.bound;
     }
@@ -282,7 +283,7 @@ bool GlobalHotkey::registerNative(Binding& b) {
     XSetErrorHandler(previous);
     b.bound = g_grabError == 0;
     if (!b.bound) for (unsigned extra : kIgnoredMasks) XUngrabKey(dpy, code, b.mods | extra, root);
-    m_status = b.bound ? QCoreApplication::translate("infrastructure", "Atajo global registrado: %1").arg(b.sequence)
+    m_status = b.bound ? m_platformStatus
                        : QCoreApplication::translate("infrastructure", "X11 rechazó «%1» (otra aplicación ya lo usa)").arg(b.sequence);
     return b.bound;
 #else

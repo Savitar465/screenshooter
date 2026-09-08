@@ -44,7 +44,8 @@ src/
     ├── theme/       Paletas oscura y clara (Theme.h); resources/styles/app.qss usa tokens (@bg, @tint(green,30))
     ├── widgets/     Piezas reutilizables: Ui (fábricas, icono), Icons (glifos del rail), LayoutButton, FlowLayout, Toast,
     │                FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard,
-    │                ImageViewer (visor), AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
+    │                EvidencePreview (visor de la ejecución), ImageViewer (visor a tamaño completo),
+    │                AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
     ├── views/       Una clase por pantalla: CasesView, PlanView, RunView, HistoryView, BugView,
     │                SettingsView (+ SettingsDialog, su ventana); Sidebar (rail de iconos),
     │                StatusStrip (barra de estado) y MainWindow (menú, atajos, bandeja,
@@ -116,8 +117,12 @@ clic. Ambas vistas se refrescan con las señales de los stores, como el resto.
 
 `MainWindow::buildMenus()` crea el menú (Archivo, Editar, Ver, Ejecución, Ayuda) con `QAction`
 y los atajos estándar (`QKeySequence::New`, `Find`, `Undo`, `Quit`, F5, Ctrl+1…5). Los atajos de
-captura y de grabación son acciones de ámbito aplicación cuya tecla sigue a Ajustes; además
-`main.cpp` los registra en el sistema con `IGlobalHotkey` (ver «Captura de pantalla»). Las acciones
+captura, de grabación y de la ejecución («Pasa y siguiente», «Falla y siguiente», «Paso anterior»)
+son acciones de ámbito aplicación cuya tecla sigue a Ajustes; además `main.cpp` los registra en el
+sistema con `IGlobalHotkey` (ver «Captura de pantalla»), para poder avanzar de paso y seguir
+capturando sin traer QAflow al frente. Tras cada atajo de la ejecución,
+`MainWindow::announceRunStep()` dice en qué paso ha quedado: en la bandeja si la ventana no está al
+frente, y con el aviso de siempre si lo está. Las acciones
 que operan sobre el caso seleccionado se habilitan según `TestCaseStore::selectedId()` y «Deshacer»
 sigue a `canUndo()`. Con `QSystemTrayIcon` disponible hay icono en la bandeja (mostrar/ocultar,
 capturar, grabar GIF, salir); si `AppSettings::closeToTray` está activo, cerrar la ventana la oculta
@@ -154,7 +159,7 @@ muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`
 | Planes                 | `$XDG_DATA_HOME/QAflow/QAflow/plans.json` (colección + plan activo; migra `plan.json` antiguo) |
 | Historial              | `$XDG_DATA_HOME/QAflow/QAflow/history.json` (se escribe al cerrar cada ejecución) |
 | Ejecución en curso     | `$XDG_DATA_HOME/QAflow/QAflow/session.json` (se borra al terminar; notas con retardo de 300 ms) |
-| Ajustes gestor/captura | QSettings (`~/.config/QAflow/QAflow.conf`), sin el token                  |
+| Ajustes (gestor, captura, atajos de la ejecución) | QSettings (`~/.config/QAflow/QAflow.conf`), sin el token |
 | Token del gestor       | `ISecretStore`: llavero del sistema; si no hay, QSettings en claro con aviso en Ajustes |
 | Bugs y cola offline    | `$XDG_DATA_HOME/QAflow/QAflow/bugs.json`                    |
 | Capturas, GIF y adjuntos | Carpeta configurable (por defecto `~/QAflow/capturas`)     |
@@ -214,6 +219,15 @@ nota y segundos que estuvo en pantalla) y el cronómetro del paso actual. Result
   acumulado antes (`stepElapsedSecs`) sí. `MainWindow` abre directamente la pantalla de ejecución.
 * **Duración real.** Cada `StepRecord` mide su tiempo; `RunRecord::durationSecs` es la suma. La
   vista muestra un reloj por paso y por caso (un `QTimer` de un segundo sólo actualiza etiquetas).
+* **La pantalla, en tres columnas.** `RunView` se construye con una función por columna:
+  `buildCasePanel()` (estado del caso, progreso, la lista de pasos con su veredicto —la pastilla de
+  cada paso ya marcado abre el menú para corregirlo— y «Cerrar ejecución»), `buildStepPanel()` (el
+  paso activo, sus veredictos, el visor grande de la evidencia elegida con la barra «Asignar a» y
+  las observaciones del paso) y `buildFilmPanel()` (la columna «Capturas», con todas las evidencias del caso).
+  El visor es `EvidencePreview`, que dibuja la imagen ajustada al hueco con la etiqueta del paso y
+  el nombre del fichero; las tarjetas de la columna de capturas son `ShotCard` con `Layout::Film`,
+  que en vez de abrir el visor a tamaño completo emiten `selectRequested` para elegir qué se ve en
+  grande. Una captura nueva se abre sola y la lista se desplaza hasta ella.
 * **Estimación del plan.** `PlanStore::estimatedSecs()` usa la media real por paso de cada caso
   según su historial; para los casos sin historial, la media global; sin datos, 3 min por paso.
   `estimateBasis()` explica en la vista de qué datos sale.
@@ -394,7 +408,9 @@ QT_QPA_PLATFORM=offscreen QAFLOW_SNAPSHOT_DIR=/tmp/qaflow-shots ./build/qaflow
 
 Renderiza cada pantalla (incluida una ejecución con un paso fallido, el bug prellenado, el
 informe de un plan, el panel de métricas con dos ciclos y la ventana de ajustes) a PNG y cierra. Usa un directorio de
-datos y unos ajustes aislados (`$QAFLOW_SNAPSHOT_DIR/data` y `/config`) para no tocar los reales.
+datos, unos ajustes y una carpeta de capturas aislados (`$QAFLOW_SNAPSHOT_DIR/data`, `/config` y
+`/capturas`) para no tocar los reales; el caso que se ejecuta lleva dos evidencias de ejemplo
+dibujadas al vuelo.
 `QAFLOW_SNAPSHOT_LANG=es|en` y `QAFLOW_SNAPSHOT_THEME=dark|light` eligen idioma y tema; sin
 `LANG` se usa el del sistema. Útil para revisar el diseño sin interacción; CI lo ejecuta como humo.
 

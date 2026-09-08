@@ -15,6 +15,8 @@ public:
     void saveCapture(const CaptureSettings& s) override;
     AppSettings loadApp() override;
     void saveApp(const AppSettings& s) override;
+    RunShortcuts loadRunShortcuts() override;
+    void saveRunShortcuts(const RunShortcuts& s) override;
 };
 
 } // namespace qaflow

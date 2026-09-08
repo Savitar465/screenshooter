@@ -146,4 +146,31 @@ void BugReportService::loadMetadata(bool force, std::function<void(const Metadat
     });
 }
 
+bool BugReportService::searchesAssigneesOnServer() const {
+    const TrackerSettings& t = m_settings.tracker();
+    return m_tracker && t.connected && m_tracker->canSearchAssignees(t);
+}
+
+void BugReportService::searchAssignees(const QString& query, std::function<void(const AssigneeSearch&)> done) {
+    const TrackerSettings& t = m_settings.tracker();
+    // Filtrado local: sin gestor, sin conexión o con uno que no sabe buscar (GitHub, GitLab, Azure).
+    auto fromMetadata = [this, query]() {
+        const QString needle = query.trimmed();
+        QList<Assignee> out;
+        for (const auto& a : m_metadata.assignees)
+            if (needle.isEmpty() || a.name.contains(needle, Qt::CaseInsensitive) || a.id.contains(needle, Qt::CaseInsensitive))
+                out.append(a);
+        return out;
+    };
+    if (!searchesAssigneesOnServer()) {
+        done(AssigneeSearch{true, fromMetadata(), {}});
+        return;
+    }
+    m_tracker->searchAssignees(t, query, [done, fromMetadata](const AssigneeSearch& r) {
+        // Si la búsqueda falla (red, permisos), el formulario se queda con lo que ya tenía y lo dice.
+        if (!r.ok) { done(AssigneeSearch{false, fromMetadata(), r.error}); return; }
+        done(r);
+    });
+}
+
 } // namespace qaflow

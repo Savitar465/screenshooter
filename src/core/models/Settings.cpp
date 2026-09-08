@@ -23,6 +23,30 @@ TrackerKind trackerKindFromString(const QString& s) {
     return TrackerKind::Jira;
 }
 
+QString toString(JiraAuth a) {
+    switch (a) {
+        case JiraAuth::CloudToken: return QStringLiteral("cloud-token");
+        case JiraAuth::ServerBasic: return QStringLiteral("server-basic");
+        case JiraAuth::ServerToken: return QStringLiteral("server-token");
+    }
+    return {};
+}
+
+JiraAuth jiraAuthFromString(const QString& s) {
+    if (s.compare(QStringLiteral("server-basic"), Qt::CaseInsensitive) == 0) return JiraAuth::ServerBasic;
+    if (s.compare(QStringLiteral("server-token"), Qt::CaseInsensitive) == 0) return JiraAuth::ServerToken;
+    return JiraAuth::CloudToken;
+}
+
+QString label(JiraAuth a) {
+    switch (a) {
+        case JiraAuth::CloudToken: return QCoreApplication::translate("core", "Jira Cloud · correo y API token");
+        case JiraAuth::ServerBasic: return QCoreApplication::translate("core", "Jira Server · usuario y contraseña");
+        case JiraAuth::ServerToken: return QCoreApplication::translate("core", "Jira Server · token personal (PAT)");
+    }
+    return {};
+}
+
 QString TrackerSettings::baseUrl() const {
     QString base = url.trimmed();
     while (base.endsWith(QLatin1Char('/'))) base.chop(1);
@@ -69,10 +93,51 @@ QString TrackerSettings::projectPlaceholder() const {
 
 QString TrackerSettings::defaultUrl() const {
     switch (kind) {
-        case TrackerKind::Jira: return QStringLiteral("https://acme.atlassian.net");
+        // Jira Server vive en el dominio de la empresa, no en atlassian.net.
+        case TrackerKind::Jira: return jiraAuth == JiraAuth::CloudToken ? QStringLiteral("https://acme.atlassian.net")
+                                                                       : QStringLiteral("https://jira.acme.com");
         case TrackerKind::GitHub: return QStringLiteral("https://api.github.com");
         case TrackerKind::GitLab: return QStringLiteral("https://gitlab.com");
         case TrackerKind::AzureDevOps: return QStringLiteral("https://dev.azure.com/acme");
+    }
+    return {};
+}
+
+bool TrackerSettings::needsUser() const {
+    return kind == TrackerKind::Jira && jiraAuth != JiraAuth::ServerToken;
+}
+
+bool TrackerSettings::usesAccountId() const {
+    return kind == TrackerKind::Jira && jiraAuth == JiraAuth::CloudToken;
+}
+
+QString TrackerSettings::userLabel() const {
+    if (kind != TrackerKind::Jira) return {};
+    return jiraAuth == JiraAuth::CloudToken ? QCoreApplication::translate("core", "Correo de la cuenta")
+                                            : QCoreApplication::translate("core", "Usuario");
+}
+
+QString TrackerSettings::userPlaceholder() const {
+    if (kind != TrackerKind::Jira) return {};
+    return jiraAuth == JiraAuth::CloudToken ? QStringLiteral("qa@acme.com") : QStringLiteral("aperez");
+}
+
+QString TrackerSettings::secretLabel() const {
+    if (kind != TrackerKind::Jira) return QCoreApplication::translate("core", "Token de acceso");
+    switch (jiraAuth) {
+        case JiraAuth::CloudToken: return QCoreApplication::translate("core", "Token de API");
+        case JiraAuth::ServerBasic: return QCoreApplication::translate("core", "Contraseña");
+        case JiraAuth::ServerToken: return QCoreApplication::translate("core", "Token personal (PAT)");
+    }
+    return {};
+}
+
+QString TrackerSettings::secretPlaceholder() const {
+    if (kind != TrackerKind::Jira) return QCoreApplication::translate("core", "Personal access token");
+    switch (jiraAuth) {
+        case JiraAuth::CloudToken: return QCoreApplication::translate("core", "API token de id.atlassian.com");
+        case JiraAuth::ServerBasic: return QCoreApplication::translate("core", "Contraseña de Jira");
+        case JiraAuth::ServerToken: return QCoreApplication::translate("core", "Token personal (Jira 8.14 o superior)");
     }
     return {};
 }

@@ -368,6 +368,25 @@ private slots:
         QVERIFY(!f.app.store.hasUnsavedChanges());
         QTRY_VERIFY(f.toastText().contains(QStringLiteral("Guardado")));
     }
+
+    // El campo "Asignado a" busca las personas en el gestor según se escribe, sin pisar el texto.
+    void bugAssigneeSearchesPeopleInTheTracker() {
+        WindowFixture f;
+        f.app.tracker->searchesAssignees = true;
+        f.app.tracker->assigneesToReturn = {Assignee{QStringLiteral("aperez"), QStringLiteral("Ana Pérez")},
+                                            Assignee{QStringLiteral("apedro"), QStringLiteral("Pedro Antón")}};
+        f.window->navigate(Screen::Bug);
+        auto* assignee = f.window->findChild<QComboBox*>(QStringLiteral("bugAssignee"));
+        QVERIFY(assignee);
+        QCOMPARE(assignee->count(), 0);
+        QTest::keyClicks(assignee->lineEdit(), QStringLiteral("an"));
+        QTRY_COMPARE(assignee->count(), 2);
+        QCOMPARE(assignee->itemText(0), QStringLiteral("Ana Pérez"));
+        QCOMPARE(assignee->itemData(0).toString(), QStringLiteral("aperez"));   // el id que espera Jira Server
+        QCOMPARE(assignee->lineEdit()->text(), QStringLiteral("an"));           // lo escrito sigue intacto
+        QCOMPARE(f.app.tracker->assigneeQueries.last(), QStringLiteral("an"));
+        QCOMPARE(f.app.tracker->assigneeQueries.size(), 1);                     // una sola llamada para dos letras
+    }
 };
 
 QTEST_MAIN(MainWindowTest)

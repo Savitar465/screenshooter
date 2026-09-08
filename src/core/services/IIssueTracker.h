@@ -5,6 +5,7 @@
 
 #include <QList>
 #include <QString>
+#include <QtGlobal>
 #include <QStringList>
 #include <functional>
 
@@ -55,6 +56,13 @@ struct MetadataResult {
     QString error;
 };
 
+/// Personas encontradas para el campo "Asignado a" mientras se escribe.
+struct AssigneeSearch {
+    bool ok = false;
+    QList<Assignee> assignees;
+    QString error;
+};
+
 /// Gestor de incidencias. Asíncrono: las llamadas devuelven por callback en el hilo principal.
 class IIssueTracker {
 public:
@@ -63,6 +71,16 @@ public:
     virtual void createIssue(const TrackerSettings& s, const BugReport& bug, std::function<void(const IssueResult&)> done) = 0;
     virtual void fetchStatus(const TrackerSettings& s, const QString& key, std::function<void(const IssueStatus&)> done) = 0;
     virtual void fetchMetadata(const TrackerSettings& s, std::function<void(const MetadataResult&)> done) = 0;
+
+    /// ¿Sabe este gestor buscar personas en el servidor mientras se escribe? Si no, el formulario
+    /// se queda con los asignables que trajo `fetchMetadata()` y los filtra en local.
+    virtual bool canSearchAssignees(const TrackerSettings& s) const { Q_UNUSED(s); return false; }
+    /// Busca personas a las que asignar en el proyecto configurado. `query` es lo escrito en el
+    /// formulario; vacío pide las primeras del proyecto.
+    virtual void searchAssignees(const TrackerSettings& s, const QString& query, std::function<void(const AssigneeSearch&)> done) {
+        Q_UNUSED(s); Q_UNUSED(query);
+        done(AssigneeSearch{});
+    }
 };
 
 } // namespace qaflow

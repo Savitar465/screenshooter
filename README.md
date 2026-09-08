@@ -80,8 +80,25 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 | Planes            | Varios planes (crear, duplicar, archivar, eliminar), casos en orden de ejecución propio, progreso del ciclo actual con enlace a su informe, estimación basada en las duraciones reales del historial (3 min/paso si no hay datos) y arranque de un ciclo nuevo |
 | Ejecución         | Tres columnas: el caso con su progreso y la lista de pasos (veredicto corregible en cada uno), el paso actual con Pasa / Falla / Bloq. / N/A (teclas P / F / B / S), paso anterior (Retroceso), **atajos globales** para avanzar de paso sin volver a la ventana (Ctrl+Alt+P / Ctrl+Alt+F / Ctrl+Alt+A), cronómetro por paso y por caso, visor grande de la evidencia elegida con «Asignar a» y observaciones, y la columna de capturas con todas las evidencias del caso. Sobrevive al cierre de la aplicación |
 | Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración), informes de plan con exportación a Markdown y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
-| Reportar bug      | Formulario prellenado con el paso fallido y campos reales del gestor (tipo, prioridad, asignado, componentes, versión, etiquetas) cargados del proyecto; crea el issue en Jira, GitHub, GitLab o Azure DevOps y sube las capturas; lista de bugs reportados con su estado y cola offline con reintento |
-| Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; atajos de la ejecución; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, token en el llavero del sistema) y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
+| Reportar bug      | Formulario prellenado con el paso fallido y campos reales del gestor (tipo, prioridad, asignado, componentes, versión, etiquetas) cargados del proyecto, con las personas buscadas en Jira según se escribe; crea el issue en Jira, GitHub, GitLab o Azure DevOps y sube las capturas; lista de bugs reportados con su estado y cola offline con reintento |
+| Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; atajos de la ejecución; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, modo de autenticación en Jira y credenciales en el llavero del sistema) y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
+
+## Conexión con Jira
+
+QAflow habla la **API REST v2**, la que sirven tanto Jira Cloud como Jira Server / Data Center. En Ajustes
+se elige cómo autenticarse:
+
+| Modo                                  | Credenciales             | Para                                                          |
+|---------------------------------------|--------------------------|---------------------------------------------------------------|
+| Jira Cloud · correo y API token       | correo + API token       | `https://empresa.atlassian.net`, con un token de id.atlassian.com |
+| Jira Server · usuario y contraseña    | usuario + contraseña     | Jira Server / Data Center, **incluida la 8.5.1**, que aún no tiene tokens personales |
+| Jira Server · token personal (PAT)    | token personal           | Jira Server / Data Center 8.14 o superior                     |
+
+En Server la URL es la de la instancia con su context path si lo tiene (`https://jira.empresa.com` o
+`https://empresa.com/jira`) y las personas se identifican por su nombre de usuario, no por `accountId`.
+La contraseña se guarda en el llavero del sistema, igual que los tokens. Si Jira bloquea al usuario tras
+varios intentos fallidos, «Probar conexión» lo dice: hay que entrar una vez por el navegador y resolver
+el CAPTCHA antes de que vuelva a aceptar la API.
 
 ## Evidencias
 

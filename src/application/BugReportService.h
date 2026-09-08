@@ -61,6 +61,13 @@ public:
     const ProjectMetadata& metadata() const { return m_metadata; }
     bool hasMetadata() const { return !m_metadata.isEmpty(); }
 
+    /// Personas para el campo "Asignado a". Con Jira se pregunta al servidor, que conoce a todo el
+    /// mundo y no sólo a los primeros del proyecto; con el resto de gestores se filtra en local la
+    /// lista que trajo `loadMetadata()`. `query` es lo que se lleva escrito.
+    void searchAssignees(const QString& query, std::function<void(const AssigneeSearch&)> done);
+    /// ¿Las personas se buscan en el servidor del gestor o se filtran las ya cargadas?
+    bool searchesAssigneesOnServer() const;
+
 signals:
     void metadataChanged();
 

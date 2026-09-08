@@ -41,10 +41,6 @@
 <context>
     <name>SettingsView</name>
     <message>
-        <source>Los bugs se crean como issues del tipo elegido en el proyecto indicado. Con correo → Jira Cloud (API token); sin correo → PAT de Jira Server/Data Center.</source>
-        <translation>Bugs are created as issues of the chosen type in the given project. With an email → Jira Cloud (API token); without an email → Jira Server/Data Center PAT.</translation>
-    </message>
-    <message>
         <source>Los bugs se crean como issues del repositorio. URL de la API: &lt;b&gt;https://api.github.com&lt;/b&gt; (o https://host/api/v3 en Enterprise). Token: PAT con permiso &lt;i&gt;issues&lt;/i&gt;. La API no admite adjuntos.</source>
         <translation>Bugs are created as issues in the repository. API URL: &lt;b&gt;https://api.github.com&lt;/b&gt; (or https://host/api/v3 on Enterprise). Token: a PAT with the &lt;i&gt;issues&lt;/i&gt; permission. The API does not support attachments.</translation>
     </message>
@@ -55,6 +51,18 @@
     <message>
         <source>Los bugs se crean como work items del tipo elegido. URL: &lt;b&gt;https://dev.azure.com/organización&lt;/b&gt;. Token: PAT con permiso &lt;i&gt;Work Items (read &amp;amp; write)&lt;/i&gt;.</source>
         <translation>Bugs are created as work items of the chosen type. URL: &lt;b&gt;https://dev.azure.com/organization&lt;/b&gt;. Token: a PAT with the &lt;i&gt;Work Items (read &amp;amp; write)&lt;/i&gt; permission.</translation>
+    </message>
+    <message>
+        <source>Los bugs se crean como issues del tipo elegido en el proyecto indicado. Jira Cloud: URL &lt;b&gt;https://empresa.atlassian.net&lt;/b&gt;, el correo de la cuenta y un &lt;i&gt;API token&lt;/i&gt; creado en id.atlassian.com.</source>
+        <translation>Bugs are created as issues of the chosen type in the given project. Jira Cloud: URL &lt;b&gt;https://company.atlassian.net&lt;/b&gt;, your account email and an &lt;i&gt;API token&lt;/i&gt; created at id.atlassian.com.</translation>
+    </message>
+    <message>
+        <source>Los bugs se crean como issues del tipo elegido en el proyecto indicado. Jira Server / Data Center con usuario y contraseña (Basic auth sobre la API v2): es la forma de conectar con Jira 8.13 y anteriores (por ejemplo &lt;b&gt;8.5.1&lt;/b&gt;), que todavía no tienen tokens personales. La URL lleva el context path si lo hay: &lt;b&gt;https://jira.empresa.com&lt;/b&gt; o &lt;b&gt;https://empresa.com/jira&lt;/b&gt;. Tras varios intentos fallidos Jira exige resolver un CAPTCHA en el navegador antes de volver a aceptar la API.</source>
+        <translation>Bugs are created as issues of the chosen type in the given project. Jira Server / Data Center with a username and password (basic auth over the v2 API): this is how you connect to Jira 8.13 and earlier (8.5.1, for instance), which have no personal access tokens yet. The URL includes the context path if there is one: &lt;b&gt;https://jira.company.com&lt;/b&gt; or &lt;b&gt;https://company.com/jira&lt;/b&gt;. After several failed attempts Jira asks you to solve a CAPTCHA in the browser before it accepts the API again.</translation>
+    </message>
+    <message>
+        <source>Los bugs se crean como issues del tipo elegido en el proyecto indicado. Jira Server / Data Center con un &lt;i&gt;token personal&lt;/i&gt; (Perfil → Personal Access Tokens), disponible desde la versión 8.14.</source>
+        <translation>Bugs are created as issues of the chosen type in the given project. Jira Server / Data Center with a &lt;i&gt;personal access token&lt;/i&gt; (Profile → Personal Access Tokens), available from version 8.14 on.</translation>
     </message>
 </context>
 <context>
@@ -370,6 +378,58 @@
         <source>hace %1 d</source>
         <translation>%1 d ago</translation>
     </message>
+    <message>
+        <source>Jira Cloud · correo y API token</source>
+        <translation>Jira Cloud · email and API token</translation>
+    </message>
+    <message>
+        <source>Jira Server · usuario y contraseña</source>
+        <translation>Jira Server · username and password</translation>
+    </message>
+    <message>
+        <source>Jira Server · token personal (PAT)</source>
+        <translation>Jira Server · personal access token (PAT)</translation>
+    </message>
+    <message>
+        <source>Correo de la cuenta</source>
+        <translation>Account email</translation>
+    </message>
+    <message>
+        <source>Usuario</source>
+        <translation>Username</translation>
+    </message>
+    <message>
+        <source>Token de acceso</source>
+        <translation>Access token</translation>
+    </message>
+    <message>
+        <source>Token de API</source>
+        <translation>API token</translation>
+    </message>
+    <message>
+        <source>Contraseña</source>
+        <translation>Password</translation>
+    </message>
+    <message>
+        <source>Token personal (PAT)</source>
+        <translation>Personal access token (PAT)</translation>
+    </message>
+    <message>
+        <source>Personal access token</source>
+        <translation>Personal access token</translation>
+    </message>
+    <message>
+        <source>API token de id.atlassian.com</source>
+        <translation>API token from id.atlassian.com</translation>
+    </message>
+    <message>
+        <source>Contraseña de Jira</source>
+        <translation>Jira password</translation>
+    </message>
+    <message>
+        <source>Token personal (Jira 8.14 o superior)</source>
+        <translation>Personal access token (Jira 8.14 or later)</translation>
+    </message>
 </context>
 <context>
     <name>infrastructure</name>
@@ -408,10 +468,6 @@
     <message>
         <source>No se pudo leer %1</source>
         <translation>Could not read %1</translation>
-    </message>
-    <message>
-        <source>Indica la URL y el token de API</source>
-        <translation>Enter the URL and the API token</translation>
     </message>
     <message>
         <source>Captura cancelada</source>
@@ -536,6 +592,42 @@
     <message>
         <source>Atajos pedidos al portal de Wayland (el escritorio puede pedir confirmación)</source>
         <translation>Shortcuts requested from the Wayland portal (the desktop may ask for confirmation)</translation>
+    </message>
+    <message>
+        <source>Indica la URL de Jira</source>
+        <translation>Enter the Jira URL</translation>
+    </message>
+    <message>
+        <source>Indica %1 y %2</source>
+        <translation>Enter %1 and %2</translation>
+    </message>
+    <message>
+        <source>Indica %1</source>
+        <translation>Enter %1</translation>
+    </message>
+    <message>
+        <source>Jira ha bloqueado el acceso tras varios intentos fallidos: entra en %1 desde el navegador, resuelve el CAPTCHA y vuelve a probar.</source>
+        <translation>Jira locked the account after several failed attempts: open %1 in the browser, solve the CAPTCHA and try again.</translation>
+    </message>
+    <message>
+        <source>Usuario o contraseña incorrectos.</source>
+        <translation>Wrong username or password.</translation>
+    </message>
+    <message>
+        <source>Token personal no válido. Jira Server sólo admite tokens desde la versión 8.14; en versiones anteriores usa usuario y contraseña.</source>
+        <translation>Invalid personal access token. Jira Server only supports tokens from version 8.14 on; on earlier versions use a username and password.</translation>
+    </message>
+    <message>
+        <source>Correo o API token incorrectos.</source>
+        <translation>Wrong email or API token.</translation>
+    </message>
+    <message>
+        <source>Sin permisos en Jira para esta operación (%1).</source>
+        <translation>No permission in Jira for this operation (%1).</translation>
+    </message>
+    <message>
+        <source>Indica la clave del proyecto</source>
+        <translation>Enter the project key</translation>
     </message>
 </context>
 <context>
@@ -904,6 +996,22 @@
     <message>
         <source>Adjunta logs, vídeos o imágenes existentes; se suben al gestor con el bug</source>
         <translation>Attach existing logs, videos or images; they are uploaded to the tracker with the bug</translation>
+    </message>
+    <message>
+        <source>Escribe para buscar en %1</source>
+        <translation>Type to search in %1</translation>
+    </message>
+    <message>
+        <source>Las personas se buscan en %1 según escribes; no hace falta cargarlas antes</source>
+        <translation>People are searched in %1 as you type; there is no need to load them first</translation>
+    </message>
+    <message>
+        <source>Personas del proyecto cargadas con «Cargar valores del proyecto»</source>
+        <translation>Project members loaded with “Load project values”</translation>
+    </message>
+    <message>
+        <source>No se pudieron buscar personas · %1</source>
+        <translation>Could not search for people · %1</translation>
     </message>
 </context>
 <context>
@@ -2557,14 +2665,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <translation>URL</translation>
     </message>
     <message>
-        <source>Sólo Jira Cloud · vacío para usar un PAT</source>
-        <translation>Jira Cloud only · leave empty to use a PAT</translation>
-    </message>
-    <message>
-        <source>Correo de la cuenta</source>
-        <translation>Account email</translation>
-    </message>
-    <message>
         <source>Proyecto</source>
         <translation>Project</translation>
     </message>
@@ -2599,22 +2699,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>●  Conectado</source>
         <translation>●  Connected</translation>
-    </message>
-    <message>
-        <source>API token (Cloud) o PAT (Server)</source>
-        <translation>API token (Cloud) or PAT (Server)</translation>
-    </message>
-    <message>
-        <source>Personal access token</source>
-        <translation>Personal access token</translation>
-    </message>
-    <message>
-        <source>🔒 Token guardado en: %1</source>
-        <translation>🔒 Token stored in: %1</translation>
-    </message>
-    <message>
-        <source>⚠ Token guardado %1. Instala un llavero (secret-tool / libsecret en Linux) para cifrarlo.</source>
-        <translation>⚠ Token stored %1. Install a keyring (secret-tool / libsecret on Linux) to encrypt it.</translation>
     </message>
     <message>
         <source>●  Probando…</source>
@@ -2743,6 +2827,26 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>Deshace el último veredicto y vuelve a ese paso</source>
         <translation>Undoes the last verdict and goes back to that step</translation>
+    </message>
+    <message>
+        <source>Jira Cloud usa correo y API token; Jira Server, usuario y contraseña o un token personal (8.14+)</source>
+        <translation>Jira Cloud uses an email and API token; Jira Server, a username and password or a personal access token (8.14+)</translation>
+    </message>
+    <message>
+        <source>Autenticación</source>
+        <translation>Authentication</translation>
+    </message>
+    <message>
+        <source>Usuario</source>
+        <translation>Username</translation>
+    </message>
+    <message>
+        <source>🔒 %1 · se guarda en: %2</source>
+        <translation>🔒 %1 · stored in: %2</translation>
+    </message>
+    <message>
+        <source>⚠ %1 · se guarda %2. Instala un llavero (secret-tool / libsecret en Linux) para cifrar el dato.</source>
+        <translation>⚠ %1 · stored %2. Install a keyring (secret-tool / libsecret on Linux) to encrypt it.</translation>
     </message>
 </context>
 <context>

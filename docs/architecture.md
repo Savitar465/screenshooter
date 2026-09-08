@@ -326,6 +326,27 @@ centraliza peticiones JSON/multipart, mensajes de error y la detección de fallo
 | GitLab (v4)   | `POST /projects/{id}/issues`            | `/uploads` antes, enlazados en Markdown | labels, assignee_ids, issue_type |
 | Azure DevOps  | `POST /{proj}/_apis/wit/workitems/$Tipo` (JSON Patch) | `/_apis/wit/attachments` + relación AttachedFile | Priority (1-4), AssignedTo, Tags, FoundIn |
 
+**Autenticación de Jira.** La API v2 la hablan tanto Jira Cloud como Jira Server / Data Center, pero
+las credenciales cambian, así que `TrackerSettings::jiraAuth` (core) lo dice explícitamente en vez de
+deducirlo del campo de usuario:
+
+| `JiraAuth`    | Cabecera                          | Para                                              | Identidad de las personas |
+|---------------|-----------------------------------|---------------------------------------------------|---------------------------|
+| `CloudToken`  | `Basic base64(correo:API token)`  | Jira Cloud                                        | `accountId`               |
+| `ServerBasic` | `Basic base64(usuario:contraseña)`| Jira Server / Data Center, incluida la **8.5.1**  | `name` (nombre de usuario)|
+| `ServerToken` | `Bearer <PAT>`                    | Jira Server / Data Center 8.14+                   | `name`                    |
+
+`needsUser()` y `usesAccountId()` son las dos preguntas que el resto del código hace al modelo:
+la primera decide si Ajustes pide usuario y si `JiraClient` puede llamar sin él; la segunda, si el
+asignado viaja como `accountId` o como `name` al crear el issue y al leer los asignables del proyecto.
+Los ajustes anteriores se migran al cargar: había correo → `CloudToken`, no había → `ServerToken`.
+
+Jira Server rechaza el login con las cabeceras de Seraph (`X-Seraph-LoginReason`,
+`X-Authentication-Denied-Reason`), que `HttpTrackerClient::Response` expone y `JiraClient::errorFor()`
+traduce a un mensaje accionable: contraseña incorrecta, PAT en una versión que no los admite o el
+**bloqueo por CAPTCHA** que Jira aplica tras varios intentos fallidos y que sólo se levanta entrando
+por el navegador.
+
 **Libro de bugs.** `BugReportService::submit()` crea el issue y guarda un `IssueLink` (clave,
 url, título, caso, gestor, fecha) en `BugStore`; el editor de casos y la pantalla de bugs lo
 muestran con su último estado. «Actualizar estados» recorre los issues del gestor actual con
@@ -339,7 +360,16 @@ error y sigue con el siguiente; un fallo de red detiene la ronda.
 **Metadatos.** `loadMetadata()` cachea por gestor+proyecto y se invalida al cambiar los ajustes.
 Los combos del formulario son editables: funcionan sin cargar nada.
 
-**Secretos.** `SettingsStore` guarda el token en `ISecretStore` bajo `tracker/<gestor>/token`,
+**Asignados.** El campo «Asignado a» no se conforma con los primeros del proyecto:
+`BugReportService::searchAssignees()` pregunta al gestor según se escribe si éste sabe buscar
+(`IIssueTracker::canSearchAssignees()`, cierto sólo en Jira) y, si no, filtra en local los asignables
+que trajo `fetchMetadata()`. `JiraClient` traduce la búsqueda a
+`GET /rest/api/2/user/assignable/search`, con `username` en Server y `query` en Cloud, descarta las
+cuentas desactivadas y devuelve el id que espera cada uno (`name` o `accountId`). La vista espera
+300 ms entre pulsaciones, descarta las respuestas que llegan tarde y conserva lo escrito; si la
+búsqueda falla, se queda con la lista anterior y enseña el error junto a los campos del gestor.
+
+**Secretos.** `SettingsStore` guarda el secreto (API token, contraseña o PAT) en `ISecretStore` bajo `tracker/<gestor>/token`,
 uno por gestor, y nunca lo pasa al repositorio de ajustes. `makeSecretStore()` elige el llavero
 disponible comprobándolo con una escritura de prueba (`secret-tool` en Linux, `security` en
 macOS, DPAPI en Windows) y, si no hay ninguno, cae a QSettings en claro; Ajustes muestra cuál se

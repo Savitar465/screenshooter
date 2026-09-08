@@ -13,7 +13,12 @@ TrackerSettings QSettingsRepository::loadTracker() {
     t.kind = trackerKindFromString(s.value(QStringLiteral("kind"), toString(TrackerKind::Jira)).toString());
     t.url = s.value(QStringLiteral("url"), t.url).toString();
     t.project = s.value(QStringLiteral("project"), t.project).toString();
-    t.email = s.value(QStringLiteral("email"), t.email).toString();
+    // "email" es la clave de versiones anteriores, cuando el campo sólo valía para Jira Cloud.
+    t.user = s.value(QStringLiteral("user"), s.value(QStringLiteral("email"), t.user).toString()).toString();
+    // Sin modo guardado se deduce del ajuste antiguo: con correo era Cloud; sin él, un PAT de Server.
+    t.jiraAuth = s.contains(QStringLiteral("jiraAuth"))
+                     ? jiraAuthFromString(s.value(QStringLiteral("jiraAuth")).toString())
+                     : (t.user.trimmed().isEmpty() ? JiraAuth::ServerToken : JiraAuth::CloudToken);
     t.token = s.value(QStringLiteral("token")).toString();   // sólo heredado: SettingsStore lo migra al llavero
     t.connected = s.value(QStringLiteral("connected"), false).toBool();
     return t;
@@ -25,8 +30,10 @@ void QSettingsRepository::saveTracker(const TrackerSettings& t) {
     s.setValue(QStringLiteral("kind"), toString(t.kind));
     s.setValue(QStringLiteral("url"), t.url);
     s.setValue(QStringLiteral("project"), t.project);
-    s.setValue(QStringLiteral("email"), t.email);
+    s.setValue(QStringLiteral("user"), t.user);
+    s.setValue(QStringLiteral("jiraAuth"), toString(t.jiraAuth));
     s.setValue(QStringLiteral("connected"), t.connected);
+    s.remove(QStringLiteral("email"));   // clave de versiones anteriores, ya migrada a "user"
     if (t.token.isEmpty()) s.remove(QStringLiteral("token"));
     else s.setValue(QStringLiteral("token"), t.token);   // sólo llega aquí sin llavero disponible
     s.endGroup();

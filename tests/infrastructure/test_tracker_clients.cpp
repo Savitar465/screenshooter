@@ -23,7 +23,14 @@ namespace {
 TrackerSettings jiraSettings(const QString& url) {
     TrackerSettings s;
     s.kind = TrackerKind::Jira; s.url = url; s.project = QStringLiteral("SHOP");
-    s.email = QStringLiteral("qa@acme.com"); s.token = QStringLiteral("tok3n"); s.connected = true;
+    s.user = QStringLiteral("qa@acme.com"); s.token = QStringLiteral("tok3n"); s.connected = true;
+    return s;
+}
+/// Jira Server 8.5.1: usuario y contraseña, sin PAT (no existen antes de la 8.14).
+TrackerSettings jiraServerSettings(const QString& url) {
+    TrackerSettings s = jiraSettings(url);
+    s.jiraAuth = JiraAuth::ServerBasic;
+    s.user = QStringLiteral("aperez"); s.token = QStringLiteral("s3creta");
     return s;
 }
 TrackerSettings githubSettings(const QString& url) {
@@ -38,7 +45,7 @@ class TrackerClientsTest : public QObject {
     Q_OBJECT
 private slots:
     // ---- Jira ---------------------------------------------------------------------------------
-    void jiraTestConnectionUsesBasicAuthWithEmail() {
+    void jiraCloudUsesBasicAuthWithEmailAndToken() {
         FakeHttpServer server;
         server.route("GET", "/rest/api/2/myself", [](const HttpRequest&) { return HttpResponse::json(200, "{\"displayName\":\"Ana QA\"}"); });
         JiraClient client;
@@ -52,16 +59,169 @@ private slots:
         QCOMPARE(server.requests[0].header("Authorization"), "Basic " + QByteArray("qa@acme.com:tok3n").toBase64());
     }
 
-    void jiraTestConnectionWithoutEmailUsesBearer() {
+    void jiraServerTokenUsesBearer() {
         FakeHttpServer server;
         server.route("GET", "/rest/api/2/myself", [](const HttpRequest&) { return HttpResponse::json(200, "{\"displayName\":\"PAT\"}"); });
         JiraClient client;
         TrackerSettings s = jiraSettings(server.baseUrl());
-        s.email.clear();
+        s.jiraAuth = JiraAuth::ServerToken;
+        s.user.clear();
         bool done = false;
         client.testConnection(s, [&](const ConnectionResult&) { done = true; });
         QTRY_VERIFY(done);
         QCOMPARE(server.requests[0].header("Authorization"), QByteArray("Bearer tok3n"));
+    }
+
+    // Jira Server / Data Center 8.5.1: Basic auth con usuario y contraseña contra la API v2.
+    void jiraServerBasicUsesUserAndPassword() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/myself", [](const HttpRequest&) { return HttpResponse::json(200, "{\"displayName\":\"Ana Pérez\"}"); });
+        JiraClient client;
+        ConnectionResult out;
+        bool done = false;
+        client.testConnection(jiraServerSettings(server.baseUrl()), [&](const ConnectionResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(out.displayName, QStringLiteral("Ana Pérez"));
+        QCOMPARE(server.requests[0].header("Authorization"), "Basic " + QByteArray("aperez:s3creta").toBase64());
+    }
+
+    void jiraServerBasicRejectsMissingUser() {
+        JiraClient client;
+        TrackerSettings s = jiraServerSettings(QStringLiteral("http://127.0.0.1:1"));
+        s.user.clear();
+        ConnectionResult out;
+        client.testConnection(s, [&](const ConnectionResult& r) { out = r; });   // síncrono: no llega a la red
+        QVERIFY(!out.ok);
+        QVERIFY(!out.error.isEmpty());
+    }
+
+    // Tras varios intentos fallidos Jira Server bloquea al usuario y lo dice en sus cabeceras.
+    void jiraServerCaptchaChallengeIsExplained() {
+        FakeHttpServer server;
+        server.fallback([](const HttpRequest&) {
+            HttpResponse r = HttpResponse::json(401, "{\"errorMessages\":[]}");
+            r.extraHeaders["X-Seraph-LoginReason"] = "AUTHENTICATION_DENIED";
+            r.extraHeaders["X-Authentication-Denied-Reason"] = "CAPTCHA_CHALLENGE; login-url=/login.jsp";
+            return r;
+        });
+        JiraClient client;
+        ConnectionResult out;
+        bool done = false;
+        client.testConnection(jiraServerSettings(server.baseUrl()), [&](const ConnectionResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(out.error.contains(QStringLiteral("CAPTCHA")));
+        QVERIFY(out.error.contains(server.baseUrl()));
+    }
+
+    void jiraServerWrongPasswordIsExplained() {
+        FakeHttpServer server;
+        server.fallback([](const HttpRequest&) { return HttpResponse::json(401, "{\"errorMessages\":[]}"); });
+        JiraClient client;
+        ConnectionResult out;
+        bool done = false;
+        client.testConnection(jiraServerSettings(server.baseUrl()), [&](const ConnectionResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(out.error.contains(QStringLiteral("contraseña"), Qt::CaseInsensitive));
+    }
+
+    // En Server el asignado va por nombre de usuario; el accountId es exclusivo de Cloud.
+    void jiraServerAssignsIssueByUsername() {
+        FakeHttpServer server;
+        server.route("POST", "/rest/api/2/issue", [](const HttpRequest&) { return HttpResponse::json(201, "{\"key\":\"SHOP-9\"}"); });
+        BugReport bug;
+        bug.title = QStringLiteral("Fallo al pagar");
+        bug.assigneeId = QStringLiteral("aperez");
+        JiraClient client;
+        IssueResult out;
+        bool done = false;
+        client.createIssue(jiraServerSettings(server.baseUrl()), bug, [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        const QJsonObject assignee = bodyOf(server.requests[0])[QStringLiteral("fields")].toObject()[QStringLiteral("assignee")].toObject();
+        QCOMPARE(assignee[QStringLiteral("name")].toString(), QStringLiteral("aperez"));
+        QVERIFY(!assignee.contains(QStringLiteral("accountId")));
+    }
+
+    // El campo "Asignado a" pregunta a Jira: en Server el parámetro es `username`; en Cloud, `query`.
+    void jiraServerSearchesAssigneesByUsernameParam() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/user/assignable/search", [](const HttpRequest&) {
+            return HttpResponse::json(200, "[{\"name\":\"aperez\",\"displayName\":\"Ana Pérez\",\"active\":true},"
+                                           "{\"name\":\"jbaja\",\"displayName\":\"Juan Baja\",\"active\":false}]");
+        });
+        JiraClient client;
+        AssigneeSearch out;
+        bool done = false;
+        client.searchAssignees(jiraServerSettings(server.baseUrl()), QStringLiteral("ana p"), [&](const AssigneeSearch& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(out.assignees.size(), 1);                       // la cuenta desactivada no se puede asignar
+        QCOMPARE(out.assignees[0].id, QStringLiteral("aperez"));
+        QCOMPARE(out.assignees[0].name, QStringLiteral("Ana Pérez"));
+        const QByteArray path = server.requests[0].path;
+        QVERIFY(path.contains("project=SHOP"));
+        QVERIFY(path.contains("username=ana%20p"));
+        QVERIFY(!path.contains("query="));
+    }
+
+    void jiraCloudSearchesAssigneesByQueryParam() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/user/assignable/search", [](const HttpRequest&) {
+            return HttpResponse::json(200, "[{\"accountId\":\"5b10a\",\"displayName\":\"Ana Pérez\"}]");
+        });
+        JiraClient client;
+        AssigneeSearch out;
+        bool done = false;
+        client.searchAssignees(jiraSettings(server.baseUrl()), QStringLiteral("ana"), [&](const AssigneeSearch& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(out.assignees[0].id, QStringLiteral("5b10a"));
+        QVERIFY(server.requests[0].path.contains("query=ana"));
+        QVERIFY(!server.requests[0].path.contains("username="));
+    }
+
+    void jiraSearchWithoutTextAsksForTheFirstOnesOfTheProject() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/user/assignable/search", [](const HttpRequest&) { return HttpResponse::json(200, "[]"); });
+        JiraClient client;
+        bool done = false;
+        client.searchAssignees(jiraServerSettings(server.baseUrl()), QString(), [&](const AssigneeSearch&) { done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!server.requests[0].path.contains("username="));
+        QVERIFY(server.requests[0].path.contains("maxResults="));
+    }
+
+    void jiraSearchReportsTheServerError() {
+        FakeHttpServer server;
+        server.fallback([](const HttpRequest&) { return HttpResponse::json(401, "{\"errorMessages\":[]}"); });
+        JiraClient client;
+        AssigneeSearch out;
+        bool done = false;
+        client.searchAssignees(jiraServerSettings(server.baseUrl()), QStringLiteral("ana"), [&](const AssigneeSearch& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(out.error.contains(QStringLiteral("contraseña"), Qt::CaseInsensitive));
+    }
+
+    void jiraServerMetadataIdentifiesAssigneesByUsername() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/project/SHOP", [](const HttpRequest&) { return HttpResponse::json(200, "{\"issueTypes\":[],\"components\":[],\"versions\":[]}"); });
+        server.route("GET", "/rest/api/2/priority", [](const HttpRequest&) { return HttpResponse::json(200, "[]"); });
+        server.route("GET", "/rest/api/2/user/assignable/search", [](const HttpRequest&) {
+            return HttpResponse::json(200, "[{\"name\":\"aperez\",\"key\":\"aperez\",\"displayName\":\"Ana Pérez\"}]");
+        });
+        JiraClient client;
+        MetadataResult out;
+        bool done = false;
+        client.fetchMetadata(jiraServerSettings(server.baseUrl()), [&](const MetadataResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(out.metadata.assignees.size(), 1);
+        QCOMPARE(out.metadata.assignees[0].id, QStringLiteral("aperez"));
+        QCOMPARE(out.metadata.assignees[0].name, QStringLiteral("Ana Pérez"));
     }
 
     void jiraTestConnectionRejectsMissingToken() {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/models/BugReport.h"
+#include "core/services/IIssueTracker.h"
 
 #include <QWidget>
 
@@ -10,6 +11,7 @@ class QComboBox;
 class QLayout;
 class QVBoxLayout;
 class QPushButton;
+class QTimer;
 
 namespace qaflow {
 
@@ -46,6 +48,10 @@ private:
     void refreshIssues();
     void refreshPending();
     void loadMetadata(bool force);
+    /// Pide al gestor las personas que encajan con lo escrito en "Asignado a".
+    void searchAssignees();
+    /// Sustituye las opciones del combo sin tocar lo que se está escribiendo.
+    void setAssigneeOptions(const QList<Assignee>& people);
     void submit();
     void retryPending();
     void refreshStatuses();
@@ -68,6 +74,8 @@ private:
     QComboBox* m_issueType;
     QComboBox* m_priority;
     QComboBox* m_assignee;
+    QTimer* m_assigneeSearch;      // retardo entre pulsaciones para no llamar al gestor en cada letra
+    int m_assigneeSeq = 0;         // descarta respuestas que llegan tarde, ya con otro texto escrito
     QLineEdit* m_components;
     QLineEdit* m_versions;
     QLineEdit* m_labels;

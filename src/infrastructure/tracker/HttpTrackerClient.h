@@ -2,6 +2,7 @@
 
 #include "core/services/IIssueTracker.h"
 
+#include <QHash>
 #include <QJsonDocument>
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
@@ -28,6 +29,9 @@ protected:
         QByteArray body;
         QString error;           // mensaje legible
         bool retryable = false;  // fallo de red o 5xx
+        QHash<QByteArray, QByteArray> headers;   // cabeceras de la respuesta, con la clave en minúsculas
+
+        QByteArray header(const char* name) const { return headers.value(QByteArray(name).toLower()); }
     };
     using Handler = std::function<void(const Response&)>;
 

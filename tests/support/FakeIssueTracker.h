@@ -21,6 +21,9 @@ public:
     bool resolvedToReturn = true;
     ProjectMetadata metadataToReturn;
     int metadataCalls = 0;
+    bool searchesAssignees = false;         // como Jira, que busca personas en el servidor
+    QList<Assignee> assigneesToReturn;
+    QStringList assigneeQueries;            // lo que se buscó, en orden
 
     void testConnection(const TrackerSettings& s, std::function<void(const ConnectionResult&)> done) override {
         settingsSeen << s;
@@ -61,6 +64,14 @@ public:
         ++metadataCalls;
         if (mode == Mode::NetworkDown) done(MetadataResult{false, {}, QStringLiteral("Host not found")});
         else done(MetadataResult{true, metadataToReturn, {}});
+    }
+
+    bool canSearchAssignees(const TrackerSettings&) const override { return searchesAssignees; }
+
+    void searchAssignees(const TrackerSettings&, const QString& query, std::function<void(const AssigneeSearch&)> done) override {
+        assigneeQueries << query;
+        if (mode == Mode::NetworkDown) done(AssigneeSearch{false, {}, QStringLiteral("Host not found")});
+        else done(AssigneeSearch{true, assigneesToReturn, {}});
     }
 };
 

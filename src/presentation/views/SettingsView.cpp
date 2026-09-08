@@ -55,9 +55,21 @@ QFrame* section(const QString& accent, const QString& title, const QString& subt
     return card;
 }
 
-QString hintFor(TrackerKind k) {
-    switch (k) {
-        case TrackerKind::Jira: return QCoreApplication::translate("SettingsView", "Los bugs se crean como issues del tipo elegido en el proyecto indicado. Con correo → Jira Cloud (API token); sin correo → PAT de Jira Server/Data Center.");
+QString jiraHint(JiraAuth a) {
+    switch (a) {
+        case JiraAuth::CloudToken:
+            return QCoreApplication::translate("SettingsView", "Los bugs se crean como issues del tipo elegido en el proyecto indicado. Jira Cloud: URL <b>https://empresa.atlassian.net</b>, el correo de la cuenta y un <i>API token</i> creado en id.atlassian.com.");
+        case JiraAuth::ServerBasic:
+            return QCoreApplication::translate("SettingsView", "Los bugs se crean como issues del tipo elegido en el proyecto indicado. Jira Server / Data Center con usuario y contraseña (Basic auth sobre la API v2): es la forma de conectar con Jira 8.13 y anteriores (por ejemplo <b>8.5.1</b>), que todavía no tienen tokens personales. La URL lleva el context path si lo hay: <b>https://jira.empresa.com</b> o <b>https://empresa.com/jira</b>. Tras varios intentos fallidos Jira exige resolver un CAPTCHA en el navegador antes de volver a aceptar la API.");
+        case JiraAuth::ServerToken:
+            return QCoreApplication::translate("SettingsView", "Los bugs se crean como issues del tipo elegido en el proyecto indicado. Jira Server / Data Center con un <i>token personal</i> (Perfil → Personal Access Tokens), disponible desde la versión 8.14.");
+    }
+    return {};
+}
+
+QString hintFor(const TrackerSettings& t) {
+    switch (t.kind) {
+        case TrackerKind::Jira: return jiraHint(t.jiraAuth);
         case TrackerKind::GitHub: return QCoreApplication::translate("SettingsView", "Los bugs se crean como issues del repositorio. URL de la API: <b>https://api.github.com</b> (o https://host/api/v3 en Enterprise). Token: PAT con permiso <i>issues</i>. La API no admite adjuntos.");
         case TrackerKind::GitLab: return QCoreApplication::translate("SettingsView", "Los bugs se crean como issues del proyecto y las capturas se suben como adjuntos. Token: PAT con ámbito <i>api</i>.");
         case TrackerKind::AzureDevOps: return QCoreApplication::translate("SettingsView", "Los bugs se crean como work items del tipo elegido. URL: <b>https://dev.azure.com/organización</b>. Token: PAT con permiso <i>Work Items (read &amp; write)</i>.");
@@ -170,18 +182,45 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     pg->setHorizontalSpacing(12);
     m_project = new QLineEdit;
     m_project->setProperty("role", QStringLiteral("mono"));
-    m_email = new QLineEdit;
-    m_email->setPlaceholderText(tr("Sólo Jira Cloud · vacío para usar un PAT"));
-    m_emailField = field(tr("Correo de la cuenta"), m_email);
+    m_jiraAuth = new QComboBox;
+    for (auto a : {JiraAuth::CloudToken, JiraAuth::ServerBasic, JiraAuth::ServerToken}) m_jiraAuth->addItem(label(a), static_cast<int>(a));
+    m_jiraAuth->setToolTip(tr("Jira Cloud usa correo y API token; Jira Server, usuario y contraseña o un token personal (8.14+)"));
+    m_authField = field(tr("Autenticación"), m_jiraAuth);
+    connect(m_jiraAuth, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (m_selfEdit) return;
+        const auto auth = static_cast<JiraAuth>(m_jiraAuth->currentData().toInt());
+        m_selfEdit = true;
+        m_settings.updateTracker([&](TrackerSettings& s) {
+            // La URL de ejemplo cambia entre Cloud y Server: si no la habían tocado, se ajusta sola.
+            const TrackerSettings prev = s;
+            s.jiraAuth = auth;
+            if (s.url.trimmed().isEmpty() || s.url == prev.defaultUrl()) s.url = s.defaultUrl();
+            s.connected = false;
+        });
+        m_selfEdit = false;
+        refreshTracker();
+    });
     pg->addWidget(field(tr("Proyecto"), m_project, &m_projectLabel), 0, 0);
-    pg->addWidget(m_emailField, 0, 1);
+    pg->addWidget(m_authField, 0, 1);
     pg->setColumnStretch(0, 1);
     pg->setColumnStretch(1, 1);
+    m_projectGrid = pg;
     tb->addWidget(prow);
 
+    auto* credrow = new QWidget;
+    auto* cgrid = new QGridLayout(credrow);
+    cgrid->setContentsMargins(0, 0, 0, 0);
+    cgrid->setHorizontalSpacing(12);
+    m_user = new QLineEdit;
+    m_userField = field(tr("Usuario"), m_user, &m_userLabel);
     m_token = new QLineEdit;
     m_token->setEchoMode(QLineEdit::Password);
-    tb->addWidget(field(tr("Token de API"), m_token));
+    cgrid->addWidget(m_userField, 0, 0);
+    cgrid->addWidget(field(tr("Token de API"), m_token, &m_tokenLabel), 0, 1);
+    cgrid->setColumnStretch(0, 1);
+    cgrid->setColumnStretch(1, 1);
+    m_credGrid = cgrid;
+    tb->addWidget(credrow);
     m_secretNote = ui::label(QString(), "muted-sm");
     m_secretNote->setWordWrap(true);
     tb->addWidget(m_secretNote);
@@ -198,7 +237,7 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     };
     bind(m_url, [](TrackerSettings& s, const QString& t) { s.url = t; });
     bind(m_project, [](TrackerSettings& s, const QString& t) { s.project = t; });
-    bind(m_email, [](TrackerSettings& s, const QString& t) { s.email = t; });
+    bind(m_user, [](TrackerSettings& s, const QString& t) { s.user = t; });
     bind(m_token, [](TrackerSettings& s, const QString& t) { s.token = t; });
 
     // Capturas
@@ -387,22 +426,32 @@ void SettingsView::refreshTracker() {
     const TrackerSettings& t = m_settings.tracker();
     ui::setFlag(m_badge, "active", t.connected);
     m_badge->setText(t.connected ? tr("●  Conectado") : tr("●  Desconectado"));
-    m_kindHint->setText(hintFor(t.kind));
+    m_kindHint->setText(hintFor(t));
     m_projectLabel->setText(t.projectLabel().toUpper());
     m_project->setPlaceholderText(t.projectPlaceholder());
     m_url->setPlaceholderText(t.defaultUrl());
-    m_emailField->setVisible(t.kind == TrackerKind::Jira);
-    m_token->setPlaceholderText(t.kind == TrackerKind::Jira ? tr("API token (Cloud) o PAT (Server)") : tr("Personal access token"));
+    // La autenticación sólo se elige en Jira; el usuario, sólo cuando ese modo lo pide. Las columnas
+    // que quedan sin campo pierden su peso para que el de al lado ocupe la fila entera.
+    const bool jira = t.kind == TrackerKind::Jira;
+    m_authField->setVisible(jira);
+    m_projectGrid->setColumnStretch(1, jira ? 1 : 0);
+    m_userField->setVisible(t.needsUser());
+    m_credGrid->setColumnStretch(0, t.needsUser() ? 1 : 0);
+    m_userLabel->setText(t.userLabel().toUpper());
+    m_user->setPlaceholderText(t.userPlaceholder());
+    m_tokenLabel->setText(t.secretLabel().toUpper());
+    m_token->setPlaceholderText(t.secretPlaceholder());
     const bool secure = m_settings.secretsAreSecure();
-    m_secretNote->setText(secure ? tr("🔒 Token guardado en: %1").arg(m_settings.secretBackend())
-                                 : tr("⚠ Token guardado %1. Instala un llavero (secret-tool / libsecret en Linux) para cifrarlo.").arg(m_settings.secretBackend()));
+    m_secretNote->setText(secure ? tr("🔒 %1 · se guarda en: %2").arg(t.secretLabel(), m_settings.secretBackend())
+                                 : tr("⚠ %1 · se guarda %2. Instala un llavero (secret-tool / libsecret en Linux) para cifrar el dato.").arg(t.secretLabel(), m_settings.secretBackend()));
     m_secretNote->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;").arg(secure ? theme::Muted : theme::AmberSoft));
     if (m_selfEdit) return;
     m_selfEdit = true;
     m_kind->setCurrentText(toString(t.kind));
     m_url->setText(t.url);
     m_project->setText(t.project);
-    m_email->setText(t.email);
+    m_jiraAuth->setCurrentIndex(std::max(0, m_jiraAuth->findData(static_cast<int>(t.jiraAuth))));
+    m_user->setText(t.user);
     m_token->setText(t.token);
     m_selfEdit = false;
 }

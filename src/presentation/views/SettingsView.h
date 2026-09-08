@@ -4,6 +4,7 @@
 
 class QLineEdit;
 class QComboBox;
+class QGridLayout;
 class QPushButton;
 class QLabel;
 class QCheckBox;
@@ -50,8 +51,14 @@ private:
     QLineEdit* m_url;
     QLabel* m_projectLabel;
     QLineEdit* m_project;
-    QWidget* m_emailField;
-    QLineEdit* m_email;
+    QWidget* m_authField;
+    QComboBox* m_jiraAuth;
+    QGridLayout* m_projectGrid;
+    QWidget* m_userField;
+    QLabel* m_userLabel;
+    QLineEdit* m_user;
+    QGridLayout* m_credGrid;
+    QLabel* m_tokenLabel;
     QLineEdit* m_token;
     QLabel* m_secretNote;
     QLineEdit* m_shortcut;

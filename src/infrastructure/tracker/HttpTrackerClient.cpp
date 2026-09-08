@@ -71,6 +71,7 @@ void HttpTrackerClient::finish(QNetworkReply* reply, Handler done) {
         r.status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         r.body = reply->readAll();
         r.json = QJsonDocument::fromJson(r.body);
+        for (const auto& [name, value] : reply->rawHeaderPairs()) r.headers.insert(name.toLower(), value);
         r.ok = reply->error() == QNetworkReply::NoError;
         if (!r.ok) {
             r.retryable = isNetworkFailure(reply->error()) || r.status >= 500;

@@ -10,17 +10,32 @@ enum class TrackerKind { Jira, GitHub, GitLab, AzureDevOps };
 QString toString(TrackerKind k);
 TrackerKind trackerKindFromString(const QString& s);
 
+/// Cómo se autentica QAflow contra Jira (los demás gestores usan siempre un token):
+///  - CloudToken:  Basic con el correo de la cuenta y un API token   → Jira Cloud.
+///  - ServerBasic: Basic con usuario y contraseña                    → Jira Server / Data Center; la única
+///                 opción en las versiones anteriores a la 8.14 (por ejemplo 8.5.1), que no tienen PAT.
+///  - ServerToken: Bearer con un token personal (PAT)                → Jira Server / Data Center 8.14+.
+enum class JiraAuth { CloudToken, ServerBasic, ServerToken };
+
+/// Valor canónico (se persiste en los ajustes). No traducir.
+QString toString(JiraAuth a);
+JiraAuth jiraAuthFromString(const QString& s);
+/// Texto para mostrar en el idioma de la interfaz.
+QString label(JiraAuth a);
+
 /// Conexión con el gestor de incidencias.
-///  - Jira:         url de la instancia, `project` = clave (SHOP), `email` sólo en Cloud, `token` = API token o PAT.
+///  - Jira:         url de la instancia (con su context path si lo tiene), `project` = clave (SHOP),
+///                  `user` y `token` según `jiraAuth`.
 ///  - GitHub:       url = https://api.github.com (o la de GitHub Enterprise), `project` = owner/repo, `token` = PAT.
 ///  - GitLab:       url = https://gitlab.com (o la propia), `project` = grupo/proyecto o id numérico, `token` = PAT.
 ///  - Azure DevOps: url = https://dev.azure.com/organizacion, `project` = nombre del proyecto, `token` = PAT.
 struct TrackerSettings {
     TrackerKind kind = TrackerKind::Jira;
+    JiraAuth jiraAuth = JiraAuth::CloudToken;   // sólo Jira
     QString url = QStringLiteral("https://acme.atlassian.net");
     QString project = QStringLiteral("SHOP");
-    QString email;      // sólo Jira Cloud (Basic auth email:token)
-    QString token;      // nunca se persiste en claro: va al llavero del sistema
+    QString user;       // correo de la cuenta (Jira Cloud) o usuario (Jira Server); vacío en los demás gestores
+    QString token;      // API token, contraseña o PAT: nunca se persiste en claro, va al llavero del sistema
     bool connected = false;
 
     QString baseUrl() const;                    // url sin barra final
@@ -29,6 +44,16 @@ struct TrackerSettings {
     QString projectLabel() const;
     QString projectPlaceholder() const;
     QString defaultUrl() const;
+
+    /// El gestor pide un usuario además del secreto (Jira salvo con PAT).
+    bool needsUser() const;
+    /// Las personas se identifican por `accountId` (sólo Jira Cloud) y no por su nombre de usuario.
+    bool usesAccountId() const;
+    /// Etiquetas y ejemplos de los dos campos de credenciales, que cambian con el gestor y el modo de autenticación.
+    QString userLabel() const;
+    QString userPlaceholder() const;
+    QString secretLabel() const;
+    QString secretPlaceholder() const;
 };
 
 enum class CaptureMode { FullScreen, ActiveWindow, Region };

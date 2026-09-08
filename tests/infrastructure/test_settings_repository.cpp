@@ -41,7 +41,7 @@ private slots:
         QSettingsRepository repo;
         TrackerSettings t;
         t.kind = TrackerKind::GitLab; t.url = QStringLiteral("https://gitlab.com"); t.project = QStringLiteral("acme/shop");
-        t.email = QStringLiteral("x@y"); t.connected = true;
+        t.user = QStringLiteral("x@y"); t.connected = true;
         repo.saveTracker(t);   // sin token: no aparece en el fichero
         QVERIFY(!QSettings().contains(QStringLiteral("tracker/token")));
         const TrackerSettings loaded = repo.loadTracker();
@@ -76,6 +76,40 @@ private slots:
         repo.saveTracker(t);
         QVERIFY(!QSettings().contains(QStringLiteral("jira/token")));
         QCOMPARE(repo.loadTracker().url, QStringLiteral("https://old.atlassian.net"));   // ahora desde "tracker"
+    }
+
+    void jiraAuthRoundTripsAndMigratesTheOldEmailKey() {
+        {
+            QSettings s;   // ajustes de una versión anterior: sólo existía "email", que implicaba Jira Cloud
+            s.setValue(QStringLiteral("tracker/url"), QStringLiteral("https://acme.atlassian.net"));
+            s.setValue(QStringLiteral("tracker/email"), QStringLiteral("qa@acme.com"));
+        }
+        QSettingsRepository repo;
+        TrackerSettings t = repo.loadTracker();
+        QCOMPARE(t.user, QStringLiteral("qa@acme.com"));
+        QCOMPARE(static_cast<int>(t.jiraAuth), static_cast<int>(JiraAuth::CloudToken));
+
+        // Al pasar a Jira Server con usuario y contraseña, el modo se guarda y la clave antigua desaparece.
+        t.jiraAuth = JiraAuth::ServerBasic;
+        t.url = QStringLiteral("https://jira.acme.com");
+        t.user = QStringLiteral("aperez");
+        repo.saveTracker(t);
+        QVERIFY(!QSettings().contains(QStringLiteral("tracker/email")));
+        const TrackerSettings loaded = repo.loadTracker();
+        QCOMPARE(static_cast<int>(loaded.jiraAuth), static_cast<int>(JiraAuth::ServerBasic));
+        QCOMPARE(loaded.user, QStringLiteral("aperez"));
+        QVERIFY(loaded.needsUser());
+        QVERIFY(!loaded.usesAccountId());
+    }
+
+    void trackerWithoutUserOrModeIsReadAsAServerToken() {
+        {
+            QSettings s;   // versión anterior sin correo: el token era un PAT de Jira Server
+            s.setValue(QStringLiteral("tracker/url"), QStringLiteral("https://jira.acme.com"));
+        }
+        const TrackerSettings t = QSettingsRepository().loadTracker();
+        QCOMPARE(static_cast<int>(t.jiraAuth), static_cast<int>(JiraAuth::ServerToken));
+        QVERIFY(!t.needsUser());
     }
 
     void captureAndAppSettingsRoundTrip() {

@@ -26,8 +26,10 @@ struct HttpResponse {
     int status = 200;
     QByteArray body;
     QByteArray contentType = "application/json";
+    /// Cabeceras adicionales (las de Seraph en Jira Server, por ejemplo).
+    QHash<QByteArray, QByteArray> extraHeaders;
 
-    static HttpResponse json(int status, const QByteArray& body) { return HttpResponse{status, body, "application/json"}; }
+    static HttpResponse json(int status, const QByteArray& body) { return HttpResponse{status, body, "application/json", {}}; }
 };
 
 class FakeHttpServer : public QObject {
@@ -73,7 +75,9 @@ private:
                 requests.append(req);
                 const HttpResponse res = dispatch(req);
                 QByteArray out = "HTTP/1.1 " + QByteArray::number(res.status) + " " + (res.status < 400 ? "OK" : "Error") + "\r\n";
-                out += "Content-Type: " + res.contentType + "\r\nContent-Length: " + QByteArray::number(res.body.size()) + "\r\nConnection: close\r\n\r\n";
+                out += "Content-Type: " + res.contentType + "\r\nContent-Length: " + QByteArray::number(res.body.size()) + "\r\nConnection: close\r\n";
+                for (auto it = res.extraHeaders.cbegin(); it != res.extraHeaders.cend(); ++it) out += it.key() + ": " + it.value() + "\r\n";
+                out += "\r\n";
                 out += res.body;
                 sock->write(out);
                 sock->flush();

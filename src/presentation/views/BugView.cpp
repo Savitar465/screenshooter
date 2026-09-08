@@ -13,11 +13,13 @@
 #include "presentation/widgets/Ui.h"
 
 #include <QComboBox>
+#include <QCompleter>
 #include <QGridLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QTimer>
 
 namespace qaflow {
 
@@ -143,6 +145,19 @@ void BugView::buildForm(QVBoxLayout* v) {
     m_issueType = editableCombo(QStringLiteral("Bug"));
     m_priority = editableCombo(tr("Por defecto"));
     m_assignee = editableCombo(tr("Sin asignar"));
+    m_assignee->setObjectName(QStringLiteral("bugAssignee"));
+    // Las opciones ya vienen filtradas por el gestor, así que el completador las muestra todas:
+    // buscar "aperez" puede devolver a "Ana Pérez", cuyo nombre no contiene lo escrito.
+    if (QCompleter* completer = m_assignee->completer()) {
+        completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
+        completer->setCaseSensitivity(Qt::CaseInsensitive);
+    }
+    m_assigneeSearch = new QTimer(this);
+    m_assigneeSearch->setSingleShot(true);
+    m_assigneeSearch->setInterval(300);
+    connect(m_assigneeSearch, &QTimer::timeout, this, &BugView::searchAssignees);
+    // `textEdited` (y no `editTextChanged`) para no buscar cuando el formulario se rellena solo.
+    connect(m_assignee->lineEdit(), &QLineEdit::textEdited, this, [this]() { m_assigneeSearch->start(); });
     m_components = new QLineEdit;
     m_components->setPlaceholderText(tr("Separados por comas"));
     m_versions = new QLineEdit;
@@ -262,13 +277,11 @@ void BugView::refreshTrackerFields() {
     const ProjectMetadata& m = m_bugs.metadata();
     fill(m_issueType, m.issueTypes);
     fill(m_priority, m.priorities);
-    // El combo de asignados guarda el id en itemData y muestra el nombre.
-    const QString curAssignee = m_assignee->currentText();
-    m_assignee->blockSignals(true);
-    m_assignee->clear();
-    for (const auto& a : m.assignees) m_assignee->addItem(a.name, a.id);
-    m_assignee->setCurrentText(curAssignee);
-    m_assignee->blockSignals(false);
+    setAssigneeOptions(m.assignees);
+    const bool searches = m_bugs.searchesAssigneesOnServer();
+    m_assignee->lineEdit()->setPlaceholderText(searches ? tr("Escribe para buscar en %1").arg(toString(t.kind)) : tr("Sin asignar"));
+    m_assignee->setToolTip(searches ? tr("Las personas se buscan en %1 según escribes; no hace falta cargarlas antes").arg(toString(t.kind))
+                                    : tr("Personas del proyecto cargadas con «Cargar valores del proyecto»"));
     if (m_issueType->currentText().isEmpty()) m_issueType->setCurrentText(t.kind == TrackerKind::GitLab ? QStringLiteral("issue") : t.kind == TrackerKind::GitHub ? QStringLiteral("Issue") : QStringLiteral("Bug"));
     m_issueType->setEnabled(t.kind != TrackerKind::GitHub);
     m_metaNote->setText(m_bugs.hasMetadata()
@@ -393,6 +406,29 @@ void BugView::loadMetadata(bool force) {
     });
 }
 
+void BugView::setAssigneeOptions(const QList<Assignee>& people) {
+    // El combo guarda el id en itemData y muestra el nombre; se conserva lo escrito y el cursor.
+    QLineEdit* edit = m_assignee->lineEdit();
+    const QString typed = edit->text();
+    const int cursor = edit->cursorPosition();
+    m_assignee->blockSignals(true);
+    m_assignee->clear();
+    for (const auto& a : people) m_assignee->addItem(a.name, a.id);
+    edit->setText(typed);
+    edit->setCursorPosition(cursor);
+    m_assignee->blockSignals(false);
+}
+
+void BugView::searchAssignees() {
+    const int seq = ++m_assigneeSeq;
+    m_bugs.searchAssignees(m_assignee->lineEdit()->text(), [this, seq](const AssigneeSearch& r) {
+        if (seq != m_assigneeSeq) return;   // ya se ha escrito otra cosa: esta respuesta no vale
+        setAssigneeOptions(r.assignees);
+        if (!r.ok) { m_metaNote->setText(tr("No se pudieron buscar personas · %1").arg(r.error)); return; }
+        if (m_assignee->lineEdit()->hasFocus() && m_assignee->completer()) m_assignee->completer()->complete();
+    });
+}
+
 BugReport BugView::collect() const {
     BugReport b;
     b.title = m_title->text();
@@ -405,9 +441,11 @@ BugReport BugView::collect() const {
     b.actual = m_actual->toPlainText();
     b.issueType = m_issueType->currentText().trimmed();
     b.priority = m_priority->currentText().trimmed();
-    const int ai = m_assignee->currentIndex();
     b.assigneeName = m_assignee->currentText().trimmed();
-    b.assigneeId = ai >= 0 && m_assignee->itemText(ai) == b.assigneeName ? m_assignee->itemData(ai).toString() : b.assigneeName;
+    // El id (usuario en Jira Server, accountId en Cloud) sale de la persona elegida; si el texto no
+    // corresponde a ninguna, se envía tal cual y que lo valide el gestor.
+    const int ai = m_assignee->findText(b.assigneeName, Qt::MatchFixedString);
+    b.assigneeId = ai >= 0 ? m_assignee->itemData(ai).toString() : b.assigneeName;
     b.components = parseTags(m_components->text());
     b.affectsVersions = parseTags(m_versions->text());
     b.labels = parseTags(m_labels->text());

@@ -9,20 +9,94 @@ namespace qaflow {
 
 QNetworkRequest JiraClient::request(const TrackerSettings& s, const QString& path) const {
     QNetworkRequest req = jsonRequest(s.baseUrl() + path);
-    if (!s.email.trimmed().isEmpty())
-        req.setRawHeader("Authorization", "Basic " + (s.email.trimmed() + QLatin1Char(':') + s.token).toUtf8().toBase64());
-    else
+    if (s.jiraAuth == JiraAuth::ServerToken)
         req.setRawHeader("Authorization", "Bearer " + s.token.toUtf8());
+    else   // correo + API token (Cloud) o usuario + contraseña (Server): el mismo Basic auth
+        req.setRawHeader("Authorization", "Basic " + (s.user.trimmed() + QLatin1Char(':') + s.token).toUtf8().toBase64());
     return req;
 }
 
-void JiraClient::testConnection(const TrackerSettings& s, std::function<void(const ConnectionResult&)> done) {
-    if (s.url.trimmed().isEmpty() || s.token.trimmed().isEmpty()) {
-        done(ConnectionResult{false, {}, QCoreApplication::translate("infrastructure", "Indica la URL y el token de API")});
+QString JiraClient::missingCredentials(const TrackerSettings& s) {
+    if (s.url.trimmed().isEmpty())
+        return QCoreApplication::translate("infrastructure", "Indica la URL de Jira");
+    if (s.needsUser() && s.user.trimmed().isEmpty())
+        return QCoreApplication::translate("infrastructure", "Indica %1 y %2").arg(s.userLabel().toLower(), s.secretLabel().toLower());
+    if (s.token.trimmed().isEmpty())
+        return QCoreApplication::translate("infrastructure", "Indica %1").arg(s.secretLabel().toLower());
+    return {};
+}
+
+QString JiraClient::errorFor(const TrackerSettings& s, const Response& r) {
+    if (r.status != 401 && r.status != 403) return r.error;
+    // Jira Server (Seraph) explica en cabeceras por qué rechaza el login: tras varios intentos fallidos
+    // bloquea al usuario y exige resolver un CAPTCHA en el navegador antes de volver a aceptar la API.
+    const QByteArray denied = r.header("X-Authentication-Denied-Reason");
+    const QByteArray reason = r.header("X-Seraph-LoginReason");
+    if (denied.contains("CAPTCHA") || reason.contains("AUTHENTICATION_DENIED"))
+        return QCoreApplication::translate("infrastructure",
+                                           "Jira ha bloqueado el acceso tras varios intentos fallidos: entra en %1 desde el navegador, "
+                                           "resuelve el CAPTCHA y vuelve a probar.").arg(s.baseUrl());
+    if (r.status == 401) {
+        switch (s.jiraAuth) {
+            case JiraAuth::ServerBasic:
+                return QCoreApplication::translate("infrastructure", "Usuario o contraseña incorrectos.");
+            case JiraAuth::ServerToken:
+                return QCoreApplication::translate("infrastructure",
+                                                   "Token personal no válido. Jira Server sólo admite tokens desde la versión 8.14; "
+                                                   "en versiones anteriores usa usuario y contraseña.");
+            case JiraAuth::CloudToken:
+                return QCoreApplication::translate("infrastructure", "Correo o API token incorrectos.");
+        }
+    }
+    return QCoreApplication::translate("infrastructure", "Sin permisos en Jira para esta operación (%1).").arg(r.error);
+}
+
+QString JiraClient::assignableSearchPath(const TrackerSettings& s, const QString& query, int maxResults) {
+    QString path = QStringLiteral("/rest/api/2/user/assignable/search?project=%1&maxResults=%2")
+                       .arg(s.project.trimmed()).arg(maxResults);
+    // Jira Cloud sustituyó `username` por `query`; Jira Server / Data Center sigue con `username`.
+    const QString text = query.trimmed();
+    if (!text.isEmpty())
+        path += (s.usesAccountId() ? QStringLiteral("&query=") : QStringLiteral("&username="))
+                + QString::fromUtf8(QUrl::toPercentEncoding(text));
+    return path;
+}
+
+QList<Assignee> JiraClient::assigneesFrom(const QJsonArray& users, bool accountIds) {
+    QList<Assignee> out;
+    for (const auto& v : users) {
+        const QJsonObject u = v.toObject();
+        // Jira Server permite desactivar cuentas sin borrarlas: no se puede asignar a ellas.
+        if (u.contains(QStringLiteral("active")) && !u[QStringLiteral("active")].toBool()) continue;
+        Assignee a;
+        a.id = accountIds ? u[QStringLiteral("accountId")].toString() : u[QStringLiteral("name")].toString();
+        a.name = u[QStringLiteral("displayName")].toString();
+        if (a.name.isEmpty()) a.name = a.id;
+        if (!a.id.isEmpty()) out.append(a);
+    }
+    return out;
+}
+
+void JiraClient::searchAssignees(const TrackerSettings& s, const QString& query, std::function<void(const AssigneeSearch&)> done) {
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) { done(AssigneeSearch{false, {}, missing}); return; }
+    if (s.project.trimmed().isEmpty()) {
+        done(AssigneeSearch{false, {}, QCoreApplication::translate("infrastructure", "Indica la clave del proyecto")});
         return;
     }
-    get(request(s, QStringLiteral("/rest/api/2/myself")), [done](const Response& r) {
-        if (!r.ok) { done(ConnectionResult{false, {}, r.error}); return; }
+    const bool accountIds = s.usesAccountId();
+    get(request(s, assignableSearchPath(s, query, 50)), [s, accountIds, done](const Response& r) {
+        if (!r.ok) { done(AssigneeSearch{false, {}, errorFor(s, r)}); return; }
+        done(AssigneeSearch{true, assigneesFrom(r.json.array(), accountIds), {}});
+    });
+}
+
+void JiraClient::testConnection(const TrackerSettings& s, std::function<void(const ConnectionResult&)> done) {
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) {
+        done(ConnectionResult{false, {}, missing});
+        return;
+    }
+    get(request(s, QStringLiteral("/rest/api/2/myself")), [s, done](const Response& r) {
+        if (!r.ok) { done(ConnectionResult{false, {}, errorFor(s, r)}); return; }
         done(ConnectionResult{true, r.json.object()[QStringLiteral("displayName")].toString(), {}});
     });
 }
@@ -40,7 +114,7 @@ void JiraClient::createIssue(const TrackerSettings& s, const BugReport& bug, std
     fields["labels"] = labels;
     if (!bug.priority.isEmpty()) fields["priority"] = QJsonObject{{"name", bug.priority}};
     if (!bug.assigneeId.isEmpty())
-        fields["assignee"] = s.email.trimmed().isEmpty() ? QJsonObject{{"name", bug.assigneeId}} : QJsonObject{{"accountId", bug.assigneeId}};
+        fields["assignee"] = s.usesAccountId() ? QJsonObject{{"accountId", bug.assigneeId}} : QJsonObject{{"name", bug.assigneeId}};
     if (!bug.components.isEmpty()) {
         QJsonArray comps;
         for (const auto& c : bug.components) if (!c.trimmed().isEmpty()) comps.append(QJsonObject{{"name", c.trimmed()}});
@@ -53,7 +127,7 @@ void JiraClient::createIssue(const TrackerSettings& s, const BugReport& bug, std
     }
 
     postJson(request(s, QStringLiteral("/rest/api/2/issue")), QJsonDocument(QJsonObject{{"fields", fields}}), [this, s, bug, done](const Response& r) {
-        if (!r.ok) { IssueResult f; f.error = r.error; f.retryable = r.retryable; done(f); return; }
+        if (!r.ok) { IssueResult f; f.error = errorFor(s, r); f.retryable = r.retryable; done(f); return; }
         IssueResult res;
         res.ok = true;
         res.key = r.json.object()[QStringLiteral("key")].toString();
@@ -77,8 +151,8 @@ void JiraClient::uploadAttachments(const TrackerSettings& s, IssueResult result,
 }
 
 void JiraClient::fetchStatus(const TrackerSettings& s, const QString& key, std::function<void(const IssueStatus&)> done) {
-    get(request(s, QStringLiteral("/rest/api/2/issue/%1?fields=status").arg(key)), [done](const Response& r) {
-        if (!r.ok) { done(IssueStatus{false, {}, false, r.error}); return; }
+    get(request(s, QStringLiteral("/rest/api/2/issue/%1?fields=status").arg(key)), [s, done](const Response& r) {
+        if (!r.ok) { done(IssueStatus{false, {}, false, errorFor(s, r)}); return; }
         const QJsonObject status = r.json.object()[QStringLiteral("fields")].toObject()[QStringLiteral("status")].toObject();
         IssueStatus st;
         st.ok = true;
@@ -92,7 +166,7 @@ void JiraClient::fetchMetadata(const TrackerSettings& s, std::function<void(cons
     const QString key = s.project.trimmed();
     // Tres peticiones encadenadas: proyecto (tipos, componentes, versiones), prioridades y asignables.
     get(request(s, QStringLiteral("/rest/api/2/project/%1").arg(key)), [this, s, key, done](const Response& r) {
-        if (!r.ok) { done(MetadataResult{false, {}, r.error}); return; }
+        if (!r.ok) { done(MetadataResult{false, {}, errorFor(s, r)}); return; }
         ProjectMetadata meta;
         const QJsonObject p = r.json.object();
         for (const auto& v : p[QStringLiteral("issueTypes")].toArray()) {
@@ -106,17 +180,10 @@ void JiraClient::fetchMetadata(const TrackerSettings& s, std::function<void(cons
         }
         get(request(s, QStringLiteral("/rest/api/2/priority")), [this, s, key, meta, done](const Response& r2) mutable {
             if (r2.ok) for (const auto& v : r2.json.array()) meta.priorities << v.toObject()[QStringLiteral("name")].toString();
-            const bool cloud = !s.email.trimmed().isEmpty();
-            get(request(s, QStringLiteral("/rest/api/2/user/assignable/search?project=%1&maxResults=100").arg(key)), [meta, cloud, done](const Response& r3) mutable {
-                if (r3.ok) {
-                    for (const auto& v : r3.json.array()) {
-                        const QJsonObject u = v.toObject();
-                        Assignee a;
-                        a.id = cloud ? u[QStringLiteral("accountId")].toString() : u[QStringLiteral("name")].toString();
-                        a.name = u[QStringLiteral("displayName")].toString();
-                        if (!a.id.isEmpty()) meta.assignees.append(a);
-                    }
-                }
+            const bool accountIds = s.usesAccountId();
+            // Primeros asignables del proyecto: el formulario arranca con ellos y luego busca en el servidor.
+            get(request(s, assignableSearchPath(s, QString(), 100)), [meta, accountIds, done](const Response& r3) mutable {
+                if (r3.ok) meta.assignees = assigneesFrom(r3.json.array(), accountIds);
                 done(MetadataResult{true, meta, {}});
             });
         });

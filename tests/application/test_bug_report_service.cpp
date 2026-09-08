@@ -161,6 +161,54 @@ private slots:
         f.settings.updateTracker([](TrackerSettings& s) { s.project = QStringLiteral("OTRO"); });
         QVERIFY(!f.bugs.hasMetadata());           // otro proyecto: caché invalidada
     }
+
+    // Jira busca personas en el servidor: lo escrito viaja tal cual y se devuelve lo que responde.
+    void assigneesAreSearchedOnTheServerWhenTheTrackerCan() {
+        AppFixture f;
+        f.tracker->searchesAssignees = true;
+        f.tracker->assigneesToReturn = {Assignee{QStringLiteral("aperez"), QStringLiteral("Ana Pérez")}};
+        QVERIFY(f.bugs.searchesAssigneesOnServer());
+        AssigneeSearch r;
+        f.bugs.searchAssignees(QStringLiteral("ana"), [&](const AssigneeSearch& x) { r = x; });
+        QVERIFY(r.ok);
+        QCOMPARE(r.assignees.size(), 1);
+        QCOMPARE(r.assignees[0].id, QStringLiteral("aperez"));
+        QCOMPARE(f.tracker->assigneeQueries, QStringList{QStringLiteral("ana")});
+    }
+
+    // GitHub, GitLab y Azure no saben buscar: se filtra en local lo que trajo el proyecto.
+    void assigneesAreFilteredLocallyWhenTheTrackerCannotSearch() {
+        AppFixture f;
+        f.tracker->metadataToReturn.assignees = {Assignee{QStringLiteral("aperez"), QStringLiteral("Ana Pérez")},
+                                                 Assignee{QStringLiteral("lgarcia"), QStringLiteral("Luis García")}};
+        f.bugs.loadMetadata(false, [](const MetadataResult&) {});
+        QVERIFY(!f.bugs.searchesAssigneesOnServer());
+        AssigneeSearch r;
+        f.bugs.searchAssignees(QStringLiteral("luis"), [&](const AssigneeSearch& x) { r = x; });
+        QVERIFY(r.ok);
+        QCOMPARE(r.assignees.size(), 1);
+        QCOMPARE(r.assignees[0].name, QStringLiteral("Luis García"));
+        QVERIFY(f.tracker->assigneeQueries.isEmpty());   // no se llamó al gestor
+
+        f.bugs.searchAssignees(QStringLiteral("aperez"), [&](const AssigneeSearch& x) { r = x; });   // también por id
+        QCOMPARE(r.assignees.size(), 1);
+        f.bugs.searchAssignees(QString(), [&](const AssigneeSearch& x) { r = x; });
+        QCOMPARE(r.assignees.size(), 2);
+    }
+
+    // Si la búsqueda falla se conserva lo ya cargado y el error llega al formulario.
+    void failedAssigneeSearchFallsBackToTheLoadedList() {
+        AppFixture f;
+        f.tracker->searchesAssignees = true;
+        f.tracker->metadataToReturn.assignees = {Assignee{QStringLiteral("aperez"), QStringLiteral("Ana Pérez")}};
+        f.bugs.loadMetadata(false, [](const MetadataResult&) {});
+        f.tracker->mode = FakeIssueTracker::Mode::NetworkDown;
+        AssigneeSearch r;
+        f.bugs.searchAssignees(QStringLiteral("ana"), [&](const AssigneeSearch& x) { r = x; });
+        QVERIFY(!r.ok);
+        QCOMPARE(r.error, QStringLiteral("Host not found"));
+        QCOMPARE(r.assignees.size(), 1);   // sigue habiendo con qué trabajar
+    }
 };
 
 QTEST_APPLESS_MAIN(BugReportServiceTest)

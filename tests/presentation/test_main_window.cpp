@@ -60,6 +60,15 @@ struct WindowFixture {
     }
     QAction* action(const char* name) const { return window->findChild<QAction*>(QString::fromLatin1(name)); }
     QPushButton* nav(Screen s) const { return window->findChild<QPushButton*>(QStringLiteral("nav-%1").arg(static_cast<int>(s))); }
+    /// Insignia del botón del rail (progreso de la ejecución, bugs pendientes…).
+    QLabel* badge(Screen s) const { return window->findChild<QLabel*>(QStringLiteral("badge-%1").arg(static_cast<int>(s))); }
+    /// Texto de un bloque de la barra de estado.
+    QString statusText(const char* name) const {
+        auto* b = window->findChild<QPushButton*>(QString::fromLatin1(name));
+        QStringList parts;
+        for (auto* l : b->findChildren<QLabel*>()) if (!l->text().isEmpty()) parts << l->text();
+        return parts.join(QStringLiteral(" "));
+    }
     /// Filas visibles de la lista de casos.
     int visibleCaseRows() const {
         int n = 0;
@@ -103,6 +112,23 @@ private slots:
         QCOMPARE(static_cast<int>(f.app.settings.app().theme), static_cast<int>(AppTheme::Light));
         dialog->findChild<QPushButton*>(QStringLiteral("settingsClose"))->click();
         QVERIFY(!f.window->settingsWindow());
+    }
+
+    void railBadgeAndStatusStripFollowTheRun() {
+        WindowFixture f;
+        QVERIFY(!f.badge(Screen::Run)->isVisible());
+        QVERIFY(f.statusText("statusRun").contains(QStringLiteral("Sin ejecución")));
+        QVERIFY(f.nav(Screen::Casos)->toolTip().contains(QStringLiteral("Ctrl+1")));
+
+        f.app.run.start(QStringLiteral("TC-101"));
+        QVERIFY(f.badge(Screen::Run)->isVisible());
+        QCOMPARE(f.badge(Screen::Run)->text(), QStringLiteral("0/%1").arg(f.app.run.totalSteps()));
+        QVERIFY(f.statusText("statusRun").contains(QStringLiteral("TC-101")));
+        QVERIFY(f.nav(Screen::Run)->toolTip().contains(QStringLiteral("TC-101")));
+
+        // El bloque de la ejecución lleva a su pantalla.
+        QTest::mouseClick(f.window->findChild<QPushButton*>(QStringLiteral("statusRun")), Qt::LeftButton);
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Run));
     }
 
     void menuActionsHaveStandardShortcuts() {

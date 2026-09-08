@@ -7,6 +7,8 @@ Jira, GitHub, GitLab o Azure DevOps. Qt 6 Widgets · C++20.
 ![Ejecución](docs/screenshots/03-ejecucion.png)
 
 Interfaz en español o inglés, tema oscuro o claro, menú con atajos estándar e icono en la bandeja del sistema.
+Navegación en un rail de iconos al estilo de los IDE de JetBrains (el nombre y el atajo, en el tooltip) y barra de
+estado con la ejecución en curso, la tasa de éxito y el plan activo.
 
 ## Requisitos
 

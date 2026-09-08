@@ -42,12 +42,13 @@ src/
 │                    TrackerRouter despacha por TrackerSettings::kind
 └── presentation/    Widgets Qt. Depende de application; nunca de infrastructure.
     ├── theme/       Paletas oscura y clara (Theme.h); resources/styles/app.qss usa tokens (@bg, @tint(green,30))
-    ├── widgets/     Piezas reutilizables: Ui (fábricas, icono), LayoutButton, FlowLayout, Toast,
+    ├── widgets/     Piezas reutilizables: Ui (fábricas, icono), Icons (glifos del rail), LayoutButton, FlowLayout, Toast,
     │                FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard,
     │                ImageViewer (visor), AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
-    ├── views/       Una clase por pantalla: Sidebar, CasesView, PlanView, RunView, HistoryView,
-    │                BugView, SettingsView (+ SettingsDialog, su ventana) y MainWindow (menú, atajos,
-    │                bandeja, navegación, avisos)
+    ├── views/       Una clase por pantalla: CasesView, PlanView, RunView, HistoryView, BugView,
+    │                SettingsView (+ SettingsDialog, su ventana); Sidebar (rail de iconos),
+    │                StatusStrip (barra de estado) y MainWindow (menú, atajos, bandeja,
+    │                navegación, avisos)
     └── DevSnapshot  herramienta de desarrollo (renderiza cada pantalla a PNG)
 ```
 
@@ -99,6 +100,18 @@ la paleta y **reconstruye la ventana** (diferido con `QTimer::singleShot(0)` por
 un widget de la ventana anterior), conservando geometría y pantalla. Así ninguna vista necesita
 implementar retraducción dinámica.
 
+## Navegación: rail y barra de estado
+
+La navegación imita a los IDE de JetBrains: `Sidebar` es un **rail** de 60 px con un icono por
+pantalla (`icons::pixmap()` los dibuja con QPainter, sin depender del plugin SVG), el nombre y el
+atajo en el tooltip, y una insignia sólo donde hay algo que atender (progreso de la ejecución en
+curso, bugs pendientes de enviar o issues abiertos). El icono se redibuja en el color de su pantalla
+cuando está activa y en `@muted` cuando no. Debajo de todo, separado, el botón de métricas.
+
+Lo que antes eran las tarjetas del sidebar («En ejecución», «Tasa de éxito», «Plan activo») es ahora
+`StatusStrip`, la barra del pie: los mismos datos en una línea y con los mismos destinos al hacer
+clic. Ambas vistas se refrescan con las señales de los stores, como el resto.
+
 ## Menú, atajos y bandeja
 
 `MainWindow::buildMenus()` crea el menú (Archivo, Editar, Ver, Ejecución, Ayuda) con `QAction`
@@ -130,7 +143,7 @@ muestra un aviso persistente con «Reintentar» que llama al `save()` correspond
 `metrics::bySuite()` a partir de la última ejecución de cada caso, y `metrics::cycles()` como la
 lista cronológica de ciclos terminados (un `CycleMetrics` por `PlanRun` cerrado, construido con
 `PlanReport::build`). `metrics::trend()` es la diferencia de tasa entre los dos últimos ciclos. El
-sidebar muestra la tasa global y la tendencia del plan activo; el panel «Métricas» del historial
+barra de estado muestra la tasa global y la tendencia del plan activo; el panel «Métricas» del historial
 muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`, con un chip por plan).
 
 ## Persistencia
@@ -179,8 +192,8 @@ el plan por si vuelven a estar listos; los borrados se retiran de todos los plan
 
 Un **ciclo** es una ejecución del plan: `RunController::startSequence()` abre un `PlanRun` en el
 historial con el `planId` del plan. `PlanStore::latestCycle(planId)` devuelve el `PlanReport` del
-ciclo más reciente (terminado o en curso), que es lo que muestran la pantalla de planes y la
-tarjeta «Plan activo» del sidebar como progreso. Archivar un plan sólo lo oculta y bloquea
+ciclo más reciente (terminado o en curso), que es lo que muestran la pantalla de planes y el
+bloque «Plan» de la barra de estado como progreso. Archivar un plan sólo lo oculta y bloquea
 «Iniciar ciclo»; eliminarlo no toca el historial. Sin planes guardados se crea uno por defecto con
 los casos de ejemplo.
 

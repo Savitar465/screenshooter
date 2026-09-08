@@ -45,7 +45,8 @@ QFrame[role="card-elevated"] { background: @elevated; border: 1px solid @border;
 QFrame[role="card-flat"] { background: @elevated; border: none; border-radius: 8px; }
 QFrame[role="card-lg"] { background: @panel; border: 1px solid @border; border-radius: 16px; }
 QFrame[role="card-run"] { background: @panel; border: 2px solid @green; border-radius: 16px; }
-QFrame[role="sidebar"] { background: @panel; border-right: 1px solid @border; }
+QFrame[role="rail"] { background: @panel; border-right: 1px solid @border; }
+QFrame[role="status-strip"] { background: @panel; border-top: 1px solid @border; }
 QFrame[role="list-pane"] { background: @panel-translucent; border-right: 1px solid @border; }
 QFrame[role="grid-cell"] { background: @elevated; border: 1px solid @border; border-radius: 8px; }
 QFrame[role="accent"] { border-radius: 2px; border: none; }
@@ -103,11 +104,12 @@ QPushButton[role="plan-row"] { text-align: left; background: transparent; border
 QPushButton[role="plan-row"]:hover { background: @elevated; }
 QPushButton[role="plan-row"][active="true"] { background: @tint(green,15); border-color: @tint(green,90); }
 
-/* Tarjetas "En ejecución" y "Plan activo" del sidebar */
-QPushButton[role="running-card"] { text-align: left; background: @tint(green,25); border: 1px solid @green; border-radius: 12px; padding: 0; }
-QPushButton[role="running-card"]:hover { background: @tint(green,40); }
-QPushButton[role="metric-card"] { text-align: left; background: @elevated; border: 1px solid @border; border-radius: 12px; padding: 0; }
-QPushButton[role="metric-card"]:hover { border-color: @blue; }
+/* Rail de navegación (iconos) y bloques de la barra de estado */
+QPushButton[role="rail-nav"] { background: transparent; border: none; border-radius: 10px; padding: 0; }
+QPushButton[role="rail-nav"]:hover { background: @elevated; }
+QPushButton[role="rail-nav"][active="true"] { background: @elevated; }
+QPushButton[role="status-item"] { background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 0; }
+QPushButton[role="status-item"]:hover { background: @elevated; border-color: @border; }
 
 /* Badge del gestor (conectado / desconectado) */
 QPushButton[role="badge"] { border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 700; }

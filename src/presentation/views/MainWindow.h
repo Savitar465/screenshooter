@@ -19,6 +19,7 @@ namespace qaflow {
 
 struct AppContext;
 class Sidebar;
+class StatusStrip;
 class CasesView;
 class RunView;
 class HistoryView;
@@ -28,7 +29,7 @@ class SettingsDialog;
 class Toast;
 class FlashOverlay;
 
-/// Ventana principal: menú, sidebar y pila de pantallas. Coordina la navegación entre vistas,
+/// Ventana principal: menú, rail de navegación, pila de pantallas y barra de estado. Coordina la navegación entre vistas,
 /// los atajos globales, el icono de la bandeja y los avisos globales (toast, destello de captura,
 /// fallos de guardado).
 class MainWindow : public QMainWindow {
@@ -72,6 +73,7 @@ private:
 
     AppContext& m_ctx;
     Sidebar* m_sidebar;
+    StatusStrip* m_status;
     QStackedWidget* m_stack;
     CasesView* m_cases;
     PlanView* m_plan;

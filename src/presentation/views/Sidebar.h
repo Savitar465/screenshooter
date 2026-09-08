@@ -1,13 +1,13 @@
 #pragma once
 
 #include "presentation/Screen.h"
+#include "presentation/widgets/Icons.h"
 
 #include <QFrame>
 #include <QMap>
 
 class QLabel;
 class QPushButton;
-class QProgressBar;
 
 namespace qaflow {
 
@@ -17,6 +17,10 @@ class RunController;
 class RunHistoryStore;
 class BugStore;
 
+/// Rail de navegación al estilo de los IDE de JetBrains: una columna estrecha de iconos, uno por
+/// pantalla, con el nombre y el atajo en el tooltip. La información de estado (ejecución en curso,
+/// tasa de éxito y plan activo) vive en la StatusStrip del pie de la ventana; aquí sólo quedan las
+/// insignias que piden atención: el progreso de la ejecución y los bugs pendientes o abiertos.
 class Sidebar : public QFrame {
     Q_OBJECT
 public:
@@ -29,8 +33,22 @@ signals:
     void metricsRequested();
 
 private:
+    /// Un botón del rail: el icono se redibuja en el color de su pantalla al activarse.
+    struct NavItem {
+        QPushButton* button = nullptr;
+        QLabel* badge = nullptr;
+        icons::Glyph glyph = icons::Glyph::Cases;
+        QString accent;
+        QString name;
+        QString shortcut;
+    };
+
     void refresh();
-    QPushButton* navButton(Screen s, const QString& label, const QString& dotColor);
+    QPushButton* railButton(icons::Glyph glyph, const QString& accent, const QString& tooltip);
+    /// Botón de pantalla: como `railButton` pero además navega, recuerda su icono y lleva insignia.
+    QPushButton* navButton(Screen s, icons::Glyph glyph, const QString& accent, const QString& name, const QString& shortcut);
+    void setBadge(Screen s, const QString& text, const QString& color, const QString& textColor);
+    void setTooltip(Screen s, const QString& detail);
 
     TestCaseStore& m_cases;
     PlanStore& m_plan;
@@ -39,19 +57,7 @@ private:
     BugStore& m_bugs;
     Screen m_active = Screen::Casos;
 
-    QMap<Screen, QPushButton*> m_buttons;
-    QMap<Screen, QLabel*> m_counts;
-    QPushButton* m_runningCard;
-    QLabel* m_runId;
-    QLabel* m_runTitle;
-    QLabel* m_runStep;
-    QLabel* m_planName;
-    QLabel* m_planCycle;
-    QLabel* m_sprintCount;
-    QProgressBar* m_sprintBar;
-    QLabel* m_rate;
-    QLabel* m_rateDetail;
-    QLabel* m_trend;
+    QMap<Screen, NavItem> m_items;
 };
 
 } // namespace qaflow

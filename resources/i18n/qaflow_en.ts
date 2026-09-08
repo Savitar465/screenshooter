@@ -2658,10 +2658,6 @@
 <context>
     <name>qaflow::Sidebar</name>
     <message>
-        <source>Equipo Calidad · v%1</source>
-        <translation>Quality Team · v%1</translation>
-    </message>
-    <message>
         <source>Casos de prueba</source>
         <translation>Test cases</translation>
     </message>
@@ -2682,60 +2678,103 @@
         <translation>Report bug</translation>
     </message>
     <message>
-        <source>EN EJECUCIÓN</source>
-        <translation>RUNNING</translation>
+        <source>%1 casos</source>
+        <translation>%1 cases</translation>
+    </message>
+    <message>
+        <source>QAflow %1 · Equipo Calidad</source>
+        <translation>QAflow %1 · Quality Team</translation>
+    </message>
+    <message>
+        <source>Métricas · tasa de éxito por suite y evolución entre ciclos</source>
+        <translation>Metrics · success rate by suite and evolution across cycles</translation>
+    </message>
+    <message>
+        <source>%1 casos en el plan</source>
+        <translation>%1 cases in the plan</translation>
+    </message>
+    <message>
+        <source>sin ejecuciones archivadas</source>
+        <translation>no archived runs</translation>
+    </message>
+    <message>
+        <source>%1 ejecuciones archivadas</source>
+        <translation>%1 archived runs</translation>
+    </message>
+    <message>
+        <source>%1 · paso %2 de %3</source>
+        <translation>%1 · step %2 of %3</translation>
+    </message>
+    <message>
+        <source>sin ejecución en curso</source>
+        <translation>no run in progress</translation>
+    </message>
+    <message>
+        <source>%1 pendientes de enviar</source>
+        <translation>%1 pending to send</translation>
+    </message>
+    <message>
+        <source>%1 issues abiertos</source>
+        <translation>%1 open issues</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::StatusStrip</name>
+    <message>
+        <source>Ir a la ejecución en curso</source>
+        <translation>Go to the run in progress</translation>
     </message>
     <message>
         <source>Ver métricas por suite y evolución entre ciclos</source>
         <translation>View metrics by suite and trend across cycles</translation>
     </message>
     <message>
-        <source>TASA DE ÉXITO</source>
-        <translation>SUCCESS RATE</translation>
+        <source>ÉXITO</source>
+        <translation>SUCCESS</translation>
     </message>
     <message>
         <source>Abrir el plan activo</source>
         <translation>Open the active plan</translation>
     </message>
     <message>
-        <source>PLAN ACTIVO</source>
-        <translation>ACTIVE PLAN</translation>
+        <source>PLAN</source>
+        <translation>PLAN</translation>
     </message>
     <message>
-        <source>Paso %1 de %2</source>
-        <translation>Step %1 of %2</translation>
+        <source>%1 · %2 · paso %3 de %4</source>
+        <translation>%1 · %2 · step %3 of %4</translation>
+    </message>
+    <message>
+        <source>Sin ejecución en curso</source>
+        <translation>No run in progress</translation>
     </message>
     <message>
         <source>%1 de %2 ejecutados</source>
         <translation>%1 of %2 executed</translation>
     </message>
     <message>
-        <source>%1 pts frente al ciclo anterior</source>
-        <translation>%1 pts vs. the previous cycle</translation>
+        <source>%1 pts</source>
+        <translation>%1 pts</translation>
     </message>
     <message>
-        <source>Sin ciclos terminados</source>
-        <translation>No finished cycles</translation>
+        <source>sin ciclos terminados</source>
+        <translation>no finished cycles</translation>
     </message>
     <message>
-        <source>Un ciclo terminado · sin comparación</source>
-        <translation>One finished cycle · nothing to compare</translation>
+        <source>un ciclo terminado</source>
+        <translation>one finished cycle</translation>
     </message>
     <message>
-        <source>Último ciclo</source>
-        <translation>Last cycle</translation>
+        <source>último ciclo</source>
+        <translation>last cycle</translation>
     </message>
     <message>
-        <source>Ciclo en curso</source>
-        <translation>Cycle in progress</translation>
+        <source>ciclo en curso</source>
+        <translation>cycle in progress</translation>
     </message>
     <message>
-        <source>Sin ciclos</source>
-        <translation>No cycles</translation>
-    </message>
-    <message>
-        <source>%1 casos</source>
-        <translation>%1 cases</translation>
+        <source>sin ciclos · %1 casos</source>
+        <translation>no cycles · %1 cases</translation>
     </message>
 </context>
 <context>

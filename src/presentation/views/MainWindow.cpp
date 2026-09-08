@@ -9,6 +9,7 @@
 #include "presentation/views/RunView.h"
 #include "presentation/views/SettingsDialog.h"
 #include "presentation/views/Sidebar.h"
+#include "presentation/views/StatusStrip.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlashOverlay.h"
 #include "presentation/widgets/Toast.h"
@@ -42,7 +43,11 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
 
     auto* central = new QWidget;
     central->setObjectName(QStringLiteral("central"));
-    auto* h = ui::hbox(central, 0, 0);
+    // Rail de iconos + pantalla, y debajo la barra de estado a todo lo ancho.
+    auto* rows = ui::vbox(central, 0, 0);
+    auto* body = new QWidget;
+    auto* h = ui::hbox(body, 0, 0);
+    rows->addWidget(body, 1);
 
     m_sidebar = new Sidebar(*ctx.cases, *ctx.plan, *ctx.run, *ctx.history, *ctx.bugLedger);
     h->addWidget(m_sidebar);
@@ -59,10 +64,12 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     m_stack->insertWidget(static_cast<int>(Screen::Historial), m_history);
     m_stack->insertWidget(static_cast<int>(Screen::Bug), m_bug);
     h->addWidget(m_stack, 1);
+    m_status = new StatusStrip(*ctx.cases, *ctx.plan, *ctx.run, *ctx.history);
+    rows->addWidget(m_status);
     setCentralWidget(central);
 
-    m_toast = new Toast(central);
-    m_flash = new FlashOverlay(central);
+    m_toast = new Toast(body);            // sobre la pantalla, sin tapar la barra de estado
+    m_flash = new FlashOverlay(central);   // el destello de captura sí cubre toda la ventana
 
     buildMenus();
     buildTray();
@@ -283,6 +290,8 @@ void MainWindow::closeEvent(QCloseEvent* e) {
 void MainWindow::wireSignals() {
     connect(m_sidebar, &Sidebar::navigate, this, &MainWindow::navigate);
     connect(m_sidebar, &Sidebar::metricsRequested, this, &MainWindow::showMetrics);
+    connect(m_status, &StatusStrip::navigate, this, &MainWindow::navigate);
+    connect(m_status, &StatusStrip::metricsRequested, this, &MainWindow::showMetrics);
 
     // Toasts de todas las vistas
     connect(m_cases, &CasesView::toast, this, &MainWindow::showToast);

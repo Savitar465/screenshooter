@@ -158,6 +158,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/theme/Theme.cpp
         src/presentation/widgets/Ui.h
         src/presentation/widgets/Ui.cpp
+        src/presentation/widgets/Icons.h
+        src/presentation/widgets/Icons.cpp
         src/presentation/widgets/LayoutButton.h
         src/presentation/widgets/LayoutButton.cpp
         src/presentation/widgets/FlowLayout.h
@@ -184,6 +186,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/EvidenceActions.cpp
         src/presentation/views/Sidebar.h
         src/presentation/views/Sidebar.cpp
+        src/presentation/views/StatusStrip.h
+        src/presentation/views/StatusStrip.cpp
         src/presentation/views/CasesView.h
         src/presentation/views/CasesView.cpp
         src/presentation/views/RunView.h

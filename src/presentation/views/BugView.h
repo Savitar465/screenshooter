@@ -17,6 +17,7 @@ class TestCaseStore;
 class SettingsStore;
 class BugReportService;
 class BugStore;
+class EvidenceService;
 class TextArea;
 
 /// Pantalla "Reportar bug": formulario prellenado desde la ejecución con los campos reales del
@@ -24,7 +25,7 @@ class TextArea;
 class BugView : public QWidget {
     Q_OBJECT
 public:
-    BugView(TestCaseStore& cases, SettingsStore& settings, BugReportService& bugs, BugStore& ledger, QWidget* parent = nullptr);
+    BugView(TestCaseStore& cases, SettingsStore& settings, BugReportService& bugs, BugStore& ledger, EvidenceService& evidence, QWidget* parent = nullptr);
 
     /// Rellena el formulario con el borrador actual (caso seleccionado + ejecución).
     void loadDraft();
@@ -54,6 +55,7 @@ private:
     SettingsStore& m_settings;
     BugReportService& m_bugs;
     BugStore& m_ledger;
+    EvidenceService& m_evidence;
     bool m_touched = false;
     bool m_sending = false;
     bool m_busy = false;

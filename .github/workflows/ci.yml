@@ -28,7 +28,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 \
-            libxcb-shape0 libxcb-xinerama0 libfuse2 file
+            libxcb-shape0 libxcb-xinerama0 libfuse2 file libx11-dev libxcb1-dev
       - name: Configurar
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Compilar

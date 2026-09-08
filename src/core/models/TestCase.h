@@ -28,11 +28,20 @@ struct TestStep {
     bool isComplete() const { return !action.trimmed().isEmpty() && !expected.trimmed().isEmpty(); }
 };
 
+/// Evidencia de un caso: una captura (cap_004.png), una grabación (rec_002.gif) o un fichero
+/// adjuntado desde el disco (adj_005_servidor.log). Todo vive en la carpeta de capturas.
 struct Screenshot {
     int id = 0;
     int step = 0;          // 0 = sin asignar, 1..N = paso
     QString fileName;      // cap_004.png
     QString path;          // ruta absoluta en disco
+
+    /// PNG, JPG, WebP, GIF, BMP: se muestra como miniatura y se puede anotar (salvo GIF).
+    bool isImage() const;
+    /// GIF animado (grabación): se ve como imagen pero no se anota.
+    bool isAnimation() const;
+    /// Extensión en minúsculas, sin punto ("png", "log", "mp4").
+    QString extension() const;
 };
 
 struct LastRun {

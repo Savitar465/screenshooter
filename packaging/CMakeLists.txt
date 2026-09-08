@@ -57,7 +57,7 @@ else ()
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "QAflow")
     set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)          # calcula las dependencias de Qt del sistema
-    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libsecret-tools, xdotool")
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libsecret-tools, xdotool, xdg-desktop-portal")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 endif ()
 

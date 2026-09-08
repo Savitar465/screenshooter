@@ -1,10 +1,12 @@
 #include "RunView.h"
 
+#include "application/EvidenceService.h"
 #include "application/RunController.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
 #include "core/models/RunHistory.h"   // formatDuration
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/ProgressCells.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/TextArea.h"
@@ -58,8 +60,8 @@ QPushButton* verdictButton(const QString& text, const QString& key, const char* 
 }
 } // namespace
 
-RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, QWidget* parent)
-    : QWidget(parent), m_cases(cases), m_run(run), m_settings(settings) {
+RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, EvidenceService& evidence, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_run(run), m_settings(settings), m_evidence(evidence) {
     auto* root = ui::hbox(this, 0, 0);
     QWidget* content;
     QVBoxLayout* outer;
@@ -243,6 +245,18 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     capture2->setStyleSheet(QStringLiteral("padding:10px;font-size:12.5px;"));
     connect(capture2, &QPushButton::clicked, this, &RunView::captureRequested);
     sah->addWidget(capture2, 1);
+    m_record = ui::button(tr("● GIF"), "dashed");
+    m_record->setStyleSheet(QStringLiteral("padding:10px;font-size:12.5px;"));
+    m_record->setToolTip(tr("Graba la pantalla o una región a GIF y la adjunta al caso"));
+    m_record->setVisible(m_evidence.canRecord());
+    connect(m_record, &QPushButton::clicked, this, [this]() { m_evidence.toggleRecording(); });
+    connect(&m_evidence, &EvidenceService::recordingChanged, this, [this](bool on) { m_record->setText(on ? tr("■ Detener") : tr("● GIF")); });
+    sah->addWidget(m_record);
+    auto* attach = ui::button(tr("+ Archivo"), "dashed");
+    attach->setStyleSheet(QStringLiteral("padding:10px;font-size:12.5px;"));
+    attach->setToolTip(tr("Adjunta logs, vídeos o imágenes existentes"));
+    connect(attach, &QPushButton::clicked, this, [this]() { m_evidence.attachFiles(evidence::pickFiles(this)); });
+    sah->addWidget(attach);
     m_sortShots = ui::button(tr("Ordenar por paso"), "outline");
     m_sortShots->setStyleSheet(QStringLiteral("padding:10px 12px;font-size:12px;border-radius:8px;"));
     connect(m_sortShots, &QPushButton::clicked, this, [this]() { m_cases.sortShotsByStep(m_run.state().caseId); });
@@ -387,6 +401,7 @@ void RunView::refreshShots() {
         connect(card, &ShotCard::stepChanged, this, [this, id](int shotId, int step) { m_cases.assignShotStep(id, shotId, step); });
         connect(card, &ShotCard::moveRequested, this, [this, id](int shotId, int delta) { m_cases.moveShot(id, shotId, delta); });
         connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_cases.removeShot(id, shotId); });
+        evidence::wireCard(card, this, m_cases, m_evidence, id);
         m_shotsLayout->addWidget(card);
     }
 }

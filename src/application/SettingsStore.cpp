@@ -16,6 +16,7 @@ void SettingsStore::load() {
     if (m_repo) {
         m_tracker = m_repo->loadTracker();
         m_capture = m_repo->loadCapture();
+        m_capture.clamp();
         m_app = m_repo->loadApp();
     }
     if (m_secrets) {
@@ -61,6 +62,7 @@ void SettingsStore::updateTracker(const std::function<void(TrackerSettings&)>& m
 
 void SettingsStore::updateCapture(const std::function<void(CaptureSettings&)>& mutate) {
     mutate(m_capture);
+    m_capture.clamp();
     if (m_repo) m_repo->saveCapture(m_capture);
     emit captureChanged();
 }

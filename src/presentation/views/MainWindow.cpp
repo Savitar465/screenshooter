@@ -9,6 +9,7 @@
 #include "presentation/views/RunView.h"
 #include "presentation/views/SettingsView.h"
 #include "presentation/views/Sidebar.h"
+#include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlashOverlay.h"
 #include "presentation/widgets/Toast.h"
 #include "presentation/widgets/Ui.h"
@@ -18,7 +19,11 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDesktopServices>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QFileInfo>
 #include <QMenu>
+#include <QMimeData>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStackedWidget>
@@ -33,6 +38,7 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     setWindowIcon(ui::appIcon());
     setMinimumSize(1100, 720);
     resize(1360, 860);
+    setAcceptDrops(true);
 
     auto* central = new QWidget;
     central->setObjectName(QStringLiteral("central"));
@@ -42,12 +48,12 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     h->addWidget(m_sidebar);
 
     m_stack = new QStackedWidget;
-    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger);
+    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence);
     m_plan = new PlanView(*ctx.cases, *ctx.plan);
-    m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings);
+    m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence);
     m_history = new HistoryView(*ctx.cases, *ctx.history);
-    m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger);
-    m_settings = new SettingsView(*ctx.settings, *ctx.bugs);
+    m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger, *ctx.evidence);
+    m_settings = new SettingsView(*ctx.settings, *ctx.bugs, ctx.hotkey, ctx.captureBackend);
     m_stack->insertWidget(static_cast<int>(Screen::Casos), m_cases);
     m_stack->insertWidget(static_cast<int>(Screen::Plan), m_plan);
     m_stack->insertWidget(static_cast<int>(Screen::Run), m_run);
@@ -156,6 +162,14 @@ void MainWindow::buildMenus() {
     m_actCapture = runMenu->addAction(tr("&Capturar pantalla"), this, [this]() { m_ctx.evidence->captureForSelectedCase(); });
     m_actCapture->setObjectName(QStringLiteral("actCapture"));
     m_actCapture->setShortcutContext(Qt::ApplicationShortcut);
+    m_actRecord = runMenu->addAction(tr("&Grabar GIF"), this, [this]() { m_ctx.evidence->toggleRecording(); });
+    m_actRecord->setObjectName(QStringLiteral("actRecord"));
+    m_actRecord->setShortcutContext(Qt::ApplicationShortcut);
+    m_actRecord->setVisible(m_ctx.evidence->canRecord());
+    m_actAttach = runMenu->addAction(tr("Adjuntar &archivo…"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A), this, [this]() {
+        m_ctx.evidence->attachFiles(evidence::pickFiles(this));
+    });
+    m_actAttach->setObjectName(QStringLiteral("actAttach"));
     m_actReportBug = runMenu->addAction(tr("&Reportar bug"), QKeySequence(Qt::CTRL | Qt::Key_B), this, [this]() { navigate(Screen::Bug); });
 
     // Ayuda
@@ -175,13 +189,16 @@ void MainWindow::buildMenus() {
                                     "<tr><td><b>Ctrl+D</b></td><td>Duplicar caso</td></tr>"
                                     "<tr><td><b>Ctrl+Z</b></td><td>Deshacer el último borrado</td></tr>"
                                     "<tr><td><b>F5</b></td><td>Ejecutar el caso seleccionado</td></tr>"
-                                    "<tr><td><b>%1</b></td><td>Capturar pantalla</td></tr>"
+                                    "<tr><td><b>%1</b></td><td>Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)</td></tr>"
+                                    "<tr><td><b>%2</b></td><td>Iniciar o detener la grabación de GIF</td></tr>"
+                                    "<tr><td><b>Ctrl+Shift+A</b></td><td>Adjuntar archivos como evidencia (o arrástralos a la ventana)</td></tr>"
+                                    "<tr><td><b>Clic en una miniatura</b></td><td>Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)</td></tr>"
                                     "<tr><td><b>Ctrl+B</b></td><td>Reportar bug</td></tr>"
                                     "<tr><td><b>Ctrl+1 … Ctrl+6</b></td><td>Cambiar de pantalla</td></tr>"
                                     "<tr><td><b>P / F / B / S</b></td><td>Veredicto del paso en ejecución</td></tr>"
                                     "<tr><td><b>Retroceso</b></td><td>Volver al paso anterior</td></tr>"
                                     "<tr><td><b>Ctrl+Q</b></td><td>Salir</td></tr></table>")
-                                     .arg(m_ctx.settings->capture().shortcut));
+                                     .arg(m_ctx.settings->capture().shortcut, m_ctx.settings->capture().recordShortcut));
     });
 }
 
@@ -196,6 +213,9 @@ void MainWindow::buildTray() {
         updateActions();
     });
     menu->addAction(tr("Capturar pantalla"), this, [this]() { m_ctx.evidence->captureForSelectedCase(); });
+    if (m_ctx.evidence->canRecord()) {
+        m_trayRecord = menu->addAction(tr("Grabar GIF"), this, [this]() { m_ctx.evidence->toggleRecording(); });
+    }
     menu->addSeparator();
     menu->addAction(tr("Salir"), this, &MainWindow::quitApplication);
     m_tray->setContextMenu(menu);
@@ -216,6 +236,8 @@ void MainWindow::updateActions() {
     m_actDuplicate->setEnabled(hasSelection);
     m_actDelete->setEnabled(hasSelection);
     m_actCapture->setEnabled(hasSelection);
+    m_actRecord->setEnabled(hasSelection || m_ctx.evidence->isRecording());
+    m_actAttach->setEnabled(hasSelection);
     m_actReportBug->setEnabled(hasSelection);
     if (m_trayToggle) m_trayToggle->setText(isVisible() ? tr("Ocultar QAflow") : tr("Mostrar QAflow"));
 }
@@ -305,9 +327,32 @@ void MainWindow::wireSignals() {
     }
 
     // Evidencias
-    connect(m_ctx.evidence, &EvidenceService::captured, this, [this](const QString&) {
+    connect(m_ctx.evidence, &EvidenceService::captured, this, [this](const QString& path) {
         m_flash->flash();
-        showToast(tr("Captura guardada en %1").arg(m_ctx.settings->capture().folder), theme::Cyan);
+        const bool gif = path.endsWith(QStringLiteral(".gif"), Qt::CaseInsensitive);
+        showToast(gif ? tr("Grabación guardada en %1").arg(m_ctx.settings->capture().folder)
+                      : tr("Captura guardada en %1").arg(m_ctx.settings->capture().folder), theme::Cyan);
+    });
+    connect(m_ctx.evidence, &EvidenceService::attached, this, [this](const QStringList& paths) {
+        showToast(paths.size() == 1 ? tr("%1 adjuntado al caso").arg(QFileInfo(paths.first()).fileName())
+                                    : tr("%1 archivos adjuntados al caso").arg(paths.size()), theme::Cyan);
+    });
+    connect(m_ctx.evidence, &EvidenceService::countdown, this, [this](int left) {
+        if (left > 0) showToast(tr("Capturando en %1… (pulsa el atajo otra vez para cancelar)").arg(left), theme::Blue);
+    });
+    connect(m_ctx.evidence, &EvidenceService::recordingChanged, this, [this](bool on) {
+        m_actRecord->setText(on ? tr("Detener la &grabación") : tr("&Grabar GIF"));
+        if (m_trayRecord) m_trayRecord->setText(on ? tr("Detener la grabación") : tr("Grabar GIF"));
+        if (on) showToast(tr("Grabando… pulsa Detener o %1 para terminar").arg(m_ctx.settings->capture().recordShortcut), theme::Violet);
+        updateActions();
+    });
+    // Abrir el editor de anotaciones tras capturar, si así está configurado.
+    connect(m_ctx.evidence, &EvidenceService::shotAdded, this, [this](const QString& caseId, int shotId, const QString& path) {
+        if (!m_ctx.settings->capture().openEditor) return;
+        Screenshot s;
+        s.path = path;
+        if (!s.isImage() || s.isAnimation() || !path.contains(QStringLiteral("/cap_"))) return;
+        QTimer::singleShot(0, this, [this, caseId, shotId]() { evidence::annotate(this, *m_ctx.cases, *m_ctx.evidence, caseId, shotId); });
     });
     connect(m_ctx.evidence, &EvidenceService::failed, this, [this](const QString& e) { showToast(e, theme::Amber); });
     connect(m_ctx.settings, &SettingsStore::captureChanged, this, &MainWindow::updateCaptureShortcut);
@@ -343,6 +388,23 @@ void MainWindow::finishRun() {
 
 void MainWindow::updateCaptureShortcut() {
     m_actCapture->setShortcut(QKeySequence(m_ctx.settings->capture().shortcut));
+    m_actRecord->setShortcut(QKeySequence(m_ctx.settings->capture().recordShortcut));
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* e) {
+    if (e->mimeData()->hasUrls() && !m_ctx.cases->selectedId().isEmpty()) e->acceptProposedAction();
+}
+
+void MainWindow::dropEvent(QDropEvent* e) {
+    if (!e->mimeData()->hasUrls()) return;
+    attachFiles(e->mimeData()->urls());
+    e->acceptProposedAction();
+}
+
+void MainWindow::attachFiles(const QList<QUrl>& urls) {
+    QStringList files;
+    for (const QUrl& u : urls) if (u.isLocalFile()) files << u.toLocalFile();
+    if (!files.isEmpty()) m_ctx.evidence->attachFiles(files);
 }
 
 void MainWindow::navigate(Screen s) {

@@ -2,6 +2,8 @@
 
 #include <QCoreApplication>
 
+#include <algorithm>
+
 namespace qaflow {
 
 QString toString(TrackerKind k) {
@@ -121,6 +123,14 @@ QString label(CaptureMode m) {
         case CaptureMode::Region: return QCoreApplication::translate("core", "Región");
     }
     return {};
+}
+
+void CaptureSettings::clamp() {
+    delaySecs = std::clamp(delaySecs, 0, 60);
+    gifFps = std::clamp(gifFps, 5, 20);
+    gifMaxSecs = std::clamp(gifMaxSecs, 5, 120);
+    if (shortcut.trimmed().isEmpty()) shortcut = QStringLiteral("Ctrl+Shift+S");
+    if (recordShortcut.trimmed().isEmpty()) recordShortcut = QStringLiteral("Ctrl+Shift+G");
 }
 
 CaptureMode captureModeFromString(const QString& s) {

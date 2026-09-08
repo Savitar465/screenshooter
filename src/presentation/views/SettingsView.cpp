@@ -2,6 +2,7 @@
 
 #include "application/BugReportService.h"
 #include "application/SettingsStore.h"
+#include "core/services/IGlobalHotkey.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/Ui.h"
 
@@ -14,6 +15,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSpinBox>
+#include <QTimer>
 
 namespace qaflow {
 
@@ -63,8 +66,8 @@ QString hintFor(TrackerKind k) {
 }
 } // namespace
 
-SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, QWidget* parent)
-    : QWidget(parent), m_settings(settings), m_bugs(bugs) {
+SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlobalHotkey* hotkey, const QString& captureBackend, QWidget* parent)
+    : QWidget(parent), m_settings(settings), m_bugs(bugs), m_hotkey(hotkey), m_captureBackend(captureBackend) {
     auto* root = ui::hbox(this, 0, 0);
     QWidget* content;
     QVBoxLayout* outer;
@@ -199,24 +202,53 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, QWid
 
     // Capturas
     QVBoxLayout* cb;
-    auto* cap = section(theme::Cyan, tr("Capturas de pantalla"),
-                        tr("Se guardan localmente y se adjuntan al paso activo de la ejecución."), nullptr, &cb);
+    auto* cap = section(theme::Cyan, tr("Capturas de pantalla y grabaciones"),
+                        tr("Se guardan localmente y se adjuntan al paso activo de la ejecución. Los ficheros existentes (logs, vídeos) se adjuntan con «Adjuntar archivo» o arrastrándolos a la ventana."), nullptr, &cb);
     auto* crow = new QWidget;
     auto* cg = new QGridLayout(crow);
     cg->setContentsMargins(0, 0, 0, 0);
     cg->setHorizontalSpacing(12);
+    cg->setVerticalSpacing(12);
     m_shortcut = new QLineEdit;
     m_shortcut->setProperty("role", QStringLiteral("mono"));
-    m_shortcut->setToolTip(tr("Atajo activo mientras QAflow tiene el foco"));
+    m_shortcut->setToolTip(tr("Atajo de captura. Con «atajo global» funciona aunque QAflow no tenga el foco"));
+    m_recordShortcut = new QLineEdit;
+    m_recordShortcut->setProperty("role", QStringLiteral("mono"));
+    m_recordShortcut->setToolTip(tr("Inicia o detiene la grabación de GIF"));
     m_format = new QComboBox;
     m_format->addItems({QStringLiteral("PNG"), QStringLiteral("JPG"), QStringLiteral("WebP")});
     m_mode = new QComboBox;
     for (auto m : {CaptureMode::FullScreen, CaptureMode::ActiveWindow, CaptureMode::Region}) m_mode->addItem(label(m), static_cast<int>(m));
-    cg->addWidget(field(tr("Atajo"), m_shortcut), 0, 0);
+    m_mode->setToolTip(tr("Las grabaciones usan «Pantalla completa» o, en los demás modos, una región elegida con el ratón"));
+    m_delay = new QComboBox;
+    for (int secs : {0, 3, 5, 10}) m_delay->addItem(secs == 0 ? tr("Sin retardo") : tr("%1 s").arg(secs), secs);
+    m_delay->setToolTip(tr("Cuenta atrás antes de capturar, para abrir menús o tooltips"));
+    m_gifFps = new QSpinBox;
+    m_gifFps->setRange(5, 20);
+    m_gifFps->setSuffix(tr(" fps"));
+    m_gifMaxSecs = new QSpinBox;
+    m_gifMaxSecs->setRange(5, 120);
+    m_gifMaxSecs->setSuffix(tr(" s"));
+    m_gifMaxSecs->setToolTip(tr("La grabación se detiene sola al llegar a esta duración"));
+    cg->addWidget(field(tr("Atajo de captura"), m_shortcut), 0, 0);
     cg->addWidget(field(tr("Formato"), m_format), 0, 1);
     cg->addWidget(field(tr("Modo"), m_mode), 0, 2);
-    for (int i = 0; i < 3; ++i) cg->setColumnStretch(i, 1);
+    cg->addWidget(field(tr("Retardo"), m_delay), 0, 3);
+    cg->addWidget(field(tr("Atajo de grabación"), m_recordShortcut), 1, 0);
+    cg->addWidget(field(tr("GIF · fotogramas"), m_gifFps), 1, 1);
+    cg->addWidget(field(tr("GIF · duración máxima"), m_gifMaxSecs), 1, 2);
+    for (int i = 0; i < 4; ++i) cg->setColumnStretch(i, 1);
     cb->addWidget(crow);
+    m_globalShortcut = new QCheckBox(tr("Atajo global: capturar aunque QAflow no tenga el foco"));
+    cb->addWidget(m_globalShortcut);
+    m_openEditor = new QCheckBox(tr("Abrir el editor de anotaciones después de cada captura"));
+    cb->addWidget(m_openEditor);
+    m_copyToClipboard = new QCheckBox(tr("Copiar la captura al portapapeles"));
+    cb->addWidget(m_copyToClipboard);
+    m_captureStatus = ui::label(QString(), "muted-sm");
+    m_captureStatus->setWordWrap(true);
+    m_captureStatus->setStyleSheet(QStringLiteral("font-size:11.5px;"));
+    cb->addWidget(m_captureStatus);
     auto* frow = new QWidget;
     auto* fh = ui::hbox(frow, 0, 8);
     m_folder = new QLineEdit;
@@ -235,7 +267,37 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, QWid
         m_selfEdit = true;
         m_settings.updateCapture([&](CaptureSettings& c) { c.shortcut = m_shortcut->text().trimmed(); });
         m_selfEdit = false;
+        refreshCaptureStatus();
     });
+    connect(m_recordShortcut, &QLineEdit::editingFinished, this, [this]() {
+        m_selfEdit = true;
+        m_settings.updateCapture([&](CaptureSettings& c) { c.recordShortcut = m_recordShortcut->text().trimmed(); });
+        m_selfEdit = false;
+        refreshCaptureStatus();
+    });
+    connect(m_delay, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (m_selfEdit) return;
+        const int secs = m_delay->currentData().toInt();
+        m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { c.delaySecs = secs; }); m_selfEdit = false;
+    });
+    connect(m_gifFps, &QSpinBox::valueChanged, this, [this](int v) {
+        if (m_selfEdit) return;
+        m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { c.gifFps = v; }); m_selfEdit = false;
+    });
+    connect(m_gifMaxSecs, &QSpinBox::valueChanged, this, [this](int v) {
+        if (m_selfEdit) return;
+        m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { c.gifMaxSecs = v; }); m_selfEdit = false;
+    });
+    auto bindCheck = [this](QCheckBox* box, void (*apply)(CaptureSettings&, bool)) {
+        connect(box, &QCheckBox::toggled, this, [this, apply](bool on) {
+            if (m_selfEdit) return;
+            m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { apply(c, on); }); m_selfEdit = false;
+            refreshCaptureStatus();
+        });
+    };
+    bindCheck(m_globalShortcut, [](CaptureSettings& c, bool on) { c.globalShortcut = on; });
+    bindCheck(m_openEditor, [](CaptureSettings& c, bool on) { c.openEditor = on; });
+    bindCheck(m_copyToClipboard, [](CaptureSettings& c, bool on) { c.copyToClipboard = on; });
     connect(m_format, &QComboBox::currentTextChanged, this, [this](const QString& t) {
         if (m_selfEdit) return;
         m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { c.format = t; }); m_selfEdit = false;
@@ -255,6 +317,19 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, QWid
     refreshGeneral();
     refreshTracker();
     refreshCapture();
+    refreshCaptureStatus();
+}
+
+/// Estado del atajo global y del método de captura. Se consulta con un pequeño retraso porque el
+/// registro del atajo reacciona a la misma señal `captureChanged` que esta vista.
+void SettingsView::refreshCaptureStatus() {
+    QTimer::singleShot(0, this, [this]() {
+        QStringList parts;
+        if (!m_captureBackend.isEmpty()) parts << tr("Captura: %1").arg(m_captureBackend);
+        if (!m_settings.capture().globalShortcut) parts << tr("Atajo sólo con QAflow en primer plano");
+        else if (m_hotkey) parts << m_hotkey->status();
+        m_captureStatus->setText(parts.join(QStringLiteral("  ·  ")));
+    });
 }
 
 void SettingsView::refreshGeneral() {
@@ -296,10 +371,18 @@ void SettingsView::refreshCapture() {
     const CaptureSettings& c = m_settings.capture();
     m_selfEdit = true;
     m_shortcut->setText(c.shortcut);
+    m_recordShortcut->setText(c.recordShortcut);
     m_format->setCurrentText(c.format);
     m_mode->setCurrentIndex(std::max(0, m_mode->findData(static_cast<int>(c.mode))));
+    m_delay->setCurrentIndex(std::max(0, m_delay->findData(c.delaySecs)));
+    m_gifFps->setValue(c.gifFps);
+    m_gifMaxSecs->setValue(c.gifMaxSecs);
+    m_globalShortcut->setChecked(c.globalShortcut);
+    m_openEditor->setChecked(c.openEditor);
+    m_copyToClipboard->setChecked(c.copyToClipboard);
     m_folder->setText(c.folder);
     m_selfEdit = false;
+    refreshCaptureStatus();
 }
 
 void SettingsView::testConnection() {

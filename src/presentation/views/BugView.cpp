@@ -2,9 +2,11 @@
 
 #include "application/BugReportService.h"
 #include "application/BugStore.h"
+#include "application/EvidenceService.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/TextArea.h"
@@ -53,8 +55,8 @@ QPushButton* smallButton(const QString& text, const char* role) {
 }
 } // namespace
 
-BugView::BugView(TestCaseStore& cases, SettingsStore& settings, BugReportService& bugs, BugStore& ledger, QWidget* parent)
-    : QWidget(parent), m_cases(cases), m_settings(settings), m_bugs(bugs), m_ledger(ledger) {
+BugView::BugView(TestCaseStore& cases, SettingsStore& settings, BugReportService& bugs, BugStore& ledger, EvidenceService& evidence, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_settings(settings), m_bugs(bugs), m_ledger(ledger), m_evidence(evidence) {
     auto* root = ui::hbox(this, 0, 0);
     QWidget* content;
     QVBoxLayout* outer;
@@ -184,6 +186,10 @@ void BugView::buildForm(QVBoxLayout* v) {
     auto* capture = ui::button(tr("+ Capturar pantalla"), "dashed");
     connect(capture, &QPushButton::clicked, this, &BugView::captureRequested);
     shh->addWidget(capture);
+    auto* attach = ui::button(tr("+ Adjuntar archivo…"), "dashed");
+    attach->setToolTip(tr("Adjunta logs, vídeos o imágenes existentes; se suben al gestor con el bug"));
+    connect(attach, &QPushButton::clicked, this, [this]() { m_evidence.attachFiles(evidence::pickFiles(this)); });
+    shh->addWidget(attach);
     sv->addWidget(shHead);
     auto* shots = new QWidget;
     m_shotsRow = new FlowLayout(shots, 0, 8, 8);
@@ -308,6 +314,7 @@ void BugView::refreshShots() {
     for (const auto& s : c->shots) {
         auto* card = new ShotCard(s, c->steps, ShotCard::Layout::Compact);
         connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_cases.removeShot(id, shotId); });
+        evidence::wireCard(card, this, m_cases, m_evidence, id);
         m_shotsRow->addWidget(card);
     }
 }

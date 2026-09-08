@@ -34,6 +34,25 @@ private slots:
         QVERIFY(c.readyToBeMarkedListo());
     }
 
+    void screenshotKindFollowsTheExtension() {
+        const Screenshot png{1, 0, QStringLiteral("cap_001.png"), QStringLiteral("/x/cap_001.png")};
+        QVERIFY(png.isImage());
+        QVERIFY(!png.isAnimation());
+        QCOMPARE(png.extension(), QStringLiteral("png"));
+        const Screenshot gif{2, 0, QStringLiteral("rec_002.GIF"), QStringLiteral("/x/rec_002.GIF")};
+        QVERIFY(gif.isImage());
+        QVERIFY(gif.isAnimation());
+        QCOMPARE(gif.extension(), QStringLiteral("gif"));
+        const Screenshot log{3, 0, QStringLiteral("adj_003_server.log"), QStringLiteral("/x/adj_003_server.log")};
+        QVERIFY(!log.isImage());
+        QCOMPARE(log.extension(), QStringLiteral("log"));
+        const Screenshot pathOnly{4, 0, QString(), QStringLiteral("/x/video.mp4")};   // sin fileName: se mira la ruta
+        QCOMPARE(pathOnly.extension(), QStringLiteral("mp4"));
+        QVERIFY(!pathOnly.isImage());
+        const Screenshot noExt{5, 0, QStringLiteral("sinextension"), {}};
+        QVERIFY(noExt.extension().isEmpty());
+    }
+
     void unassignedShotsCountsStepZero() {
         TestCase c;
         c.shots = {Screenshot{1, 0, {}, {}}, Screenshot{2, 2, {}, {}}, Screenshot{3, 0, {}, {}}};

@@ -76,6 +76,20 @@ QString LastRun::label(const QDateTime& now) const {
     return verb + QStringLiteral(" · ") + when;
 }
 
+QString Screenshot::extension() const {
+    const QString name = fileName.isEmpty() ? path : fileName;
+    const int dot = name.lastIndexOf(QLatin1Char('.'));
+    return dot < 0 ? QString() : name.mid(dot + 1).toLower();
+}
+
+bool Screenshot::isImage() const {
+    static const QStringList kImages{QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("webp"),
+                                     QStringLiteral("gif"), QStringLiteral("bmp")};
+    return kImages.contains(extension());
+}
+
+bool Screenshot::isAnimation() const { return extension() == QStringLiteral("gif"); }
+
 int TestCase::unassignedShots() const {
     int n = 0;
     for (const auto& s : shots) if (s.step == 0) ++n;

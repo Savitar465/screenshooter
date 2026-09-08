@@ -2,7 +2,8 @@
 
 QAflow es una aplicación de escritorio (Qt 6 Widgets, C++20) para equipos de QA: gestiona
 casos de prueba, planes de regresión, ejecuciones manuales paso a paso con evidencias
-(capturas de pantalla) y reporte de defectos a Jira, GitHub, GitLab o Azure DevOps.
+(capturas anotadas, grabaciones GIF y ficheros adjuntos) y reporte de defectos a Jira, GitHub,
+GitLab o Azure DevOps.
 
 ## Capas
 
@@ -13,7 +14,7 @@ src/
 │   │                RunHistory (RunRecord, PlanRun), PlanReport (informe calculado + Markdown),
 │   │                Metrics (tasa por suite, evolución entre ciclos), CaseFilter, CaseFormats (JSON / CSV / Markdown)
 │   └── services/    ITestCaseRepository, IRunHistoryRepository, IRunSessionRepository, IBugRepository,
-│                    ISettingsRepository, ISecretStore, IScreenCapture, IIssueTracker
+│                    ISettingsRepository, ISecretStore, IScreenCapture, IScreenRecorder, IGlobalHotkey, IIssueTracker
 ├── application/     Casos de uso y estado observable (QObject + señales). Sin UI.
 │   ├── TestCaseStore      fuente de verdad de los casos; toda mutación pasa por aquí;
 │   │                      deshacer de un nivel para borrados
@@ -23,7 +24,8 @@ src/
 │   ├── RunHistoryStore    historial de ejecuciones y de planes; genera el PlanReport
 │   ├── PlanStore          colección de planes, plan activo, orden de ejecución, ciclos y estimación
 │   ├── SettingsStore      ajustes del gestor (token en ISecretStore), de captura y generales (idioma, tema, bandeja)
-│   ├── EvidenceService    captura → guarda fichero → adjunta al caso/paso activo
+│   ├── EvidenceService    evidencias: captura (con cuenta atrás), grabación GIF, ficheros adjuntos,
+│   │                      portapapeles y sustitución de la imagen anotada; único sitio que toca ficheros
 │   ├── BugReportService   borrador de bug, envío al gestor, cola offline, estados y metadatos
 │   ├── BugStore           libro de bugs: issues enlazados a su caso y cola de pendientes
 │   ├── SeedData           datos de ejemplo del primer arranque
@@ -32,14 +34,17 @@ src/
 │   ├── persistence/ JsonTestCaseRepository (cases.json, plans.json), JsonRunHistoryRepository
 │   │                (history.json), JsonRunSessionRepository (session.json), JsonBugRepository (bugs.json),
 │   │                QSettingsRepository (tracker, captura y app; sin token)
-│   ├── capture/     ScreenCaptureService (QScreen::grabWindow), RegionSelector (overlay)
+│   ├── capture/     ScreenCaptureService (QScreen::grabWindow o PortalScreenshot en Wayland), RegionSelector
+│   │                (overlay), GifRecorder + GifEncoder (grabación a GIF), RecorderOverlay (control flotante)
+│   ├── hotkey/      GlobalHotkey (RegisterHotKey / XGrabKey / Carbon), PortalShortcuts (portal de Wayland)
 │   ├── secrets/     SecretStores: secret-tool (Linux), Keychain (macOS), DPAPI (Windows), fichero en claro
 │   └── tracker/     HttpTrackerClient (base) → JiraClient, GitHubClient, GitLabClient, AzureDevOpsClient;
 │                    TrackerRouter despacha por TrackerSettings::kind
 └── presentation/    Widgets Qt. Depende de application; nunca de infrastructure.
     ├── theme/       Paletas oscura y clara (Theme.h); resources/styles/app.qss usa tokens (@bg, @tint(green,30))
     ├── widgets/     Piezas reutilizables: Ui (fábricas, icono), LayoutButton, FlowLayout, Toast,
-    │                FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard
+    │                FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard,
+    │                ImageViewer (visor), AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
     ├── views/       Una clase por pantalla: Sidebar, CasesView, PlanView, RunView, HistoryView,
     │                BugView, SettingsView y MainWindow (menú, atajos, bandeja, navegación, avisos)
     └── DevSnapshot  herramienta de desarrollo (renderiza cada pantalla a PNG)
@@ -96,11 +101,13 @@ implementar retraducción dinámica.
 ## Menú, atajos y bandeja
 
 `MainWindow::buildMenus()` crea el menú (Archivo, Editar, Ver, Ejecución, Ayuda) con `QAction`
-y los atajos estándar (`QKeySequence::New`, `Find`, `Undo`, `Quit`, F5, Ctrl+1…6). El atajo de
-captura es una acción de ámbito aplicación cuya tecla sigue a Ajustes. Las acciones que operan
-sobre el caso seleccionado se habilitan según `TestCaseStore::selectedId()` y «Deshacer» sigue a
-`canUndo()`. Con `QSystemTrayIcon` disponible hay icono en la bandeja (mostrar/ocultar, capturar,
-salir); si `AppSettings::closeToTray` está activo, cerrar la ventana la oculta en lugar de salir.
+y los atajos estándar (`QKeySequence::New`, `Find`, `Undo`, `Quit`, F5, Ctrl+1…6). Los atajos de
+captura y de grabación son acciones de ámbito aplicación cuya tecla sigue a Ajustes; además
+`main.cpp` los registra en el sistema con `IGlobalHotkey` (ver «Captura de pantalla»). Las acciones
+que operan sobre el caso seleccionado se habilitan según `TestCaseStore::selectedId()` y «Deshacer»
+sigue a `canUndo()`. Con `QSystemTrayIcon` disponible hay icono en la bandeja (mostrar/ocultar,
+capturar, grabar GIF, salir); si `AppSettings::closeToTray` está activo, cerrar la ventana la oculta
+en lugar de salir. Arrastrar ficheros a la ventana (`dropEvent` → `attachFiles`) los adjunta al caso.
 
 ## Errores de guardado
 
@@ -130,7 +137,7 @@ muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`
 | Ajustes gestor/captura | QSettings (`~/.config/QAflow/QAflow.conf`), sin el token                  |
 | Token del gestor       | `ISecretStore`: llavero del sistema; si no hay, QSettings en claro con aviso en Ajustes |
 | Bugs y cola offline    | `$XDG_DATA_HOME/QAflow/QAflow/bugs.json`                    |
-| Imágenes de capturas   | Carpeta configurable (por defecto `~/QAflow/capturas`)      |
+| Capturas, GIF y adjuntos | Carpeta configurable (por defecto `~/QAflow/capturas`)     |
 
 ## Gestión de casos
 
@@ -221,9 +228,53 @@ caso del plan, abre el informe cuando el plan termina o vuelve a la lista de cas
   si no está instalado devuelve la pantalla completa.
 * **Región**: overlay `RegionSelector` a pantalla completa; arrastrar para elegir, Esc cancela.
 
-El atajo configurado (por defecto `Ctrl+Shift+S`) es un `QShortcut` de ámbito aplicación:
-funciona mientras QAflow tiene el foco. Un atajo global de sistema requeriría código
-específico por plataforma (X11/Wayland portal) y queda fuera de esta versión.
+**Wayland.** `grabWindow` devuelve negro, así que si la sesión es Wayland y hay un
+`xdg-desktop-portal` con la interfaz `org.freedesktop.portal.Screenshot`, `ScreenCaptureService`
+delega en `PortalScreenshot` (QtDBus, `QAFLOW_HAS_DBUS`): «Pantalla completa» y «Región» piden una
+captura silenciosa del escritorio (se recorta la pantalla bajo el cursor y, para la región, se
+reutiliza el overlay); «Ventana activa» pide la captura interactiva, en la que el compositor deja
+elegir pantalla, ventana o zona. `AppContext::captureBackend` lleva el nombre del método a Ajustes.
+
+**Cuenta atrás.** `EvidenceService::captureForSelectedCase()` respeta `CaptureSettings::delaySecs`:
+emite `countdown(n)` cada segundo (la ventana lo muestra como aviso) y captura al llegar a 0; una
+segunda llamada durante la cuenta atrás la cancela. Tras guardar, según los ajustes, copia la
+imagen al portapapeles y `MainWindow` abre el editor de anotaciones (`shotAdded`).
+
+**Atajo global.** `IGlobalHotkey` (core) se implementa en `infrastructure/hotkey/GlobalHotkey`:
+`RegisterHotKey` + `WM_HOTKEY` en Windows, `XGrabKey` sobre la ventana raíz + filtro de eventos xcb
+en X11 (`QAFLOW_HOTKEY_X11`, con y sin Bloq Num / Bloq Mayús), `RegisterEventHotKey` (Carbon) en
+macOS y, en Wayland, `PortalShortcuts` sobre `org.freedesktop.portal.GlobalShortcuts` (crea una
+sesión, pide los atajos con su combinación preferida y escucha `Activated`; el compositor puede
+pedir confirmación). `main.cpp` registra «capture» y «record» con las teclas de Ajustes y los vuelve
+a registrar al cambiarlas; si `bind()` falla o `globalShortcut` está desactivado, quedan los
+`QAction` de ámbito aplicación. `IGlobalHotkey::status()` explica la situación en Ajustes.
+
+## Evidencias: grabación, adjuntos, anotaciones y visor
+
+* **Grabación a GIF.** `IScreenRecorder` (core) → `GifRecorder` (infrastructure): oculta la ventana,
+  pide la región con `RegionSelector` (o toma la pantalla entera), muestra `RecorderOverlay`
+  (tiempo, «Detener», Esc cancela) y captura con `grabWindow` a `fps` fotogramas por segundo hasta
+  `stop()` o `maxSecs`. Cada fotograma se reduce a `maxWidth` (1280) y se pasa a `GifEncoder`, un
+  codificador GIF89a propio: paleta por fotograma con median cut sobre un histograma de 15 bits
+  (exacta si hay ≤ 256 colores) y LZW incremental con la misma política de tamaño de código que
+  giflib. El retardo de cada fotograma es el tiempo real transcurrido, así el GIF mantiene el ritmo
+  aunque capturar sea lento. `EvidenceService::toggleRecording()` crea `rec_NNN.gif` en la carpeta
+  de capturas y lo adjunta como una evidencia más. No hay grabación en Wayland (haría falta el portal
+  ScreenCast con PipeWire).
+* **Ficheros adjuntos.** `EvidenceService::attachFiles()` copia cada fichero a la carpeta de
+  capturas como `adj_NNN_<nombre>` y lo añade al caso (asignado al paso en ejecución). `Screenshot`
+  distingue con `isImage()` / `isAnimation()` / `extension()`: las imágenes se muestran y anotan, los
+  demás ficheros salen con su extensión en la miniatura y se abren con la aplicación del sistema.
+  Los gestores los suben por su tipo MIME (GitHub sigue sin admitir adjuntos).
+* **Anotaciones.** `AnnotationEditor` (presentation/widgets) dibuja sobre la imagen: flecha,
+  rectángulo, elipse, marcador, texto y difuminado (pixelado por bloques). `renderAnnotations()` es
+  una función pura que aplica la lista de `Annotation` en coordenadas de la imagen original; el
+  lienzo sólo escala. Al guardar, `EvidenceService::replaceImage()` sobrescribe el fichero y
+  `TestCaseStore::notifyShotFileChanged()` hace que las vistas recarguen la miniatura.
+* **Visor.** `ImageViewer` muestra las evidencias del caso a tamaño completo con navegación,
+  zoom (ajustar nunca amplía), arrastre y acciones de copiar, anotar y mostrar en la carpeta.
+  `EvidenceActions` reúne estas acciones para que las tres vistas con miniaturas (Casos, Ejecución,
+  Reportar bug) sólo conecten sus `ShotCard` con `wireCard()`.
 
 ## Bugs y gestores de incidencias
 
@@ -269,6 +320,7 @@ tests/
 ├── support/
 │   ├── MemoryRepositories.h   repositorios, ajustes y llavero en memoria (con `failWrites` para simular fallos de disco)
 │   ├── FakeIssueTracker.h     IIssueTracker con modos Succeed / RejectContent / NetworkDown
+│   ├── FakeScreenRecorder.h   IScreenRecorder que no graba: start/stop simulados y fichero mínimo
 │   ├── FakeHttpServer.h       servidor HTTP mínimo en localhost que guarda las peticiones y responde lo que se le diga
 │   └── AppFixture.h           toda la capa de aplicación ya cargada con los datos de ejemplo
 ├── core/                      modelos y funciones puras
@@ -286,16 +338,20 @@ tests/
     ├── test_plan_store.cpp         colección, orden, ciclos, estimación
     ├── test_settings_store.cpp     token en el llavero, migración, un token por gestor
     ├── test_bug_store.cpp          issues por caso, estados, cola de pendientes
-    └── test_bug_report_service.cpp borrador, envío, cola offline, reintentos, estados, metadatos
+    ├── test_bug_report_service.cpp borrador, envío, cola offline, reintentos, estados, metadatos
+    └── test_evidence_service.cpp   captura (formato, cuenta atrás y su cancelación), adjuntos, grabación,
+                                    sustitución de la imagen anotada, portapapeles, borrado de ficheros liberados
 ├── infrastructure/            disco y red reales, en directorios temporales y localhost
 │   ├── test_json_repositories.cpp   ida y vuelta de casos, planes (y migración de plan.json), historial, sesión, bugs;
 │   │                                ficheros corruptos y directorio sin permisos
 │   ├── test_settings_repository.cpp QSettingsRepository (grupo "tracker", migración del grupo "jira"), PlainSettingsSecretStore
-│   └── test_tracker_clients.cpp     JiraClient y GitHubClient contra FakeHttpServer: cabeceras, cuerpo, adjuntos multipart,
-│                                    4xx no reintentable, 5xx y conexión rechazada reintentables, estados, metadatos, TrackerRouter
+│   ├── test_tracker_clients.cpp     JiraClient y GitHubClient contra FakeHttpServer: cabeceras, cuerpo, adjuntos multipart,
+│   │                                4xx no reintentable, 5xx y conexión rechazada reintentables, estados, metadatos, TrackerRouter
+│   └── test_gif_encoder.cpp         cuantización (exacta y median cut) y GIF animado leído de vuelta con el plugin de Qt
 └── presentation/              ventana completa con plataforma offscreen
-    └── test_main_window.cpp   navegación, atajos del menú, Ctrl+F y filtro, teclas de veredicto, captura,
-                               deshacer, métricas y el aviso «Reintentar» al fallar el guardado
+    ├── test_main_window.cpp   navegación, atajos del menú, Ctrl+F y filtro, teclas de veredicto, captura, cuenta atrás,
+    │                          grabación, adjuntar por arrastre, abrir el visor, deshacer, métricas y el aviso «Reintentar»
+    └── test_evidence_widgets.cpp renderAnnotations (formas, texto, difuminado), AnnotationEditor, ImageViewer, Thumbnail y ShotCard
 ```
 
 `core/test_metrics.cpp` cubre `metrics::` (por suite, ciclos, tendencia).

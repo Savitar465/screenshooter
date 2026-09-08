@@ -39,9 +39,17 @@ CaptureSettings QSettingsRepository::loadCapture() {
     s.beginGroup(QStringLiteral("capture"));
     CaptureSettings c;
     c.shortcut = s.value(QStringLiteral("shortcut"), c.shortcut).toString();
+    c.recordShortcut = s.value(QStringLiteral("recordShortcut"), c.recordShortcut).toString();
     c.format = s.value(QStringLiteral("format"), c.format).toString();
     c.mode = captureModeFromString(s.value(QStringLiteral("mode"), toString(c.mode)).toString());
     c.folder = s.value(QStringLiteral("folder"), c.folder).toString();
+    c.delaySecs = s.value(QStringLiteral("delaySecs"), c.delaySecs).toInt();
+    c.globalShortcut = s.value(QStringLiteral("globalShortcut"), c.globalShortcut).toBool();
+    c.openEditor = s.value(QStringLiteral("openEditor"), c.openEditor).toBool();
+    c.copyToClipboard = s.value(QStringLiteral("copyToClipboard"), c.copyToClipboard).toBool();
+    c.gifFps = s.value(QStringLiteral("gifFps"), c.gifFps).toInt();
+    c.gifMaxSecs = s.value(QStringLiteral("gifMaxSecs"), c.gifMaxSecs).toInt();
+    c.clamp();
     return c;
 }
 
@@ -49,9 +57,16 @@ void QSettingsRepository::saveCapture(const CaptureSettings& c) {
     QSettings s;
     s.beginGroup(QStringLiteral("capture"));
     s.setValue(QStringLiteral("shortcut"), c.shortcut);
+    s.setValue(QStringLiteral("recordShortcut"), c.recordShortcut);
     s.setValue(QStringLiteral("format"), c.format);
     s.setValue(QStringLiteral("mode"), toString(c.mode));
     s.setValue(QStringLiteral("folder"), c.folder);
+    s.setValue(QStringLiteral("delaySecs"), c.delaySecs);
+    s.setValue(QStringLiteral("globalShortcut"), c.globalShortcut);
+    s.setValue(QStringLiteral("openEditor"), c.openEditor);
+    s.setValue(QStringLiteral("copyToClipboard"), c.copyToClipboard);
+    s.setValue(QStringLiteral("gifFps"), c.gifFps);
+    s.setValue(QStringLiteral("gifMaxSecs"), c.gifMaxSecs);
 }
 
 AppSettings QSettingsRepository::loadApp() {

@@ -68,12 +68,24 @@ private slots:
         QSettingsRepository repo;
         CaptureSettings c;
         c.shortcut = QStringLiteral("Ctrl+Alt+S"); c.format = QStringLiteral("JPG"); c.mode = CaptureMode::Region; c.folder = QStringLiteral("/tmp/caps");
+        c.recordShortcut = QStringLiteral("F8"); c.delaySecs = 5; c.globalShortcut = false; c.openEditor = true; c.copyToClipboard = true;
+        c.gifFps = 15; c.gifMaxSecs = 45;
         repo.saveCapture(c);
         const CaptureSettings lc = repo.loadCapture();
         QCOMPARE(lc.shortcut, c.shortcut);
         QCOMPARE(lc.format, c.format);
         QCOMPARE(static_cast<int>(lc.mode), static_cast<int>(CaptureMode::Region));
         QCOMPARE(lc.folder, c.folder);
+        QCOMPARE(lc.recordShortcut, QStringLiteral("F8"));
+        QCOMPARE(lc.delaySecs, 5);
+        QVERIFY(!lc.globalShortcut);
+        QVERIFY(lc.openEditor);
+        QVERIFY(lc.copyToClipboard);
+        QCOMPARE(lc.gifFps, 15);
+        QCOMPARE(lc.gifMaxSecs, 45);
+        // Valores fuera de rango editados a mano en el fichero se corrigen al cargar.
+        QSettings().setValue(QStringLiteral("capture/gifFps"), 500);
+        QCOMPARE(repo.loadCapture().gifFps, 20);
 
         QCOMPARE(static_cast<int>(repo.loadApp().theme), static_cast<int>(AppTheme::Dark));   // valores por defecto
         QCOMPARE(static_cast<int>(repo.loadApp().language), static_cast<int>(AppLanguage::System));

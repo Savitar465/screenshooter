@@ -6,7 +6,9 @@
 // (SettingsStore::appChanged) la reconstruye en el mismo sitio y pantalla.
 
 #include "application/AppContext.h"
+#include "infrastructure/capture/GifRecorder.h"
 #include "infrastructure/capture/ScreenCaptureService.h"
+#include "infrastructure/hotkey/GlobalHotkey.h"
 #include "infrastructure/persistence/JsonBugRepository.h"
 #include "infrastructure/persistence/JsonRunHistoryRepository.h"
 #include "infrastructure/persistence/JsonRunSessionRepository.h"
@@ -93,7 +95,9 @@ int main(int argc, char* argv[]) {
     auto secrets = makeSecretStore();   // llavero del sistema si lo hay; si no, avisa en Ajustes
     auto bugRepo = std::make_shared<JsonBugRepository>(dataDir);
     auto tracker = std::make_shared<TrackerRouter>();   // Jira, GitHub, GitLab o Azure DevOps según Ajustes
-    auto capture = std::make_shared<ScreenCaptureService>();
+    auto capture = std::make_shared<ScreenCaptureService>();   // grabWindow o portal de Wayland
+    auto recorder = std::make_shared<GifRecorder>();
+    GlobalHotkey hotkey;                                       // atajo del sistema (RegisterHotKey, XGrabKey, portal, Carbon)
 
     // Aplicación
     TestCaseStore cases(caseRepo);
@@ -104,6 +108,7 @@ int main(int argc, char* argv[]) {
     BugStore bugLedger(bugRepo);
     BugReportService bugs(tracker, cases, run, settings, bugLedger);
     EvidenceService evidence(capture, cases, run, settings);
+    evidence.setRecorder(recorder);
     CaseTransferService transfer(cases);
     settings.load();   // primero: idioma y tema deciden cómo se construye todo lo demás
     if (devsnapshot::requested()) devsnapshot::applyRequestedAppSettings(settings);
@@ -126,7 +131,20 @@ int main(int argc, char* argv[]) {
     ctx.bugLedger = &bugLedger;
     ctx.evidence = &evidence;
     ctx.transfer = &transfer;
+    ctx.hotkey = &hotkey;
     ctx.dataDir = dataDir;
+    ctx.captureBackend = capture->backendName();
+
+    // Atajos globales: capturar y grabar aunque la ventana no tenga el foco. Si el sistema los
+    // rechaza, siguen funcionando los QAction de la ventana (mismo atajo, ámbito aplicación).
+    auto bindHotkeys = [&]() {
+        const CaptureSettings& c = settings.capture();
+        if (!c.globalShortcut) { hotkey.unbind(QStringLiteral("capture")); hotkey.unbind(QStringLiteral("record")); return; }
+        hotkey.bind(QStringLiteral("capture"), c.shortcut, [&evidence]() { evidence.captureForSelectedCase(); });
+        hotkey.bind(QStringLiteral("record"), c.recordShortcut, [&evidence]() { evidence.toggleRecording(); });
+    };
+    bindHotkeys();
+    QObject::connect(&settings, &SettingsStore::captureChanged, &app, bindHotkeys);
 
     // Presentación (la captura oculta la ventana principal mientras captura)
     std::unique_ptr<MainWindow> window;
@@ -134,6 +152,7 @@ int main(int argc, char* argv[]) {
         std::unique_ptr<MainWindow> previous = std::move(window);
         window = std::make_unique<MainWindow>(ctx);
         capture->setAppWindow(window.get());
+        recorder->setAppWindow(window.get());
         if (previous) {
             window->setGeometry(previous->geometry());
             window->navigate(previous->currentScreen());

@@ -71,6 +71,8 @@ public:
     void moveShot(const QString& id, int shotId, int delta);
     void sortShotsByStep(const QString& id);
     int nextShotSequence();
+    /// El fichero de una evidencia cambió en disco (anotaciones): las vistas deben recargar la miniatura.
+    void notifyShotFileChanged(const QString& id) { emit caseChanged(id); }
 
     // Deshacer (un nivel, sólo tras una operación destructiva)
     bool canUndo() const { return m_undo.has_value(); }

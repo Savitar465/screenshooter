@@ -9,6 +9,12 @@ set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Network)
 find_package(Qt6 QUIET COMPONENTS LinguistTools)
+# Linux: QtDBus para los portales de Wayland (captura y atajos globales) y X11/xcb para el atajo
+# global en X11. Ambos son opcionales: sin ellos la app compila y esas funciones avisan en Ajustes.
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    find_package(X11 QUIET COMPONENTS xcb)
+endif ()
 
 # Avisos comunes a todas las capas.
 add_library(qaflow_warnings INTERFACE)
@@ -43,6 +49,8 @@ add_library(qaflow_core STATIC
         src/core/services/IRunSessionRepository.h
         src/core/services/ISettingsRepository.h
         src/core/services/IScreenCapture.h
+        src/core/services/IScreenRecorder.h
+        src/core/services/IGlobalHotkey.h
         src/core/services/IIssueTracker.h
         src/core/services/ISecretStore.h
         src/core/services/IBugRepository.h
@@ -92,6 +100,18 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/capture/ScreenCaptureService.cpp
         src/infrastructure/capture/RegionSelector.h
         src/infrastructure/capture/RegionSelector.cpp
+        src/infrastructure/capture/PortalScreenshot.h
+        src/infrastructure/capture/PortalScreenshot.cpp
+        src/infrastructure/capture/GifEncoder.h
+        src/infrastructure/capture/GifEncoder.cpp
+        src/infrastructure/capture/GifRecorder.h
+        src/infrastructure/capture/GifRecorder.cpp
+        src/infrastructure/capture/RecorderOverlay.h
+        src/infrastructure/capture/RecorderOverlay.cpp
+        src/infrastructure/hotkey/GlobalHotkey.h
+        src/infrastructure/hotkey/GlobalHotkey.cpp
+        src/infrastructure/hotkey/PortalShortcuts.h
+        src/infrastructure/hotkey/PortalShortcuts.cpp
         src/infrastructure/secrets/SecretStores.h
         src/infrastructure/secrets/SecretStores.cpp
         src/infrastructure/tracker/HttpTrackerClient.h
@@ -109,7 +129,24 @@ add_library(qaflow_infrastructure STATIC
 )
 target_link_libraries(qaflow_infrastructure PUBLIC qaflow_core Qt6::Gui Qt6::Widgets Qt6::Network PRIVATE qaflow_warnings)
 if (WIN32)
-    target_link_libraries(qaflow_infrastructure PUBLIC crypt32)   # DPAPI para el token del gestor
+    target_link_libraries(qaflow_infrastructure PUBLIC crypt32 user32)   # DPAPI para el token del gestor; RegisterHotKey
+elseif (APPLE)
+    target_link_libraries(qaflow_infrastructure PUBLIC "-framework Carbon")   # RegisterEventHotKey
+else ()
+    if (TARGET Qt6::DBus)
+        target_link_libraries(qaflow_infrastructure PUBLIC Qt6::DBus)
+        target_compile_definitions(qaflow_infrastructure PUBLIC QAFLOW_HAS_DBUS)
+        message(STATUS "QtDBus encontrado: portales de Wayland (captura y atajos globales) activados")
+    else ()
+        message(STATUS "QtDBus no encontrado: sin portales de Wayland")
+    endif ()
+    if (X11_FOUND AND X11_xcb_FOUND)
+        target_link_libraries(qaflow_infrastructure PUBLIC X11::X11 X11::xcb)
+        target_compile_definitions(qaflow_infrastructure PUBLIC QAFLOW_HOTKEY_X11)
+        message(STATUS "X11 y xcb encontrados: atajo global en X11 activado")
+    else ()
+        message(STATUS "X11/xcb no encontrados: el atajo de captura sólo funciona con la app en primer plano")
+    endif ()
 endif ()
 
 # presentation: widgets Qt. Depende de application; nunca de infrastructure.
@@ -139,6 +176,12 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/TextArea.cpp
         src/presentation/widgets/ShotCard.h
         src/presentation/widgets/ShotCard.cpp
+        src/presentation/widgets/ImageViewer.h
+        src/presentation/widgets/ImageViewer.cpp
+        src/presentation/widgets/AnnotationEditor.h
+        src/presentation/widgets/AnnotationEditor.cpp
+        src/presentation/widgets/EvidenceActions.h
+        src/presentation/widgets/EvidenceActions.cpp
         src/presentation/views/Sidebar.h
         src/presentation/views/Sidebar.cpp
         src/presentation/views/CasesView.h

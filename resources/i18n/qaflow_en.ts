@@ -2,6 +2,28 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US" sourcelanguage="es_ES">
 <context>
+    <name>EvidenceActions</name>
+    <message>
+        <source>Adjuntar archivos como evidencia</source>
+        <translation>Attach files as evidence</translation>
+    </message>
+    <message>
+        <source>Evidencias (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.mp4 *.webm *.mkv *.mov *.log *.txt *.json *.har *.zip);;Todos los archivos (*)</source>
+        <translation>Evidence (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.mp4 *.webm *.mkv *.mov *.log *.txt *.json *.har *.zip);;All files (*)</translation>
+    </message>
+</context>
+<context>
+    <name>RecorderOverlay</name>
+    <message>
+        <source>Detener</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
+        <source>Esc cancela</source>
+        <translation>Esc cancels</translation>
+    </message>
+</context>
+<context>
     <name>RunView</name>
     <message>
         <source>PASA</source>
@@ -391,6 +413,225 @@
         <source>Indica la URL y el token de API</source>
         <translation>Enter the URL and the API token</translation>
     </message>
+    <message>
+        <source>Captura cancelada</source>
+        <translation>Capture cancelled</translation>
+    </message>
+    <message>
+        <source>QAflow · %1</source>
+        <translation>QAflow · %1</translation>
+    </message>
+    <message>
+        <source>Grabación interrumpida</source>
+        <translation>Recording interrupted</translation>
+    </message>
+    <message>
+        <source>Ya hay una grabación en curso</source>
+        <translation>A recording is already in progress</translation>
+    </message>
+    <message>
+        <source>La grabación de GIF no está disponible en Wayland (usa una sesión X11)</source>
+        <translation>GIF recording is not available on Wayland (use an X11 session)</translation>
+    </message>
+    <message>
+        <source>Grabación cancelada</source>
+        <translation>Recording cancelled</translation>
+    </message>
+    <message>
+        <source>No se pudo crear %1: %2</source>
+        <translation>Could not create %1: %2</translation>
+    </message>
+    <message>
+        <source>No se pudo escribir la grabación: %1</source>
+        <translation>Could not write the recording: %1</translation>
+    </message>
+    <message>
+        <source>La grabación no tiene fotogramas</source>
+        <translation>The recording has no frames</translation>
+    </message>
+    <message>
+        <source>No se pudo escribir la grabación</source>
+        <translation>Could not write the recording</translation>
+    </message>
+    <message>
+        <source>El portal de capturas devolvió un error</source>
+        <translation>The screenshot portal returned an error</translation>
+    </message>
+    <message>
+        <source>No se pudo leer la captura del portal (%1)</source>
+        <translation>Could not read the portal screenshot (%1)</translation>
+    </message>
+    <message>
+        <source>No hay bus de sesión D-Bus</source>
+        <translation>No D-Bus session bus</translation>
+    </message>
+    <message>
+        <source>El portal rechazó la captura: %1</source>
+        <translation>The portal rejected the screenshot: %1</translation>
+    </message>
+    <message>
+        <source>Captura por portal no disponible en esta compilación</source>
+        <translation>Portal screenshots are not available in this build</translation>
+    </message>
+    <message>
+        <source>Atajo global del sistema (Windows)</source>
+        <translation>System-wide shortcut (Windows)</translation>
+    </message>
+    <message>
+        <source>Atajo global del sistema (macOS)</source>
+        <translation>System-wide shortcut (macOS)</translation>
+    </message>
+    <message>
+        <source>Atajo global mediante el portal de Wayland</source>
+        <translation>System-wide shortcut through the Wayland portal</translation>
+    </message>
+    <message>
+        <source>Wayland sin portal GlobalShortcuts: el atajo sólo funciona con QAflow en primer plano</source>
+        <translation>Wayland without the GlobalShortcuts portal: the shortcut only works while QAflow is in the foreground</translation>
+    </message>
+    <message>
+        <source>Wayland: el atajo sólo funciona con QAflow en primer plano (compilado sin QtDBus)</source>
+        <translation>Wayland: the shortcut only works while QAflow is in the foreground (built without QtDBus)</translation>
+    </message>
+    <message>
+        <source>Atajo global del sistema (X11)</source>
+        <translation>System-wide shortcut (X11)</translation>
+    </message>
+    <message>
+        <source>Compilado sin soporte X11: el atajo sólo funciona con QAflow en primer plano</source>
+        <translation>Built without X11 support: the shortcut only works while QAflow is in the foreground</translation>
+    </message>
+    <message>
+        <source>Atajo global no disponible en esta plataforma</source>
+        <translation>System-wide shortcut not available on this platform</translation>
+    </message>
+    <message>
+        <source>Atajo «%1» no válido</source>
+        <translation>Invalid shortcut “%1”</translation>
+    </message>
+    <message>
+        <source>La tecla de «%1» no admite atajo global</source>
+        <translation>The key in “%1” cannot be used as a system-wide shortcut</translation>
+    </message>
+    <message>
+        <source>Atajo global registrado: %1</source>
+        <translation>System-wide shortcut registered: %1</translation>
+    </message>
+    <message>
+        <source>Windows rechazó «%1» (otra aplicación ya lo usa)</source>
+        <translation>Windows rejected “%1” (another application already uses it)</translation>
+    </message>
+    <message>
+        <source>macOS rechazó «%1»</source>
+        <translation>macOS rejected “%1”</translation>
+    </message>
+    <message>
+        <source>Atajo pedido al portal de Wayland (el escritorio puede pedir confirmación)</source>
+        <translation>Shortcut requested from the Wayland portal (the desktop may ask for confirmation)</translation>
+    </message>
+    <message>
+        <source>Sin conexión X11: el atajo sólo funciona con QAflow en primer plano</source>
+        <translation>No X11 connection: the shortcut only works while QAflow is in the foreground</translation>
+    </message>
+    <message>
+        <source>La tecla de «%1» no existe en este teclado</source>
+        <translation>The key in “%1” does not exist on this keyboard</translation>
+    </message>
+    <message>
+        <source>X11 rechazó «%1» (otra aplicación ya lo usa)</source>
+        <translation>X11 rejected “%1” (another application already uses it)</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::AnnotationEditor</name>
+    <message>
+        <source>Anotar captura</source>
+        <translation>Annotate screenshot</translation>
+    </message>
+    <message>
+        <source>Flecha</source>
+        <translation>Arrow</translation>
+    </message>
+    <message>
+        <source>Flecha (A)</source>
+        <translation>Arrow (A)</translation>
+    </message>
+    <message>
+        <source>Rectángulo</source>
+        <translation>Rectangle</translation>
+    </message>
+    <message>
+        <source>Rectángulo (R)</source>
+        <translation>Rectangle (R)</translation>
+    </message>
+    <message>
+        <source>Elipse</source>
+        <translation>Ellipse</translation>
+    </message>
+    <message>
+        <source>Elipse (E)</source>
+        <translation>Ellipse (E)</translation>
+    </message>
+    <message>
+        <source>Marcador</source>
+        <translation>Highlighter</translation>
+    </message>
+    <message>
+        <source>Resaltar una zona (M)</source>
+        <translation>Highlight an area (M)</translation>
+    </message>
+    <message>
+        <source>Texto</source>
+        <translation>Text</translation>
+    </message>
+    <message>
+        <source>Texto: clic donde quieras escribir (T)</source>
+        <translation>Text: click where you want to write (T)</translation>
+    </message>
+    <message>
+        <source>Difuminar</source>
+        <translation>Blur</translation>
+    </message>
+    <message>
+        <source>Pixelar datos sensibles (D)</source>
+        <translation>Pixelate sensitive data (D)</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Colour</translation>
+    </message>
+    <message>
+        <source>Grosor</source>
+        <translation>Width</translation>
+    </message>
+    <message>
+        <source>Arrastra para dibujar · Ctrl+Z deshace · Ctrl+rueda amplía</source>
+        <translation>Drag to draw · Ctrl+Z undoes · Ctrl+wheel zooms</translation>
+    </message>
+    <message>
+        <source>Deshacer</source>
+        <translation>Undo</translation>
+    </message>
+    <message>
+        <source>Deshacer la última anotación (Ctrl+Z)</source>
+        <translation>Undo the last annotation (Ctrl+Z)</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Guardar</source>
+        <translation>Save</translation>
+    </message>
+    <message>
+        <source>Sustituye la captura por la versión anotada (Ctrl+S)</source>
+        <translation>Replaces the screenshot with the annotated version (Ctrl+S)</translation>
+    </message>
+    <message>
+        <source>Texto de la anotación</source>
+        <translation>Annotation text</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::BugReportService</name>
@@ -659,6 +900,14 @@
     <message>
         <source>NUEVO DEFECTO · DESTINO %1 &lt;span style=&quot;color:%2;font-family:monospace&quot;&gt;%3&lt;/span&gt;</source>
         <translation>NEW DEFECT · TARGET %1 &lt;span style=&quot;color:%2;font-family:monospace&quot;&gt;%3&lt;/span&gt;</translation>
+    </message>
+    <message>
+        <source>+ Adjuntar archivo…</source>
+        <translation>+ Attach file…</translation>
+    </message>
+    <message>
+        <source>Adjunta logs, vídeos o imágenes existentes; se suben al gestor con el bug</source>
+        <translation>Attach existing logs, videos or images; they are uploaded to the tracker with the bug</translation>
     </message>
 </context>
 <context>
@@ -1010,6 +1259,26 @@
         <source>Exportar casos</source>
         <translation>Export cases</translation>
     </message>
+    <message>
+        <source>● Grabar GIF</source>
+        <translation>● Record GIF</translation>
+    </message>
+    <message>
+        <source>Graba la pantalla o una región a GIF y la adjunta al caso</source>
+        <translation>Records the screen or a region to a GIF and attaches it to the case</translation>
+    </message>
+    <message>
+        <source>■ Detener grabación</source>
+        <translation>■ Stop recording</translation>
+    </message>
+    <message>
+        <source>+ Adjuntar archivo…</source>
+        <translation>+ Attach file…</translation>
+    </message>
+    <message>
+        <source>Adjunta logs, vídeos o imágenes existentes (también puedes arrastrarlos a la ventana)</source>
+        <translation>Attach existing logs, videos or images (you can also drag them onto the window)</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::EvidenceService</name>
@@ -1024,6 +1293,26 @@
     <message>
         <source>No se pudo guardar %1</source>
         <translation>Could not save %1</translation>
+    </message>
+    <message>
+        <source>Cuenta atrás cancelada</source>
+        <translation>Countdown cancelled</translation>
+    </message>
+    <message>
+        <source>La grabación no está disponible</source>
+        <translation>Recording is not available</translation>
+    </message>
+    <message>
+        <source>No existe %1</source>
+        <translation>%1 does not exist</translation>
+    </message>
+    <message>
+        <source>No se pudo copiar %1 a la carpeta de capturas</source>
+        <translation>Could not copy %1 to the screenshots folder</translation>
+    </message>
+    <message>
+        <source>No se pudo copiar la imagen al portapapeles</source>
+        <translation>Could not copy the image to the clipboard</translation>
     </message>
 </context>
 <context>
@@ -1270,6 +1559,81 @@
     </message>
 </context>
 <context>
+    <name>qaflow::ImageViewer</name>
+    <message>
+        <source>Evidencia</source>
+        <translation>Evidence</translation>
+    </message>
+    <message>
+        <source>Anterior (←)</source>
+        <translation>Previous (←)</translation>
+    </message>
+    <message>
+        <source>Siguiente (→)</source>
+        <translation>Next (→)</translation>
+    </message>
+    <message>
+        <source>Ajustar</source>
+        <translation>Fit</translation>
+    </message>
+    <message>
+        <source>Ajustar a la ventana (0)</source>
+        <translation>Fit to window (0)</translation>
+    </message>
+    <message>
+        <source>Tamaño real (1)</source>
+        <translation>Actual size (1)</translation>
+    </message>
+    <message>
+        <source>Copiar</source>
+        <translation>Copy</translation>
+    </message>
+    <message>
+        <source>Copiar la imagen al portapapeles (Ctrl+C)</source>
+        <translation>Copy the image to the clipboard (Ctrl+C)</translation>
+    </message>
+    <message>
+        <source>Anotar…</source>
+        <translation>Annotate…</translation>
+    </message>
+    <message>
+        <source>Flechas, rectángulos, texto y difuminado (Ctrl+E)</source>
+        <translation>Arrows, rectangles, text and blur (Ctrl+E)</translation>
+    </message>
+    <message>
+        <source>Carpeta</source>
+        <translation>Folder</translation>
+    </message>
+    <message>
+        <source>Mostrar en la carpeta de capturas</source>
+        <translation>Show in the screenshots folder</translation>
+    </message>
+    <message>
+        <source>Cerrar (Esc)</source>
+        <translation>Close (Esc)</translation>
+    </message>
+    <message>
+        <source>Abrir con la aplicación del sistema</source>
+        <translation>Open with the system application</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>El fichero ya no está en el disco</source>
+        <translation>The file is no longer on disk</translation>
+    </message>
+    <message>
+        <source>  ·  Paso %1</source>
+        <translation>  ·  Step %1</translation>
+    </message>
+    <message>
+        <source>Evidencia · %1</source>
+        <translation>Evidence · %1</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::MainWindow</name>
     <message>
         <source>Ejecución de %1 recuperada de la sesión anterior</source>
@@ -1428,10 +1792,6 @@
         <translation>Keyboard shortcuts</translation>
     </message>
     <message>
-        <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Volver al paso anterior&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
-        <translation>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicate case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take screenshot&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict for the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go back to the previous step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
-    </message>
-    <message>
         <source>Ocultar QAflow</source>
         <translation>Hide QAflow</translation>
     </message>
@@ -1494,6 +1854,50 @@
     <message>
         <source>Plan terminado · %1 superados · %2 fallidos · %3 bloqueados</source>
         <translation>Plan finished · %1 passed · %2 failed · %3 blocked</translation>
+    </message>
+    <message>
+        <source>&amp;Grabar GIF</source>
+        <translation>Record &amp;GIF</translation>
+    </message>
+    <message>
+        <source>Adjuntar &amp;archivo…</source>
+        <translation>Attach &amp;file…</translation>
+    </message>
+    <message>
+        <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Iniciar o detener la grabación de GIF&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Adjuntar archivos como evidencia (o arrástralos a la ventana)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en una miniatura&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Volver al paso anterior&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
+        <translation>&lt;table cellspacing='6'&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicate case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take a screenshot (system-wide when the system allows it; press again to cancel the countdown)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Start or stop the GIF recording&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Attach files as evidence (or drag them onto the window)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a thumbnail&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the evidence at full size (← → navigate, Ctrl+E annotates, Ctrl+C copies)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict of the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Back to the previous step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
+    </message>
+    <message>
+        <source>Grabar GIF</source>
+        <translation>Record GIF</translation>
+    </message>
+    <message>
+        <source>Grabación guardada en %1</source>
+        <translation>Recording saved in %1</translation>
+    </message>
+    <message>
+        <source>%1 adjuntado al caso</source>
+        <translation>%1 attached to the case</translation>
+    </message>
+    <message>
+        <source>%1 archivos adjuntados al caso</source>
+        <translation>%1 files attached to the case</translation>
+    </message>
+    <message>
+        <source>Capturando en %1… (pulsa el atajo otra vez para cancelar)</source>
+        <translation>Capturing in %1… (press the shortcut again to cancel)</translation>
+    </message>
+    <message>
+        <source>Detener la &amp;grabación</source>
+        <translation>Stop the &amp;recording</translation>
+    </message>
+    <message>
+        <source>Detener la grabación</source>
+        <translation>Stop the recording</translation>
+    </message>
+    <message>
+        <source>Grabando… pulsa Detener o %1 para terminar</source>
+        <translation>Recording… press Stop or %1 to finish</translation>
     </message>
 </context>
 <context>
@@ -1954,6 +2358,26 @@
         <source>CAPTURAS · %1</source>
         <translation>SCREENSHOTS · %1</translation>
     </message>
+    <message>
+        <source>● GIF</source>
+        <translation>● GIF</translation>
+    </message>
+    <message>
+        <source>Graba la pantalla o una región a GIF y la adjunta al caso</source>
+        <translation>Records the screen or a region to a GIF and attaches it to the case</translation>
+    </message>
+    <message>
+        <source>■ Detener</source>
+        <translation>■ Stop</translation>
+    </message>
+    <message>
+        <source>+ Archivo</source>
+        <translation>+ File</translation>
+    </message>
+    <message>
+        <source>Adjunta logs, vídeos o imágenes existentes</source>
+        <translation>Attach existing logs, videos or images</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::SettingsStore</name>
@@ -2037,22 +2461,6 @@
         <translation>●  Disconnected</translation>
     </message>
     <message>
-        <source>Capturas de pantalla</source>
-        <translation>Screenshots</translation>
-    </message>
-    <message>
-        <source>Se guardan localmente y se adjuntan al paso activo de la ejecución.</source>
-        <translation>They are saved locally and attached to the active step of the run.</translation>
-    </message>
-    <message>
-        <source>Atajo activo mientras QAflow tiene el foco</source>
-        <translation>Shortcut active while QAflow has focus</translation>
-    </message>
-    <message>
-        <source>Atajo</source>
-        <translation>Shortcut</translation>
-    </message>
-    <message>
         <source>Formato</source>
         <translation>Format</translation>
     </message>
@@ -2104,6 +2512,90 @@
         <source>No se pudo conectar · %1</source>
         <translation>Could not connect · %1</translation>
     </message>
+    <message>
+        <source>Capturas de pantalla y grabaciones</source>
+        <translation>Screenshots and recordings</translation>
+    </message>
+    <message>
+        <source>Se guardan localmente y se adjuntan al paso activo de la ejecución. Los ficheros existentes (logs, vídeos) se adjuntan con «Adjuntar archivo» o arrastrándolos a la ventana.</source>
+        <translation>Saved locally and attached to the active step of the run. Existing files (logs, videos) are attached with “Attach file” or by dragging them onto the window.</translation>
+    </message>
+    <message>
+        <source>Atajo de captura. Con «atajo global» funciona aunque QAflow no tenga el foco</source>
+        <translation>Screenshot shortcut. With “system-wide shortcut” it works even when QAflow is not focused</translation>
+    </message>
+    <message>
+        <source>Inicia o detiene la grabación de GIF</source>
+        <translation>Starts or stops the GIF recording</translation>
+    </message>
+    <message>
+        <source>Las grabaciones usan «Pantalla completa» o, en los demás modos, una región elegida con el ratón</source>
+        <translation>Recordings use “Full screen” or, in the other modes, a region chosen with the mouse</translation>
+    </message>
+    <message>
+        <source>Sin retardo</source>
+        <translation>No delay</translation>
+    </message>
+    <message>
+        <source>%1 s</source>
+        <translation>%1 s</translation>
+    </message>
+    <message>
+        <source>Cuenta atrás antes de capturar, para abrir menús o tooltips</source>
+        <translation>Countdown before capturing, to open menus or tooltips</translation>
+    </message>
+    <message>
+        <source> fps</source>
+        <translation> fps</translation>
+    </message>
+    <message>
+        <source> s</source>
+        <translation> s</translation>
+    </message>
+    <message>
+        <source>La grabación se detiene sola al llegar a esta duración</source>
+        <translation>The recording stops by itself when it reaches this length</translation>
+    </message>
+    <message>
+        <source>Atajo de captura</source>
+        <translation>Screenshot shortcut</translation>
+    </message>
+    <message>
+        <source>Retardo</source>
+        <translation>Delay</translation>
+    </message>
+    <message>
+        <source>Atajo de grabación</source>
+        <translation>Recording shortcut</translation>
+    </message>
+    <message>
+        <source>GIF · fotogramas</source>
+        <translation>GIF · frame rate</translation>
+    </message>
+    <message>
+        <source>GIF · duración máxima</source>
+        <translation>GIF · maximum length</translation>
+    </message>
+    <message>
+        <source>Atajo global: capturar aunque QAflow no tenga el foco</source>
+        <translation>System-wide shortcut: capture even when QAflow is not focused</translation>
+    </message>
+    <message>
+        <source>Abrir el editor de anotaciones después de cada captura</source>
+        <translation>Open the annotation editor after each screenshot</translation>
+    </message>
+    <message>
+        <source>Copiar la captura al portapapeles</source>
+        <translation>Copy the screenshot to the clipboard</translation>
+    </message>
+    <message>
+        <source>Captura: %1</source>
+        <translation>Capture: %1</translation>
+    </message>
+    <message>
+        <source>Atajo sólo con QAflow en primer plano</source>
+        <translation>Shortcut only while QAflow is in the foreground</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ShotCard</name>
@@ -2126,6 +2618,26 @@
     <message>
         <source>Bajar</source>
         <translation>Move down</translation>
+    </message>
+    <message>
+        <source>Anotar (flechas, rectángulos, texto, difuminado)</source>
+        <translation>Annotate (arrows, rectangles, text, blur)</translation>
+    </message>
+    <message>
+        <source>Abrir</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>Anotar…</source>
+        <translation>Annotate…</translation>
+    </message>
+    <message>
+        <source>Copiar imagen</source>
+        <translation>Copy image</translation>
+    </message>
+    <message>
+        <source>Mostrar en la carpeta</source>
+        <translation>Show in folder</translation>
     </message>
 </context>
 <context>

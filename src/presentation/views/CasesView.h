@@ -21,6 +21,7 @@ class RunController;
 class RunHistoryStore;
 class CaseTransferService;
 class BugStore;
+class EvidenceService;
 class TextArea;
 
 /// Pantalla "Casos de prueba": lista filtrable a la izquierda y editor del caso a la derecha.
@@ -28,7 +29,7 @@ class CasesView : public QWidget {
     Q_OBJECT
 public:
     CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer,
-              BugStore& bugs, QWidget* parent = nullptr);
+              BugStore& bugs, EvidenceService& evidence, QWidget* parent = nullptr);
 
     // Acciones también accesibles desde el menú de la ventana
     void focusSearch();
@@ -67,6 +68,7 @@ private:
     RunHistoryStore& m_history;
     CaseTransferService& m_transfer;
     BugStore& m_bugs;
+    EvidenceService& m_evidence;
     CaseFilter m_filter;
     bool m_selfEdit = false;
 
@@ -96,6 +98,7 @@ private:
     QLabel* m_shotsHeader = nullptr;
     QLabel* m_unassigned = nullptr;
     QPushButton* m_sortShots = nullptr;
+    QPushButton* m_record = nullptr;
     QGridLayout* m_shotsGrid = nullptr;
     QWidget* m_shotsContainer = nullptr;
     QLabel* m_historyHeader = nullptr;

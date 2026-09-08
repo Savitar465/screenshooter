@@ -3,7 +3,9 @@
 #include "presentation/Screen.h"
 
 #include <QMainWindow>
+#include <QList>
 #include <QMap>
+#include <QUrl>
 
 #include <functional>
 
@@ -43,10 +45,16 @@ public:
     void showMetrics();
     /// Cierra la aplicación aunque esté configurado "cerrar a la bandeja".
     void quitApplication();
+    /// Adjunta ficheros locales (rutas o URLs file://) al caso seleccionado; lo usan el arrastre a
+    /// la ventana y el menú.
+    void attachFiles(const QList<QUrl>& urls);
 
 protected:
     void resizeEvent(QResizeEvent* e) override;
     void closeEvent(QCloseEvent* e) override;
+    /// Arrastrar ficheros a la ventana los adjunta como evidencia del caso seleccionado.
+    void dragEnterEvent(QDragEnterEvent* e) override;
+    void dropEvent(QDropEvent* e) override;
 
 private:
     void buildMenus();
@@ -71,6 +79,9 @@ private:
     Screen m_current = Screen::Casos;
 
     QAction* m_actCapture = nullptr;
+    QAction* m_actRecord = nullptr;
+    QAction* m_actAttach = nullptr;
+    QAction* m_trayRecord = nullptr;
     QAction* m_actUndo = nullptr;
     QAction* m_actRun = nullptr;
     QAction* m_actDuplicate = nullptr;

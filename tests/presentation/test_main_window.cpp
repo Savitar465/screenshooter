@@ -4,21 +4,26 @@
 // la lista de casos, métricas y el aviso con «Reintentar» cuando falla el guardado.
 
 #include "support/AppFixture.h"
+#include "support/FakeScreenRecorder.h"
 
 #include "application/AppContext.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
 #include "presentation/views/MainWindow.h"
+#include "presentation/widgets/ImageViewer.h"
+#include "presentation/widgets/Thumbnail.h"
 #include "presentation/widgets/Toast.h"
 
 #include <QAction>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QUrl>
 #include <QtTest>
 
 using namespace qaflow;
 using qaflow::testing::AppFixture;
+using qaflow::testing::FakeScreenRecorder;
 
 namespace {
 class FakeScreenCapture : public IScreenCapture {
@@ -35,13 +40,15 @@ struct WindowFixture {
     AppFixture app;
     QTemporaryDir captures;
     std::shared_ptr<FakeScreenCapture> capture = std::make_shared<FakeScreenCapture>();
+    std::shared_ptr<FakeScreenRecorder> recorder = std::make_shared<FakeScreenRecorder>();
     EvidenceService evidence{capture, app.store, app.run, app.settings};
     CaseTransferService transfer{app.store};
     AppContext ctx;
     std::unique_ptr<MainWindow> window;
 
     WindowFixture() {
-        app.settings.updateCapture([&](CaptureSettings& c) { c.folder = captures.path(); });
+        app.settings.updateCapture([&](CaptureSettings& c) { c.folder = captures.path(); c.delaySecs = 0; });
+        evidence.setRecorder(recorder);
         ctx.cases = &app.store; ctx.plan = &app.plans; ctx.run = &app.run; ctx.history = &app.history;
         ctx.settings = &app.settings; ctx.bugs = &app.bugs; ctx.bugLedger = &app.bugLedger;
         ctx.evidence = &evidence; ctx.transfer = &transfer; ctx.dataDir = captures.path();
@@ -88,8 +95,66 @@ private slots:
         QCOMPARE(f.action("actQuit")->shortcut(), QKeySequence(QKeySequence::Quit));
         QCOMPARE(f.action("actRun")->shortcut(), QKeySequence(Qt::Key_F5));
         QCOMPARE(f.action("actCapture")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Shift+S")));   // el de Ajustes
-        f.app.settings.updateCapture([](CaptureSettings& c) { c.shortcut = QStringLiteral("F9"); });
+        QCOMPARE(f.action("actRecord")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Shift+G")));
+        QCOMPARE(f.action("actAttach")->shortcut(), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A));
+        f.app.settings.updateCapture([](CaptureSettings& c) { c.shortcut = QStringLiteral("F9"); c.recordShortcut = QStringLiteral("F10"); });
         QCOMPARE(f.action("actCapture")->shortcut(), QKeySequence(Qt::Key_F9));
+        QCOMPARE(f.action("actRecord")->shortcut(), QKeySequence(Qt::Key_F10));
+    }
+
+    void recordActionTogglesTheRecorderAndAttachesTheGif() {
+        WindowFixture f;
+        const QString id = f.app.store.selectedId();
+        QVERIFY(f.action("actRecord")->isVisible());
+        f.action("actRecord")->trigger();
+        QVERIFY(f.evidence.isRecording());
+        QVERIFY(f.action("actRecord")->text().contains(QStringLiteral("Detener")));
+        f.action("actRecord")->trigger();
+        QVERIFY(!f.evidence.isRecording());
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
+        QVERIFY(f.app.store.find(id)->shots[0].isAnimation());
+        QTRY_VERIFY(f.toastText().contains(QStringLiteral("Grabaci")));
+    }
+
+    void droppingFilesAttachesThemToTheSelectedCase() {
+        WindowFixture f;
+        const QString id = f.app.store.selectedId();
+        const QString log = f.captures.filePath(QStringLiteral("app.log"));
+        { QFile file(log); file.open(QIODevice::WriteOnly); file.write("x"); }
+        QSignalSpy failed(&f.evidence, &EvidenceService::failed);
+        f.window->attachFiles({QUrl::fromLocalFile(log), QUrl(QStringLiteral("https://example.com/no-local"))});
+        QVERIFY2(failed.isEmpty(), qPrintable(failed.isEmpty() ? QString() : failed.first().at(0).toString()));
+        QCOMPARE(f.app.store.find(id)->shots.size(), 1);
+        QVERIFY(f.app.store.find(id)->shots[0].fileName.endsWith(QStringLiteral("_app.log")));
+        QVERIFY(!f.app.store.find(id)->shots[0].isImage());
+        QTRY_VERIFY(f.toastText().contains(QStringLiteral("app.log")));
+    }
+
+    void clickingAThumbnailOpensTheViewer() {
+        WindowFixture f;
+        f.action("actCapture")->trigger();
+        // Reportar bug también crea tarjetas (ocultas): hay que esperar a la miniatura visible de Casos.
+        auto visibleThumb = [&]() -> Thumbnail* {
+            for (auto* t : f.window->findChildren<Thumbnail*>()) if (t->isVisible()) return t;
+            return nullptr;
+        };
+        QTRY_VERIFY(visibleThumb() != nullptr);
+        QTest::mouseClick(visibleThumb(), Qt::LeftButton);
+        QTRY_VERIFY(f.window->findChild<ImageViewer*>() != nullptr);
+        auto* viewer = f.window->findChild<ImageViewer*>();
+        QCOMPARE(viewer->current().fileName, f.app.store.selected()->shots[0].fileName);
+        viewer->close();
+    }
+
+    void captureCountdownShowsAToastAndCanBeCancelled() {
+        WindowFixture f;
+        f.app.settings.updateCapture([](CaptureSettings& c) { c.delaySecs = 5; });
+        f.action("actCapture")->trigger();
+        QTRY_VERIFY(f.toastText().contains(QStringLiteral("Capturando en 5")));
+        f.action("actCapture")->trigger();   // cancela
+        QVERIFY(!f.evidence.isCountingDown());
+        QTRY_VERIFY(f.toastText().contains(QStringLiteral("cancelada")));
+        QVERIFY(f.app.store.selected()->shots.isEmpty());
     }
 
     void newCaseActionCreatesAndSelectsACase() {

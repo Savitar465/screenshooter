@@ -184,6 +184,9 @@ private slots:
     }
 
     void saveFailsWhenDirectoryIsNotWritable() {
+#ifdef Q_OS_WIN
+        QSKIP("en NTFS quitar el permiso de escritura al directorio no impide crear ficheros dentro");
+#endif
 #ifdef Q_OS_UNIX
         if (geteuid() == 0) QSKIP("root puede escribir en cualquier sitio");
 #endif

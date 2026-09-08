@@ -56,6 +56,27 @@ private slots:
         QCOMPARE(c.extension(), QStringLiteral("webp"));
         for (auto m : {CaptureMode::FullScreen, CaptureMode::ActiveWindow, CaptureMode::Region}) QCOMPARE(static_cast<int>(captureModeFromString(toString(m))), static_cast<int>(m));
     }
+
+    void captureClampKeepsValuesInRange() {
+        CaptureSettings c;
+        c.delaySecs = -3; c.gifFps = 99; c.gifMaxSecs = 1; c.shortcut = QStringLiteral("  "); c.recordShortcut.clear();
+        c.clamp();
+        QCOMPARE(c.delaySecs, 0);
+        QCOMPARE(c.gifFps, 20);
+        QCOMPARE(c.gifMaxSecs, 5);
+        QCOMPARE(c.shortcut, QStringLiteral("Ctrl+Shift+S"));
+        QCOMPARE(c.recordShortcut, QStringLiteral("Ctrl+Shift+G"));
+        c.delaySecs = 5; c.gifFps = 12; c.gifMaxSecs = 60;
+        c.clamp();
+        QCOMPARE(c.delaySecs, 5);
+        QCOMPARE(c.gifFps, 12);
+        QCOMPARE(c.gifMaxSecs, 60);
+        // Valores por defecto de las opciones nuevas.
+        const CaptureSettings d;
+        QVERIFY(d.globalShortcut);
+        QVERIFY(!d.openEditor);
+        QVERIFY(!d.copyToClipboard);
+    }
 };
 
 QTEST_APPLESS_MAIN(SettingsTest)

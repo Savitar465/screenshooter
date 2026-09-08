@@ -13,6 +13,7 @@ namespace qaflow {
 class TestCaseStore;
 class RunController;
 class SettingsStore;
+class EvidenceService;
 class ProgressCells;
 class TextArea;
 
@@ -20,7 +21,7 @@ class TextArea;
 class RunView : public QWidget {
     Q_OBJECT
 public:
-    RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, QWidget* parent = nullptr);
+    RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, EvidenceService& evidence, QWidget* parent = nullptr);
 
 signals:
     void captureRequested();
@@ -38,6 +39,7 @@ private:
     TestCaseStore& m_cases;
     RunController& m_run;
     SettingsStore& m_settings;
+    EvidenceService& m_evidence;
 
     QLabel* m_eyebrow;
     QLabel* m_title;
@@ -62,6 +64,7 @@ private:
     QLabel* m_shotFolder;
     QVBoxLayout* m_shotsLayout;
     QPushButton* m_sortShots;
+    QPushButton* m_record;
     QLabel* m_empty;
     QTimer m_clock;
 };

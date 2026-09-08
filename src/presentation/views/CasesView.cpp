@@ -2,10 +2,12 @@
 
 #include "application/BugStore.h"
 #include "application/CaseTransferService.h"
+#include "application/EvidenceService.h"
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
 #include "application/TestCaseStore.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/TextArea.h"
@@ -64,8 +66,9 @@ QPushButton* smallButton(const QString& text, const char* role, const QString& t
 }
 } // namespace
 
-CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer, BugStore& bugs, QWidget* parent)
-    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_bugs(bugs) {
+CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer, BugStore& bugs,
+                     EvidenceService& evidence, QWidget* parent)
+    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_bugs(bugs), m_evidence(evidence) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildEditor(root);
@@ -423,6 +426,16 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     auto* capture = ui::button(tr("+ Capturar pantalla"), "dashed");
     connect(capture, &QPushButton::clicked, this, &CasesView::captureRequested);
     shh->addWidget(capture);
+    m_record = ui::button(tr("● Grabar GIF"), "dashed");
+    m_record->setToolTip(tr("Graba la pantalla o una región a GIF y la adjunta al caso"));
+    m_record->setVisible(m_evidence.canRecord());
+    connect(m_record, &QPushButton::clicked, this, [this]() { m_evidence.toggleRecording(); });
+    connect(&m_evidence, &EvidenceService::recordingChanged, this, [this](bool on) { m_record->setText(on ? tr("■ Detener grabación") : tr("● Grabar GIF")); });
+    shh->addWidget(m_record);
+    auto* attach = ui::button(tr("+ Adjuntar archivo…"), "dashed");
+    attach->setToolTip(tr("Adjunta logs, vídeos o imágenes existentes (también puedes arrastrarlos a la ventana)"));
+    connect(attach, &QPushButton::clicked, this, [this]() { m_evidence.attachFiles(evidence::pickFiles(this)); });
+    shh->addWidget(attach);
     shv->addWidget(shotsHead);
     m_shotsContainer = new QWidget;
     m_shotsGrid = new QGridLayout(m_shotsContainer);
@@ -570,6 +583,7 @@ void CasesView::refreshShots() {
         connect(card, &ShotCard::stepChanged, this, [this, id](int shotId, int step) { m_store.assignShotStep(id, shotId, step); });
         connect(card, &ShotCard::moveRequested, this, [this, id](int shotId, int delta) { m_store.moveShot(id, shotId, delta); });
         connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_store.removeShot(id, shotId); });
+        evidence::wireCard(card, this, m_store, m_evidence, id);
         m_shotsGrid->addWidget(card, i / columns, i % columns);
     }
     for (int col = 0; col < columns; ++col) m_shotsGrid->setColumnStretch(col, 1);

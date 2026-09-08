@@ -1,0 +1,32 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-mingw-base",
+      "hidden": true,
+      "description": "Base para compilar con el MinGW que trae Qt. Las rutas concretas de Qt van en CMakeUserPresets.json.",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/cmake-build-${presetName}",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "QAFLOW_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-mingw-base",
+      "hidden": true,
+      "configurePreset": "windows-mingw-base"
+    }
+  ]
+}

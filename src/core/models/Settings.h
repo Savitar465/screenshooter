@@ -56,11 +56,20 @@ struct AppSettings {
 
 struct CaptureSettings {
     QString shortcut = QStringLiteral("Ctrl+Shift+S");
+    QString recordShortcut = QStringLiteral("Ctrl+Shift+G");   // iniciar / detener la grabación de GIF
     QString format = QStringLiteral("PNG");   // PNG, JPG, WebP
     CaptureMode mode = CaptureMode::ActiveWindow;
     QString folder;                            // por defecto ~/QAflow/capturas
+    int delaySecs = 0;                         // cuenta atrás antes de capturar (0 = inmediata)
+    bool globalShortcut = true;                // registrar el atajo en el sistema (funciona sin foco)
+    bool openEditor = false;                   // abrir el editor de anotaciones tras cada captura
+    bool copyToClipboard = false;              // copiar la imagen al portapapeles tras capturar
+    int gifFps = 10;                           // fotogramas por segundo de la grabación (5-20)
+    int gifMaxSecs = 30;                       // duración máxima de una grabación (5-120)
 
     QString extension() const { return format.toLower() == QStringLiteral("jpg") ? QStringLiteral("jpg") : format.toLower(); }
+    /// Valores fuera de rango vuelven a un valor razonable (ajustes editados a mano).
+    void clamp();
 };
 
 } // namespace qaflow

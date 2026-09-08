@@ -196,6 +196,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/PlanView.cpp
         src/presentation/views/SettingsView.h
         src/presentation/views/SettingsView.cpp
+        src/presentation/views/SettingsDialog.h
+        src/presentation/views/SettingsDialog.cpp
         src/presentation/views/MainWindow.h
         src/presentation/views/MainWindow.cpp
 )

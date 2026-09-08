@@ -62,7 +62,8 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 | Ctrl+Shift+A         | Adjuntar archivos como evidencia (o arrastrarlos a la ventana) |
 | Clic en una miniatura | Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia) |
 | Ctrl+B               | Reportar bug                        |
-| Ctrl+1 … Ctrl+6      | Cambiar de pantalla                 |
+| Ctrl+1 … Ctrl+5      | Cambiar de pantalla                 |
+| Ctrl+,               | Abrir los ajustes                   |
 | P / F / B / S        | Veredicto del paso en ejecución     |
 | Ctrl+Q               | Salir                               |
 
@@ -75,7 +76,7 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 | Ejecución         | Paso actual con Pasa / Falla / Bloqueado / Saltar (teclas P / F / B / S), paso anterior (Retroceso), corrección de veredictos desde el registro, cronómetro por paso y por caso, observaciones y capturas. Sobrevive al cierre de la aplicación |
 | Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración), informes de plan con exportación a Markdown y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
 | Reportar bug      | Formulario prellenado con el paso fallido y campos reales del gestor (tipo, prioridad, asignado, componentes, versión, etiquetas) cargados del proyecto; crea el issue en Jira, GitHub, GitLab o Azure DevOps y sube las capturas; lista de bugs reportados con su estado y cola offline con reintento |
-| Ajustes           | Idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, token en el llavero del sistema) y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
+| Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, token en el llavero del sistema) y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
 
 ## Evidencias
 

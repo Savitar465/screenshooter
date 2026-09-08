@@ -15,6 +15,7 @@
 #include "presentation/widgets/Toast.h"
 
 #include <QAction>
+#include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -83,8 +84,25 @@ private slots:
         QVERIFY(f.nav(Screen::Historial));
         QTest::mouseClick(f.nav(Screen::Historial), Qt::LeftButton);
         QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Historial));
-        QTest::mouseClick(f.nav(Screen::Ajustes), Qt::LeftButton);
-        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Ajustes));
+        QTest::mouseClick(f.nav(Screen::Bug), Qt::LeftButton);
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Bug));
+    }
+
+    void fileMenuOpensSettingsInItsOwnWindow() {
+        WindowFixture f;
+        QVERIFY(!f.window->settingsWindow());
+        QCOMPARE(f.action("actSettings")->shortcut(), QKeySequence(Qt::CTRL | Qt::Key_Comma));
+        f.action("actSettings")->trigger();
+        QWidget* dialog = f.window->settingsWindow();
+        QVERIFY(dialog);
+        QVERIFY(dialog->isWindow());
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Casos));   // la pantalla no cambia
+        // Los ajustes se guardan al momento: el tema elegido en la ventana llega al store.
+        auto* theme = dialog->findChild<QComboBox*>(QStringLiteral("settingsTheme"));
+        theme->setCurrentIndex(theme->findData(static_cast<int>(AppTheme::Light)));
+        QCOMPARE(static_cast<int>(f.app.settings.app().theme), static_cast<int>(AppTheme::Light));
+        dialog->findChild<QPushButton*>(QStringLiteral("settingsClose"))->click();
+        QVERIFY(!f.window->settingsWindow());
     }
 
     void menuActionsHaveStandardShortcuts() {

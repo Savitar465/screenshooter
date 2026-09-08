@@ -39,7 +39,8 @@ void run(MainWindow& window, AppContext& ctx) {
     const QString dir = qEnvironmentVariable("QAFLOW_SNAPSHOT_DIR");
     QDir().mkpath(dir);
 
-    struct Shot { const char* name; std::function<void()> prepare; };
+    // `target` (opcional) devuelve la ventana que hay que fotografiar; por defecto, la principal.
+    struct Shot { const char* name; std::function<void()> prepare; std::function<QWidget*()> target = {}; };
     const QList<Shot> shots = {
         {"01-casos", [&] { window.navigate(Screen::Casos); }},
         {"02-plan", [&] { window.navigate(Screen::Plan); }},
@@ -94,8 +95,12 @@ void run(MainWindow& window, AppContext& ctx) {
             window.showMetrics();
         }},
         {"09-planes", [&] { ctx.plan->createPlan(QStringLiteral("Smoke release 2.3")); ctx.plan->toggle(QStringLiteral("TC-101")); ctx.plan->setActive(QStringLiteral("PL-0001")); window.navigate(Screen::Plan); }},
-        {"05-ajustes", [&] { window.navigate(Screen::Ajustes); window.showToast(QStringLiteral("Captura guardada en ~/QAflow/capturas"), theme::Cyan); }},
-        {"06-casos-en-ejecucion", [&] { window.navigate(Screen::Casos); }},
+        {"05-ajustes", [&] { window.openSettings(); }, [&] { return window.settingsWindow(); }},
+        {"06-casos-en-ejecucion", [&] {
+            if (QWidget* settings = window.settingsWindow()) settings->close();
+            window.navigate(Screen::Casos);
+            window.showToast(QStringLiteral("Captura guardada en ~/QAflow/capturas"), theme::Cyan);
+        }},
     };
 
     auto* timer = new QTimer(&window);
@@ -103,7 +108,9 @@ void run(MainWindow& window, AppContext& ctx) {
         if (i >= shots.size()) { timer->stop(); QApplication::quit(); return; }
         shots[i].prepare();
         QApplication::processEvents();
-        window.grab().save(QDir(dir).filePath(QString::fromLatin1(shots[i].name) + QStringLiteral(".png")));
+        QWidget* target = shots[i].target ? shots[i].target() : &window;
+        if (!target) target = &window;
+        target->grab().save(QDir(dir).filePath(QString::fromLatin1(shots[i].name) + QStringLiteral(".png")));
         ++i;
     });
     timer->start(150);

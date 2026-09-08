@@ -49,6 +49,8 @@ QFrame[role="sidebar"] { background: @panel; border-right: 1px solid @border; }
 QFrame[role="list-pane"] { background: @panel-translucent; border-right: 1px solid @border; }
 QFrame[role="grid-cell"] { background: @elevated; border: 1px solid @border; border-radius: 8px; }
 QFrame[role="accent"] { border-radius: 2px; border: none; }
+/* Pie de un diálogo (Ajustes): separa el contenido de los botones de cierre. */
+QFrame[role="dialog-footer"] { background: @panel; border-top: 1px solid @border; }
 
 /* ---- Botones ---- */
 QPushButton { border-radius: 9px; padding: 8px 14px; font-weight: 700; font-size: 13px; border: 1px solid transparent; }
@@ -66,6 +68,13 @@ QPushButton[role="outline"] { background: @elevated; color: @text; border: 1px s
 QPushButton[role="outline"]:hover { border-color: @blue; }
 QPushButton[role="ghost"] { background: transparent; color: @muted; border: 1px solid @border; }
 QPushButton[role="ghost"]:hover { color: @text; }
+
+/* Veredictos de la pantalla de Ejecución: los cuatro comparten el mismo peso visual
+   para que "Bloqueado" y "Saltar" se lean como botones y no como texto suelto. */
+QPushButton[role="verdict-block"] { background: @tint(amber,45); color: @amber-soft; border: 1px solid @amber; }
+QPushButton[role="verdict-block"]:hover { background: @tint(amber,80); }
+QPushButton[role="verdict-skip"] { background: @elevated; color: @text-soft; border: 1px solid @muted; }
+QPushButton[role="verdict-skip"]:hover { background: @tint(muted,45); border-color: @text-soft; }
 QPushButton[role="dashed"] { background: transparent; color: @blue; border: 1px dashed @border; padding: 5px 10px; font-size: 12px; border-radius: 8px; }
 QPushButton[role="dashed"]:hover { border-color: @blue; background: @tint(blue,15); }
 QPushButton[role="chip"] { background: transparent; color: @muted; border: 1px solid @border; border-radius: 999px; padding: 3px 9px; font-size: 11.5px; font-weight: 600; }

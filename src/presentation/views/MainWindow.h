@@ -24,7 +24,7 @@ class RunView;
 class HistoryView;
 class BugView;
 class PlanView;
-class SettingsView;
+class SettingsDialog;
 class Toast;
 class FlashOverlay;
 
@@ -45,6 +45,11 @@ public:
     void showMetrics();
     /// Cierra la aplicación aunque esté configurado "cerrar a la bandeja".
     void quitApplication();
+    /// Abre la ventana de ajustes («Archivo → Ajustes») o la trae al frente si ya estaba abierta.
+    void openSettings();
+    /// Ventana de ajustes mientras esté abierta; nullptr si no lo está. La usan la reconstrucción
+    /// de la ventana al cambiar de idioma o tema y las capturas de la documentación.
+    QWidget* settingsWindow() const;
     /// Adjunta ficheros locales (rutas o URLs file://) al caso seleccionado; lo usan el arrastre a
     /// la ventana y el menú.
     void attachFiles(const QList<QUrl>& urls);
@@ -73,7 +78,7 @@ private:
     RunView* m_run;
     HistoryView* m_history;
     BugView* m_bug;
-    SettingsView* m_settings;
+    SettingsDialog* m_settings = nullptr;   // se crea al abrirla por primera vez
     Toast* m_toast;
     FlashOverlay* m_flash;
     Screen m_current = Screen::Casos;

@@ -46,7 +46,6 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunH
     v->addWidget(navButton(Screen::Run, tr("Ejecución"), theme::Green));
     v->addWidget(navButton(Screen::Historial, tr("Historial"), theme::Blue));
     v->addWidget(navButton(Screen::Bug, tr("Reportar bug"), theme::Red));
-    v->addWidget(navButton(Screen::Ajustes, tr("Ajustes"), theme::Cyan));
     v->addStretch(1);
 
     // Tarjeta "En ejecución"

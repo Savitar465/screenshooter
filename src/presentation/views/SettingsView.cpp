@@ -98,6 +98,7 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     m_language->addItem(QStringLiteral("Español"), static_cast<int>(AppLanguage::Spanish));
     m_language->addItem(QStringLiteral("English"), static_cast<int>(AppLanguage::English));
     m_theme = new QComboBox;
+    m_theme->setObjectName(QStringLiteral("settingsTheme"));
     m_theme->addItem(tr("Oscuro"), static_cast<int>(AppTheme::Dark));
     m_theme->addItem(tr("Claro"), static_cast<int>(AppTheme::Light));
     m_theme->addItem(tr("Como el sistema"), static_cast<int>(AppTheme::System));

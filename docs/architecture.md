@@ -46,7 +46,8 @@ src/
     │                FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard,
     │                ImageViewer (visor), AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
     ├── views/       Una clase por pantalla: Sidebar, CasesView, PlanView, RunView, HistoryView,
-    │                BugView, SettingsView y MainWindow (menú, atajos, bandeja, navegación, avisos)
+    │                BugView, SettingsView (+ SettingsDialog, su ventana) y MainWindow (menú, atajos,
+    │                bandeja, navegación, avisos)
     └── DevSnapshot  herramienta de desarrollo (renderiza cada pantalla a PNG)
 ```
 
@@ -101,13 +102,19 @@ implementar retraducción dinámica.
 ## Menú, atajos y bandeja
 
 `MainWindow::buildMenus()` crea el menú (Archivo, Editar, Ver, Ejecución, Ayuda) con `QAction`
-y los atajos estándar (`QKeySequence::New`, `Find`, `Undo`, `Quit`, F5, Ctrl+1…6). Los atajos de
+y los atajos estándar (`QKeySequence::New`, `Find`, `Undo`, `Quit`, F5, Ctrl+1…5). Los atajos de
 captura y de grabación son acciones de ámbito aplicación cuya tecla sigue a Ajustes; además
 `main.cpp` los registra en el sistema con `IGlobalHotkey` (ver «Captura de pantalla»). Las acciones
 que operan sobre el caso seleccionado se habilitan según `TestCaseStore::selectedId()` y «Deshacer»
 sigue a `canUndo()`. Con `QSystemTrayIcon` disponible hay icono en la bandeja (mostrar/ocultar,
 capturar, grabar GIF, salir); si `AppSettings::closeToTray` está activo, cerrar la ventana la oculta
 en lugar de salir. Arrastrar ficheros a la ventana (`dropEvent` → `attachFiles`) los adjunta al caso.
+
+Los ajustes **no** son una pantalla de la pila: «Archivo → Ajustes» (Ctrl+,) abre `SettingsDialog`,
+una ventana no modal, hija de la principal, que aloja la `SettingsView` y se crea la primera vez que
+se abre (`MainWindow::openSettings()`). No es modal porque los cambios se guardan al momento y el de
+idioma o tema reconstruye la ventana principal mientras la de ajustes sigue abierta; por eso
+`main.cpp` la vuelve a abrir tras reconstruir si `MainWindow::settingsWindow()` decía que lo estaba.
 
 ## Errores de guardado
 
@@ -349,7 +356,7 @@ tests/
 │   │                                4xx no reintentable, 5xx y conexión rechazada reintentables, estados, metadatos, TrackerRouter
 │   └── test_gif_encoder.cpp         cuantización (exacta y median cut) y GIF animado leído de vuelta con el plugin de Qt
 └── presentation/              ventana completa con plataforma offscreen
-    ├── test_main_window.cpp   navegación, atajos del menú, Ctrl+F y filtro, teclas de veredicto, captura, cuenta atrás,
+    ├── test_main_window.cpp   navegación, ventana de ajustes, atajos del menú, Ctrl+F y filtro, teclas de veredicto, captura, cuenta atrás,
     │                          grabación, adjuntar por arrastre, abrir el visor, deshacer, métricas y el aviso «Reintentar»
     └── test_evidence_widgets.cpp renderAnnotations (formas, texto, difuminado), AnnotationEditor, ImageViewer, Thumbnail y ShotCard
 ```
@@ -373,7 +380,7 @@ QT_QPA_PLATFORM=offscreen QAFLOW_SNAPSHOT_DIR=/tmp/qaflow-shots ./build/qaflow
 ```
 
 Renderiza cada pantalla (incluida una ejecución con un paso fallido, el bug prellenado, el
-informe de un plan y el panel de métricas con dos ciclos) a PNG y cierra. Usa un directorio de
+informe de un plan, el panel de métricas con dos ciclos y la ventana de ajustes) a PNG y cierra. Usa un directorio de
 datos y unos ajustes aislados (`$QAFLOW_SNAPSHOT_DIR/data` y `/config`) para no tocar los reales.
 `QAFLOW_SNAPSHOT_LANG=es|en` y `QAFLOW_SNAPSHOT_THEME=dark|light` eligen idioma y tema; sin
 `LANG` se usa el del sistema. Útil para revisar el diseño sin interacción; CI lo ejecuta como humo.

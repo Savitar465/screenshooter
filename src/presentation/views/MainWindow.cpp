@@ -7,7 +7,7 @@
 #include "presentation/views/HistoryView.h"
 #include "presentation/views/PlanView.h"
 #include "presentation/views/RunView.h"
-#include "presentation/views/SettingsView.h"
+#include "presentation/views/SettingsDialog.h"
 #include "presentation/views/Sidebar.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlashOverlay.h"
@@ -53,13 +53,11 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence);
     m_history = new HistoryView(*ctx.cases, *ctx.history);
     m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger, *ctx.evidence);
-    m_settings = new SettingsView(*ctx.settings, *ctx.bugs, ctx.hotkey, ctx.captureBackend);
     m_stack->insertWidget(static_cast<int>(Screen::Casos), m_cases);
     m_stack->insertWidget(static_cast<int>(Screen::Plan), m_plan);
     m_stack->insertWidget(static_cast<int>(Screen::Run), m_run);
     m_stack->insertWidget(static_cast<int>(Screen::Historial), m_history);
     m_stack->insertWidget(static_cast<int>(Screen::Bug), m_bug);
-    m_stack->insertWidget(static_cast<int>(Screen::Ajustes), m_settings);
     h->addWidget(m_stack, 1);
     setCentralWidget(central);
 
@@ -100,6 +98,11 @@ void MainWindow::buildMenus() {
     file->addAction(tr("Abrir carpeta de &datos"), this, [this]() { QDesktopServices::openUrl(QUrl::fromLocalFile(m_ctx.dataDir)); });
     file->addAction(tr("Abrir carpeta de &capturas"), this, [this]() { QDesktopServices::openUrl(QUrl::fromLocalFile(m_ctx.settings->capture().folder)); });
     file->addSeparator();
+    // Los ajustes viven en su propia ventana, no en la pila de pantallas.
+    auto* settings = file->addAction(tr("A&justes…"), QKeySequence(Qt::CTRL | Qt::Key_Comma), this, &MainWindow::openSettings);
+    settings->setObjectName(QStringLiteral("actSettings"));
+    settings->setMenuRole(QAction::PreferencesRole);
+    file->addSeparator();
     auto* quit = file->addAction(tr("&Salir"), QKeySequence::Quit, this, &MainWindow::quitApplication);
     quit->setObjectName(QStringLiteral("actQuit"));
     quit->setMenuRole(QAction::QuitRole);
@@ -121,7 +124,7 @@ void MainWindow::buildMenus() {
     QMenu* view = bar->addMenu(tr("&Ver"));
     const std::pair<Screen, QString> screens[] = {
         {Screen::Casos, tr("&Casos de prueba")}, {Screen::Plan, tr("&Planes de pruebas")}, {Screen::Run, tr("&Ejecución")},
-        {Screen::Historial, tr("&Historial")}, {Screen::Bug, tr("&Reportar bug")}, {Screen::Ajustes, tr("&Ajustes")}};
+        {Screen::Historial, tr("&Historial")}, {Screen::Bug, tr("&Reportar bug")}};
     auto* screenGroup = new QActionGroup(this);
     int n = 1;
     for (const auto& [screen, label] : screens) {
@@ -194,7 +197,8 @@ void MainWindow::buildMenus() {
                                     "<tr><td><b>Ctrl+Shift+A</b></td><td>Adjuntar archivos como evidencia (o arrástralos a la ventana)</td></tr>"
                                     "<tr><td><b>Clic en una miniatura</b></td><td>Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)</td></tr>"
                                     "<tr><td><b>Ctrl+B</b></td><td>Reportar bug</td></tr>"
-                                    "<tr><td><b>Ctrl+1 … Ctrl+6</b></td><td>Cambiar de pantalla</td></tr>"
+                                    "<tr><td><b>Ctrl+1 … Ctrl+5</b></td><td>Cambiar de pantalla</td></tr>"
+                                    "<tr><td><b>Ctrl+,</b></td><td>Abrir los ajustes</td></tr>"
                                     "<tr><td><b>P / F / B / S</b></td><td>Veredicto del paso en ejecución</td></tr>"
                                     "<tr><td><b>Retroceso</b></td><td>Volver al paso anterior</td></tr>"
                                     "<tr><td><b>Ctrl+Q</b></td><td>Salir</td></tr></table>")
@@ -242,6 +246,18 @@ void MainWindow::updateActions() {
     if (m_trayToggle) m_trayToggle->setText(isVisible() ? tr("Ocultar QAflow") : tr("Mostrar QAflow"));
 }
 
+void MainWindow::openSettings() {
+    if (!m_settings) {
+        m_settings = new SettingsDialog(*m_ctx.settings, *m_ctx.bugs, m_ctx.hotkey, m_ctx.captureBackend, this);
+        connect(m_settings, &SettingsDialog::toast, this, &MainWindow::showToast);
+    }
+    m_settings->show();
+    m_settings->raise();
+    m_settings->activateWindow();
+}
+
+QWidget* MainWindow::settingsWindow() const { return m_settings && m_settings->isVisible() ? m_settings : nullptr; }
+
 void MainWindow::quitApplication() {
     m_quitting = true;
     close();
@@ -273,7 +289,6 @@ void MainWindow::wireSignals() {
     connect(m_run, &RunView::toast, this, &MainWindow::showToast);
     connect(m_bug, &BugView::toast, this, &MainWindow::showToast);
     connect(m_plan, &PlanView::toast, this, &MainWindow::showToast);
-    connect(m_settings, &SettingsView::toast, this, &MainWindow::showToast);
     connect(m_history, &HistoryView::toast, this, &MainWindow::showToast);
 
     // Casos

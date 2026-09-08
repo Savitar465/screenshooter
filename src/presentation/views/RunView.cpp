@@ -41,7 +41,10 @@ QString resultLabel(StepResult r) {
     return {};
 }
 constexpr StepResult kAllResults[] = {StepResult::Pass, StepResult::Fail, StepResult::Block, StepResult::Skip};
-QPushButton* verdictButton(const QString& text, const QString& key, const char* role) {
+/// Botón de veredicto: rótulo + tecla rápida centrados dentro del botón.
+/// El color se fija de forma explícita porque las etiquetas hijas no heredan el `color`
+/// que el QSS aplica al botón (`color: inherit` no existe en las hojas de estilo de Qt).
+QPushButton* verdictButton(const QString& text, const QString& key, const char* role, const QString& fg) {
     auto* b = ui::button(QString(), role);
     b->setMinimumWidth(140);
     b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -49,9 +52,9 @@ QPushButton* verdictButton(const QString& text, const QString& key, const char* 
     h->setContentsMargins(12, 12, 12, 12);
     h->addStretch(1);
     auto* t = new QLabel(text);
-    t->setStyleSheet(QStringLiteral("font-weight:800;font-size:14px;color:inherit;background:transparent;"));
+    t->setStyleSheet(QStringLiteral("font-weight:800;font-size:14px;color:%1;background:transparent;").arg(fg));
     auto* k = new QLabel(key);
-    k->setStyleSheet(QStringLiteral("font-weight:600;font-size:12px;color:inherit;background:transparent;"));
+    k->setStyleSheet(QStringLiteral("font-weight:600;font-size:12px;color:%1;background:transparent;").arg(theme::tint(fg, 175)));
     h->addWidget(t);
     h->addWidget(k);
     h->addStretch(1);
@@ -152,10 +155,10 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
     sc->addWidget(m_note);
     auto* verdicts = new QWidget;
     auto* vh = ui::hbox(verdicts, 0, 10);
-    auto* pass = verdictButton(tr("Pasa"), tr("P"), "success");
-    auto* fail = verdictButton(tr("Falla"), tr("F"), "danger");
-    auto* block = verdictButton(tr("Bloqueado"), tr("B"), "warning-outline");
-    auto* skip = verdictButton(tr("Saltar"), tr("S"), "ghost");
+    auto* pass = verdictButton(tr("Pasa"), tr("P"), "success", theme::OnAccent);
+    auto* fail = verdictButton(tr("Falla"), tr("F"), "danger", QStringLiteral("#ffffff"));
+    auto* block = verdictButton(tr("Bloqueado"), tr("B"), "verdict-block", theme::AmberSoft);
+    auto* skip = verdictButton(tr("Saltar"), tr("S"), "verdict-skip", theme::TextSoft);
     skip->setToolTip(tr("No aplica: el paso no cuenta para el veredicto"));
     connect(pass, &QPushButton::clicked, this, [this]() { m_run.mark(StepResult::Pass); });
     connect(fail, &QPushButton::clicked, this, [this]() { m_run.mark(StepResult::Fail); });

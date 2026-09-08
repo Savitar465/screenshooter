@@ -158,6 +158,9 @@ int main(int argc, char* argv[]) {
             window->navigate(previous->currentScreen());
         }
         window->show();
+        // La ventana de ajustes es hija de la principal: si estaba abierta (por ejemplo porque el
+        // cambio de idioma o de tema salió de ella), se vuelve a abrir con la ventana nueva.
+        if (previous && previous->settingsWindow()) window->openSettings();
         previous.reset();
     };
     buildWindow();

@@ -15,6 +15,7 @@
 #include "infrastructure/persistence/JsonTestCaseRepository.h"
 #include "infrastructure/persistence/QSettingsRepository.h"
 #include "infrastructure/secrets/SecretStores.h"
+#include "infrastructure/testmgmt/ZephyrClient.h"
 #include "infrastructure/tracker/TrackerRouter.h"
 #include "presentation/DevSnapshot.h"
 #include "presentation/theme/Theme.h"
@@ -107,6 +108,8 @@ int main(int argc, char* argv[]) {
     PlanStore plan(caseRepo, cases, history);
     BugStore bugLedger(bugRepo);
     BugReportService bugs(tracker, cases, run, settings, bugLedger);
+    auto zephyr = std::make_shared<ZephyrClient>();     // gestión de pruebas: ciclos y ejecuciones en Jira
+    TestPublishService publish(zephyr, cases, settings);
     EvidenceService evidence(capture, cases, run, settings);
     evidence.setRecorder(recorder);
     CaseTransferService transfer(cases);
@@ -131,6 +134,7 @@ int main(int argc, char* argv[]) {
     ctx.bugLedger = &bugLedger;
     ctx.evidence = &evidence;
     ctx.transfer = &transfer;
+    ctx.publish = &publish;
     ctx.hotkey = &hotkey;
     ctx.dataDir = dataDir;
     ctx.captureBackend = capture->backendName();

@@ -1,6 +1,7 @@
 #include "HistoryView.h"
 
 #include "application/RunHistoryStore.h"
+#include "application/TestPublishService.h"
 #include "application/TestCaseStore.h"
 #include "core/models/Metrics.h"
 #include "core/models/PlanReport.h"
@@ -16,6 +17,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QMessageBox>
 #include <QGridLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -75,8 +77,8 @@ struct Entry {
 
 } // namespace
 
-HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, QWidget* parent)
-    : QWidget(parent), m_cases(cases), m_history(history) {
+HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_history(history), m_publish(publish) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildDetailPane(root);
@@ -310,6 +312,14 @@ void HistoryView::renderPlan(const PlanReport& report) {
     connect(copyBtn, &QPushButton::clicked, this, [this, report]() { copyMarkdown(report); });
     hh->addWidget(exportBtn, 0, Qt::AlignTop);
     hh->addWidget(copyBtn, 0, Qt::AlignTop);
+    // Sólo cuando el ciclo ha terminado: publicar uno a medias dejaría el ciclo incompleto en Zephyr.
+    if (m_publish && m_publish->enabled() && plan.isFinished() && report.executed > 0) {
+        auto* zephyrBtn = ui::button(tr("Publicar en Zephyr"), "primary");
+        zephyrBtn->setObjectName(QStringLiteral("publishZephyr"));
+        zephyrBtn->setToolTip(tr("Crea el ciclo en Zephyr con estas ejecuciones, el veredicto de cada paso y sus evidencias"));
+        connect(zephyrBtn, &QPushButton::clicked, this, [this, report]() { publishToZephyr(report); });
+        hh->addWidget(zephyrBtn, 0, Qt::AlignTop);
+    }
     m_detailLayout->addWidget(head);
 
     // Resumen
@@ -562,6 +572,42 @@ void HistoryView::exportMarkdown(const PlanReport& report) {
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) { emit toast(tr("No se pudo escribir %1").arg(path), theme::Red); return; }
     f.write(report.toMarkdown().toUtf8());
     emit toast(tr("Informe exportado a %1").arg(path), theme::Green);
+}
+
+void HistoryView::publishToZephyr(const PlanReport& report) {
+    const QStringList sinClave = m_publish->casesWithoutTestKey(report);
+    const int publicables = report.executed - sinClave.size();
+    QString aviso = tr("Se creará el ciclo «%1» en Zephyr con %2 ejecuciones.").arg(m_publish->requestFor(report).cycleName).arg(publicables);
+    if (!sinClave.isEmpty())
+        aviso += tr("\n\nQuedan fuera %1 casos sin clave de Test: %2.\nIndícala en el editor del caso para incluirlos.")
+                     .arg(sinClave.size()).arg(sinClave.join(QStringLiteral(", ")));
+    if (publicables <= 0) {
+        emit toast(tr("Ningún caso del ciclo tiene clave de Test de Zephyr"), theme::Amber);
+        return;
+    }
+    if (QMessageBox::question(this, tr("Publicar en Zephyr"), aviso, QMessageBox::Ok | QMessageBox::Cancel) != QMessageBox::Ok) return;
+
+    emit toast(tr("Publicando en Zephyr…"), theme::Cyan);
+    m_publish->publish(report, [this](const PublishResult& r) {
+        if (!r.ok) {
+            QString error = tr("No se pudo publicar en Zephyr · %1").arg(r.error);
+            if (r.retryable) error += tr(" · vuelve a intentarlo");
+            emit toast(error, theme::Red);
+            return;
+        }
+        QString msg = tr("Ciclo publicado en Zephyr · %1 ejecuciones, %2 pasos, %3 evidencias")
+                          .arg(r.executions).arg(r.steps).arg(r.attachments);
+        if (!r.skipped.isEmpty()) msg += tr(" · %1 sin publicar").arg(r.skipped.size());
+        emit toast(msg, r.skipped.isEmpty() ? theme::Green : theme::Amber);
+        // Un contador no dice qué arreglar: lo que se quedó fuera va con su motivo, uno por línea.
+        if (!r.skipped.isEmpty()) {
+            QMessageBox box(QMessageBox::Warning, tr("Publicado con salvedades"),
+                            tr("El ciclo se creó en Zephyr, pero %1 cosas se quedaron fuera.").arg(r.skipped.size()),
+                            QMessageBox::Ok, this);
+            box.setDetailedText(r.skipped.join(QLatin1Char('\n')));
+            box.exec();
+        }
+    });
 }
 
 void HistoryView::copyMarkdown(const PlanReport& report) {

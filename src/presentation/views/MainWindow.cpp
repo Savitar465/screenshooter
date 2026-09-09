@@ -57,7 +57,7 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence);
     m_plan = new PlanView(*ctx.cases, *ctx.plan);
     m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence);
-    m_history = new HistoryView(*ctx.cases, *ctx.history);
+    m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish);
     m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger, *ctx.evidence);
     m_stack->insertWidget(static_cast<int>(Screen::Casos), m_cases);
     m_stack->insertWidget(static_cast<int>(Screen::Plan), m_plan);
@@ -275,7 +275,7 @@ void MainWindow::updateActions() {
 
 void MainWindow::openSettings() {
     if (!m_settings) {
-        m_settings = new SettingsDialog(*m_ctx.settings, *m_ctx.bugs, m_ctx.hotkey, m_ctx.captureBackend, this);
+        m_settings = new SettingsDialog(*m_ctx.settings, *m_ctx.bugs, m_ctx.hotkey, m_ctx.captureBackend, m_ctx.publish, this);
         connect(m_settings, &SettingsDialog::toast, this, &MainWindow::showToast);
     }
     m_settings->show();

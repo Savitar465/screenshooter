@@ -14,7 +14,7 @@ QJsonObject caseToJson(const TestCase& c, bool includeShots) {
         {"id", c.id}, {"title", c.title}, {"suite", c.suite},
         {"priority", toString(c.priority)}, {"status", toString(c.status)},
         {"preconditions", c.preconditions}, {"steps", steps},
-        {"tags", QJsonArray::fromStringList(c.tags)}, {"component", c.component}, {"jiraKey", c.jiraKey},
+        {"tags", QJsonArray::fromStringList(c.tags)}, {"component", c.component}, {"jiraKey", c.jiraKey}, {"testKey", c.testKey},
     };
     if (includeShots) {
         QJsonArray shots;
@@ -38,6 +38,7 @@ TestCase caseFromJson(const QJsonObject& o) {
     c.preconditions = o["preconditions"].toString();
     c.component = o["component"].toString();
     c.jiraKey = o["jiraKey"].toString();
+    c.testKey = o["testKey"].toString();
     for (const auto& v : o["tags"].toArray()) if (!v.toString().trimmed().isEmpty()) c.tags << v.toString().trimmed();
     for (const auto& v : o["steps"].toArray()) {
         const auto s = v.toObject();
@@ -90,7 +91,7 @@ namespace {
 
 const QStringList kCsvHeader = {
     QStringLiteral("id"), QStringLiteral("title"), QStringLiteral("suite"), QStringLiteral("priority"), QStringLiteral("status"),
-    QStringLiteral("tags"), QStringLiteral("component"), QStringLiteral("jira"), QStringLiteral("preconditions"),
+    QStringLiteral("tags"), QStringLiteral("component"), QStringLiteral("jira"), QStringLiteral("test"), QStringLiteral("preconditions"),
     QStringLiteral("step"), QStringLiteral("action"), QStringLiteral("expected")};
 
 QString csvField(const QString& v) {
@@ -133,7 +134,7 @@ QString casesToCsv(const QList<TestCase>& cases) {
     QStringList lines{kCsvHeader.join(QLatin1Char(','))};
     for (const auto& c : cases) {
         const QStringList base{c.id, c.title, c.suite, toString(c.priority), toString(c.status),
-                               c.tags.join(QStringLiteral("; ")), c.component, c.jiraKey, c.preconditions};
+                               c.tags.join(QStringLiteral("; ")), c.component, c.jiraKey, c.testKey, c.preconditions};
         auto writeRow = [&](int stepNo, const QString& action, const QString& expected) {
             QStringList f;
             for (const auto& b : base) f << csvField(b);
@@ -153,7 +154,7 @@ std::optional<QList<TestCase>> casesFromCsv(const QString& text, QString* error)
     for (const auto& h : rows.first()) header << h.trimmed().toLower();
     auto col = [&](const char* name) { return header.indexOf(QString::fromLatin1(name)); };
     const int iId = col("id"), iTitle = col("title"), iSuite = col("suite"), iPrio = col("priority"), iStatus = col("status"),
-              iTags = col("tags"), iComp = col("component"), iJira = col("jira"), iPre = col("preconditions"),
+              iTags = col("tags"), iComp = col("component"), iJira = col("jira"), iTest = col("test"), iPre = col("preconditions"),
               iAction = col("action"), iExpected = col("expected");
     if (iId < 0 || iTitle < 0) {
         if (error) *error = QStringLiteral("Faltan las columnas obligatorias id y title");
@@ -179,6 +180,7 @@ std::optional<QList<TestCase>> casesFromCsv(const QString& text, QString* error)
             fresh.tags = parseTags(at(r, iTags).replace(QLatin1Char(';'), QLatin1Char(',')));
             fresh.component = at(r, iComp).trimmed();
             fresh.jiraKey = at(r, iJira).trimmed();
+            fresh.testKey = at(r, iTest).trimmed();
             fresh.preconditions = at(r, iPre);
             out.append(fresh);
             c = &out.last();
@@ -203,6 +205,7 @@ QString casesToMarkdown(const QList<TestCase>& cases) {
         meta << QStringLiteral("**Estado:** %1").arg(toString(c.status));
         if (!c.component.isEmpty()) meta << QStringLiteral("**Componente:** %1").arg(c.component);
         if (!c.jiraKey.isEmpty()) meta << QStringLiteral("**Historia:** %1").arg(c.jiraKey);
+        if (!c.testKey.isEmpty()) meta << QStringLiteral("**Test:** %1").arg(c.testKey);
         if (!c.tags.isEmpty()) meta << QStringLiteral("**Etiquetas:** %1").arg(c.tags.join(QStringLiteral(", ")));
         out << meta.join(QStringLiteral(" · ")) << QString();
         if (!c.preconditions.trimmed().isEmpty()) out << QStringLiteral("**Precondiciones:** %1").arg(c.preconditions.trimmed()) << QString();

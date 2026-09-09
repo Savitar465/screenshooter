@@ -19,10 +19,13 @@ struct PlanReport;
 
 /// Pantalla "Historial": lista de ejecuciones de planes y de casos a la izquierda;
 /// a la derecha, el informe del plan (exportable a Markdown) o el detalle de una ejecución.
+class TestPublishService;
+
 class HistoryView : public QWidget {
     Q_OBJECT
 public:
-    HistoryView(TestCaseStore& cases, RunHistoryStore& history, QWidget* parent = nullptr);
+    /// `publish` puede ser nullptr (tests, o sin Zephyr configurado): entonces no se ofrece publicar.
+    HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish = nullptr, QWidget* parent = nullptr);
 
     void showPlan(const QString& planRunId);
     void showRun(const QString& runId);
@@ -49,9 +52,12 @@ private:
     QWidget* stepsList(const RunRecord& run) const;
     void exportMarkdown(const PlanReport& report);
     void copyMarkdown(const PlanReport& report);
+    /// Crea en Zephyr el ciclo con las ejecuciones del informe, sus pasos y sus evidencias.
+    void publishToZephyr(const PlanReport& report);
 
     TestCaseStore& m_cases;
     RunHistoryStore& m_history;
+    TestPublishService* m_publish;
     Mode m_mode = Mode::All;
     QString m_search;
     QString m_selectedPlan;

@@ -35,12 +35,14 @@ qaflow_add_test(application test_settings_store LIBS qaflow_application)
 qaflow_add_test(application test_bug_store LIBS qaflow_application)
 qaflow_add_test(application test_bug_report_service LIBS qaflow_application)
 qaflow_add_test(application test_evidence_service LIBS qaflow_application)
+qaflow_add_test(application test_test_publish_service LIBS qaflow_application)
 
 # infrastructure: repositorios JSON en un directorio temporal, QSettings en un fichero temporal
 # y clientes REST contra un servidor HTTP falso en localhost
 qaflow_add_test(infrastructure test_json_repositories LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_settings_repository LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_tracker_clients LIBS qaflow_infrastructure)
+qaflow_add_test(infrastructure test_zephyr_client LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_gif_encoder LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_global_hotkey LIBS qaflow_infrastructure)
 

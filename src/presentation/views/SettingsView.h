@@ -14,6 +14,7 @@ namespace qaflow {
 
 class SettingsStore;
 class BugReportService;
+class TestPublishService;
 class IGlobalHotkey;
 
 /// Pantalla "Ajustes": preferencias generales (idioma, tema, bandeja), gestor de incidencias
@@ -22,8 +23,9 @@ class SettingsView : public QWidget {
     Q_OBJECT
 public:
     /// `hotkey` puede ser nullptr (tests); `captureBackend` es el texto informativo del método de captura.
+    /// `publish` puede ser nullptr (tests): sin él no se ofrece la publicación en Zephyr.
     SettingsView(SettingsStore& settings, BugReportService& bugs, IGlobalHotkey* hotkey = nullptr,
-                 const QString& captureBackend = QString(), QWidget* parent = nullptr);
+                 const QString& captureBackend = QString(), TestPublishService* publish = nullptr, QWidget* parent = nullptr);
 
 signals:
     void toast(const QString& message, const QString& color);
@@ -35,9 +37,12 @@ private:
     void refreshRunShortcuts();
     void refreshCaptureStatus();
     void testConnection();
+    void testZephyr();
+    void refreshZephyr();
 
     SettingsStore& m_settings;
     BugReportService& m_bugs;
+    TestPublishService* m_publish;
     IGlobalHotkey* m_hotkey;
     QString m_captureBackend;
     bool m_selfEdit = false;
@@ -61,6 +66,11 @@ private:
     QLabel* m_tokenLabel;
     QLineEdit* m_token;
     QLabel* m_secretNote;
+    QWidget* m_zephyrBlock;
+    QCheckBox* m_zephyr;
+    QLineEdit* m_zephyrVersion;
+    QPushButton* m_zephyrTest;
+    QLabel* m_zephyrNote;
     QLineEdit* m_shortcut;
     QLineEdit* m_recordShortcut;
     QComboBox* m_format;

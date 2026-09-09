@@ -90,6 +90,7 @@ private:
     QLabel* m_lastRun = nullptr;
     QLineEdit* m_component = nullptr;
     QLineEdit* m_jiraKey = nullptr;
+    QLineEdit* m_testKey = nullptr;   // issue de tipo Test en Zephyr
     QPushButton* m_openJira = nullptr;
     QLineEdit* m_tags = nullptr;
     TextArea* m_pre = nullptr;

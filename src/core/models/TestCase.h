@@ -65,10 +65,11 @@ struct TestCase {
     QStringList tags;           // etiquetas libres: "regresión", "smoke"…
     QString component;          // módulo o componente del producto
     QString jiraKey;            // historia o épica enlazada: SHOP-12
+    QString testKey;            // issue de tipo Test que representa el caso en Zephyr: SHOP-42
 
     int unassignedShots() const;
     bool readyToBeMarkedListo() const;
-    /// Texto en el que buscan los filtros (id, título, suite, etiquetas, componente, historia).
+    /// Texto en el que buscan los filtros (id, título, suite, etiquetas, componente, historia, Test).
     QString searchText() const;
 };
 

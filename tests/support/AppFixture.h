@@ -12,6 +12,7 @@
 //   Gestor: Jira falso (FakeIssueTracker) en https://acme.atlassian.net, proyecto SHOP, conectado.
 
 #include "FakeIssueTracker.h"
+#include "FakeTestManagement.h"
 #include "MemoryRepositories.h"
 
 #include "application/BugReportService.h"
@@ -21,6 +22,7 @@
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
+#include "application/TestPublishService.h"
 
 #include <memory>
 
@@ -34,6 +36,7 @@ struct AppFixture {
     std::shared_ptr<MemorySecretStore> secrets = std::make_shared<MemorySecretStore>();
     std::shared_ptr<MemoryBugRepository> bugRepo = std::make_shared<MemoryBugRepository>();
     std::shared_ptr<FakeIssueTracker> tracker = std::make_shared<FakeIssueTracker>();
+    std::shared_ptr<FakeTestManagement> zephyr = std::make_shared<FakeTestManagement>();
 
     TestCaseStore store{repo};
     RunHistoryStore history{historyRepo, store};
@@ -42,6 +45,7 @@ struct AppFixture {
     SettingsStore settings{settingsRepo, secrets};
     BugStore bugLedger{bugRepo};
     BugReportService bugs{tracker, store, run, settings, bugLedger};
+    TestPublishService publish{zephyr, store, settings};
 
     AppFixture() {
         store.load();

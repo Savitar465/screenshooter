@@ -52,6 +52,7 @@ add_library(qaflow_core STATIC
         src/core/services/IScreenRecorder.h
         src/core/services/IGlobalHotkey.h
         src/core/services/IIssueTracker.h
+        src/core/services/ITestManagement.h
         src/core/services/ISecretStore.h
         src/core/services/IBugRepository.h
 )
@@ -81,6 +82,8 @@ add_library(qaflow_application STATIC
         src/application/BugStore.cpp
         src/application/CaseTransferService.h
         src/application/CaseTransferService.cpp
+        src/application/TestPublishService.h
+        src/application/TestPublishService.cpp
 )
 target_link_libraries(qaflow_application PUBLIC qaflow_core Qt6::Gui PRIVATE qaflow_warnings)
 
@@ -114,8 +117,11 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/hotkey/PortalShortcuts.cpp
         src/infrastructure/secrets/SecretStores.h
         src/infrastructure/secrets/SecretStores.cpp
+        src/infrastructure/http/HttpClient.h
+        src/infrastructure/http/HttpClient.cpp
         src/infrastructure/tracker/HttpTrackerClient.h
-        src/infrastructure/tracker/HttpTrackerClient.cpp
+        src/infrastructure/tracker/JiraAuth.h
+        src/infrastructure/tracker/JiraAuth.cpp
         src/infrastructure/tracker/JiraClient.h
         src/infrastructure/tracker/JiraClient.cpp
         src/infrastructure/tracker/GitHubClient.h
@@ -126,6 +132,8 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/tracker/AzureDevOpsClient.cpp
         src/infrastructure/tracker/TrackerRouter.h
         src/infrastructure/tracker/TrackerRouter.cpp
+        src/infrastructure/testmgmt/ZephyrClient.h
+        src/infrastructure/testmgmt/ZephyrClient.cpp
 )
 target_link_libraries(qaflow_infrastructure PUBLIC qaflow_core Qt6::Gui Qt6::Widgets Qt6::Network PRIVATE qaflow_warnings)
 if (WIN32)

@@ -14,6 +14,7 @@ TestCase richCase() {
     c.id = QStringLiteral("TC-1"); c.title = QStringLiteral("Título, con coma"); c.suite = QStringLiteral("S");
     c.priority = Priority::Alta; c.status = CaseStatus::Listo;
     c.tags = {QStringLiteral("smoke"), QStringLiteral("api")}; c.component = QStringLiteral("Comp"); c.jiraKey = QStringLiteral("SHOP-9");
+    c.testKey = QStringLiteral("SHOP-42");
     c.preconditions = QStringLiteral("línea 1\nlínea 2");
     c.steps = {TestStep{QStringLiteral("Pulsar \"OK\""), QStringLiteral("Cierra")}, TestStep{QStringLiteral("Otro"), QStringLiteral("Más")}};
     c.shots = {Screenshot{3, 1, QStringLiteral("cap.png"), QStringLiteral("/x/cap.png")}};
@@ -37,6 +38,7 @@ private slots:
         QCOMPARE(r.tags, c.tags);
         QCOMPARE(r.component, c.component);
         QCOMPARE(r.jiraKey, c.jiraKey);
+        QCOMPARE(r.testKey, c.testKey);
         QCOMPARE(r.preconditions, c.preconditions);
         QCOMPARE(r.steps.size(), 2);
         QCOMPARE(r.shots.size(), 1);
@@ -66,7 +68,7 @@ private slots:
         TestCase noSteps;
         noSteps.id = QStringLiteral("TC-2"); noSteps.title = QStringLiteral("Sin pasos");
         const QString csv = formats::casesToCsv({richCase(), noSteps});
-        QVERIFY(csv.startsWith(QStringLiteral("id,title,suite,priority,status,tags,component,jira,preconditions,step,action,expected\n")));
+        QVERIFY(csv.startsWith(QStringLiteral("id,title,suite,priority,status,tags,component,jira,test,preconditions,step,action,expected\n")));
 
         const auto back = formats::casesFromCsv(csv);
         QVERIFY(back.has_value());
@@ -76,6 +78,8 @@ private slots:
         QCOMPARE(r.steps[0].action, QStringLiteral("Pulsar \"OK\""));
         QCOMPARE(r.preconditions, QStringLiteral("línea 1\nlínea 2")); // saltos de línea entre comillas
         QCOMPARE(r.tags, (QStringList{QStringLiteral("smoke"), QStringLiteral("api")}));
+        QCOMPARE(r.jiraKey, QStringLiteral("SHOP-9"));
+        QCOMPARE(r.testKey, QStringLiteral("SHOP-42"));   // la clave del Test de Zephyr viaja en el CSV
         QCOMPARE(r.steps.size(), 2);
         QCOMPARE(static_cast<int>(r.priority), static_cast<int>(Priority::Alta));
         QVERIFY(back->last().steps.isEmpty());

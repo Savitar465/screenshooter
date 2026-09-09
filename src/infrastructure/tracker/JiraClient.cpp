@@ -1,5 +1,7 @@
 #include "JiraClient.h"
 
+#include "infrastructure/tracker/JiraAuth.h"
+
 #include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -9,10 +11,7 @@ namespace qaflow {
 
 QNetworkRequest JiraClient::request(const TrackerSettings& s, const QString& path) const {
     QNetworkRequest req = jsonRequest(s.baseUrl() + path);
-    if (s.jiraAuth == JiraAuth::ServerToken)
-        req.setRawHeader("Authorization", "Bearer " + s.token.toUtf8());
-    else   // correo + API token (Cloud) o usuario + contraseña (Server): el mismo Basic auth
-        req.setRawHeader("Authorization", "Basic " + (s.user.trimmed() + QLatin1Char(':') + s.token).toUtf8().toBase64());
+    req.setRawHeader("Authorization", jiraAuthorization(s));
     return req;
 }
 

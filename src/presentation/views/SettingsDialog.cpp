@@ -12,7 +12,7 @@
 namespace qaflow {
 
 SettingsDialog::SettingsDialog(SettingsStore& settings, BugReportService& bugs, IGlobalHotkey* hotkey,
-                               const QString& captureBackend, QWidget* parent)
+                               const QString& captureBackend, TestPublishService* publish, QWidget* parent)
     : QDialog(parent) {
     setObjectName(QStringLiteral("settingsDialog"));
     setWindowTitle(tr("Ajustes · QAflow"));
@@ -26,7 +26,7 @@ SettingsDialog::SettingsDialog(SettingsStore& settings, BugReportService& bugs, 
     }
 
     auto* v = ui::vbox(this, 0, 0);
-    auto* view = new SettingsView(settings, bugs, hotkey, captureBackend);
+    auto* view = new SettingsView(settings, bugs, hotkey, captureBackend, publish);
     connect(view, &SettingsView::toast, this, &SettingsDialog::toast);
     v->addWidget(view, 1);
 

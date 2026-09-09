@@ -21,6 +21,8 @@ TrackerSettings QSettingsRepository::loadTracker() {
                      : (t.user.trimmed().isEmpty() ? JiraAuth::ServerToken : JiraAuth::CloudToken);
     t.token = s.value(QStringLiteral("token")).toString();   // sólo heredado: SettingsStore lo migra al llavero
     t.connected = s.value(QStringLiteral("connected"), false).toBool();
+    t.zephyr = s.value(QStringLiteral("zephyr"), false).toBool();
+    t.zephyrVersion = s.value(QStringLiteral("zephyrVersion")).toString();
     return t;
 }
 
@@ -33,6 +35,8 @@ void QSettingsRepository::saveTracker(const TrackerSettings& t) {
     s.setValue(QStringLiteral("user"), t.user);
     s.setValue(QStringLiteral("jiraAuth"), toString(t.jiraAuth));
     s.setValue(QStringLiteral("connected"), t.connected);
+    s.setValue(QStringLiteral("zephyr"), t.zephyr);
+    s.setValue(QStringLiteral("zephyrVersion"), t.zephyrVersion);
     s.remove(QStringLiteral("email"));   // clave de versiones anteriores, ya migrada a "user"
     if (t.token.isEmpty()) s.remove(QStringLiteral("token"));
     else s.setValue(QStringLiteral("token"), t.token);   // sólo llega aquí sin llavero disponible

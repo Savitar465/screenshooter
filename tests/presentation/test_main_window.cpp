@@ -16,6 +16,7 @@
 #include "presentation/widgets/Toast.h"
 
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QFrame>
 #include <QScrollArea>
@@ -57,6 +58,7 @@ struct WindowFixture {
         ctx.cases = &app.store; ctx.plan = &app.plans; ctx.run = &app.run; ctx.history = &app.history;
         ctx.settings = &app.settings; ctx.bugs = &app.bugs; ctx.bugLedger = &app.bugLedger;
         ctx.evidence = &evidence; ctx.transfer = &transfer; ctx.dataDir = captures.path();
+        ctx.publish = &app.publish;
         window = std::make_unique<MainWindow>(ctx);
         window->show();
         QApplication::setActiveWindow(window.get());
@@ -386,6 +388,29 @@ private slots:
         QCOMPARE(assignee->lineEdit()->text(), QStringLiteral("an"));           // lo escrito sigue intacto
         QCOMPARE(f.app.tracker->assigneeQueries.last(), QStringLiteral("an"));
         QCOMPARE(f.app.tracker->assigneeQueries.size(), 1);                     // una sola llamada para dos letras
+    }
+
+    // Zephyr se activa en Ajustes y sólo se ofrece con Jira, que es donde vive el plugin.
+    void settingsEnableZephyrPublishing() {
+        WindowFixture f;
+        f.action("actSettings")->trigger();
+        QWidget* dialog = f.window->settingsWindow();
+        auto* zephyr = dialog->findChild<QCheckBox*>(QStringLiteral("settingsZephyr"));
+        QVERIFY(zephyr);
+        QVERIFY(zephyr->isVisible());
+        QVERIFY(!f.app.settings.tracker().zephyr);
+        QVERIFY(!f.app.publish.enabled());
+
+        zephyr->setChecked(true);
+        QVERIFY(f.app.settings.tracker().zephyr);
+        QVERIFY(f.app.publish.enabled());
+
+        // Con otro gestor el bloque desaparece: Zephyr es un plugin de Jira.
+        auto* kind = dialog->findChild<QComboBox*>(QStringLiteral("settingsKind"));
+        QVERIFY(kind);
+        kind->setCurrentText(toString(TrackerKind::GitHub));
+        QVERIFY(!zephyr->isVisible());
+        QVERIFY(!f.app.publish.enabled());
     }
 };
 

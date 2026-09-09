@@ -13,6 +13,13 @@
     </message>
 </context>
 <context>
+    <name>QObject</name>
+    <message>
+        <source>Publicado desde QAflow · %1 de %2 casos ejecutados · %3 % de éxito</source>
+        <translation>Published from QAflow · %1 of %2 cases executed · %3 % passed</translation>
+    </message>
+</context>
+<context>
     <name>RecorderOverlay</name>
     <message>
         <source>Detener</source>
@@ -628,6 +635,74 @@
     <message>
         <source>Indica la clave del proyecto</source>
         <translation>Enter the project key</translation>
+    </message>
+    <message>
+        <source>Jira responde pero no se encuentra la API de Zephyr (ni /rest/zapi/latest ni /rest/zephyr/latest). Comprueba que el plugin de Zephyr está instalado y activo.</source>
+        <translation>Jira answers but the Zephyr API was not found (neither /rest/zapi/latest nor /rest/zephyr/latest). Check that the Zephyr plugin is installed and enabled.</translation>
+    </message>
+    <message>
+        <source>Jira no devolvió el id del proyecto</source>
+        <translation>Jira did not return the project id</translation>
+    </message>
+    <message>
+        <source>El proyecto no tiene la versión indicada: %1</source>
+        <translation>The project has no such version: %1</translation>
+    </message>
+    <message>
+        <source>API de Zephyr en %1</source>
+        <translation>Zephyr API at %1</translation>
+    </message>
+    <message>
+        <source>El ciclo no tiene ninguna ejecución que publicar</source>
+        <translation>The cycle has no executions to publish</translation>
+    </message>
+    <message>
+        <source>Zephyr no devolvió el id del ciclo creado</source>
+        <translation>Zephyr did not return the id of the new cycle</translation>
+    </message>
+    <message>
+        <source>%1: sin clave de Test</source>
+        <translation>%1: no Test key</translation>
+    </message>
+    <message>
+        <source>%1: no se encontró el Test %2</source>
+        <translation>%1: Test %2 was not found</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo añadir al ciclo · %2</source>
+        <translation>%1: could not be added to the cycle · %2</translation>
+    </message>
+    <message>
+        <source>%1: Zephyr no devolvió el id de la ejecución</source>
+        <translation>%1: Zephyr did not return the execution id</translation>
+    </message>
+    <message>
+        <source>Publicado por QAflow · %1</source>
+        <translation>Published by QAflow · %1</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo fijar el veredicto · %2</source>
+        <translation>%1: could not set the verdict · %2</translation>
+    </message>
+    <message>
+        <source>%1: no se pudieron leer los pasos de la ejecución</source>
+        <translation>%1: could not read the execution steps</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo fijar el veredicto de un paso · %2</source>
+        <translation>%1: could not set a step verdict · %2</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo subir %2</source>
+        <translation>%1: could not upload %2</translation>
+    </message>
+    <message>
+        <source>%1: el Test %2 tiene %3 pasos y se ejecutaron %4; los %5 últimos veredictos se quedan fuera</source>
+        <translation>%1: test %2 has %3 steps but %4 were run; the last %5 verdicts are left out</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo leer %2</source>
+        <translation>%1: could not read %2</translation>
     </message>
 </context>
 <context>
@@ -1383,6 +1458,14 @@
         <source>Adjunta logs, vídeos o imágenes existentes (también puedes arrastrarlos a la ventana)</source>
         <translation>Attach existing logs, videos or images (you can also drag them onto the window)</translation>
     </message>
+    <message>
+        <source>Issue de tipo Test que representa este caso en Zephyr. Sin él, el caso no se publica en el ciclo</source>
+        <translation>The Test issue that stands for this case in Zephyr. Without it the case is left out of the cycle</translation>
+    </message>
+    <message>
+        <source>Test de Zephyr</source>
+        <translation>Zephyr Test</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::EvidencePreview</name>
@@ -1679,6 +1762,60 @@
     <message>
         <source>Informe copiado al portapapeles</source>
         <translation>Report copied to the clipboard</translation>
+    </message>
+    <message>
+        <source>Publicar en Zephyr</source>
+        <translation>Publish to Zephyr</translation>
+    </message>
+    <message>
+        <source>Crea el ciclo en Zephyr con estas ejecuciones, el veredicto de cada paso y sus evidencias</source>
+        <translation>Creates the Zephyr cycle with these executions, each step&apos;s verdict and its evidence</translation>
+    </message>
+    <message>
+        <source>Se creará el ciclo «%1» en Zephyr con %2 ejecuciones.</source>
+        <translation>The cycle “%1” will be created in Zephyr with %2 executions.</translation>
+    </message>
+    <message>
+        <source>
+
+Quedan fuera %1 casos sin clave de Test: %2.
+Indícala en el editor del caso para incluirlos.</source>
+        <translation>
+
+%1 cases are left out for having no Test key: %2.
+Set it in the case editor to include them.</translation>
+    </message>
+    <message>
+        <source>Ningún caso del ciclo tiene clave de Test de Zephyr</source>
+        <translation>No case in the cycle has a Zephyr Test key</translation>
+    </message>
+    <message>
+        <source>Publicando en Zephyr…</source>
+        <translation>Publishing to Zephyr…</translation>
+    </message>
+    <message>
+        <source>No se pudo publicar en Zephyr · %1</source>
+        <translation>Could not publish to Zephyr · %1</translation>
+    </message>
+    <message>
+        <source>Ciclo publicado en Zephyr · %1 ejecuciones, %2 pasos, %3 evidencias</source>
+        <translation>Cycle published to Zephyr · %1 executions, %2 steps, %3 attachments</translation>
+    </message>
+    <message>
+        <source> · %1 sin publicar</source>
+        <translation> · %1 not published</translation>
+    </message>
+    <message>
+        <source> · vuelve a intentarlo</source>
+        <translation> · try again</translation>
+    </message>
+    <message>
+        <source>Publicado con salvedades</source>
+        <translation>Published with exceptions</translation>
+    </message>
+    <message>
+        <source>El ciclo se creó en Zephyr, pero %1 cosas se quedaron fuera.</source>
+        <translation>The cycle was created in Zephyr, but %1 things were left out.</translation>
     </message>
 </context>
 <context>
@@ -2848,6 +2985,54 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <source>⚠ %1 · se guarda %2. Instala un llavero (secret-tool / libsecret en Linux) para cifrar el dato.</source>
         <translation>⚠ %1 · stored %2. Install a keyring (secret-tool / libsecret on Linux) to encrypt it.</translation>
     </message>
+    <message>
+        <source>GESTIÓN DE PRUEBAS</source>
+        <translation>TEST MANAGEMENT</translation>
+    </message>
+    <message>
+        <source>Publicar los ciclos de plan en Zephyr</source>
+        <translation>Publish plan cycles to Zephyr</translation>
+    </message>
+    <message>
+        <source>Al terminar un ciclo, el informe puede crear en Zephyr el ciclo con sus ejecuciones, el veredicto de cada paso y las evidencias</source>
+        <translation>When a cycle ends, its report can create the Zephyr cycle with its executions, each step&apos;s verdict and the evidence</translation>
+    </message>
+    <message>
+        <source>Sin programar (Unscheduled)</source>
+        <translation>Unscheduled</translation>
+    </message>
+    <message>
+        <source>Versión del proyecto a la que van los ciclos; vacío los deja sin programar</source>
+        <translation>Project version the cycles go to; leave it empty for Unscheduled</translation>
+    </message>
+    <message>
+        <source>Probar Zephyr</source>
+        <translation>Test Zephyr</translation>
+    </message>
+    <message>
+        <source>Versión del proyecto</source>
+        <translation>Project version</translation>
+    </message>
+    <message>
+        <source>Cada caso publica su issue de tipo Test (campo «Test de Zephyr» del caso); los que no lo tengan se quedan fuera del ciclo.</source>
+        <translation>Each case publishes its Test issue (the case&apos;s “Zephyr Test” field); those without one are left out of the cycle.</translation>
+    </message>
+    <message>
+        <source>Zephyr for Jira: los ciclos y sus ejecuciones se crean en la misma instancia con estas credenciales.</source>
+        <translation>Zephyr for Jira: cycles and their executions are created on the same instance with these credentials.</translation>
+    </message>
+    <message>
+        <source>Probando…</source>
+        <translation>Testing…</translation>
+    </message>
+    <message>
+        <source>Zephyr responde · %1</source>
+        <translation>Zephyr answered · %1</translation>
+    </message>
+    <message>
+        <source>No se pudo hablar con Zephyr · %1</source>
+        <translation>Could not reach Zephyr · %1</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ShotCard</name>
@@ -3035,6 +3220,17 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>Captura %1 eliminada</source>
         <translation>Screenshot %1 deleted</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::TestPublishService</name>
+    <message>
+        <source>Integración no disponible</source>
+        <translation>Integration not available</translation>
+    </message>
+    <message>
+        <source>Activa Zephyr en Ajustes para publicar los ciclos</source>
+        <translation>Turn Zephyr on in Settings to publish cycles</translation>
     </message>
 </context>
 <context>

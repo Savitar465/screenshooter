@@ -38,6 +38,8 @@ src/
 │   │                (overlay), GifRecorder + GifEncoder (grabación a GIF), RecorderOverlay (control flotante)
 │   ├── hotkey/      GlobalHotkey (RegisterHotKey / XGrabKey / Carbon), PortalShortcuts (portal de Wayland)
 │   ├── secrets/     SecretStores: secret-tool (Linux), Keychain (macOS), DPAPI (Windows), fichero en claro
+│   ├── http/        HttpClient: base REST (JSON, multipart, errores, reintentables) de tracker/ y testmgmt/
+│   ├── testmgmt/    ZephyrClient: ciclos, ejecuciones y evidencias en Zephyr for Jira
 │   └── tracker/     HttpTrackerClient (base) → JiraClient, GitHubClient, GitLabClient, AzureDevOpsClient;
 │                    TrackerRouter despacha por TrackerSettings::kind
 └── presentation/    Widgets Qt. Depende de application; nunca de infrastructure.
@@ -346,6 +348,49 @@ Jira Server rechaza el login con las cabeceras de Seraph (`X-Seraph-LoginReason`
 traduce a un mensaje accionable: contraseña incorrecta, PAT en una versión que no los admite o el
 **bloqueo por CAPTCHA** que Jira aplica tras varios intentos fallidos y que sólo se levanta entrando
 por el navegador.
+
+### Gestión de pruebas (Zephyr)
+
+`ITestManagement` (core) es una interfaz aparte de `IIssueTracker`: aquélla crea defectos, ésta
+publica el resultado de un ciclo. `ZephyrClient` (infrastructure/testmgmt/) la implementa sobre la
+misma instancia y las mismas credenciales de Jira — comparte `HttpClient` y `jiraAuthorization()`
+con los clientes de gestores, pero no hereda su interfaz.
+
+Zephyr sirve su API por dos rutas según la versión del plugin, y el cliente prueba las dos en orden:
+
+| Ruta | Cuándo |
+|------|--------|
+| `/rest/zapi/latest` | ZAPI pública: add-on aparte hasta Zephyr 5.6, incluida de fábrica desde entonces |
+| `/rest/zephyr/latest` | La que publica el propio plugin y usa su interfaz web; lo único disponible por debajo de la 5.6 |
+
+Un 404 significa «esa ruta no está aquí» y se pasa a la siguiente; cualquier otro fallo (401, red)
+se informa tal cual en vez de disimularlo probando la otra.
+
+`TestPublishService` (application) traduce un `PlanReport` a un `PublishRequest`: sólo las filas
+ejecutadas, la clave del Test desde `TestCase::testKey` y las evidencias del caso que sigan en disco
+con el paso al que se asignaron. El cliente encadena entonces, por cada caso:
+
+| Paso | Petición |
+|------|----------|
+| Resolver los ids | `GET /rest/api/2/project/{clave}` (Zephyr trabaja con ids numéricos, no con claves) y `GET /rest/api/2/issue/{testKey}?fields=id` |
+| Crear el ciclo | `POST {api}/cycle` con `projectId`, `versionId` y las fechas en el formato de Zephyr (`12/May/26`) |
+| Añadir el caso | `POST {api}/execution` → la respuesta viene indexada por el id de la ejecución creada |
+| Veredicto del caso | `PUT {api}/execution/{id}/execute` con 1 PASS · 2 FAIL · 4 BLOCKED |
+| Veredicto por paso | `GET {api}/stepResult?executionId=` y `PUT {api}/stepResult/{id}` (N/A queda sin ejecutar, -1) |
+| Evidencias | `POST {api}/attachment?entityId=&entityType=` — `TESTSTEPRESULT` las de un paso, `EXECUTION` las demás |
+
+El fallo de un caso no aborta el ciclo: se anota en `PublishResult::skipped` con su motivo y se sigue
+con el siguiente, que es lo que interesa cuando se publican decenas. Sí abortan los fallos previos
+(proyecto, versión inexistente o creación del ciclo), porque sin ellos no hay dónde publicar. Ahí
+entra también lo que se queda fuera sin ser un error de red: un caso sin clave de Test, una evidencia
+que ya no está en disco y los veredictos que sobran cuando el Test de Zephyr tiene menos pasos que el
+caso de QAflow — los dos se editan por separado y se desincronizan. El informe los enseña al terminar
+con su motivo, uno por línea, porque un contador de «3 sin publicar» no dice qué hay que arreglar.
+
+La ruta detectada se recuerda por instancia (`m_apiFor`), y una detección que no encuentra nada la
+olvida entera: dejar puesta la última que se probó hacía que la siguiente publicación contra una
+instancia que sí tenía Zephyr saliera por la ruta equivocada. Que el plugin no esté no se marca como
+reintentable — no lo arregla insistir —, y un 401 o una caída de red sí.
 
 **Libro de bugs.** `BugReportService::submit()` crea el issue y guarda un `IssueLink` (clave,
 url, título, caso, gestor, fecha) en `BugStore`; el editor de casos y la pantalla de bugs lo

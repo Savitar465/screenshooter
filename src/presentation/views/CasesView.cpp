@@ -362,13 +362,21 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_openJira->setFixedWidth(24);
     connect(m_openJira, &QPushButton::clicked, this, [this]() { if (const TestCase* c = m_store.selected(); c && !c->jiraKey.isEmpty()) emit openJiraRequested(c->jiraKey); });
     jrh->addWidget(m_openJira);
+    m_testKey = new QLineEdit;
+    m_testKey->setProperty("role", QStringLiteral("mono"));
+    m_testKey->setPlaceholderText(QStringLiteral("SHOP-42"));
+    m_testKey->setToolTip(tr("Issue de tipo Test que representa este caso en Zephyr. Sin él, el caso no se publica en el ciclo"));
+    connect(m_testKey, &QLineEdit::textEdited, this, [this](const QString& t) {
+        edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.testKey = t.trimmed().toUpper(); }); });
+    });
     m_tags = new QLineEdit;
     m_tags->setPlaceholderText(tr("regresión, smoke…"));
     m_tags->setToolTip(tr("Etiquetas separadas por comas"));
     connect(m_tags, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.tags = parseTags(t); }); }); });
     mg->addWidget(fieldCell(tr("Componente"), m_component), 1, 0);
     mg->addWidget(fieldCell(tr("Historia Jira"), jiraRow), 1, 1);
-    mg->addWidget(fieldCell(tr("Etiquetas"), m_tags), 1, 2, 1, 2);
+    mg->addWidget(fieldCell(tr("Test de Zephyr"), m_testKey), 1, 2);
+    mg->addWidget(fieldCell(tr("Etiquetas"), m_tags), 1, 3);
     for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
     v->addWidget(meta);
 
@@ -495,6 +503,7 @@ void CasesView::loadEditor() {
     m_lastRun->setStyleSheet(QStringLiteral("font-weight:600;padding:5px 0;color:%1;").arg(lastRunColor(c->lastRun)));
     if (m_component->text() != c->component) m_component->setText(c->component);
     if (m_jiraKey->text() != c->jiraKey) m_jiraKey->setText(c->jiraKey);
+    if (m_testKey->text() != c->testKey) m_testKey->setText(c->testKey);
     m_openJira->setEnabled(!c->jiraKey.isEmpty());
     if (parseTags(m_tags->text()) != c->tags) m_tags->setText(c->tags.join(QStringLiteral(", ")));
     m_pre->setTextSilently(c->preconditions);

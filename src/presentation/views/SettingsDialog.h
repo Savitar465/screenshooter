@@ -7,6 +7,7 @@ namespace qaflow {
 class SettingsStore;
 class BugReportService;
 class IGlobalHotkey;
+class TestPublishService;
 
 /// Ventana de ajustes: aloja la SettingsView y se abre desde «Archivo → Ajustes» (Ctrl+,).
 /// No es modal, porque los cambios se guardan al instante y algunos (idioma, tema) reconstruyen
@@ -16,7 +17,7 @@ class SettingsDialog : public QDialog {
 public:
     /// `hotkey` puede ser nullptr (tests); `captureBackend` es el texto informativo del método de captura.
     SettingsDialog(SettingsStore& settings, BugReportService& bugs, IGlobalHotkey* hotkey = nullptr,
-                   const QString& captureBackend = QString(), QWidget* parent = nullptr);
+                   const QString& captureBackend = QString(), TestPublishService* publish = nullptr, QWidget* parent = nullptr);
 
 signals:
     /// Reenvía los avisos de la vista para que la ventana principal los muestre en su toast.

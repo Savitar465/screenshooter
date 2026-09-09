@@ -76,12 +76,12 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 
 | Pantalla          | Qué hace                                                                   |
 |-------------------|----------------------------------------------------------------------------|
-| Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira, pasos reordenables e insertables, evidencias (capturar, grabar GIF, adjuntar archivos; abrir, anotar, copiar) e historial; duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
+| Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira y a su Test de Zephyr, pasos reordenables e insertables, evidencias (capturar, grabar GIF, adjuntar archivos; abrir, anotar, copiar) e historial; duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
 | Planes            | Varios planes (crear, duplicar, archivar, eliminar), casos en orden de ejecución propio, progreso del ciclo actual con enlace a su informe, estimación basada en las duraciones reales del historial (3 min/paso si no hay datos) y arranque de un ciclo nuevo |
 | Ejecución         | Tres columnas: el caso con su progreso y la lista de pasos (veredicto corregible en cada uno), el paso actual con Pasa / Falla / Bloq. / N/A (teclas P / F / B / S), paso anterior (Retroceso), **atajos globales** para avanzar de paso sin volver a la ventana (Ctrl+Alt+P / Ctrl+Alt+F / Ctrl+Alt+A), cronómetro por paso y por caso, visor grande de la evidencia elegida con «Asignar a» y observaciones, y la columna de capturas con todas las evidencias del caso. Sobrevive al cierre de la aplicación |
-| Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración), informes de plan con exportación a Markdown y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
+| Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración), informes de plan con exportación a Markdown y publicación en Zephyr y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
 | Reportar bug      | Formulario prellenado con el paso fallido y campos reales del gestor (tipo, prioridad, asignado, componentes, versión, etiquetas) cargados del proyecto, con las personas buscadas en Jira según se escribe; crea el issue en Jira, GitHub, GitLab o Azure DevOps y sube las capturas; lista de bugs reportados con su estado y cola offline con reintento |
-| Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; atajos de la ejecución; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, modo de autenticación en Jira y credenciales en el llavero del sistema) y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
+| Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; atajos de la ejecución; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, modo de autenticación en Jira y credenciales en el llavero del sistema), publicación de ciclos en Zephyr y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
 
 ## Conexión con Jira
 
@@ -99,6 +99,31 @@ En Server la URL es la de la instancia con su context path si lo tiene (`https:/
 La contraseña se guarda en el llavero del sistema, igual que los tokens. Si Jira bloquea al usuario tras
 varios intentos fallidos, «Probar conexión» lo dice: hay que entrar una vez por el navegador y resolver
 el CAPTCHA antes de que vuelva a aceptar la API.
+
+## Zephyr: publicar los ciclos en Jira
+
+Si el proyecto usa **Zephyr for Jira** para los ciclos de prueba, QAflow los rellena solo: al terminar
+un ciclo de plan, «Publicar en Zephyr» crea el *test cycle* con una ejecución por caso, el veredicto de
+cada paso y las evidencias colgadas donde corresponde — las de un paso en su resultado y las del caso
+en la ejecución.
+
+Cada caso se corresponde con su issue de tipo **Test** mediante el campo «Test de Zephyr» del editor
+(`SHOP-42`); los casos sin esa clave se quedan fuera del ciclo y la aplicación los enumera antes de publicar.
+Al terminar, si algo se ha quedado fuera —un caso sin clave, una evidencia que ya no está en disco o
+los veredictos que sobran cuando el Test tiene menos pasos que el caso— la aplicación lo detalla con
+su motivo en vez de limitarse a contarlo.
+
+Se activa en Ajustes, bajo el gestor de incidencias: usa la misma instancia y las mismas credenciales
+de Jira. La API se busca en las dos rutas por las que Zephyr la sirve, así que funciona tanto con la
+**ZAPI** pública (incluida de fábrica desde Zephyr 5.6) como con la del propio plugin
+(`/rest/zephyr/latest`), que es lo único que hay en las versiones anteriores como la **5.3**.
+
+| Veredicto de QAflow | Estado en Zephyr |
+|---------------------|------------------|
+| Pasa                | PASS (1)         |
+| Falla               | FAIL (2)         |
+| Bloqueado           | BLOCKED (4)      |
+| N/A                 | sin ejecutar (-1)|
 
 ## Evidencias
 

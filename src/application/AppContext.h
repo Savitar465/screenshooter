@@ -9,6 +9,7 @@
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
+#include "application/TestPublishService.h"
 #include "core/services/IGlobalHotkey.h"
 
 #include <QString>
@@ -27,6 +28,8 @@ struct AppContext {
     BugReportService* bugs = nullptr;
     BugStore* bugLedger = nullptr;
     CaseTransferService* transfer = nullptr;
+    /// Publicación de ciclos en Zephyr (puede ser nullptr en tests).
+    TestPublishService* publish = nullptr;
     /// Atajo global del sistema (puede ser nullptr en tests). Ajustes muestra su `status()`.
     IGlobalHotkey* hotkey = nullptr;
     /// Directorio de datos (cases.json, history.json…), para mostrarlo o abrirlo desde la UI.

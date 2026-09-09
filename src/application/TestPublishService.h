@@ -27,9 +27,6 @@ public:
     bool enabled() const;
     /// Casos ejecutados del informe a los que habrá que crearles el Test porque aún no lo tienen.
     QStringList casesNeedingTest(const PlanReport& report) const;
-    /// Crea en Zephyr el Test de un caso suelto —lo que pide el editor del caso— y lo enlaza a él.
-    /// Con el caso que ya lo tiene no hace nada: devuelve la clave que ya estaba enlazada.
-    void createTestFor(const QString& caseId, std::function<void(const CreateTestResult&)> done);
 
     void testConnection(std::function<void(const ConnectionResult&)> done);
     /// Publica las ejecuciones del informe como un ciclo nuevo y anota en el ciclo de plan el de

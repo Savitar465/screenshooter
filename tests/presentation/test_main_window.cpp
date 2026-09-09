@@ -156,6 +156,7 @@ private slots:
     void recordActionTogglesTheRecorderAndAttachesTheGif() {
         WindowFixture f;
         const QString id = f.app.store.selectedId();
+        f.app.run.start(id);   // la evidencia es de la ejecución
         QVERIFY(f.action("actRecord")->isVisible());
         f.action("actRecord")->trigger();
         QVERIFY(f.evidence.isRecording());
@@ -167,9 +168,10 @@ private slots:
         QTRY_VERIFY(f.toastText().contains(QStringLiteral("Grabaci")));
     }
 
-    void droppingFilesAttachesThemToTheSelectedCase() {
+    void droppingFilesAttachesThemToTheRunningCase() {
         WindowFixture f;
         const QString id = f.app.store.selectedId();
+        f.app.run.start(id);
         const QString log = f.captures.filePath(QStringLiteral("app.log"));
         { QFile file(log); file.open(QIODevice::WriteOnly); file.write("x"); }
         QSignalSpy failed(&f.evidence, &EvidenceService::failed);
@@ -181,10 +183,49 @@ private slots:
         QTRY_VERIFY(f.toastText().contains(QStringLiteral("app.log")));
     }
 
+    // Desde el caso se salta a los resultados de una de sus ejecuciones.
+    void clickingARunInTheCaseOpensItsResults() {
+        WindowFixture f;
+        const QString id = f.app.store.selectedId();
+        f.app.run.start(id);
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
+        while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        const QString runId = f.app.history.runsForCase(id).first().id;
+
+        f.window->navigate(Screen::Casos);
+        auto* row = f.window->findChild<QPushButton*>(QStringLiteral("caseRun-%1").arg(runId));
+        QVERIFY(row);
+        QVERIFY2(row->findChild<QLabel*>() != nullptr, "la fila resume la ejecución");
+        row->click();
+
+        // Aterriza en el historial, en los resultados de esa ejecución y con su evidencia.
+        QCOMPARE(f.window->currentScreen(), Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        auto visibleThumb = [&]() {
+            for (auto* t : f.window->findChildren<Thumbnail*>()) if (t->isVisible()) return true;
+            return false;
+        };
+        QTRY_VERIFY(visibleThumb());
+    }
+
+    // La evidencia de una ejecución se ve en su ficha del historial, y desde ahí se abre el visor.
     void clickingAThumbnailOpensTheViewer() {
         WindowFixture f;
+        const QString id = f.app.store.selectedId();
+        f.app.run.start(id);
         f.action("actCapture")->trigger();
-        // Reportar bug también crea tarjetas (ocultas): hay que esperar a la miniatura visible de Casos.
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
+        while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        f.window->navigate(Screen::Historial);
+        history->showRun(f.app.history.runsForCase(id).first().id);
+        // Reportar bug también crea tarjetas (ocultas): hay que esperar a la miniatura visible.
         auto visibleThumb = [&]() -> Thumbnail* {
             for (auto* t : f.window->findChildren<Thumbnail*>()) if (t->isVisible()) return t;
             return nullptr;
@@ -193,12 +234,13 @@ private slots:
         QTest::mouseClick(visibleThumb(), Qt::LeftButton);
         QTRY_VERIFY(f.window->findChild<ImageViewer*>() != nullptr);
         auto* viewer = f.window->findChild<ImageViewer*>();
-        QCOMPARE(viewer->current().fileName, f.app.store.selected()->shots[0].fileName);
+        QCOMPARE(viewer->current().fileName, f.app.store.find(id)->shots[0].fileName);
         viewer->close();
     }
 
     void captureCountdownShowsAToastAndCanBeCancelled() {
         WindowFixture f;
+        f.app.run.start(f.app.store.selectedId());
         f.app.settings.updateCapture([](CaptureSettings& c) { c.delaySecs = 5; });
         f.action("actCapture")->trigger();
         QTRY_VERIFY(f.toastText().contains(QStringLiteral("Capturando en 5")));
@@ -273,9 +315,10 @@ private slots:
         QCOMPARE(f.action("actStepPass")->shortcut(), QKeySequence(Qt::Key_F8));
     }
 
-    void captureActionAttachesScreenshotToSelectedCase() {
+    void captureActionAttachesScreenshotToTheRunningCase() {
         WindowFixture f;
         const QString id = f.app.store.selectedId();
+        f.app.run.start(id);
         f.action("actCapture")->trigger();
         QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
         QVERIFY(QFile::exists(f.app.store.find(id)->shots[0].path));
@@ -442,38 +485,6 @@ private slots:
         auto* cycle = f.window->findChild<QLabel*>(QStringLiteral("runZephyrCycle"));
         QVERIFY(cycle);
         QVERIFY2(cycle->text().contains(QStringLiteral("77")), qPrintable(cycle->text()));
-    }
-
-    // El caso enlaza su Test de Zephyr, y el que no lo tenga puede crearlo desde el propio caso.
-    void theCaseEditorCreatesItsZephyrTest() {
-        WindowFixture f;
-        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
-        f.app.store.select(QStringLiteral("TC-101"));
-        f.app.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) { c.testKey.clear(); });
-        f.window->navigate(Screen::Casos);
-
-        auto* key = f.window->findChild<QLineEdit*>(QStringLiteral("caseTestKey"));
-        auto* create = f.window->findChild<QPushButton*>(QStringLiteral("caseCreateTest"));
-        QVERIFY(key);
-        QVERIFY(create);
-        QVERIFY(create->isVisible());
-        QVERIFY(create->isEnabled());
-        QVERIFY(key->text().isEmpty());
-
-        create->click();
-        QTRY_COMPARE(f.app.zephyr->testsCreated.size(), 1);
-        // Viaja el caso, no sólo una clave: título, precondiciones y pasos.
-        QCOMPARE(f.app.zephyr->testsCreated[0].caseId, QStringLiteral("TC-101"));
-        QCOMPARE(f.app.zephyr->testsCreated[0].design.size(), f.app.store.find(QStringLiteral("TC-101"))->steps.size());
-        // Y el Test queda enlazado al caso, listo para reutilizarse en los ciclos siguientes.
-        QTRY_COMPARE(key->text(), QStringLiteral("SHOP-77"));
-        QCOMPARE(f.app.store.find(QStringLiteral("TC-101"))->testKey, QStringLiteral("SHOP-77"));
-        QVERIFY(!create->isVisible());
-
-        // Y una clave escrita a mano enlaza el caso con un Test que ya existía.
-        f.app.store.select(QStringLiteral("TC-102"));
-        QTest::keyClicks(key, QStringLiteral("shop-9"));
-        QCOMPARE(f.app.store.find(QStringLiteral("TC-102"))->testKey, QStringLiteral("SHOP-9"));
     }
 
     // Zephyr se activa en Ajustes y sólo se ofrece con Jira, que es donde vive el plugin.

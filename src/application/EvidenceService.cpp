@@ -32,9 +32,12 @@ EvidenceService::EvidenceService(std::shared_ptr<IScreenCapture> capture, TestCa
 
 void EvidenceService::setRecorder(std::shared_ptr<IScreenRecorder> recorder) { m_recorder = std::move(recorder); }
 
-QString EvidenceService::targetCaseId() const { return m_cases.selectedId(); }
+QString EvidenceService::targetCaseId() const {
+    // La evidencia es de la ejecución: sin una en curso no hay dónde guardarla.
+    return m_run.isRunning() ? m_run.state().caseId : QString();
+}
 
-/// Si la ejecución activa es la del caso, la evidencia se asocia al paso actual.
+/// La evidencia se asocia al paso que se está ejecutando.
 int EvidenceService::targetStep(const QString& caseId) const {
     return (m_run.isRunning() && m_run.state().caseId == caseId) ? m_run.state().idx + 1 : 0;
 }
@@ -58,7 +61,7 @@ void EvidenceService::captureForSelectedCase() {
         return;
     }
     if (m_busy || !m_capture || isRecording()) return;
-    if (targetCaseId().isEmpty()) { emit failed(tr("No hay ningún caso seleccionado")); return; }
+    if (targetCaseId().isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return; }
     const int delay = m_settings.capture().delaySecs;
     if (delay <= 0) { grabNow(); return; }
     m_countdownLeft = delay;
@@ -68,7 +71,7 @@ void EvidenceService::captureForSelectedCase() {
 
 void EvidenceService::grabNow() {
     const QString caseId = targetCaseId();
-    if (caseId.isEmpty()) { emit failed(tr("No hay ningún caso seleccionado")); return; }
+    if (caseId.isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return; }
     m_busy = true;
     const CaptureSettings cfg = m_settings.capture();
     m_capture->capture(cfg.mode, [this, caseId, cfg](const CaptureResult& r) {
@@ -98,7 +101,7 @@ void EvidenceService::toggleRecording() {
     if (m_recorder->isRecording()) { m_recorder->stop(); return; }
     if (m_busy || m_countdownLeft > 0) return;
     const QString caseId = targetCaseId();
-    if (caseId.isEmpty()) { emit failed(tr("No hay ningún caso seleccionado")); return; }
+    if (caseId.isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return; }
     QString error;
     if (!ensureFolder(&error)) { emit failed(error); return; }
     const CaptureSettings cfg = m_settings.capture();
@@ -126,7 +129,7 @@ void EvidenceService::toggleRecording() {
 
 int EvidenceService::attachFiles(const QStringList& paths) {
     const QString caseId = targetCaseId();
-    if (caseId.isEmpty()) { emit failed(tr("No hay ningún caso seleccionado")); return 0; }
+    if (caseId.isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return 0; }
     QString error;
     if (!ensureFolder(&error)) { emit failed(error); return 0; }
     const QDir dir(m_settings.capture().folder);

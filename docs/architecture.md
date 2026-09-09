@@ -177,6 +177,10 @@ muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`
   rellena la estructura y pregunta `matches()`.
 * **Pasos**: `insertStep`, `moveStep` y `removeStep` renumeran las capturas asignadas para que
   sigan a su paso (`remapShotSteps`).
+* **Últimas ejecuciones.** El editor lista las cinco últimas del caso —veredicto, fecha, pasos,
+  duración, cuántas evidencias dejó y de qué plan salió— y cada fila abre sus resultados en el
+  historial (`openRunRequested` → `HistoryView::showRun()`), que es donde están sus pasos con su
+  veredicto, sus evidencias y con qué está enlazada en Jira y Zephyr.
 * **Duplicar** copia contenido y metadatos, no capturas ni resultado; el nuevo caso queda en
   Borrador justo después del original y **sin Test de Zephyr**: la copia es un caso nuevo, y
   heredar `testKey` haría que dos casos publicaran sus ejecuciones sobre el mismo Test.
@@ -287,6 +291,25 @@ a registrar al cambiarlas; si `bind()` falla o `globalShortcut` está desactivad
 `QAction` de ámbito aplicación. `IGlobalHotkey::status()` explica la situación en Ajustes.
 
 ## Evidencias: grabación, adjuntos, anotaciones y visor
+
+**La evidencia es de la ejecución.** Se captura ejecutando, así que pertenece a la ejecución en la que
+se tomó y no al caso: `Screenshot::runId` dice a cuál. Mientras la ejecución está en curso todavía no
+tiene id —lo pone el historial al archivarla—, así que `runId` va vacío y `RunController::archive()`
+lo sella con el de la ejecución (`TestCaseStore::sealShots()`). Sin ejecución en curso no se captura
+nada: `EvidenceService` lo rechaza con un aviso, porque no habría ejecución a la que atarla.
+
+Los ficheros los sigue guardando el caso (`TestCase::shots`): tienen un ciclo de vida —anotar, borrar,
+deshacer, liberar del disco— que vive en `TestCaseStore`, y el historial son instantáneas que no se
+reescriben. Pero se enseñan y se publican **por ejecución**: la pantalla de Ejecución muestra las de la
+que está en curso (`shotsOfRun("")`), el historial las de cada ejecución archivada —en su ficha y en el
+informe del plan, en tarjetas de sólo lectura: se abren, se anotan y se copian, pero no se reordenan ni
+se borran—, «Reportar bug» adjunta las de la ejecución más reciente (`latestEvidence()`) y el ciclo de
+Zephyr sube las de la ejecución que publica. La pantalla de Casos no las enseña.
+
+`RunHistoryStore::adoptLooseEvidence()` migra los datos anteriores: las evidencias sueltas de cada caso
+pasan a su última ejecución (conservando su paso) y las de un caso que nunca se ejecutó se sueltan de
+la lista sin tocar los ficheros. Se llama al arrancar, después de restaurar la ejecución interrumpida,
+cuya evidencia sigue siendo suya y todavía no puede sellarse.
 
 * **Grabación a GIF.** `IScreenRecorder` (core) → `GifRecorder` (infrastructure): oculta la ventana,
   pide la región con `RegionSelector` (o toma la pantalla entera), muestra `RecorderOverlay`

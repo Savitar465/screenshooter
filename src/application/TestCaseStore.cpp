@@ -239,6 +239,34 @@ void TestCaseStore::addShot(const QString& id, const Screenshot& shot) {
     updateCase(id, [&](TestCase& c) { c.shots.append(shot); });
 }
 
+void TestCaseStore::sealShots(const QString& caseId, const QString& runId) {
+    if (runId.isEmpty()) return;
+    const TestCase* c = find(caseId);
+    if (!c) return;
+    bool any = false;
+    for (const auto& s : c->shots) if (s.runId.isEmpty()) { any = true; break; }
+    if (!any) return;   // sin evidencias sueltas no hay nada que sellar (ni que guardar)
+    updateCase(caseId, [&runId](TestCase& tc) {
+        for (auto& s : tc.shots) if (s.runId.isEmpty()) s.runId = runId;
+    });
+}
+
+int TestCaseStore::adoptLooseShots(const QString& caseId, const QString& runId) {
+    const TestCase* c = find(caseId);
+    if (!c) return 0;
+    int loose = 0;
+    for (const auto& s : c->shots) if (s.runId.isEmpty()) ++loose;
+    if (loose == 0) return 0;
+    if (!runId.isEmpty()) { sealShots(caseId, runId); return loose; }
+    // Un caso que nunca se ejecutó: esas evidencias no tienen ejecución en la que enseñarse. Se
+    // sueltan de la lista sin tocar los ficheros, que siguen en la carpeta de capturas.
+    updateCase(caseId, [](TestCase& tc) {
+        tc.shots.erase(std::remove_if(tc.shots.begin(), tc.shots.end(), [](const Screenshot& s) { return s.runId.isEmpty(); }),
+                       tc.shots.end());
+    });
+    return loose;
+}
+
 void TestCaseStore::removeShot(const QString& id, int shotId) {
     const TestCase* c = find(id);
     if (!c) return;

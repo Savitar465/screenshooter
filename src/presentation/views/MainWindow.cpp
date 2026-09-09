@@ -54,10 +54,10 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     h->addWidget(m_sidebar);
 
     m_stack = new QStackedWidget;
-    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence, ctx.publish);
+    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence);
     m_plan = new PlanView(*ctx.cases, *ctx.plan);
     m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence);
-    m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish);
+    m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish, ctx.evidence);
     m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger, *ctx.evidence);
     m_stack->insertWidget(static_cast<int>(Screen::Casos), m_cases);
     m_stack->insertWidget(static_cast<int>(Screen::Plan), m_plan);
@@ -322,8 +322,11 @@ void MainWindow::wireSignals() {
 
     // Casos
     connect(m_cases, &CasesView::runRequested, this, [this](const QString& id) { m_ctx.run->start(id); navigate(Screen::Run); });
-    connect(m_cases, &CasesView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
     connect(m_cases, &CasesView::historyRequested, this, [this](const QString& id) { m_history->showCase(id); navigate(Screen::Historial); });
+    connect(m_cases, &CasesView::openRunRequested, this, [this](const QString& runId) {
+        navigate(Screen::Historial);
+        m_history->showRun(runId);
+    });
     connect(m_cases, &CasesView::openJiraRequested, this, [this](const QString& key) {
         const TrackerSettings& t = m_ctx.settings->tracker();
         if (t.baseUrl().isEmpty()) { showToast(tr("Configura la URL del gestor en Ajustes"), theme::Amber); return; }

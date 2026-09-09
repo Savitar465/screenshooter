@@ -66,6 +66,12 @@ public:
 
     // Evidencias
     void addShot(const QString& id, const Screenshot& shot);
+    /// Sella con su ejecución las evidencias que se capturaron durante ella (las que no tienen id).
+    void sealShots(const QString& caseId, const QString& runId);
+    /// Migración: las evidencias sueltas (de antes de que la evidencia fuera de la ejecución) pasan
+    /// a la ejecución indicada; con `runId` vacío se descartan, porque no hay ejecución donde
+    /// enseñarlas. Devuelve cuántas se movieron o descartaron. Los ficheros no se tocan.
+    int adoptLooseShots(const QString& caseId, const QString& runId);
     void removeShot(const QString& id, int shotId);
     void assignShotStep(const QString& id, int shotId, int step);
     void moveShot(const QString& id, int shotId, int delta);

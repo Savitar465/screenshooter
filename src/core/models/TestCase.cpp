@@ -90,9 +90,29 @@ bool Screenshot::isImage() const {
 
 bool Screenshot::isAnimation() const { return extension() == QStringLiteral("gif"); }
 
+QList<Screenshot> TestCase::shotsOfRun(const QString& runId) const {
+    QList<Screenshot> out;
+    for (const auto& s : shots) if (s.runId == runId) out << s;
+    return out;
+}
+
+QString TestCase::latestEvidenceRunId() const {
+    // Los ids del historial crecen (R-0007 > R-0006), así que el mayor es el más reciente; y una
+    // ejecución en curso (sin id) manda sobre todas.
+    QString latest;
+    bool live = false;
+    for (const auto& s : shots) {
+        if (s.runId.isEmpty()) live = true;
+        else if (s.runId > latest) latest = s.runId;
+    }
+    return live ? QString() : latest;
+}
+
+QList<Screenshot> TestCase::latestEvidence() const { return shotsOfRun(latestEvidenceRunId()); }
+
 int TestCase::unassignedShots() const {
     int n = 0;
-    for (const auto& s : shots) if (s.step == 0) ++n;
+    for (const auto& s : shots) if (s.step == 0 && s.runId.isEmpty()) ++n;
     return n;
 }
 

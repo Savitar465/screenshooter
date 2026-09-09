@@ -64,8 +64,8 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report) const {
             pc.testKey = from.testKey;
             pc.preconditions = from.preconditions;
             pc.design = from.design;
-            // Las evidencias son las que el caso tiene ahora en disco, con el paso al que se asignaron.
-            for (const auto& shot : c->shots)
+            // Las evidencias son las de esa ejecución que sigan en disco, con su paso.
+            for (const auto& shot : c->shotsOfRun(row.run.id))
                 if (QFileInfo::exists(shot.path)) pc.attachments.append(PublishAttachment{shot.path, shot.step});
         }
         // Del caso que ya no está en el catálogo sólo queda la ejecución: sus pasos son el Test.
@@ -74,24 +74,6 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report) const {
         req.cases.append(pc);
     }
     return req;
-}
-
-void TestPublishService::createTestFor(const QString& caseId, std::function<void(const CreateTestResult&)> done) {
-    CreateTestResult r;
-    if (!enabled()) {
-        r.error = tr("Activa Zephyr en Ajustes para crear el Test del caso");
-        done(r);
-        return;
-    }
-    const TestCase* c = m_cases.find(caseId);
-    if (!c) { r.error = tr("El caso ya no existe"); done(r); return; }
-    // El caso que ya tiene su Test no estrena otro: se responde con el que ya estaba enlazado.
-    if (!c->testKey.trimmed().isEmpty()) { r.ok = true; r.key = c->testKey.trimmed(); done(r); return; }
-    m_zephyr->createTest(m_settings.tracker(), publishCaseFrom(*c), [this, caseId, done](const CreateTestResult& result) {
-        if (result.ok && !result.key.isEmpty())
-            m_cases.updateCase(caseId, [&result](TestCase& c) { c.testKey = result.key; });
-        done(result);
-    });
 }
 
 void TestPublishService::testConnection(std::function<void(const ConnectionResult&)> done) {

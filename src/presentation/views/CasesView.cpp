@@ -6,7 +6,6 @@
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
 #include "application/TestCaseStore.h"
-#include "application/TestPublishService.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlowLayout.h"
@@ -68,9 +67,8 @@ QPushButton* smallButton(const QString& text, const char* role, const QString& t
 } // namespace
 
 CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer, BugStore& bugs,
-                     EvidenceService& evidence, TestPublishService* publish, QWidget* parent)
-    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_bugs(bugs), m_evidence(evidence),
-      m_publish(publish) {
+                     EvidenceService& evidence, QWidget* parent)
+    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_bugs(bugs), m_evidence(evidence) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildEditor(root);
@@ -225,7 +223,7 @@ void CasesView::refreshList() {
 
         auto* bottom = new QWidget;
         auto* bh = ui::hbox(bottom, 0, 8);
-        auto* status = new QLabel(tr("%1 · %2 pasos · %3 capturas").arg(label(c.status)).arg(c.steps.size()).arg(c.shots.size()));
+        auto* status = new QLabel(tr("%1 · %2 pasos").arg(label(c.status)).arg(c.steps.size()));
         status->setStyleSheet(QStringLiteral("font-size:11.5px;font-weight:600;color:%1;").arg(statusColor(c.status)));
         bh->addWidget(status, 1);
         if (c.id == runningId) {
@@ -364,39 +362,15 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_openJira->setFixedWidth(24);
     connect(m_openJira, &QPushButton::clicked, this, [this]() { if (const TestCase* c = m_store.selected(); c && !c->jiraKey.isEmpty()) emit openJiraRequested(c->jiraKey); });
     jrh->addWidget(m_openJira);
-    // El Test de Zephyr del caso: se pega la clave de uno que ya exista o se crea a partir del caso.
-    auto* testRow = new QWidget;
-    auto* trh = ui::hbox(testRow, 0, 4);
-    m_testKey = new QLineEdit;
-    m_testKey->setObjectName(QStringLiteral("caseTestKey"));
-    m_testKey->setProperty("role", QStringLiteral("mono"));
-    m_testKey->setPlaceholderText(QStringLiteral("SHOP-42"));
-    m_testKey->setToolTip(tr("Issue de tipo Test que representa este caso en Zephyr; se reutiliza en todos sus ciclos. Vacío: se crea al publicar, o aquí mismo con «Crear»"));
-    connect(m_testKey, &QLineEdit::textEdited, this, [this](const QString& t) {
-        edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.testKey = t.trimmed().toUpper(); }); });
-        refreshTestKey();
-    });
-    trh->addWidget(m_testKey, 1);
-    m_openTest = ui::button(QStringLiteral("↗"), "icon-move");
-    m_openTest->setToolTip(tr("Abrir el Test en Jira"));
-    m_openTest->setFixedWidth(24);
-    connect(m_openTest, &QPushButton::clicked, this, [this]() {
-        if (const TestCase* c = m_store.selected(); c && !c->testKey.isEmpty()) emit openJiraRequested(c->testKey);
-    });
-    trh->addWidget(m_openTest);
-    m_createTest = ui::button(tr("Crear"), "outline");
-    m_createTest->setObjectName(QStringLiteral("caseCreateTest"));
-    connect(m_createTest, &QPushButton::clicked, this, &CasesView::createZephyrTest);
-    trh->addWidget(m_createTest);
-
     m_tags = new QLineEdit;
     m_tags->setPlaceholderText(tr("regresión, smoke…"));
     m_tags->setToolTip(tr("Etiquetas separadas por comas"));
     connect(m_tags, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.tags = parseTags(t); }); }); });
     mg->addWidget(fieldCell(tr("Componente"), m_component), 1, 0);
     mg->addWidget(fieldCell(tr("Historia Jira"), jiraRow), 1, 1);
-    mg->addWidget(fieldCell(tr("Test de Zephyr"), testRow), 1, 2);
-    mg->addWidget(fieldCell(tr("Etiquetas"), m_tags), 1, 3);
+    // El Test de Zephyr no se enseña aquí: lo que se enlaza son las ejecuciones, y se ve en el
+    // historial (informe del plan y detalle de la ejecución). El caso sólo lo guarda.
+    mg->addWidget(fieldCell(tr("Etiquetas"), m_tags), 1, 2, 1, 2);
     for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
     v->addWidget(meta);
 
@@ -439,38 +413,7 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     sv->addWidget(stepsList);
     v->addWidget(stepsBlock);
 
-    // Evidencias
-    auto* shotsBlock = new QWidget;
-    auto* shv = ui::vbox(shotsBlock, 0, 8);
-    auto* shotsHead = new QWidget;
-    auto* shh = ui::hbox(shotsHead, 0, 8);
-    m_shotsHeader = ui::label(QString(), "eyebrow");
-    shh->addWidget(m_shotsHeader, 1);
-    m_unassigned = ui::label(QString(), "warn");
-    shh->addWidget(m_unassigned);
-    m_sortShots = smallButton(tr("Ordenar por paso"), "outline");
-    connect(m_sortShots, &QPushButton::clicked, this, [this]() { m_store.sortShotsByStep(m_store.selectedId()); });
-    shh->addWidget(m_sortShots);
-    auto* capture = ui::button(tr("+ Capturar pantalla"), "dashed");
-    connect(capture, &QPushButton::clicked, this, &CasesView::captureRequested);
-    shh->addWidget(capture);
-    m_record = ui::button(tr("● Grabar GIF"), "dashed");
-    m_record->setToolTip(tr("Graba la pantalla o una región a GIF y la adjunta al caso"));
-    m_record->setVisible(m_evidence.canRecord());
-    connect(m_record, &QPushButton::clicked, this, [this]() { m_evidence.toggleRecording(); });
-    connect(&m_evidence, &EvidenceService::recordingChanged, this, [this](bool on) { m_record->setText(on ? tr("■ Detener grabación") : tr("● Grabar GIF")); });
-    shh->addWidget(m_record);
-    auto* attach = ui::button(tr("+ Adjuntar archivo…"), "dashed");
-    attach->setToolTip(tr("Adjunta logs, vídeos o imágenes existentes (también puedes arrastrarlos a la ventana)"));
-    connect(attach, &QPushButton::clicked, this, [this]() { m_evidence.attachFiles(evidence::pickFiles(this)); });
-    shh->addWidget(attach);
-    shv->addWidget(shotsHead);
-    m_shotsContainer = new QWidget;
-    m_shotsGrid = new QGridLayout(m_shotsContainer);
-    m_shotsGrid->setContentsMargins(0, 0, 0, 0);
-    m_shotsGrid->setSpacing(10);
-    shv->addWidget(m_shotsContainer);
-    v->addWidget(shotsBlock);
+    // Las evidencias no están aquí: son de cada ejecución y se ven en su ficha del historial.
 
     // Últimas ejecuciones
     auto* histBlock = new QWidget;
@@ -523,56 +466,13 @@ void CasesView::loadEditor() {
     m_lastRun->setStyleSheet(QStringLiteral("font-weight:600;padding:5px 0;color:%1;").arg(lastRunColor(c->lastRun)));
     if (m_component->text() != c->component) m_component->setText(c->component);
     if (m_jiraKey->text() != c->jiraKey) m_jiraKey->setText(c->jiraKey);
-    if (m_testKey->text() != c->testKey) m_testKey->setText(c->testKey);
     m_openJira->setEnabled(!c->jiraKey.isEmpty());
-    refreshTestKey();
     if (parseTags(m_tags->text()) != c->tags) m_tags->setText(c->tags.join(QStringLiteral(", ")));
     m_pre->setTextSilently(c->preconditions);
     m_selfEdit = false;
     refreshSteps();
-    refreshShots();
     refreshHistory();
     refreshBugs();
-}
-
-void CasesView::refreshTestKey() {
-    const TestCase* c = m_store.selected();
-    if (!c) return;
-    const bool linked = !c->testKey.trimmed().isEmpty();
-    // Enlazado: sólo queda abrirlo. Sin enlazar: se ofrece crearlo con lo que dice el caso.
-    m_openTest->setVisible(linked);
-    m_createTest->setVisible(!linked);
-    const bool canCreate = m_publish && m_publish->enabled();
-    m_createTest->setEnabled(canCreate && !m_creatingTest);
-    m_createTest->setText(m_creatingTest ? tr("Creando…") : tr("Crear"));
-    m_createTest->setToolTip(canCreate ? tr("Crear el Test en Zephyr con el título, las precondiciones y los pasos de este caso")
-                                       : tr("Activa la publicación en Zephyr en Ajustes para crear el Test de este caso"));
-}
-
-void CasesView::createZephyrTest() {
-    const TestCase* c = m_store.selected();
-    if (!c || !m_publish || m_creatingTest || !c->testKey.trimmed().isEmpty()) return;
-    const QString caseId = c->id;
-    m_creatingTest = true;
-    refreshTestKey();
-    emit toast(tr("Creando en Zephyr el Test de %1…").arg(caseId), theme::Cyan);
-    m_publish->createTestFor(caseId, [this, caseId](const CreateTestResult& r) {
-        m_creatingTest = false;
-        refreshTestKey();
-        if (!r.ok) {
-            QString error = tr("No se pudo crear el Test de %1 · %2").arg(caseId, r.error);
-            if (r.retryable) error += tr(" · vuelve a intentarlo");
-            emit toast(error, theme::Red);
-            return;
-        }
-        // Un paso que no entró no invalida el Test, pero tampoco se calla: el caso y su Test ya no
-        // dicen lo mismo.
-        if (r.skipped.isEmpty()) {
-            emit toast(tr("Test %1 creado en Zephyr a partir de %2").arg(r.key, caseId), theme::Green);
-            return;
-        }
-        emit toast(tr("Test %1 creado · %2 pasos se quedaron fuera").arg(r.key).arg(r.skipped.size()), theme::Amber);
-    });
 }
 
 void CasesView::refreshSteps() {
@@ -635,30 +535,6 @@ void CasesView::refreshSteps() {
     }
 }
 
-void CasesView::refreshShots() {
-    const TestCase* c = m_store.selected();
-    if (!c) return;
-    m_shotsHeader->setText(tr("EVIDENCIAS · %1 CAPTURAS").arg(c->shots.size()));
-    const int unassigned = c->unassignedShots();
-    m_unassigned->setVisible(unassigned > 0);
-    m_unassigned->setText(tr("%1 sin paso asignado").arg(unassigned));
-    m_sortShots->setVisible(!c->shots.isEmpty());
-    ui::clearLayout(m_shotsGrid);
-    m_shotsContainer->setVisible(!c->shots.isEmpty());
-
-    const QString id = c->id;
-    const int columns = std::max(1, std::min(4, (m_editor->width() > 0 ? m_editor->width() : 800) / 210));
-    for (int i = 0; i < c->shots.size(); ++i) {
-        auto* card = new ShotCard(c->shots[i], c->steps, ShotCard::Layout::Grid);
-        connect(card, &ShotCard::stepChanged, this, [this, id](int shotId, int step) { m_store.assignShotStep(id, shotId, step); });
-        connect(card, &ShotCard::moveRequested, this, [this, id](int shotId, int delta) { m_store.moveShot(id, shotId, delta); });
-        connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_store.removeShot(id, shotId); });
-        evidence::wireCard(card, this, m_store, m_evidence, id);
-        m_shotsGrid->addWidget(card, i / columns, i % columns);
-    }
-    for (int col = 0; col < columns; ++col) m_shotsGrid->setColumnStretch(col, 1);
-}
-
 void CasesView::refreshHistory() {
     ui::clearLayout(m_historyLayout);
     const TestCase* c = m_store.selected();
@@ -672,16 +548,26 @@ void CasesView::refreshHistory() {
     constexpr int kMax = 5;
     for (int i = 0; i < runs.size() && i < kMax; ++i) {
         const RunRecord& r = runs[i];
-        auto* row = ui::card("card-flat");
+        // La fila entera abre los resultados de esa ejecución en el historial: sus pasos con su
+        // veredicto, sus evidencias y con qué está enlazada.
+        auto* row = ui::button(QString(), "row");
+        row->setObjectName(QStringLiteral("caseRun-%1").arg(r.id));
+        row->setToolTip(tr("Ver los resultados de esta ejecución"));
+        connect(row, &QPushButton::clicked, this, [this, id = r.id]() { emit openRunRequested(id); });
         auto* h = ui::hbox(row, 0, 10);
         h->setContentsMargins(10, 7, 10, 7);
         const QString color = r.verdict == Verdict::Superado ? theme::Green : r.verdict == Verdict::Fallido ? theme::Red : theme::Amber;
         h->addWidget(ui::pill(label(r.verdict).toUpper(), color, r.verdict == Verdict::Fallido ? QStringLiteral("#ffffff") : theme::Bg));
         h->addWidget(ui::label(r.finishedAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")), "muted-sm"));
-        h->addWidget(ui::label(tr("%1/%2 pasos · %3").arg(r.steps.size()).arg(r.plannedSteps).arg(formatDuration(r.durationSecs)), "muted-sm"));
+        QString detail = tr("%1/%2 pasos · %3").arg(r.steps.size()).arg(r.plannedSteps).arg(formatDuration(r.durationSecs));
+        // Las evidencias son de la ejecución: aquí sólo se dice cuántas tiene cada una.
+        if (const int shots = c->shotsOfRun(r.id).size(); shots > 0)
+            detail += shots == 1 ? tr(" · 1 evidencia") : tr(" · %1 evidencias").arg(shots);
+        h->addWidget(ui::label(detail, "muted-sm"));
         h->addStretch(1);
         const PlanRun* p = r.planRunId.isEmpty() ? nullptr : m_history.findPlan(r.planRunId);
         h->addWidget(ui::label(p ? p->name : tr("Ejecución suelta"), "muted-sm"));
+        h->addWidget(ui::label(QStringLiteral("›"), "muted"));
         m_historyLayout->addWidget(row);
     }
 }
@@ -761,7 +647,8 @@ void CasesView::removeSelected() {
     const TestCase* c = m_store.selected();
     if (!c) return;
     QString detail = tr("Se eliminará el caso con sus %1 pasos").arg(c->steps.size());
-    if (!c->shots.isEmpty()) detail += tr(" y sus %1 capturas (los ficheros se borran del disco)").arg(c->shots.size());
+    if (!c->shots.isEmpty())
+        detail += tr(" y las %1 evidencias de sus ejecuciones (los ficheros se borran del disco)").arg(c->shots.size());
     detail += tr(". Podrás deshacerlo durante unos segundos.");
     QMessageBox box(QMessageBox::Warning, tr("Eliminar %1").arg(c->id),
                     tr("¿Eliminar \"%1\"?").arg(c->title.isEmpty() ? c->id : c->title), QMessageBox::NoButton, this);

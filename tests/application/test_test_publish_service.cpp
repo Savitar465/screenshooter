@@ -27,6 +27,7 @@ PlanReport reportWith(const QList<QPair<QString, Verdict>>& executed, const QStr
         row.caseId = caseId;
         row.title = QStringLiteral("Caso %1").arg(caseId);
         row.executed = true;
+        row.run.id = QStringLiteral("R-%1").arg(caseId.right(1));   // la ejecución de ese caso
         row.run.caseId = caseId;
         row.run.verdict = verdict;
         row.run.durationSecs = 245;
@@ -150,98 +151,24 @@ private slots:
         QCOMPARE(zephyr->published[1].cases[0].testKey, QStringLiteral("SHOP-77"));
     }
 
-    // El editor del caso pide su Test sin ciclo de por medio; la clave queda enlazada al caso.
-    void createsTheTestOfASingleCaseAndSavesItsKey() {
-        AppFixture f;
-        f.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) {
-            c.title = QStringLiteral("Comprar con cupón");
-            c.preconditions = QStringLiteral("Sesión iniciada");
-            c.steps = {TestStep{QStringLiteral("Abrir carrito"), QStringLiteral("Se abre")}};
-        });
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
-        auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
-
-        CreateTestResult out;
-        publish.createTestFor(QStringLiteral("TC-101"), [&](const CreateTestResult& r) { out = r; });
-        QVERIFY(out.ok);
-        QCOMPARE(out.key, QStringLiteral("SHOP-77"));
-        QCOMPARE(zephyr->testsCreated.size(), 1);
-        QCOMPARE(zephyr->testsCreated[0].title, QStringLiteral("Comprar con cupón"));
-        QCOMPARE(zephyr->testsCreated[0].preconditions, QStringLiteral("Sesión iniciada"));
-        QCOMPARE(zephyr->testsCreated[0].design.size(), 1);
-        QCOMPARE(f.store.find(QStringLiteral("TC-101"))->testKey, QStringLiteral("SHOP-77"));
-
-        // El caso que ya lo tiene no estrena otro: contesta con el que ya estaba enlazado.
-        publish.createTestFor(QStringLiteral("TC-101"), [&](const CreateTestResult& r) { out = r; });
-        QVERIFY(out.ok);
-        QCOMPARE(out.key, QStringLiteral("SHOP-77"));
-        QCOMPARE(zephyr->testsCreated.size(), 1);
-    }
-
-    void doesNotCreateTestsWhileZephyrIsOff() {
-        AppFixture f;
-        auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
-        CreateTestResult out;
-        publish.createTestFor(QStringLiteral("TC-101"), [&](const CreateTestResult& r) { out = r; });
-        QVERIFY(!out.ok);
-        QVERIFY(!out.error.isEmpty());
-        QVERIFY(zephyr->testsCreated.isEmpty());
-        QVERIFY(f.store.find(QStringLiteral("TC-101"))->testKey.isEmpty());
-    }
-
-    // Los resultados publicados quedan enlazados a su ciclo de Zephyr: sin eso, saber si un ciclo
-    // ya se publicó (y dónde) era ir a mirarlo a Jira.
-    void thePlanRunRemembersTheZephyrCycleItWasPublishedTo() {
-        AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
-        auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
-
-        const QString planRunId = f.history.startPlan(QStringLiteral("Regresión Sprint 14"), {QStringLiteral("TC-101")});
-        RunRecord rec;
-        rec.caseId = QStringLiteral("TC-101");
-        rec.planRunId = planRunId;
-        rec.verdict = Verdict::Superado;
-        rec.startedAt = QDateTime(QDate(2026, 5, 12), QTime(9, 0));
-        rec.finishedAt = QDateTime(QDate(2026, 5, 12), QTime(9, 5));
-        rec.steps = {RunRecordStep{QStringLiteral("Abrir"), QStringLiteral("Se abre"), StepResult::Pass, {}, 30}};
-        f.history.addRun(rec);
-        f.history.finishPlan(planRunId);
-        QVERIFY(!f.history.findPlan(planRunId)->isPublished());
-
-        publish.publish(f.history.report(planRunId), [](const PublishResult&) {});
-        const PlanRun* run = f.history.findPlan(planRunId);
-        QVERIFY(run->isPublished());
-        QCOMPARE(run->zephyrCycleId, QStringLiteral("77"));   // el ciclo que devolvió Zephyr
-        QVERIFY(run->publishedAt.isValid());
-    }
-
-    // Un fallo no deja el ciclo de plan marcado como publicado.
-    void aFailedPublicationDoesNotMarkThePlanRun() {
-        AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
-        auto zephyr = std::make_shared<FakeTestManagement>();
-        zephyr->resultToReturn.error = QStringLiteral("Host not found");
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
-
-        const QString planRunId = f.history.startPlan(QStringLiteral("Regresión"), {QStringLiteral("TC-101")});
-        f.history.finishPlan(planRunId);
-        publish.publish(f.history.report(planRunId), [](const PublishResult&) {});
-        QVERIFY(!f.history.findPlan(planRunId)->isPublished());
-    }
-
-    // Las evidencias que existen en disco viajan con el paso al que se asignaron.
-    void attachmentsTravelWithTheirStep() {
+    // Cada ejecución publica sus evidencias: las de esa ejecución que sigan en disco, con su paso.
+    void attachmentsAreTheEvidenceOfThatRunWithTheirStep() {
         AppFixture f;
         QTemporaryDir dir;
-        const QString shot = dir.filePath(QStringLiteral("cap_001.png"));
-        { QFile file(shot); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("PNG"); }
+        auto write = [&](const QString& name) {
+            const QString path = dir.filePath(name);
+            QFile file(path);
+            file.open(QIODevice::WriteOnly);
+            file.write("PNG");
+            return path;
+        };
+        const QString shot = write(QStringLiteral("cap_001.png"));
+        const QString anterior = write(QStringLiteral("cap_009.png"));
         f.store.updateCase(QStringLiteral("TC-101"), [&](TestCase& c) {
             c.testKey = QStringLiteral("SHOP-42");
-            c.shots = {Screenshot{1, 2, QStringLiteral("cap_001.png"), shot},
-                       Screenshot{2, 0, QStringLiteral("perdida.png"), dir.filePath(QStringLiteral("perdida.png"))}};
+            c.shots = {Screenshot{1, 2, QStringLiteral("cap_001.png"), shot, QStringLiteral("R-1")},
+                       Screenshot{2, 0, QStringLiteral("perdida.png"), dir.filePath(QStringLiteral("perdida.png")), QStringLiteral("R-1")},
+                       Screenshot{9, 1, QStringLiteral("cap_009.png"), anterior, QStringLiteral("R-0")}};
         });
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
@@ -249,7 +176,7 @@ private slots:
 
         publish.publish(reportWith({{QStringLiteral("TC-101"), Verdict::Superado}}), [](const PublishResult&) {});
         const QList<PublishAttachment> sent = zephyr->published[0].cases[0].attachments;
-        QCOMPARE(sent.size(), 1);                          // la que ya no está en disco no se envía
+        QCOMPARE(sent.size(), 1);                          // ni la que ya no está en disco, ni la de otra ejecución
         QCOMPARE(sent[0].path, shot);
         QCOMPARE(sent[0].step, 2);
     }

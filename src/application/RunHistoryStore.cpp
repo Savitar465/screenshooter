@@ -82,6 +82,22 @@ void RunHistoryStore::finishPlan(const QString& planRunId) {
     }
 }
 
+int RunHistoryStore::adoptLooseEvidence(const QString& runningCaseId) {
+    // Los ids primero: adoptar reescribe la lista de casos y dejaría la iteración colgando.
+    QStringList pending;
+    for (const auto& c : m_cases.cases()) {
+        if (c.id == runningCaseId) continue;
+        for (const auto& s : c.shots)
+            if (s.runId.isEmpty()) { pending << c.id; break; }
+    }
+    int moved = 0;
+    for (const auto& caseId : pending) {
+        const QList<RunRecord> runs = runsForCase(caseId);   // la más reciente primero
+        moved += m_cases.adoptLooseShots(caseId, runs.isEmpty() ? QString() : runs.first().id);
+    }
+    return moved;
+}
+
 void RunHistoryStore::markPublished(const QString& planRunId, const QString& zephyrCycleId) {
     if (zephyrCycleId.trimmed().isEmpty()) return;
     for (auto& p : m_history.plans) {

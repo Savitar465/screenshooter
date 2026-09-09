@@ -514,48 +514,6 @@ private slots:
         for (const auto& r : server.requests) QVERIFY(r.path != "/rest/api/2/issue");
     }
 
-    // El editor del caso crea su Test sin publicar ningún ciclo: mismo issue, mismos pasos.
-    void createsTheTestOfASingleCaseWithoutACycle() {
-        FakeHttpServer server;
-        routeProject(server);
-        routeZephyr(server, "/rest/zapi/latest");
-
-        PublishCase c = caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {});
-        c.title = QStringLiteral("Comprar con cupón");
-        c.design = {TestStep{QStringLiteral("Abrir carrito"), QStringLiteral("Se abre")},
-                    TestStep{QStringLiteral("Pagar"), QStringLiteral("Se confirma")}};
-
-        ZephyrClient client;
-        CreateTestResult out;
-        bool done = false;
-        client.createTest(settingsFor(server.baseUrl()), c, [&](const CreateTestResult& r) { out = r; done = true; });
-        QTRY_VERIFY(done);
-        QVERIFY2(out.ok, qPrintable(out.error));
-        QCOMPARE(out.key, QStringLiteral("SHOP-77"));
-        QVERIFY(out.skipped.isEmpty());
-        int steps = 0;
-        for (const auto& r : server.requests) {
-            if (r.method == "POST" && r.path == "/rest/zapi/latest/teststep/10700") ++steps;
-            QVERIFY(r.path != "/rest/zapi/latest/cycle");   // no se crea ningún ciclo por el camino
-        }
-        QCOMPARE(steps, 2);
-    }
-
-    void aSingleTestSaysWhyItCouldNotBeCreated() {
-        FakeHttpServer server;
-        routeProject(server, "Prueba");   // el proyecto no tiene ningún tipo llamado "Test"
-        routeZephyr(server, "/rest/zapi/latest");
-        ZephyrClient client;
-        CreateTestResult out;
-        bool done = false;
-        client.createTest(settingsFor(server.baseUrl()), caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {}),
-                          [&](const CreateTestResult& r) { out = r; done = true; });
-        QTRY_VERIFY(done);
-        QVERIFY(!out.ok);
-        QVERIFY2(out.error.contains(QStringLiteral("Test")), qPrintable(out.error));
-        for (const auto& r : server.requests) QVERIFY(r.path != "/rest/api/2/issue");
-    }
-
     void unknownVersionStopsThePublicationBeforeCreatingAnything() {
         FakeHttpServer server;
         routeProject(server);

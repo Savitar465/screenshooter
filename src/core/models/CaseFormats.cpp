@@ -18,7 +18,8 @@ QJsonObject caseToJson(const TestCase& c, bool includeShots) {
     };
     if (includeShots) {
         QJsonArray shots;
-        for (const auto& s : c.shots) shots.append(QJsonObject{{"id", s.id}, {"step", s.step}, {"fileName", s.fileName}, {"path", s.path}});
+        for (const auto& s : c.shots)
+            shots.append(QJsonObject{{"id", s.id}, {"step", s.step}, {"fileName", s.fileName}, {"path", s.path}, {"runId", s.runId}});
         o["shots"] = shots;
     }
     if (c.lastRun.outcome != RunOutcome::None) {
@@ -46,7 +47,7 @@ TestCase caseFromJson(const QJsonObject& o) {
     }
     for (const auto& v : o["shots"].toArray()) {
         const auto s = v.toObject();
-        c.shots.append(Screenshot{s["id"].toInt(), s["step"].toInt(), s["fileName"].toString(), s["path"].toString()});
+        c.shots.append(Screenshot{s["id"].toInt(), s["step"].toInt(), s["fileName"].toString(), s["path"].toString(), s["runId"].toString()});
     }
     const QString outcome = o["lastRunOutcome"].toString();
     if (!outcome.isEmpty()) {

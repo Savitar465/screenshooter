@@ -320,11 +320,13 @@ void BugView::loadDraft() {
 void BugView::refreshShots() {
     ui::clearLayout(m_shotsRow);
     const TestCase* c = m_cases.selected();
-    const int n = c ? c->shots.size() : 0;
-    m_shotsHeader->setText(tr("ADJUNTOS · %1").arg(n));
+    // El bug sale de una ejecución: se adjunta la evidencia de la más reciente (la que está en
+    // curso si la hay), no todo lo que el caso haya acumulado en su historia.
+    const QList<Screenshot> shots = c ? c->latestEvidence() : QList<Screenshot>{};
+    m_shotsHeader->setText(tr("ADJUNTOS · %1").arg(shots.size()));
     if (!c) return;
     const QString id = c->id;
-    for (const auto& s : c->shots) {
+    for (const auto& s : shots) {
         auto* card = new ShotCard(s, c->steps, ShotCard::Layout::Compact);
         connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_cases.removeShot(id, shotId); });
         evidence::wireCard(card, this, m_cases, m_evidence, id);
@@ -449,7 +451,7 @@ BugReport BugView::collect() const {
     b.components = parseTags(m_components->text());
     b.affectsVersions = parseTags(m_versions->text());
     b.labels = parseTags(m_labels->text());
-    if (const TestCase* c = m_cases.selected()) for (const auto& s : c->shots) b.attachmentPaths << s.path;
+    if (const TestCase* c = m_cases.selected()) for (const auto& s : c->latestEvidence()) b.attachmentPaths << s.path;
     return b;
 }
 

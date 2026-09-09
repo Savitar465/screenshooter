@@ -76,10 +76,10 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 
 | Pantalla          | Qué hace                                                                   |
 |-------------------|----------------------------------------------------------------------------|
-| Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira y a su Test de Zephyr (enlazarlo o crearlo desde el propio caso), pasos reordenables e insertables, evidencias (capturar, grabar GIF, adjuntar archivos; abrir, anotar, copiar) e historial; duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
+| Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira, pasos reordenables e insertables y sus últimas ejecuciones, cada una con un clic para abrir sus resultados en el historial (las evidencias son de cada ejecución y se ven allí); duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
 | Planes            | Varios planes (crear, duplicar, archivar, eliminar), casos en orden de ejecución propio, progreso del ciclo actual con enlace a su informe, estimación basada en las duraciones reales del historial (3 min/paso si no hay datos) y arranque de un ciclo nuevo |
-| Ejecución         | Tres columnas: el caso con su progreso y la lista de pasos (veredicto corregible en cada uno), el paso actual con Pasa / Falla / Bloq. / N/A (teclas P / F / B / S), paso anterior (Retroceso), **atajos globales** para avanzar de paso sin volver a la ventana (Ctrl+Alt+P / Ctrl+Alt+F / Ctrl+Alt+A), cronómetro por paso y por caso, visor grande de la evidencia elegida con «Asignar a» y observaciones, y la columna de capturas con todas las evidencias del caso. Sobrevive al cierre de la aplicación |
-| Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración), informes de plan con exportación a Markdown y publicación en Zephyr y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
+| Ejecución         | Tres columnas: el caso con su progreso y la lista de pasos (veredicto corregible en cada uno), el paso actual con Pasa / Falla / Bloq. / N/A (teclas P / F / B / S), paso anterior (Retroceso), **atajos globales** para avanzar de paso sin volver a la ventana (Ctrl+Alt+P / Ctrl+Alt+F / Ctrl+Alt+A), cronómetro por paso y por caso, visor grande de la evidencia elegida con «Asignar a» y observaciones, y la columna de capturas con las evidencias de esta ejecución. Sobrevive al cierre de la aplicación |
+| Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración y sus evidencias, con lo que está enlazado en Jira y Zephyr), informes de plan con exportación a Markdown y publicación en Zephyr y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
 | Reportar bug      | Formulario prellenado con el paso fallido y campos reales del gestor (tipo, prioridad, asignado, componentes, versión, etiquetas) cargados del proyecto, con las personas buscadas en Jira según se escribe; crea el issue en Jira, GitHub, GitLab o Azure DevOps y sube las capturas; lista de bugs reportados con su estado y cola offline con reintento |
 | Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; atajos de la ejecución; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, modo de autenticación en Jira y credenciales en el llavero del sistema), publicación de ciclos en Zephyr y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
 
@@ -137,6 +137,12 @@ el que se crean los Tests (`Test` salvo en un Jira traducido, donde se llame de 
 
 ## Evidencias
 
+Las evidencias son **de la ejecución**, no del caso: se capturan ejecutando y se ven en la ejecución
+—en la propia pantalla de Ejecución mientras dura, y después en su ficha del historial y en el informe
+del plan, donde se abren, se anotan y se copian—. Por eso, sin una ejecución en curso, capturar avisa
+en vez de guardar nada, y la pantalla de Casos no tiene galería. Al publicar el ciclo en Zephyr, cada
+ejecución sube las suyas.
+
 * **Captura** (`Ctrl+Shift+S`): pantalla completa, ventana activa o región, con **retardo** opcional (3, 5 o 10 s con
   cuenta atrás en pantalla) para abrir menús o tooltips. El atajo es **global**: se registra en el sistema
   (`RegisterHotKey` en Windows, `XGrabKey` en X11, portal `GlobalShortcuts` en Wayland, Carbon en macOS) y funciona
@@ -146,7 +152,7 @@ el que se crean los Tests (`Test` salvo en un Jira traducido, donde se llame de 
 * **Editor de anotaciones**: flechas, rectángulos, elipses, marcador, texto y **difuminado** (pixelado) de datos
   sensibles, con colores, grosor y deshacer. Se abre desde la miniatura (✎), el visor o, si se activa en Ajustes,
   automáticamente tras cada captura. Guardar sustituye el fichero.
-* **Visor a tamaño completo**: clic en cualquier miniatura; navegación entre las evidencias del caso, zoom,
+* **Visor a tamaño completo**: clic en cualquier miniatura; navegación entre las evidencias de la ejecución, zoom,
   arrastre, copiar al portapapeles, anotar y mostrar en la carpeta.
 * **Adjuntar ficheros existentes** (logs, vídeos, HAR, imágenes…): botón «Adjuntar archivo», `Ctrl+Shift+A` o
   arrastrándolos a la ventana. Se copian a la carpeta de capturas, se asignan al paso en ejecución y se suben al

@@ -123,6 +123,9 @@ int main(int argc, char* argv[]) {
     plan.load();
     history.load();
     run.load();   // ejecución interrumpida en la sesión anterior, si la hay
+    // Datos de versiones en las que la evidencia era del caso: cada una pasa a su última ejecución.
+    // Va después de restaurar la ejecución, cuyas evidencias son suyas y aún no tienen id.
+    history.adoptLooseEvidence(run.isRunning() ? run.state().caseId : QString());
 
     AppContext ctx;
     ctx.cases = &cases;

@@ -45,15 +45,6 @@ struct PublishRequest {
     QList<PublishCase> cases;
 };
 
-/// Resultado de crear el Test de un caso, se pida desde el editor del caso o al publicar un ciclo.
-struct CreateTestResult {
-    bool ok = false;
-    QString key;             // clave del Test creado (SHOP-77)
-    QStringList skipped;     // pasos que no entraron en el Test, con su motivo
-    QString error;
-    bool retryable = false;  // fallo de red o 5xx: merece la pena reintentar
-};
-
 struct PublishResult {
     bool ok = false;
     QString cycleId;
@@ -82,9 +73,7 @@ public:
     /// está enlazado a un Test se le crea antes a partir de él, y su clave vuelve en
     /// `PublishResult::createdTests` para que el caso la guarde y la reutilice.
     virtual void publish(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) = 0;
-    /// Crea el Test de un caso suelto (su título, precondiciones y pasos), sin ciclo de por medio:
-    /// es lo que pide el editor del caso.
-    virtual void createTest(const TrackerSettings& s, const PublishCase& c, std::function<void(const CreateTestResult&)> done) = 0;
+
 };
 
 } // namespace qaflow

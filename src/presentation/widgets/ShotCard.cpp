@@ -65,6 +65,7 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
     }
 
     auto* combo = stepCombo(shot, steps, this);
+    m_stepCombo = combo;
     connect(combo, &QComboBox::currentIndexChanged, this, [this, combo, id](int) { emit stepChanged(id, combo->currentData().toInt()); });
 
     if (layout == Layout::Grid) {
@@ -90,6 +91,7 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
         h->addWidget(down);
         remove->setStyleSheet(QStringLiteral("font-size:14px;"));
         h->addWidget(remove);
+        m_editors = {up, down, remove};
         bv->addWidget(row);
         v->addWidget(bottom);
         return;
@@ -133,6 +135,12 @@ void ShotCard::setSelected(bool on) {
                       .arg(theme::Field, on ? theme::Blue : theme::Border));
 }
 
+void ShotCard::setReadOnly(bool on) {
+    if (m_stepCombo) m_stepCombo->setEnabled(!on);
+    for (auto* w : m_editors) w->setVisible(!on);
+    m_readOnly = on;
+}
+
 void ShotCard::contextMenuEvent(QContextMenuEvent* e) {
     const int id = m_shot.id;
     QMenu menu(this);
@@ -140,12 +148,14 @@ void ShotCard::contextMenuEvent(QContextMenuEvent* e) {
     if (m_shot.isImage() && !m_shot.isAnimation()) menu.addAction(tr("Anotar…"), this, [this, id]() { emit annotateRequested(id); });
     if (m_shot.isImage()) menu.addAction(tr("Copiar imagen"), this, [this, id]() { emit copyRequested(id); });
     menu.addAction(tr("Mostrar en la carpeta"), this, [this, id]() { emit openFolderRequested(id); });
-    menu.addSeparator();
-    // La columna de capturas no tiene flechas: el orden se cambia desde aquí.
-    menu.addAction(tr("Mover antes"), this, [this, id]() { emit moveRequested(id, -1); });
-    menu.addAction(tr("Mover después"), this, [this, id]() { emit moveRequested(id, +1); });
-    menu.addSeparator();
-    menu.addAction(tr("Eliminar"), this, [this, id]() { emit removeRequested(id); });
+    if (!m_readOnly) {
+        menu.addSeparator();
+        // La columna de capturas no tiene flechas: el orden se cambia desde aquí.
+        menu.addAction(tr("Mover antes"), this, [this, id]() { emit moveRequested(id, -1); });
+        menu.addAction(tr("Mover después"), this, [this, id]() { emit moveRequested(id, +1); });
+        menu.addSeparator();
+        menu.addAction(tr("Eliminar"), this, [this, id]() { emit removeRequested(id); });
+    }
     menu.exec(e->globalPos());
 }
 

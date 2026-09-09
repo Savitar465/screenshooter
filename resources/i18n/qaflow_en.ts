@@ -736,10 +736,6 @@
         <source>%1: no se encontró el Test %2</source>
         <translation>%1: Test %2 was not found</translation>
     </message>
-    <message>
-        <source>El proyecto no tiene el tipo de incidencia «%1» con el que crear el Test</source>
-        <translation>The project has no “%1” issue type to create the Test with</translation>
-    </message>
 </context>
 <context>
     <name>qaflow::AnnotationEditor</name>
@@ -1215,10 +1211,6 @@
         <translation>(untitled)</translation>
     </message>
     <message>
-        <source>%1 · %2 pasos · %3 capturas</source>
-        <translation>%1 · %2 steps · %3 screenshots</translation>
-    </message>
-    <message>
         <source>● EN EJECUCIÓN</source>
         <translation>● RUNNING</translation>
     </message>
@@ -1331,14 +1323,6 @@
         <translation>EXPECTED RESULT</translation>
     </message>
     <message>
-        <source>Ordenar por paso</source>
-        <translation>Sort by step</translation>
-    </message>
-    <message>
-        <source>+ Capturar pantalla</source>
-        <translation>+ Take screenshot</translation>
-    </message>
-    <message>
         <source>Ver historial</source>
         <translation>View history</translation>
     </message>
@@ -1369,14 +1353,6 @@
     <message>
         <source>Eliminar paso (se puede deshacer)</source>
         <translation>Delete step (can be undone)</translation>
-    </message>
-    <message>
-        <source>EVIDENCIAS · %1 CAPTURAS</source>
-        <translation>EVIDENCE · %1 SCREENSHOTS</translation>
-    </message>
-    <message>
-        <source>%1 sin paso asignado</source>
-        <translation>%1 with no step assigned</translation>
     </message>
     <message>
         <source>ÚLTIMAS EJECUCIONES · %1</source>
@@ -1427,10 +1403,6 @@
         <translation>The test case will be deleted along with its %1 steps</translation>
     </message>
     <message>
-        <source> y sus %1 capturas (los ficheros se borran del disco)</source>
-        <translation> and its %1 screenshots (the files are deleted from disk)</translation>
-    </message>
-    <message>
         <source>. Podrás deshacerlo durante unos segundos.</source>
         <translation>. You will be able to undo this for a few seconds.</translation>
     </message>
@@ -1475,72 +1447,24 @@
         <translation>Export cases</translation>
     </message>
     <message>
-        <source>● Grabar GIF</source>
-        <translation>● Record GIF</translation>
+        <source>%1 · %2 pasos</source>
+        <translation>%1 · %2 steps</translation>
     </message>
     <message>
-        <source>Graba la pantalla o una región a GIF y la adjunta al caso</source>
-        <translation>Records the screen or a region to a GIF and attaches it to the case</translation>
+        <source> y las %1 evidencias de sus ejecuciones (los ficheros se borran del disco)</source>
+        <translation> and the %1 pieces of evidence from its executions (the files are deleted from disk)</translation>
     </message>
     <message>
-        <source>■ Detener grabación</source>
-        <translation>■ Stop recording</translation>
+        <source>Ver los resultados de esta ejecución</source>
+        <translation>See the results of this execution</translation>
     </message>
     <message>
-        <source>+ Adjuntar archivo…</source>
-        <translation>+ Attach file…</translation>
+        <source> · 1 evidencia</source>
+        <translation> · 1 piece of evidence</translation>
     </message>
     <message>
-        <source>Adjunta logs, vídeos o imágenes existentes (también puedes arrastrarlos a la ventana)</source>
-        <translation>Attach existing logs, videos or images (you can also drag them onto the window)</translation>
-    </message>
-    <message>
-        <source>Issue de tipo Test que representa este caso en Zephyr; se reutiliza en todos sus ciclos. Vacío: se crea al publicar, o aquí mismo con «Crear»</source>
-        <translation>The Test issue that stands for this case in Zephyr; every cycle reuses it. Leave it empty and it is created when publishing, or right here with “Create”</translation>
-    </message>
-    <message>
-        <source>Abrir el Test en Jira</source>
-        <translation>Open the Test in Jira</translation>
-    </message>
-    <message>
-        <source>Crear</source>
-        <translation>Create</translation>
-    </message>
-    <message>
-        <source>Test de Zephyr</source>
-        <translation>Zephyr Test</translation>
-    </message>
-    <message>
-        <source>Creando…</source>
-        <translation>Creating…</translation>
-    </message>
-    <message>
-        <source>Crear el Test en Zephyr con el título, las precondiciones y los pasos de este caso</source>
-        <translation>Create the Test in Zephyr with this case&apos;s title, preconditions and steps</translation>
-    </message>
-    <message>
-        <source>Activa la publicación en Zephyr en Ajustes para crear el Test de este caso</source>
-        <translation>Turn on publishing to Zephyr in Settings to create this case&apos;s Test</translation>
-    </message>
-    <message>
-        <source>Creando en Zephyr el Test de %1…</source>
-        <translation>Creating the Test of %1 in Zephyr…</translation>
-    </message>
-    <message>
-        <source>No se pudo crear el Test de %1 · %2</source>
-        <translation>Could not create the Test of %1 · %2</translation>
-    </message>
-    <message>
-        <source> · vuelve a intentarlo</source>
-        <translation> · try again</translation>
-    </message>
-    <message>
-        <source>Test %1 creado en Zephyr a partir de %2</source>
-        <translation>Test %1 created in Zephyr from %2</translation>
-    </message>
-    <message>
-        <source>Test %1 creado · %2 pasos se quedaron fuera</source>
-        <translation>Test %1 created · %2 steps were left out</translation>
+        <source> · %1 evidencias</source>
+        <translation> · %1 pieces of evidence</translation>
     </message>
 </context>
 <context>
@@ -1564,10 +1488,6 @@
 </context>
 <context>
     <name>qaflow::EvidenceService</name>
-    <message>
-        <source>No hay ningún caso seleccionado</source>
-        <translation>No test case selected</translation>
-    </message>
     <message>
         <source>No se pudo crear la carpeta %1</source>
         <translation>Could not create the folder %1</translation>
@@ -1595,6 +1515,10 @@
     <message>
         <source>No se pudo copiar la imagen al portapapeles</source>
         <translation>Could not copy the image to the clipboard</translation>
+    </message>
+    <message>
+        <source>Inicia la ejecución del caso para capturar: la evidencia es de la ejecución</source>
+        <translation>Start the case&apos;s execution to capture: evidence belongs to the execution</translation>
     </message>
 </context>
 <context>
@@ -1932,6 +1856,10 @@ HEADS-UP: these results were already published on %1 (cycle %2). A new cycle wil
     <message>
         <source>Publicado en Zephyr · ciclo %1</source>
         <translation>Published to Zephyr · cycle %1</translation>
+    </message>
+    <message>
+        <source>EVIDENCIAS · %1</source>
+        <translation>EVIDENCE · %1</translation>
     </message>
 </context>
 <context>
@@ -3355,14 +3283,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>Activa Zephyr en Ajustes para publicar los ciclos</source>
         <translation>Turn Zephyr on in Settings to publish cycles</translation>
-    </message>
-    <message>
-        <source>Activa Zephyr en Ajustes para crear el Test del caso</source>
-        <translation>Turn on Zephyr in Settings to create the case&apos;s Test</translation>
-    </message>
-    <message>
-        <source>El caso ya no existe</source>
-        <translation>The case no longer exists</translation>
     </message>
 </context>
 <context>

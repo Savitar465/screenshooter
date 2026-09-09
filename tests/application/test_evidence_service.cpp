@@ -1,6 +1,8 @@
 // EvidenceService (application/EvidenceService.h) con una captura y un grabador falsos sobre la
-// AppFixture. Cubre: captura inmediata y con cuenta atrás (y su cancelación), adjuntar ficheros
-// existentes, grabación de GIF, sustitución de la imagen tras anotar y copia al portapapeles.
+// AppFixture. La evidencia es de la ejecución, así que el fixture arranca una: cubre la captura
+// inmediata y con cuenta atrás (y su cancelación), adjuntar ficheros existentes, la grabación de
+// GIF, la sustitución de la imagen tras anotar, la copia al portapapeles y que sin ejecución en
+// curso no se captura nada.
 
 #include "support/AppFixture.h"
 #include "support/FakeScreenRecorder.h"
@@ -39,6 +41,8 @@ struct Fixture {
 
     Fixture() {
         app.settings.updateCapture([&](CaptureSettings& c) { c.folder = folder.path(); c.delaySecs = 0; });
+        // Sin ejecución no hay dónde guardar la evidencia: se ejecuta el caso seleccionado.
+        app.run.start(app.store.selectedId());
     }
     const TestCase& selected() const { return *app.store.selected(); }
     QString writeFile(const QString& name, const QByteArray& content) {
@@ -55,6 +59,36 @@ class EvidenceServiceTest : public QObject {
     Q_OBJECT
 private slots:
     // ---- Captura -----------------------------------------------------------------------
+
+    // Sin ejecución en curso no se captura: la evidencia es de la ejecución.
+    void capturingWithoutARunIsRefused() {
+        Fixture f;
+        f.app.run.abandon();
+        QSignalSpy failed(&f.evidence, &EvidenceService::failed);
+        QSignalSpy added(&f.evidence, &EvidenceService::shotAdded);
+        f.evidence.captureForSelectedCase();
+        QCOMPARE(added.count(), 0);
+        QCOMPARE(failed.count(), 1);
+        QVERIFY(f.selected().shots.isEmpty());
+        // Y lo mismo con un fichero que se arrastra o se elige a mano.
+        const QString log = f.writeFile(QStringLiteral("servidor.log"), "boom");
+        QCOMPARE(f.evidence.attachFiles({log}), 0);
+        QVERIFY(f.selected().shots.isEmpty());
+    }
+
+    // Lo capturado durante la ejecución es suyo: al archivarla queda sellado con su id.
+    void evidenceIsSealedWithTheRunWhenItIsArchived() {
+        Fixture f;
+        f.evidence.captureForSelectedCase();
+        QVERIFY(f.selected().shots.first().runId.isEmpty());   // la ejecución sigue en curso
+        while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        const QString runId = f.app.history.runsForCase(f.selected().id).first().id;
+        QVERIFY(!runId.isEmpty());
+        QCOMPARE(f.selected().shots.first().runId, runId);
+        QCOMPARE(f.selected().shotsOfRun(runId).size(), 1);
+        QVERIFY(f.selected().shotsOfRun(QString()).isEmpty());   // ya no hay evidencia suelta
+    }
 
     void captureSavesFileAndAttachesToSelectedCase() {
         Fixture f;
@@ -80,18 +114,6 @@ private slots:
         f.evidence.captureForSelectedCase();
         QCOMPARE(f.selected().shots.first().extension(), QStringLiteral("jpg"));
         QCOMPARE(static_cast<int>(f.capture->lastMode), static_cast<int>(CaptureMode::Region));
-    }
-
-    void captureWithoutSelectionFails() {
-        Fixture f;
-        for (const QString& id : QStringList{QStringLiteral("TC-101"), QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-104"),
-                                             QStringLiteral("TC-105"), QStringLiteral("TC-106"), QStringLiteral("TC-107")})
-            f.app.store.removeCase(id);
-        QVERIFY(f.app.store.selectedId().isEmpty());
-        QSignalSpy failed(&f.evidence, &EvidenceService::failed);
-        f.evidence.captureForSelectedCase();
-        QCOMPARE(failed.count(), 1);
-        QCOMPARE(f.capture->calls, 0);
     }
 
     void delayCountsDownBeforeCapturing() {

@@ -12,6 +12,7 @@ class QHBoxLayout;
 
 namespace qaflow {
 
+class EvidenceService;
 class TestCaseStore;
 class RunHistoryStore;
 class TrendChart;
@@ -24,8 +25,10 @@ class TestPublishService;
 class HistoryView : public QWidget {
     Q_OBJECT
 public:
-    /// `publish` puede ser nullptr (tests, o sin Zephyr configurado): entonces no se ofrece publicar.
-    HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish = nullptr, QWidget* parent = nullptr);
+    /// `publish` puede ser nullptr (tests, o sin Zephyr configurado): entonces no se ofrece publicar;
+    /// `evidence` también (sin él las evidencias se ven pero no se anotan ni se copian).
+    HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish = nullptr,
+                EvidenceService* evidence = nullptr, QWidget* parent = nullptr);
 
     void showPlan(const QString& planRunId);
     void showRun(const QString& runId);
@@ -54,6 +57,8 @@ private:
     QWidget* stepsList(const RunRecord& run) const;
     /// Fila con la historia de Jira y el Test de Zephyr del caso; nullptr si no tiene ninguno.
     QWidget* issueLinks(const QString& jiraKey, const QString& testKey);
+    /// Rejilla con las evidencias que se capturaron en esa ejecución; nullptr si no hubo ninguna.
+    QWidget* evidenceGrid(const QString& caseId, const QString& runId, int columns);
     void exportMarkdown(const PlanReport& report);
     void copyMarkdown(const PlanReport& report);
     /// Crea en Zephyr el ciclo con las ejecuciones del informe, sus pasos y sus evidencias.
@@ -62,6 +67,7 @@ private:
     TestCaseStore& m_cases;
     RunHistoryStore& m_history;
     TestPublishService* m_publish;
+    EvidenceService* m_evidence;
     Mode m_mode = Mode::All;
     QString m_search;
     QString m_selectedPlan;

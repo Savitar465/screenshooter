@@ -385,7 +385,7 @@ void RunView::tick() {
     const TestCase* c = m_cases.find(r.caseId);
     if (!c) return;
     m_caseStats->setText(tr("%1 de %2 pasos · %3 capturas · ⏱ %4")
-                             .arg(r.results.size()).arg(c->steps.size()).arg(c->shots.size()).arg(formatDuration(r.elapsedSecs())));
+                             .arg(r.results.size()).arg(c->steps.size()).arg(c->shotsOfRun(QString()).size()).arg(formatDuration(r.elapsedSecs())));
 }
 
 void RunView::refresh() {
@@ -523,7 +523,7 @@ QWidget* RunView::stepCard(int index, const TestCase& c, const RunState& r) {
     v->addWidget(action);
 
     int shots = 0;
-    for (const auto& s : c.shots) if (s.step == index + 1) ++shots;
+    for (const auto& s : c.shots) if (s.step == index + 1 && s.runId.isEmpty()) ++shots;
     auto* evidence = ui::label(shots == 0 ? tr("sin evidencia") : shots == 1 ? tr("1 captura") : tr("%1 capturas").arg(shots), "muted-sm");
     evidence->setStyleSheet(QStringLiteral("font-size:11px;"));
     v->addWidget(evidence);
@@ -535,23 +535,25 @@ void RunView::refreshShots() {
     ui::clearLayout(m_shotsLayout);
     const TestCase* c = m_cases.find(m_run.state().caseId);
     if (!c) return;
-    m_filmHeader->setText(tr("CAPTURAS · %1").arg(c->shots.size()));
-    m_sortShots->setVisible(c->shots.size() > 1);
+    // Sólo las de esta ejecución: las de las anteriores están en su ficha del historial.
+    const QList<Screenshot> shots = c->shotsOfRun(QString());
+    m_filmHeader->setText(tr("CAPTURAS · %1").arg(shots.size()));
+    m_sortShots->setVisible(shots.size() > 1);
 
     // La captura recién hecha se abre sola en el visor; si la elegida ya no está, la última.
     int maxId = 0;
     bool selectionExists = false;
-    for (const auto& s : c->shots) {
+    for (const auto& s : shots) {
         maxId = std::max(maxId, s.id);
         if (s.id == m_selectedShot) selectionExists = true;
     }
     if (maxId > m_maxShotId) m_selectedShot = maxId;
-    else if (!selectionExists) m_selectedShot = c->shots.isEmpty() ? 0 : c->shots.last().id;
+    else if (!selectionExists) m_selectedShot = shots.isEmpty() ? 0 : shots.last().id;
     m_maxShotId = maxId;
 
     const QString id = c->id;
     QWidget* selectedCard = nullptr;
-    for (const auto& s : c->shots) {
+    for (const auto& s : shots) {
         auto* card = new ShotCard(s, c->steps, ShotCard::Layout::Film);
         card->setSelected(s.id == m_selectedShot);
         if (s.id == m_selectedShot) selectedCard = card;

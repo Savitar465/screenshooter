@@ -337,28 +337,6 @@ void ZephyrClient::postTestSteps(const TrackerSettings& s, const QString& issueI
     });
 }
 
-void ZephyrClient::createTest(const TrackerSettings& s, const PublishCase& c, std::function<void(const CreateTestResult&)> done) {
-    resolveProject(s, QString(), [this, s, c, done](bool ok, const Project& project, const QString& error) {
-        if (!ok) { done(CreateTestResult{false, {}, {}, error, false}); return; }
-        if (project.testTypeId.isEmpty()) {
-            done(CreateTestResult{false, {}, {}, QCoreApplication::translate("infrastructure", "El proyecto no tiene el tipo de incidencia «%1» con el que crear el Test")
-                                                     .arg(testTypeName(s)), false});
-            return;
-        }
-        // Los pasos van por la API de Zephyr, así que hay que saber por qué ruta responde.
-        ensureApi(s, project.id, [this, s, c, project, done](bool found, const QString& detectError, bool retryable) {
-            if (!found) { done(CreateTestResult{false, {}, {}, detectError, retryable}); return; }
-            postTestIssue(s, project, c, [this, s, c, done](bool created, const QString& issueId, const QString& key,
-                                                            const QString& error, bool retryable) {
-                if (!created) { done(CreateTestResult{false, {}, {}, error, retryable}); return; }
-                postTestSteps(s, issueId, c, 0, {}, [key, done](const QStringList& failed) {
-                    done(CreateTestResult{true, key, failed, {}, false});
-                });
-            });
-        });
-    });
-}
-
 void ZephyrClient::createTestForCase(const std::shared_ptr<Job>& job) {
     const PublishCase& c = job->current();
     if (job->project.testTypeId.isEmpty()) {

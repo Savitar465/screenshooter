@@ -1,12 +1,15 @@
 #include "HistoryView.h"
 
+#include "application/EvidenceService.h"
 #include "application/RunHistoryStore.h"
 #include "application/TestPublishService.h"
 #include "application/TestCaseStore.h"
 #include "core/models/Metrics.h"
 #include "core/models/PlanReport.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlowLayout.h"
+#include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/MetricBars.h"
 #include "presentation/widgets/ProgressCells.h"
 #include "presentation/widgets/Ui.h"
@@ -77,8 +80,9 @@ struct Entry {
 
 } // namespace
 
-HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish, QWidget* parent)
-    : QWidget(parent), m_cases(cases), m_history(history), m_publish(publish) {
+HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish,
+                         EvidenceService* evidence, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_history(history), m_publish(publish), m_evidence(evidence) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildDetailPane(root);
@@ -382,6 +386,8 @@ void HistoryView::renderPlan(const PlanReport& report) {
         // Con qué está enlazado el caso: su historia de Jira y el Test sobre el que se publica.
         if (auto* links = issueLinks(row.jiraKey, row.testKey)) cv->addWidget(links);
         if (row.executed) cv->addWidget(stepsList(row.run));
+        if (row.executed)
+            if (auto* shots = evidenceGrid(row.caseId, row.run.id, 4)) cv->addWidget(shots);
         m_detailLayout->addWidget(card);
     }
 }
@@ -546,6 +552,15 @@ void HistoryView::renderRun(const RunRecord& run) {
     cv->addWidget(ui::label(tr("REGISTRO"), "eyebrow"));
     cv->addWidget(stepsList(run));
     m_detailLayout->addWidget(card);
+
+    // Lo que se capturó ejecutando: es de esta ejecución y aquí es donde se ve.
+    if (auto* shots = evidenceGrid(run.caseId, run.id, 3)) {
+        auto* box = ui::card("card");
+        auto* bv = ui::vbox(box, 0, 10);
+        bv->setContentsMargins(16, 14, 16, 14);
+        bv->addWidget(shots);
+        m_detailLayout->addWidget(box);
+    }
 }
 
 QWidget* HistoryView::issueLinks(const QString& jiraKey, const QString& testKey) {
@@ -566,6 +581,32 @@ QWidget* HistoryView::issueLinks(const QString& jiraKey, const QString& testKey)
     add("linkTest", tr("Test"), test, tr("Abrir en Jira el Test de Zephyr sobre el que se publican las ejecuciones de este caso"));
     h->addStretch(1);
     return row;
+}
+
+QWidget* HistoryView::evidenceGrid(const QString& caseId, const QString& runId, int columns) {
+    const TestCase* c = m_cases.find(caseId);
+    if (!c) return nullptr;
+    // Las evidencias son de la ejecución: se enseñan aquí, con el paso al que se asignaron.
+    const QList<Screenshot> shots = c->shotsOfRun(runId);
+    if (shots.isEmpty()) return nullptr;
+    auto* box = new QWidget;
+    auto* v = ui::vbox(box, 0, 8);
+    v->addWidget(ui::label(tr("EVIDENCIAS · %1").arg(shots.size()), "eyebrow"));
+    auto* gridBox = new QWidget;
+    auto* grid = new QGridLayout(gridBox);
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setSpacing(10);
+    for (int i = 0; i < shots.size(); ++i) {
+        auto* card = new ShotCard(shots[i], c->steps, ShotCard::Layout::Grid);
+        // La ejecución ya pasó: su evidencia se mira, se anota y se copia, pero no se reordena ni
+        // se reasigna de paso, que la cambiaría después de haberse publicado.
+        card->setReadOnly(true);
+        if (m_evidence) evidence::wireCard(card, this, m_cases, *m_evidence, caseId);
+        grid->addWidget(card, i / columns, i % columns);
+    }
+    for (int col = 0; col < columns; ++col) grid->setColumnStretch(col, 1);
+    v->addWidget(gridBox);
+    return box;
 }
 
 QWidget* HistoryView::stepsList(const RunRecord& run) const {

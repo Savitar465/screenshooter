@@ -3,6 +3,7 @@
 #include "core/models/TestCase.h"
 
 #include <QFrame>
+#include <QList>
 
 namespace qaflow {
 
@@ -26,6 +27,9 @@ public:
     void reloadThumbnail();
     /// Resalta la tarjeta como la evidencia abierta en el visor (sólo `Layout::Film`).
     void setSelected(bool on);
+    /// Evidencia de una ejecución ya archivada: se mira, se anota y se copia, pero no se reordena,
+    /// ni se borra, ni se cambia de paso — eso reescribiría una ejecución que ya pasó.
+    void setReadOnly(bool on);
 
 signals:
     void stepChanged(int shotId, int step);
@@ -44,6 +48,9 @@ protected:
 private:
     Screenshot m_shot;
     Thumbnail* m_thumb = nullptr;
+    QWidget* m_stepCombo = nullptr;          // se deshabilita en sólo lectura
+    QList<QWidget*> m_editors;               // reordenar y borrar: se ocultan en sólo lectura
+    bool m_readOnly = false;
 };
 
 } // namespace qaflow

@@ -14,9 +14,10 @@ class TestCaseStore;
 class RunController;
 class SettingsStore;
 
-/// Orquesta las evidencias del caso seleccionado:
+/// Orquesta las evidencias de la ejecución en curso (sin ejecución no se captura: la evidencia es
+/// de la ejecución, no del caso):
 ///  - captura de pantalla (con cuenta atrás opcional), guardada en la carpeta configurada y
-///    adjuntada al caso (asignada al paso en ejecución, si lo hay);
+///    adjuntada a la ejecución, asignada al paso que se estaba ejecutando;
 ///  - grabación de GIF (iniciar / detener), que se adjunta igual que una captura;
 ///  - ficheros existentes (logs, vídeos…) copiados a la carpeta de capturas;
 ///  - copia al portapapeles y sustitución de una imagen tras anotarla.
@@ -31,12 +32,12 @@ public:
     void setRecorder(std::shared_ptr<IScreenRecorder> recorder);
     bool canRecord() const { return m_recorder != nullptr; }
 
-    /// Captura según los ajustes. Con retardo, primero cuenta atrás (`countdown`); una segunda
-    /// llamada durante la cuenta atrás la cancela.
+    /// Captura según los ajustes, para la ejecución en curso. Con retardo, primero cuenta atrás
+    /// (`countdown`); una segunda llamada durante la cuenta atrás la cancela.
     void captureForSelectedCase();
     bool isCountingDown() const { return m_countdownLeft > 0; }
 
-    /// Inicia o detiene la grabación de GIF del caso seleccionado.
+    /// Inicia o detiene la grabación de GIF de la ejecución en curso.
     void toggleRecording();
     bool isRecording() const;
 

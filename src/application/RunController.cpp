@@ -150,7 +150,10 @@ void RunController::commitIfFinished() {
         rec.steps.append(RunRecordStep{c->steps[i].action, c->steps[i].expected, r.result, r.note, r.durationSecs});
         rec.durationSecs += r.durationSecs;
     }
-    m_history.addRun(rec);
+    const RunRecord saved = m_history.addRun(rec);
+    // La evidencia capturada durante la ejecución pasa a ser suya: desde aquí se enseña y se
+    // publica con ella, no con el caso.
+    m_store.sealShots(c->id, saved.id);
 
     switch (rec.verdict) {
         case Verdict::Superado: m_store.recordOutcome(c->id, RunOutcome::Passed); break;

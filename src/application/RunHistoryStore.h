@@ -36,6 +36,12 @@ public:
     void finishPlan(const QString& planRunId);
     /// Anota en el ciclo de plan el ciclo de Zephyr en el que se publicaron sus resultados.
     void markPublished(const QString& planRunId, const QString& zephyrCycleId);
+    /// Migración de datos anteriores a que la evidencia fuera de la ejecución: las evidencias
+    /// sueltas de cada caso pasan a su última ejecución, y las de un caso que nunca se ejecutó se
+    /// descartan (los ficheros no se tocan). `runningCaseId` es el caso que se está ejecutando
+    /// ahora, cuyas evidencias son de esa ejecución y todavía no pueden sellarse.
+    /// Devuelve cuántas evidencias se movieron o descartaron.
+    int adoptLooseEvidence(const QString& runningCaseId = QString());
     /// Añade una ejecución terminada. Asigna el id y devuelve el registro guardado.
     RunRecord addRun(RunRecord record);
 

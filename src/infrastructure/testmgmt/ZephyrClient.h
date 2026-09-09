@@ -22,6 +22,7 @@ public:
 
     void testConnection(const TrackerSettings& s, std::function<void(const ConnectionResult&)> done) override;
     void publish(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) override;
+    void createTest(const TrackerSettings& s, const PublishCase& c, std::function<void(const CreateTestResult&)> done) override;
 
     /// Ruta detectada de la API ("/rest/zapi/latest"); vacía mientras no se haya detectado.
     QString apiPath() const { return m_api; }
@@ -36,8 +37,21 @@ public:
     /// regional del usuario de Jira; vacía si la fecha no lo es.
     static QString cycleDate(const QDateTime& dt, const QString& jiraLocale);
 
+    /// Tipo de incidencia con el que se crean los Tests: el de los ajustes o "Test", que es el que
+    /// instala Zephyr.
+    static QString testTypeName(const TrackerSettings& s);
+    /// Descripción del Test creado a partir de un caso: sus precondiciones y de dónde sale.
+    static QString testDescription(const PublishCase& c);
+
 private:
     struct Job;   // estado de una publicación en curso (encadena decenas de peticiones)
+
+    /// Lo que Zephyr necesita del proyecto: trabaja con ids numéricos, no con claves.
+    struct Project {
+        QString id;
+        QString versionId;
+        QString testTypeId;   // tipo de incidencia de los Tests; vacío si el proyecto no lo tiene
+    };
 
     QNetworkRequest jira(const TrackerSettings& s, const QString& path) const;
     QNetworkRequest zephyr(const TrackerSettings& s, const QString& path) const;
@@ -47,15 +61,28 @@ private:
                 std::function<void(bool ok, const QString& error, bool retryable)> done);
     /// Olvida la ruta detectada: la que quedó a medias de probar no vale para nadie.
     void forgetApi() { m_api.clear(); m_apiFor.clear(); }
-    /// Resuelve el id numérico del proyecto y sus versiones a partir de la clave configurada.
+    /// La ruta ya detectada para esta instancia, o una detección nueva si todavía no se sabe.
+    void ensureApi(const TrackerSettings& s, const QString& projectId,
+                   std::function<void(bool ok, const QString& error, bool retryable)> done);
+    /// Resuelve los ids numéricos del proyecto: el suyo, el de la versión y el del tipo de
+    /// incidencia con el que se crean los Tests.
     void resolveProject(const TrackerSettings& s, const QString& versionName,
-                        std::function<void(bool, const QString& projectId, const QString& versionId, const QString& error)> done);
+                        std::function<void(bool, const Project& project, const QString& error)> done);
 
     /// Configuración regional del usuario de Jira, que es con la que Zephyr parsea las fechas.
     void resolveLocale(const std::shared_ptr<Job>& job, std::function<void()> done);
     /// `withDates` a false repite el ciclo sin fechas cuando Zephyr rechaza el formato de las suyas.
     void createCycle(const std::shared_ptr<Job>& job, bool withDates = true);
+    /// Crea en Jira el issue de tipo Test que representa al caso (título y precondiciones).
+    void postTestIssue(const TrackerSettings& s, const Project& project, const PublishCase& c,
+                       std::function<void(bool ok, const QString& issueId, const QString& key, const QString& error, bool retryable)> done);
+    /// Añade al Test los pasos del caso, uno a uno; devuelve con su motivo los que no entraron.
+    void postTestSteps(const TrackerSettings& s, const QString& issueId, const PublishCase& c, int step,
+                       const QStringList& failed, std::function<void(const QStringList& failed)> done);
+
     void nextCase(const std::shared_ptr<Job>& job);
+    /// Estrena en Jira el Test del caso que aún no está enlazado a ninguno y sigue con su ejecución.
+    void createTestForCase(const std::shared_ptr<Job>& job);
     void executeCase(const std::shared_ptr<Job>& job, const QString& issueId);
     /// Lee los resultados de paso que Zephyr crea con la ejecución y reparte las evidencias.
     void readStepResults(const std::shared_ptr<Job>& job, const QString& issueId);

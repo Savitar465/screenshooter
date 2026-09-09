@@ -55,6 +55,7 @@ private slots:
     void duplicateCaseCopiesContentButNotResultsOrShots() {
         AppFixture f;
         f.store.addShot(QStringLiteral("TC-104"), Screenshot{1, 1, QStringLiteral("a.png"), {}});
+        f.store.updateCase(QStringLiteral("TC-104"), [](TestCase& c) { c.testKey = QStringLiteral("SHOP-42"); });
         const QString id = f.store.duplicateCase(QStringLiteral("TC-104"));
         QCOMPARE(id, QStringLiteral("TC-108"));
         const TestCase* c = f.store.find(id);
@@ -65,6 +66,9 @@ private slots:
         QCOMPARE(static_cast<int>(c->status), static_cast<int>(CaseStatus::Borrador));
         QCOMPARE(static_cast<int>(c->lastRun.outcome), static_cast<int>(RunOutcome::None));
         QVERIFY(c->shots.isEmpty());
+        // La copia nace sin Test de Zephyr: el del original es del original.
+        QVERIFY(c->testKey.isEmpty());
+        QCOMPARE(f.store.find(QStringLiteral("TC-104"))->testKey, QStringLiteral("SHOP-42"));
         QCOMPARE(f.store.cases()[4].id, id);   // justo después del original (índice 3)
         QCOMPARE(f.store.selectedId(), id);
     }

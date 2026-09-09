@@ -56,7 +56,7 @@ PlanReport RunHistoryStore::report(const QString& planRunId) const {
     if (!plan) return PlanReport{};
     return PlanReport::build(*plan, runsForPlan(planRunId), [this](const QString& caseId) {
         const TestCase* c = m_cases.find(caseId);
-        return c ? c->title : QString();
+        return c ? PlanReport::CaseInfo{c->title, c->jiraKey, c->testKey} : PlanReport::CaseInfo{};
     });
 }
 
@@ -77,6 +77,19 @@ void RunHistoryStore::finishPlan(const QString& planRunId) {
     for (auto& p : m_history.plans) {
         if (p.id != planRunId || p.isFinished()) continue;
         p.finishedAt = QDateTime::currentDateTime();
+        persist();
+        return;
+    }
+}
+
+void RunHistoryStore::markPublished(const QString& planRunId, const QString& zephyrCycleId) {
+    if (zephyrCycleId.trimmed().isEmpty()) return;
+    for (auto& p : m_history.plans) {
+        if (p.id != planRunId) continue;
+        // Republicar crea otro ciclo en Zephyr: el que vale es el último, que es donde están estos
+        // resultados ahora.
+        p.zephyrCycleId = zephyrCycleId.trimmed();
+        p.publishedAt = QDateTime::currentDateTime();
         persist();
         return;
     }

@@ -34,6 +34,8 @@ public:
     /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos).
     QString startPlan(const QString& name, const QStringList& caseIds, const QString& planId = QString());
     void finishPlan(const QString& planRunId);
+    /// Anota en el ciclo de plan el ciclo de Zephyr en el que se publicaron sus resultados.
+    void markPublished(const QString& planRunId, const QString& zephyrCycleId);
     /// Añade una ejecución terminada. Asigna el id y devuelve el registro guardado.
     RunRecord addRun(RunRecord record);
 

@@ -39,11 +39,13 @@ private slots:
         QVERIFY(!hk.isBound(QStringLiteral("capture")));
         // Disparo simulado por id nativo: el callback del registro vigente se ejecuta, el retirado no.
         const bool again = hk.bind(QStringLiteral("record"), QStringLiteral("Ctrl+Shift+F10"), [&]() { fired += 10; });
-        Q_UNUSED(again);
+        // Sin registro nativo (Linux offscreen) nada puede dispararse; donde la plataforma sí
+        // registra, el callback vigente corre una vez y el retirado ninguna.
+        const int expected = again ? 10 : 0;
         hk.activate(3);   // tercer registro → id nativo 3
-        QCOMPARE(fired, 10);
+        QCOMPARE(fired, expected);
         hk.activate(1);
-        QCOMPARE(fired, 10);
+        QCOMPARE(fired, expected);
     }
 };
 

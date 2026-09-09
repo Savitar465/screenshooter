@@ -11,7 +11,7 @@ Verdict PlanReport::verdict() const {
     return Verdict::Superado;
 }
 
-PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOfPlan, const TitleLookup& titleOf) {
+PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOfPlan, const CaseLookup& caseOf) {
     PlanReport r;
     r.plan = plan;
 
@@ -27,6 +27,10 @@ PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOf
     for (const auto& caseId : plan.caseIds) {
         PlanReportRow row;
         row.caseId = caseId;
+        // Los enlaces salen del caso de hoy: son con los que se publica, no una foto de aquel día.
+        const CaseInfo info = caseOf ? caseOf(caseId) : CaseInfo{};
+        row.jiraKey = info.jiraKey;
+        row.testKey = info.testKey;
         if (const auto it = latest.constFind(caseId); it != latest.cend()) {
             row.executed = true;
             row.run = **it;
@@ -38,8 +42,8 @@ PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOf
                 case Verdict::Fallido: ++r.failed; break;
                 case Verdict::Bloqueado: ++r.blocked; break;
             }
-        } else if (titleOf) {
-            row.title = titleOf(caseId);
+        } else {
+            row.title = info.title;
         }
         r.rows.append(row);
     }
@@ -52,6 +56,10 @@ QString PlanReport::toMarkdown() const {
     out << QString();
     out << QCoreApplication::translate("core", "- **Inicio:** %1").arg(plan.startedAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")));
     if (plan.isFinished()) out << QCoreApplication::translate("core", "- **Fin:** %1").arg(plan.finishedAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")));
+    // Dónde quedaron estos resultados, para que el informe pegado en un ticket lo diga también.
+    if (plan.isPublished())
+        out << QCoreApplication::translate("core", "- **Ciclo de Zephyr:** %1 · publicado el %2")
+                   .arg(plan.zephyrCycleId, plan.publishedAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")));
     out << QCoreApplication::translate("core", "- **Veredicto:** %1").arg(label(verdict()));
     out << QCoreApplication::translate("core", "- **Casos:** %1 · Superados %2 · Fallidos %3 · Bloqueados %4 · Pendientes %5")
                .arg(total()).arg(passed).arg(failed).arg(blocked).arg(pending());
@@ -75,6 +83,10 @@ QString PlanReport::toMarkdown() const {
         if (!row.executed) continue;
         out << QString();
         out << QStringLiteral("## %1 · %2 — %3").arg(row.caseId, row.title, label(row.run.verdict));
+        QStringList links;
+        if (!row.jiraKey.trimmed().isEmpty()) links << QCoreApplication::translate("core", "**Historia:** %1").arg(row.jiraKey.trimmed());
+        if (!row.testKey.trimmed().isEmpty()) links << QCoreApplication::translate("core", "**Test:** %1").arg(row.testKey.trimmed());
+        if (!links.isEmpty()) out << links.join(QStringLiteral(" · "));
         for (int i = 0; i < row.run.steps.size(); ++i) {
             const auto& s = row.run.steps[i];
             QString line = QStringLiteral("%1. [%2] %3").arg(i + 1).arg(label(s.result), s.action);

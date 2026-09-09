@@ -304,6 +304,18 @@ void HistoryView::renderPlan(const PlanReport& report) {
     }
     sh->addStretch(1);
     tv->addWidget(sub);
+    // Dónde acabaron estos resultados: sin esto, saber si un ciclo ya se publicó era mirarlo en Jira.
+    // En su propia línea y con ajuste de texto: apretada contra los botones de la cabecera se cortaba.
+    if (plan.isPublished()) {
+        const QString texto = plan.publishedAt.isValid()
+                                  ? tr("Publicado en Zephyr el %1 · ciclo %2").arg(when(plan.publishedAt), plan.zephyrCycleId)
+                                  : tr("Publicado en Zephyr · ciclo %1").arg(plan.zephyrCycleId);
+        auto* published = ui::label(texto, "muted-sm");
+        published->setObjectName(QStringLiteral("planPublished"));
+        published->setWordWrap(true);
+        published->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Green));
+        tv->addWidget(published);
+    }
     hh->addWidget(titleBlock, 1);
     auto* exportBtn = ui::button(tr("Exportar Markdown…"), "outline");
     connect(exportBtn, &QPushButton::clicked, this, [this, report]() { exportMarkdown(report); });
@@ -367,6 +379,8 @@ void HistoryView::renderPlan(const PlanReport& report) {
             th->addWidget(ui::pill(tr("PENDIENTE"), theme::tint(theme::Muted, 38), theme::Muted));
         }
         cv->addWidget(top);
+        // Con qué está enlazado el caso: su historia de Jira y el Test sobre el que se publica.
+        if (auto* links = issueLinks(row.jiraKey, row.testKey)) cv->addWidget(links);
         if (row.executed) cv->addWidget(stepsList(row.run));
         m_detailLayout->addWidget(card);
     }
@@ -490,8 +504,19 @@ void HistoryView::renderRun(const RunRecord& run) {
     auto* sh = ui::hbox(sub, 0, 8);
     sh->addWidget(verdictPill(run.verdict));
     sh->addWidget(ui::label(QStringLiteral("%1 → %2").arg(when(run.startedAt), when(run.finishedAt)), "muted-sm"));
+    // Dónde se publicó esta ejecución: el ciclo de Zephyr del plan al que pertenece.
+    if (const PlanRun* p = run.planRunId.isEmpty() ? nullptr : m_history.findPlan(run.planRunId); p && p->isPublished()) {
+        auto* cycle = ui::label(tr("· Zephyr · ciclo %1").arg(p->zephyrCycleId), "muted-sm");
+        cycle->setObjectName(QStringLiteral("runZephyrCycle"));
+        cycle->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Green));
+        cycle->setMinimumWidth(cycle->sizeHint().width());   // que no se lo coma la fila
+        sh->addWidget(cycle);
+    }
     sh->addStretch(1);
     tv->addWidget(sub);
+    // Y con qué está enlazado el caso que se ejecutó.
+    if (const TestCase* c = m_cases.find(run.caseId))
+        if (auto* links = issueLinks(c->jiraKey, c->testKey)) tv->addWidget(links);
     hh->addWidget(titleBlock, 1);
     auto* open = ui::button(tr("Abrir caso"), "outline");
     connect(open, &QPushButton::clicked, this, [this, id = run.caseId]() { emit openCaseRequested(id); });
@@ -521,6 +546,26 @@ void HistoryView::renderRun(const RunRecord& run) {
     cv->addWidget(ui::label(tr("REGISTRO"), "eyebrow"));
     cv->addWidget(stepsList(run));
     m_detailLayout->addWidget(card);
+}
+
+QWidget* HistoryView::issueLinks(const QString& jiraKey, const QString& testKey) {
+    const QString jira = jiraKey.trimmed();
+    const QString test = testKey.trimmed();
+    if (jira.isEmpty() && test.isEmpty()) return nullptr;
+    auto* row = new QWidget;
+    auto* h = ui::hbox(row, 0, 6);
+    auto add = [&](const char* name, const QString& text, const QString& key, const QString& tip) {
+        if (key.isEmpty()) return;
+        auto* b = ui::button(QStringLiteral("%1 %2").arg(text, key), "chip");
+        b->setObjectName(QString::fromLatin1(name));
+        b->setToolTip(tip);
+        connect(b, &QPushButton::clicked, this, [this, key]() { emit openJiraRequested(key); });
+        h->addWidget(b);
+    };
+    add("linkJira", tr("Historia"), jira, tr("Abrir en Jira la historia enlazada al caso"));
+    add("linkTest", tr("Test"), test, tr("Abrir en Jira el Test de Zephyr sobre el que se publican las ejecuciones de este caso"));
+    h->addStretch(1);
+    return row;
 }
 
 QWidget* HistoryView::stepsList(const RunRecord& run) const {
@@ -575,14 +620,17 @@ void HistoryView::exportMarkdown(const PlanReport& report) {
 }
 
 void HistoryView::publishToZephyr(const PlanReport& report) {
-    const QStringList sinClave = m_publish->casesWithoutTestKey(report);
-    const int publicables = report.executed - sinClave.size();
-    QString aviso = tr("Se creará el ciclo «%1» en Zephyr con %2 ejecuciones.").arg(m_publish->requestFor(report).cycleName).arg(publicables);
-    if (!sinClave.isEmpty())
-        aviso += tr("\n\nQuedan fuera %1 casos sin clave de Test: %2.\nIndícala en el editor del caso para incluirlos.")
-                     .arg(sinClave.size()).arg(sinClave.join(QStringLiteral(", ")));
-    if (publicables <= 0) {
-        emit toast(tr("Ningún caso del ciclo tiene clave de Test de Zephyr"), theme::Amber);
+    const QStringList nuevos = m_publish->casesNeedingTest(report);
+    QString aviso = tr("Se creará el ciclo «%1» en Zephyr con %2 ejecuciones.").arg(m_publish->requestFor(report).cycleName).arg(report.executed);
+    if (!nuevos.isEmpty())
+        aviso += tr("\n\nAntes se crearán en Jira %1 Tests, a partir de los casos que aún no tienen uno enlazado: %2.\nSu clave quedará en el caso y se reutilizará en los ciclos siguientes.")
+                     .arg(nuevos.size()).arg(nuevos.join(QStringLiteral(", ")));
+    // Publicar dos veces no actualiza el ciclo anterior: crea otro. Mejor decirlo antes.
+    if (const PlanRun* p = m_history.findPlan(report.plan.id); p && p->isPublished())
+        aviso += tr("\n\nOJO: estos resultados ya se publicaron el %1 (ciclo %2). Se creará un ciclo nuevo, no se actualiza aquél.")
+                     .arg(when(p->publishedAt), p->zephyrCycleId);
+    if (report.executed <= 0) {
+        emit toast(tr("El ciclo no tiene ninguna ejecución que publicar"), theme::Amber);
         return;
     }
     if (QMessageBox::question(this, tr("Publicar en Zephyr"), aviso, QMessageBox::Ok | QMessageBox::Cancel) != QMessageBox::Ok) return;
@@ -595,8 +643,9 @@ void HistoryView::publishToZephyr(const PlanReport& report) {
             emit toast(error, theme::Red);
             return;
         }
-        QString msg = tr("Ciclo publicado en Zephyr · %1 ejecuciones, %2 pasos, %3 evidencias")
-                          .arg(r.executions).arg(r.steps).arg(r.attachments);
+        QString msg = tr("Ciclo %1 publicado en Zephyr · %2 ejecuciones, %3 pasos, %4 evidencias")
+                          .arg(r.cycleId).arg(r.executions).arg(r.steps).arg(r.attachments);
+        if (r.testsCreated > 0) msg += tr(" · %1 Tests creados").arg(r.testsCreated);
         if (!r.skipped.isEmpty()) msg += tr(" · %1 sin publicar").arg(r.skipped.size());
         emit toast(msg, r.skipped.isEmpty() ? theme::Green : theme::Amber);
         // Un contador no dice qué arreglar: lo que se quedó fuera va con su motivo, uno por línea.

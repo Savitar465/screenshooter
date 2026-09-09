@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
     BugStore bugLedger(bugRepo);
     BugReportService bugs(tracker, cases, run, settings, bugLedger);
     auto zephyr = std::make_shared<ZephyrClient>();     // gestión de pruebas: ciclos y ejecuciones en Jira
-    TestPublishService publish(zephyr, cases, settings);
+    TestPublishService publish(zephyr, cases, history, settings);
     EvidenceService evidence(capture, cases, run, settings);
     evidence.setRecorder(recorder);
     CaseTransferService transfer(cases);

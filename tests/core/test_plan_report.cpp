@@ -38,7 +38,11 @@ struct Sample {
     }
 
     PlanReport build() const {
-        return PlanReport::build(plan, {first, retry, blocked, foreign}, [](const QString& id) { return QStringLiteral("Título de ") + id; });
+        return PlanReport::build(plan, {first, retry, blocked, foreign}, [](const QString& id) {
+            // El catálogo: título y los enlaces del caso (historia de Jira y Test de Zephyr).
+            return PlanReport::CaseInfo{QStringLiteral("Título de ") + id, QStringLiteral("SHOP-9"),
+                                        id == QStringLiteral("TC-1") ? QStringLiteral("SHOP-42") : QString()};
+        });
     }
 };
 
@@ -84,6 +88,28 @@ private slots:
         QVERIFY(md.contains(QStringLiteral("| TC-1 | Login |  | Superado | 2/2 |")));
         QVERIFY(md.contains(QStringLiteral("| TC-3 | Título de TC-3 |  | Pendiente |")));
         QVERIFY(md.contains(QStringLiteral("1. [Bloqueado] pagar — _pasarela caída_")));
+        // Con qué está enlazado cada caso, para que el informe pegado en un ticket lo diga.
+        QVERIFY(md.contains(QStringLiteral("**Historia:** SHOP-9 · **Test:** SHOP-42")));
+    }
+
+    // Las filas llevan los enlaces del caso: la historia de Jira y el Test de Zephyr.
+    void rowsCarryTheLinksOfTheirCase() {
+        const PlanReport r = Sample().build();
+        QCOMPARE(r.rows[0].caseId, QStringLiteral("TC-1"));
+        QCOMPARE(r.rows[0].jiraKey, QStringLiteral("SHOP-9"));
+        QCOMPARE(r.rows[0].testKey, QStringLiteral("SHOP-42"));
+        QVERIFY(r.rows[1].testKey.isEmpty());        // el caso que aún no tiene Test
+        QVERIFY(!r.rows[2].executed);                // y el pendiente también los trae
+        QCOMPARE(r.rows[2].jiraKey, QStringLiteral("SHOP-9"));
+    }
+
+    // Publicado el ciclo, el informe dice en cuál de Zephyr quedaron sus resultados.
+    void theMarkdownNamesTheZephyrCycleOncePublished() {
+        Sample s;
+        QVERIFY(!s.build().toMarkdown().contains(QStringLiteral("Ciclo de Zephyr")));
+        s.plan.zephyrCycleId = QStringLiteral("77");
+        s.plan.publishedAt = QDateTime(QDate(2026, 5, 12), QTime(12, 30));
+        QVERIFY(s.build().toMarkdown().contains(QStringLiteral("- **Ciclo de Zephyr:** 77 · publicado el 12/05/2026 12:30")));
     }
 };
 

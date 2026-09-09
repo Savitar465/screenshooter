@@ -45,7 +45,7 @@ struct AppFixture {
     SettingsStore settings{settingsRepo, secrets};
     BugStore bugLedger{bugRepo};
     BugReportService bugs{tracker, store, run, settings, bugLedger};
-    TestPublishService publish{zephyr, store, settings};
+    TestPublishService publish{zephyr, store, history, settings};
 
     AppFixture() {
         store.load();

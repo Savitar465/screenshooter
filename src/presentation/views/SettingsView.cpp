@@ -255,11 +255,21 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
         m_settings.updateTracker([&](TrackerSettings& s) { s.zephyrVersion = text; });
         m_selfEdit = false;
     });
+    m_zephyrTestType = new QLineEdit;
+    m_zephyrTestType->setPlaceholderText(QStringLiteral("Test"));
+    m_zephyrTestType->setToolTip(tr("Tipo de incidencia con el que se crean los Tests; vacío usa «Test», el que instala Zephyr"));
+    connect(m_zephyrTestType, &QLineEdit::textEdited, this, [this](const QString& text) {
+        m_selfEdit = true;
+        m_settings.updateTracker([&](TrackerSettings& s) { s.zephyrTestType = text; });
+        m_selfEdit = false;
+    });
     m_zephyrTest = ui::button(tr("Probar Zephyr"), "outline");
     connect(m_zephyrTest, &QPushButton::clicked, this, &SettingsView::testZephyr);
     zg->addWidget(field(tr("Versión del proyecto"), m_zephyrVersion), 0, 0);
-    zg->addWidget(m_zephyrTest, 0, 1, Qt::AlignBottom);
+    zg->addWidget(field(tr("Tipo de incidencia del Test"), m_zephyrTestType), 0, 1);
+    zg->addWidget(m_zephyrTest, 0, 2, Qt::AlignBottom);
     zg->setColumnStretch(0, 1);
+    zg->setColumnStretch(1, 1);
     zv->addWidget(zrow);
     m_zephyrNote = ui::label(QString(), "muted-sm");
     m_zephyrNote->setWordWrap(true);
@@ -532,15 +542,17 @@ void SettingsView::refreshZephyr() {
     // Zephyr es un plugin de Jira: no tiene sentido ofrecerlo con otro gestor.
     m_zephyrBlock->setVisible(m_publish != nullptr && t.kind == TrackerKind::Jira);
     m_zephyrVersion->setEnabled(t.zephyr);
+    m_zephyrTestType->setEnabled(t.zephyr);
     m_zephyrTest->setEnabled(t.zephyr);
     m_zephyrNote->setText(t.zephyr
-                              ? tr("Cada caso publica su issue de tipo Test (campo «Test de Zephyr» del caso); los que no lo tengan se quedan fuera del ciclo.")
+                              ? tr("Cada caso publica su ejecución sobre el issue de tipo Test que tiene enlazado; el que aún no lo tenga lo estrena a partir del caso (título, precondiciones y pasos) y su clave se guarda en el campo «Test de Zephyr».")
                               : tr("Zephyr for Jira: los ciclos y sus ejecuciones se crean en la misma instancia con estas credenciales."));
     if (m_selfEdit) return;
     const bool wasEditing = m_selfEdit;
     m_selfEdit = true;
     m_zephyr->setChecked(t.zephyr);
     m_zephyrVersion->setText(t.zephyrVersion);
+    m_zephyrTestType->setText(t.zephyrTestType);
     m_selfEdit = wasEditing;
 }
 

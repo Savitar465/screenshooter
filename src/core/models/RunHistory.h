@@ -56,8 +56,13 @@ struct PlanRun {
     QStringList caseIds;      // composición del plan al arrancar, en orden de ejecución
     QDateTime startedAt;
     QDateTime finishedAt;     // inválida mientras el plan sigue en curso
+    /// Dónde quedaron estos resultados en la herramienta de gestión de pruebas: el ciclo de Zephyr
+    /// que se creó al publicarlos y cuándo se hizo. Vacío mientras no se haya publicado.
+    QString zephyrCycleId;
+    QDateTime publishedAt;
 
     bool isFinished() const { return finishedAt.isValid(); }
+    bool isPublished() const { return !zephyrCycleId.isEmpty(); }
 };
 
 /// Todo el historial. Un único agregado para que la persistencia sea trivial.

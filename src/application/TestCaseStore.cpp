@@ -127,6 +127,9 @@ QString TestCaseStore::duplicateCase(const QString& id) {
     c.status = CaseStatus::Borrador;
     c.lastRun = LastRun{};
     c.shots.clear();
+    // La copia es un caso nuevo: heredar la clave haría que dos casos publicaran sus ejecuciones
+    // sobre el mismo Test de Zephyr. Se enlaza o se crea cuando toque.
+    c.testKey.clear();
     // Justo después del original, para que se vea de dónde sale.
     const int pos = static_cast<int>(src - m_cases.constData()) + 1;
     m_cases.insert(pos, c);

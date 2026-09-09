@@ -76,7 +76,7 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 
 | Pantalla          | Qué hace                                                                   |
 |-------------------|----------------------------------------------------------------------------|
-| Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira y a su Test de Zephyr, pasos reordenables e insertables, evidencias (capturar, grabar GIF, adjuntar archivos; abrir, anotar, copiar) e historial; duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
+| Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira y a su Test de Zephyr (enlazarlo o crearlo desde el propio caso), pasos reordenables e insertables, evidencias (capturar, grabar GIF, adjuntar archivos; abrir, anotar, copiar) e historial; duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
 | Planes            | Varios planes (crear, duplicar, archivar, eliminar), casos en orden de ejecución propio, progreso del ciclo actual con enlace a su informe, estimación basada en las duraciones reales del historial (3 min/paso si no hay datos) y arranque de un ciclo nuevo |
 | Ejecución         | Tres columnas: el caso con su progreso y la lista de pasos (veredicto corregible en cada uno), el paso actual con Pasa / Falla / Bloq. / N/A (teclas P / F / B / S), paso anterior (Retroceso), **atajos globales** para avanzar de paso sin volver a la ventana (Ctrl+Alt+P / Ctrl+Alt+F / Ctrl+Alt+A), cronómetro por paso y por caso, visor grande de la evidencia elegida con «Asignar a» y observaciones, y la columna de capturas con todas las evidencias del caso. Sobrevive al cierre de la aplicación |
 | Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración), informes de plan con exportación a Markdown y publicación en Zephyr y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
@@ -107,14 +107,24 @@ un ciclo de plan, «Publicar en Zephyr» crea el *test cycle* con una ejecución
 cada paso y las evidencias colgadas donde corresponde — las de un paso en su resultado y las del caso
 en la ejecución.
 
-Cada caso se corresponde con su issue de tipo **Test** mediante el campo «Test de Zephyr» del editor
-(`SHOP-42`); los casos sin esa clave se quedan fuera del ciclo y la aplicación los enumera antes de publicar.
-Al terminar, si algo se ha quedado fuera —un caso sin clave, una evidencia que ya no está en disco o
-los veredictos que sobran cuando el Test tiene menos pasos que el caso— la aplicación lo detalla con
-su motivo en vez de limitarse a contarlo.
+**Un caso, un Test.** Como el caso se ejecuta muchas veces y en varios planes, su issue de tipo
+**Test** es siempre el mismo: el campo «Test de Zephyr» del editor lo enlaza (`SHOP-42`) y todos los
+ciclos se publican sobre él. Ese campo se rellena una vez, y de dos maneras: pegando la clave de un
+Test que ya exista, o pulsando **«Crear»**, que lo estrena en Jira con el título, las precondiciones y
+los pasos del caso y anota su clave. El caso que llegue a la publicación sin Test lo estrena ahí
+mismo, y la aplicación enumera antes cuáles van a estrenarlo. Al terminar, si algo se ha quedado fuera
+—un Test que Jira rechazó, una evidencia que ya no está en disco o los veredictos que sobran cuando el
+Test tiene menos pasos que el caso— lo detalla con su motivo en vez de limitarse a contarlo.
+
+Publicado el ciclo, el informe del plan lo recuerda: enseña «Publicado en Zephyr el … · ciclo N» y, si
+se pide publicarlo otra vez, avisa de que Zephyr creará un ciclo nuevo en vez de actualizar aquél.
+Además, cada caso del informe —y el detalle de cada ejecución— muestra con qué está enlazado: su
+historia de Jira y su Test de Zephyr, en chips que abren el issue en el navegador. El Markdown
+exportado lo lleva también, para que el informe pegado en un ticket se explique solo.
 
 Se activa en Ajustes, bajo el gestor de incidencias: usa la misma instancia y las mismas credenciales
-de Jira. La API se busca en las dos rutas por las que Zephyr la sirve, así que funciona tanto con la
+de Jira, y allí se indican la versión del proyecto a la que van los ciclos y el tipo de incidencia con
+el que se crean los Tests (`Test` salvo en un Jira traducido, donde se llame de otra manera). La API se busca en las dos rutas por las que Zephyr la sirve, así que funciona tanto con la
 **ZAPI** pública (incluida de fábrica desde Zephyr 5.6) como con la del propio plugin
 (`/rest/zephyr/latest`), que es lo único que hay en las versiones anteriores como la **5.3**.
 

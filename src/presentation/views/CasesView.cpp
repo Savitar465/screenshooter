@@ -6,6 +6,7 @@
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
 #include "application/TestCaseStore.h"
+#include "application/TestPublishService.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlowLayout.h"
@@ -67,8 +68,9 @@ QPushButton* smallButton(const QString& text, const char* role, const QString& t
 } // namespace
 
 CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer, BugStore& bugs,
-                     EvidenceService& evidence, QWidget* parent)
-    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_bugs(bugs), m_evidence(evidence) {
+                     EvidenceService& evidence, TestPublishService* publish, QWidget* parent)
+    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_bugs(bugs), m_evidence(evidence),
+      m_publish(publish) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildEditor(root);
@@ -362,20 +364,38 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_openJira->setFixedWidth(24);
     connect(m_openJira, &QPushButton::clicked, this, [this]() { if (const TestCase* c = m_store.selected(); c && !c->jiraKey.isEmpty()) emit openJiraRequested(c->jiraKey); });
     jrh->addWidget(m_openJira);
+    // El Test de Zephyr del caso: se pega la clave de uno que ya exista o se crea a partir del caso.
+    auto* testRow = new QWidget;
+    auto* trh = ui::hbox(testRow, 0, 4);
     m_testKey = new QLineEdit;
+    m_testKey->setObjectName(QStringLiteral("caseTestKey"));
     m_testKey->setProperty("role", QStringLiteral("mono"));
     m_testKey->setPlaceholderText(QStringLiteral("SHOP-42"));
-    m_testKey->setToolTip(tr("Issue de tipo Test que representa este caso en Zephyr. Sin él, el caso no se publica en el ciclo"));
+    m_testKey->setToolTip(tr("Issue de tipo Test que representa este caso en Zephyr; se reutiliza en todos sus ciclos. Vacío: se crea al publicar, o aquí mismo con «Crear»"));
     connect(m_testKey, &QLineEdit::textEdited, this, [this](const QString& t) {
         edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.testKey = t.trimmed().toUpper(); }); });
+        refreshTestKey();
     });
+    trh->addWidget(m_testKey, 1);
+    m_openTest = ui::button(QStringLiteral("↗"), "icon-move");
+    m_openTest->setToolTip(tr("Abrir el Test en Jira"));
+    m_openTest->setFixedWidth(24);
+    connect(m_openTest, &QPushButton::clicked, this, [this]() {
+        if (const TestCase* c = m_store.selected(); c && !c->testKey.isEmpty()) emit openJiraRequested(c->testKey);
+    });
+    trh->addWidget(m_openTest);
+    m_createTest = ui::button(tr("Crear"), "outline");
+    m_createTest->setObjectName(QStringLiteral("caseCreateTest"));
+    connect(m_createTest, &QPushButton::clicked, this, &CasesView::createZephyrTest);
+    trh->addWidget(m_createTest);
+
     m_tags = new QLineEdit;
     m_tags->setPlaceholderText(tr("regresión, smoke…"));
     m_tags->setToolTip(tr("Etiquetas separadas por comas"));
     connect(m_tags, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.tags = parseTags(t); }); }); });
     mg->addWidget(fieldCell(tr("Componente"), m_component), 1, 0);
     mg->addWidget(fieldCell(tr("Historia Jira"), jiraRow), 1, 1);
-    mg->addWidget(fieldCell(tr("Test de Zephyr"), m_testKey), 1, 2);
+    mg->addWidget(fieldCell(tr("Test de Zephyr"), testRow), 1, 2);
     mg->addWidget(fieldCell(tr("Etiquetas"), m_tags), 1, 3);
     for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
     v->addWidget(meta);
@@ -505,6 +525,7 @@ void CasesView::loadEditor() {
     if (m_jiraKey->text() != c->jiraKey) m_jiraKey->setText(c->jiraKey);
     if (m_testKey->text() != c->testKey) m_testKey->setText(c->testKey);
     m_openJira->setEnabled(!c->jiraKey.isEmpty());
+    refreshTestKey();
     if (parseTags(m_tags->text()) != c->tags) m_tags->setText(c->tags.join(QStringLiteral(", ")));
     m_pre->setTextSilently(c->preconditions);
     m_selfEdit = false;
@@ -512,6 +533,46 @@ void CasesView::loadEditor() {
     refreshShots();
     refreshHistory();
     refreshBugs();
+}
+
+void CasesView::refreshTestKey() {
+    const TestCase* c = m_store.selected();
+    if (!c) return;
+    const bool linked = !c->testKey.trimmed().isEmpty();
+    // Enlazado: sólo queda abrirlo. Sin enlazar: se ofrece crearlo con lo que dice el caso.
+    m_openTest->setVisible(linked);
+    m_createTest->setVisible(!linked);
+    const bool canCreate = m_publish && m_publish->enabled();
+    m_createTest->setEnabled(canCreate && !m_creatingTest);
+    m_createTest->setText(m_creatingTest ? tr("Creando…") : tr("Crear"));
+    m_createTest->setToolTip(canCreate ? tr("Crear el Test en Zephyr con el título, las precondiciones y los pasos de este caso")
+                                       : tr("Activa la publicación en Zephyr en Ajustes para crear el Test de este caso"));
+}
+
+void CasesView::createZephyrTest() {
+    const TestCase* c = m_store.selected();
+    if (!c || !m_publish || m_creatingTest || !c->testKey.trimmed().isEmpty()) return;
+    const QString caseId = c->id;
+    m_creatingTest = true;
+    refreshTestKey();
+    emit toast(tr("Creando en Zephyr el Test de %1…").arg(caseId), theme::Cyan);
+    m_publish->createTestFor(caseId, [this, caseId](const CreateTestResult& r) {
+        m_creatingTest = false;
+        refreshTestKey();
+        if (!r.ok) {
+            QString error = tr("No se pudo crear el Test de %1 · %2").arg(caseId, r.error);
+            if (r.retryable) error += tr(" · vuelve a intentarlo");
+            emit toast(error, theme::Red);
+            return;
+        }
+        // Un paso que no entró no invalida el Test, pero tampoco se calla: el caso y su Test ya no
+        // dicen lo mismo.
+        if (r.skipped.isEmpty()) {
+            emit toast(tr("Test %1 creado en Zephyr a partir de %2").arg(r.key, caseId), theme::Green);
+            return;
+        }
+        emit toast(tr("Test %1 creado · %2 pasos se quedaron fuera").arg(r.key).arg(r.skipped.size()), theme::Amber);
+    });
 }
 
 void CasesView::refreshSteps() {

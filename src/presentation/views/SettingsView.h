@@ -69,6 +69,7 @@ private:
     QWidget* m_zephyrBlock;
     QCheckBox* m_zephyr;
     QLineEdit* m_zephyrVersion;
+    QLineEdit* m_zephyrTestType;
     QPushButton* m_zephyrTest;
     QLabel* m_zephyrNote;
     QLineEdit* m_shortcut;

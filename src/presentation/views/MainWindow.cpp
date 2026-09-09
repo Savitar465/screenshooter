@@ -54,7 +54,7 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     h->addWidget(m_sidebar);
 
     m_stack = new QStackedWidget;
-    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence);
+    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence, ctx.publish);
     m_plan = new PlanView(*ctx.cases, *ctx.plan);
     m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence);
     m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish);
@@ -356,6 +356,11 @@ void MainWindow::wireSignals() {
 
     // Historial
     connect(m_history, &HistoryView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigate(Screen::Casos); });
+    connect(m_history, &HistoryView::openJiraRequested, this, [this](const QString& key) {
+        const TrackerSettings& t = m_ctx.settings->tracker();
+        if (t.baseUrl().isEmpty()) { showToast(tr("Configura la URL del gestor en Ajustes"), theme::Amber); return; }
+        QDesktopServices::openUrl(QUrl(t.issueUrl(key)));
+    });
 
     // Bug
     connect(m_bug, &BugView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);

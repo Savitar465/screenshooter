@@ -1,5 +1,6 @@
 #include "TestPublishService.h"
 
+#include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
 
@@ -7,15 +8,29 @@
 
 namespace qaflow {
 
-TestPublishService::TestPublishService(std::shared_ptr<ITestManagement> zephyr, TestCaseStore& cases, SettingsStore& settings, QObject* parent)
-    : QObject(parent), m_zephyr(std::move(zephyr)), m_cases(cases), m_settings(settings) {}
+TestPublishService::TestPublishService(std::shared_ptr<ITestManagement> zephyr, TestCaseStore& cases, RunHistoryStore& history,
+                                       SettingsStore& settings, QObject* parent)
+    : QObject(parent), m_zephyr(std::move(zephyr)), m_cases(cases), m_history(history), m_settings(settings) {}
 
 bool TestPublishService::enabled() const {
     const TrackerSettings& t = m_settings.tracker();
     return m_zephyr && t.zephyr && t.kind == TrackerKind::Jira;
 }
 
-QStringList TestPublishService::casesWithoutTestKey(const PlanReport& report) const {
+namespace {
+/// El caso como lo espera la herramienta: lo que hace falta para crear su Test.
+PublishCase publishCaseFrom(const TestCase& c) {
+    PublishCase pc;
+    pc.caseId = c.id;
+    pc.testKey = c.testKey.trimmed();
+    pc.title = c.title;
+    pc.preconditions = c.preconditions;
+    pc.design = c.steps;
+    return pc;
+}
+} // namespace
+
+QStringList TestPublishService::casesNeedingTest(const PlanReport& report) const {
     QStringList out;
     for (const auto& row : report.rows) {
         if (!row.executed) continue;
@@ -44,14 +59,39 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report) const {
         pc.steps = row.run.steps;
         pc.durationSecs = row.run.durationSecs;
         if (const TestCase* c = m_cases.find(row.caseId)) {
-            pc.testKey = c->testKey.trimmed();
+            // Con lo que el caso dice hoy se crea su Test si todavía no está enlazado a ninguno.
+            const PublishCase from = publishCaseFrom(*c);
+            pc.testKey = from.testKey;
+            pc.preconditions = from.preconditions;
+            pc.design = from.design;
             // Las evidencias son las que el caso tiene ahora en disco, con el paso al que se asignaron.
             for (const auto& shot : c->shots)
                 if (QFileInfo::exists(shot.path)) pc.attachments.append(PublishAttachment{shot.path, shot.step});
         }
+        // Del caso que ya no está en el catálogo sólo queda la ejecución: sus pasos son el Test.
+        if (pc.design.isEmpty())
+            for (const auto& s : row.run.steps) pc.design.append(TestStep{s.action, s.expected});
         req.cases.append(pc);
     }
     return req;
+}
+
+void TestPublishService::createTestFor(const QString& caseId, std::function<void(const CreateTestResult&)> done) {
+    CreateTestResult r;
+    if (!enabled()) {
+        r.error = tr("Activa Zephyr en Ajustes para crear el Test del caso");
+        done(r);
+        return;
+    }
+    const TestCase* c = m_cases.find(caseId);
+    if (!c) { r.error = tr("El caso ya no existe"); done(r); return; }
+    // El caso que ya tiene su Test no estrena otro: se responde con el que ya estaba enlazado.
+    if (!c->testKey.trimmed().isEmpty()) { r.ok = true; r.key = c->testKey.trimmed(); done(r); return; }
+    m_zephyr->createTest(m_settings.tracker(), publishCaseFrom(*c), [this, caseId, done](const CreateTestResult& result) {
+        if (result.ok && !result.key.isEmpty())
+            m_cases.updateCase(caseId, [&result](TestCase& c) { c.testKey = result.key; });
+        done(result);
+    });
 }
 
 void TestPublishService::testConnection(std::function<void(const ConnectionResult&)> done) {
@@ -66,7 +106,18 @@ void TestPublishService::publish(const PlanReport& report, std::function<void(co
         done(r);
         return;
     }
-    m_zephyr->publish(m_settings.tracker(), requestFor(report), std::move(done));
+    m_zephyr->publish(m_settings.tracker(), requestFor(report), [this, planRunId = report.plan.id, done = std::move(done)](const PublishResult& r) {
+        // El ciclo de plan se queda con el de Zephyr en el que acabaron sus resultados.
+        if (r.ok) m_history.markPublished(planRunId, r.cycleId);
+        // El Test recién creado queda enlazado al caso: los ciclos siguientes reutilizan ese mismo
+        // Test en vez de estrenar otro.
+        for (auto it = r.createdTests.constBegin(); it != r.createdTests.constEnd(); ++it) {
+            const QString key = it.value();
+            if (key.isEmpty()) continue;
+            m_cases.updateCase(it.key(), [&key](TestCase& c) { c.testKey = key; });
+        }
+        done(r);
+    });
 }
 
 } // namespace qaflow

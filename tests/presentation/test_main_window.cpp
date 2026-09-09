@@ -9,6 +9,7 @@
 #include "application/AppContext.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
+#include "presentation/views/HistoryView.h"
 #include "presentation/views/MainWindow.h"
 #include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/ImageViewer.h"
@@ -388,6 +389,91 @@ private slots:
         QCOMPARE(assignee->lineEdit()->text(), QStringLiteral("an"));           // lo escrito sigue intacto
         QCOMPARE(f.app.tracker->assigneeQueries.last(), QStringLiteral("an"));
         QCOMPARE(f.app.tracker->assigneeQueries.size(), 1);                     // una sola llamada para dos letras
+    }
+
+    // El informe del plan y el detalle de la ejecución dicen con qué Jira y qué Zephyr está enlazado
+    // cada caso, y en qué ciclo de Zephyr acabaron esos resultados.
+    void thePlanReportShowsWhatEachCaseIsLinkedTo() {
+        WindowFixture f;
+        // Con Zephyr activo la cabecera lleva además el botón de publicar: es la fila más apretada.
+        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        f.app.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) { c.testKey = QStringLiteral("SHOP-42"); });
+        const QString planRunId = f.app.history.startPlan(QStringLiteral("Regresión Sprint 14 · candidata de release"), {QStringLiteral("TC-101")});
+        RunRecord rec;
+        rec.caseId = QStringLiteral("TC-101");
+        rec.caseTitle = QStringLiteral("Iniciar sesión");
+        rec.planRunId = planRunId;
+        rec.verdict = Verdict::Superado;
+        rec.startedAt = QDateTime::currentDateTime().addSecs(-300);
+        rec.finishedAt = QDateTime::currentDateTime();
+        rec.plannedSteps = 1;
+        rec.steps = {RunRecordStep{QStringLiteral("Entrar"), QStringLiteral("Entra"), StepResult::Pass, {}, 30}};
+        const RunRecord saved = f.app.history.addRun(rec);
+        f.app.history.finishPlan(planRunId);
+        f.app.history.markPublished(planRunId, QStringLiteral("77"));
+
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        // A lo ancho de una pantalla normal, no de la máxima: la cabecera del informe lleva tres
+        // botones y es donde se apretaba la línea de la publicación.
+        f.window->resize(760, 700);
+        f.window->navigate(Screen::Historial);
+        history->showPlan(planRunId);
+        QTest::qWait(50);
+        // La historia del caso (de los datos de ejemplo) y su Test de Zephyr, uno al lado del otro.
+        auto* jira = f.window->findChild<QPushButton*>(QStringLiteral("linkJira"));
+        auto* test = f.window->findChild<QPushButton*>(QStringLiteral("linkTest"));
+        QVERIFY(jira);
+        QVERIFY(test);
+        QCOMPARE(jira->text(), QStringLiteral("Historia SHOP-3"));
+        QCOMPARE(test->text(), QStringLiteral("Test SHOP-42"));
+        // Y dónde se publicó el ciclo.
+        auto* published = f.window->findChild<QLabel*>(QStringLiteral("planPublished"));
+        QVERIFY(published);
+        QVERIFY2(published->text().contains(QStringLiteral("77")), qPrintable(published->text()));
+        // Y se ve entero: apretado contra los botones de la cabecera se quedaba en "Publicado el 0".
+        QVERIFY2(published->width() >= published->sizeHint().width(),
+                 qPrintable(QStringLiteral("ancho %1 < necesario %2 · texto: %3")
+                                .arg(published->width()).arg(published->sizeHint().width()).arg(published->text())));
+
+        // El detalle de la ejecución dice lo mismo: sus enlaces y el ciclo en el que acabó.
+        history->showRun(saved.id);
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("linkTest")));
+        auto* cycle = f.window->findChild<QLabel*>(QStringLiteral("runZephyrCycle"));
+        QVERIFY(cycle);
+        QVERIFY2(cycle->text().contains(QStringLiteral("77")), qPrintable(cycle->text()));
+    }
+
+    // El caso enlaza su Test de Zephyr, y el que no lo tenga puede crearlo desde el propio caso.
+    void theCaseEditorCreatesItsZephyrTest() {
+        WindowFixture f;
+        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        f.app.store.select(QStringLiteral("TC-101"));
+        f.app.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) { c.testKey.clear(); });
+        f.window->navigate(Screen::Casos);
+
+        auto* key = f.window->findChild<QLineEdit*>(QStringLiteral("caseTestKey"));
+        auto* create = f.window->findChild<QPushButton*>(QStringLiteral("caseCreateTest"));
+        QVERIFY(key);
+        QVERIFY(create);
+        QVERIFY(create->isVisible());
+        QVERIFY(create->isEnabled());
+        QVERIFY(key->text().isEmpty());
+
+        create->click();
+        QTRY_COMPARE(f.app.zephyr->testsCreated.size(), 1);
+        // Viaja el caso, no sólo una clave: título, precondiciones y pasos.
+        QCOMPARE(f.app.zephyr->testsCreated[0].caseId, QStringLiteral("TC-101"));
+        QCOMPARE(f.app.zephyr->testsCreated[0].design.size(), f.app.store.find(QStringLiteral("TC-101"))->steps.size());
+        // Y el Test queda enlazado al caso, listo para reutilizarse en los ciclos siguientes.
+        QTRY_COMPARE(key->text(), QStringLiteral("SHOP-77"));
+        QCOMPARE(f.app.store.find(QStringLiteral("TC-101"))->testKey, QStringLiteral("SHOP-77"));
+        QVERIFY(!create->isVisible());
+
+        // Y una clave escrita a mano enlaza el caso con un Test que ya existía.
+        f.app.store.select(QStringLiteral("TC-102"));
+        QTest::keyClicks(key, QStringLiteral("shop-9"));
+        QCOMPARE(f.app.store.find(QStringLiteral("TC-102"))->testKey, QStringLiteral("SHOP-9"));
     }
 
     // Zephyr se activa en Ajustes y sólo se ofrece con Jira, que es donde vive el plugin.

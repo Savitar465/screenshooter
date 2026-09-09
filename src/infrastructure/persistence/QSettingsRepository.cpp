@@ -23,6 +23,7 @@ TrackerSettings QSettingsRepository::loadTracker() {
     t.connected = s.value(QStringLiteral("connected"), false).toBool();
     t.zephyr = s.value(QStringLiteral("zephyr"), false).toBool();
     t.zephyrVersion = s.value(QStringLiteral("zephyrVersion")).toString();
+    t.zephyrTestType = s.value(QStringLiteral("zephyrTestType")).toString();
     return t;
 }
 
@@ -37,6 +38,7 @@ void QSettingsRepository::saveTracker(const TrackerSettings& t) {
     s.setValue(QStringLiteral("connected"), t.connected);
     s.setValue(QStringLiteral("zephyr"), t.zephyr);
     s.setValue(QStringLiteral("zephyrVersion"), t.zephyrVersion);
+    s.setValue(QStringLiteral("zephyrTestType"), t.zephyrTestType);
     s.remove(QStringLiteral("email"));   // clave de versiones anteriores, ya migrada a "user"
     if (t.token.isEmpty()) s.remove(QStringLiteral("token"));
     else s.setValue(QStringLiteral("token"), t.token);   // sólo llega aquí sin llavero disponible

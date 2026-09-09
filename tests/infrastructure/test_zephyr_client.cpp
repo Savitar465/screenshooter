@@ -1,11 +1,13 @@
 // ZephyrClient (infrastructure/testmgmt/) contra un servidor HTTP falso: detección de la ruta de
-// la API (ZAPI pública o la del propio plugin), creación del ciclo con sus ids numéricos, estado
-// de cada ejecución, veredicto por paso y reparto de las evidencias entre ejecución y paso.
+// la API (ZAPI pública o la del propio plugin), creación del ciclo con sus ids numéricos, creación
+// del Test a partir del caso cuando todavía no existe, estado de cada ejecución, veredicto por paso
+// y reparto de las evidencias entre ejecución y paso.
 
 #include "support/FakeHttpServer.h"
 
 #include "infrastructure/testmgmt/ZephyrClient.h"
 
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
@@ -30,11 +32,20 @@ TrackerSettings settingsFor(const QString& url) {
     return s;
 }
 
-/// Proyecto SHOP = id 13500, con una versión "2.3.0" = id 10100.
-void routeProject(FakeHttpServer& server) {
-    server.route("GET", "/rest/api/2/project/SHOP", [](const HttpRequest&) {
-        return HttpResponse::json(200, "{\"id\":\"13500\",\"key\":\"SHOP\",\"versions\":[{\"id\":\"10100\",\"name\":\"2.3.0\",\"archived\":false}]}");
+/// Proyecto SHOP = id 13500, con una versión "2.3.0" = id 10100 y el tipo de incidencia Test = 10300.
+void routeProject(FakeHttpServer& server, const QByteArray& testType = "Test") {
+    server.route("GET", "/rest/api/2/project/SHOP", [testType](const HttpRequest&) {
+        return HttpResponse::json(200, "{\"id\":\"13500\",\"key\":\"SHOP\",\"versions\":[{\"id\":\"10100\",\"name\":\"2.3.0\",\"archived\":false}],"
+                                       "\"issueTypes\":[{\"id\":\"10000\",\"name\":\"Error\"},{\"id\":\"10300\",\"name\":\"" + testType + "\"}]}");
     });
+}
+
+/// Creación de Tests: Jira devuelve el issue nuevo (SHOP-77 = id 10700) y Zephyr acepta sus pasos.
+void routeTestCreation(FakeHttpServer& server, const QByteArray& api) {
+    server.route("POST", "/rest/api/2/issue", [](const HttpRequest&) {
+        return HttpResponse::json(200, "{\"id\":\"10700\",\"key\":\"SHOP-77\"}");
+    });
+    server.route("POST", api + "/teststep/10700", [](const HttpRequest&) { return HttpResponse::json(200, "{\"id\":1}"); });
 }
 
 PublishCase caseOf(const QString& id, const QString& testKey, Verdict verdict, const QList<StepResult>& steps) {
@@ -42,12 +53,16 @@ PublishCase caseOf(const QString& id, const QString& testKey, Verdict verdict, c
     c.caseId = id;
     c.testKey = testKey;
     c.title = QStringLiteral("Checkout");
+    c.preconditions = QStringLiteral("Carrito con dos artículos");
     c.verdict = verdict;
     for (auto r : steps) {
         RunRecordStep s;
+        s.action = QStringLiteral("Aplicar cupón");
+        s.expected = QStringLiteral("Descuenta");
         s.result = r;
         s.note = r == StepResult::Fail ? QStringLiteral("El cupón no descuenta") : QString();
         c.steps << s;
+        c.design << TestStep{s.action, s.expected};
     }
     return c;
 }
@@ -120,6 +135,8 @@ void routeZephyr(FakeHttpServer& server, const QByteArray& api, bool strictAccep
     route("PUT", api + "/stepResult/9002", [](const HttpRequest&) { return HttpResponse::json(200, "{}"); });
     // La subida de evidencias no contesta JSON, sino texto plano.
     route("POST", api + "/attachment", [](const HttpRequest&) { return HttpResponse{200, "Attachment added successfully", "text/plain", {}}; });
+    routeTestCreation(server, api);
+    // El Test ya enlazado a un caso (SHOP-42 = id 10600), que no hay que crear.
     route("GET", "/rest/api/2/issue/SHOP-42", [](const HttpRequest&) { return HttpResponse::json(200, "{\"id\":\"10600\",\"key\":\"SHOP-42\"}"); });
 }
 } // namespace
@@ -367,9 +384,80 @@ private slots:
         QVERIFY2(out.error.contains(QStringLiteral("POST /rest/zapi/latest/cycle")), qPrintable(out.error));
     }
 
-    void casesWithoutTestKeyAreSkippedButTheCycleIsPublished() {
+    // ---- El Test se crea a partir del caso -----------------------------------------------------
+
+    // El caso sin Test enlazado no se queda fuera del ciclo: se le crea uno con lo que dice el caso.
+    void createsTheTestFromTheCaseWhenItDoesNotHaveOneYet() {
         FakeHttpServer server;
         routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+
+        PublishCase c = caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {StepResult::Pass, StepResult::Pass});
+        c.title = QStringLiteral("Comprar con cupón");
+        c.design = {TestStep{QStringLiteral("Abrir carrito"), QStringLiteral("Se abre")},
+                    TestStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Descuenta")}};
+
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.publish(settingsFor(server.baseUrl()), requestOf({c}), [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.executions, 1);
+        QCOMPARE(out.testsCreated, 1);
+        // La clave del Test creado vuelve con el resultado para enlazarla al caso.
+        QCOMPARE(out.createdTests.value(QStringLiteral("TC-103")), QStringLiteral("SHOP-77"));
+        QVERIFY2(out.skipped.isEmpty(), qPrintable(out.skipped.join(QLatin1Char('\n'))));
+
+        auto find = [&](const QByteArray& method, const QByteArray& path) {
+            for (const auto& r : server.requests) if (r.method == method && r.path.startsWith(path)) return r;
+            return HttpRequest{};
+        };
+        // El Test se crea en el proyecto, con el tipo de incidencia Test y el título del caso.
+        const QJsonObject fields = bodyOf(find("POST", "/rest/api/2/issue"))[QStringLiteral("fields")].toObject();
+        QCOMPARE(fields[QStringLiteral("project")].toObject()[QStringLiteral("id")].toString(), QStringLiteral("13500"));
+        QCOMPARE(fields[QStringLiteral("issuetype")].toObject()[QStringLiteral("id")].toString(), QStringLiteral("10300"));
+        QCOMPARE(fields[QStringLiteral("summary")].toString(), QStringLiteral("Comprar con cupón"));
+        const QString description = fields[QStringLiteral("description")].toString();
+        QVERIFY(description.contains(QStringLiteral("Carrito con dos artículos")));   // las precondiciones del caso
+        QVERIFY(description.contains(QStringLiteral("TC-103")));                      // y de qué caso salió
+        // Etiquetado como los defectos que crea QAflow, y con el id del caso del que salió.
+        const QJsonArray labels = fields[QStringLiteral("labels")].toArray();
+        QVERIFY(labels.contains(QJsonValue(QStringLiteral("qaflow"))));
+        QVERIFY(labels.contains(QJsonValue(QStringLiteral("TC-103"))));
+        // Y los pasos del caso son los pasos del Test, en su orden.
+        QStringList stepActions;
+        for (const auto& r : server.requests)
+            if (r.method == "POST" && r.path == "/rest/zapi/latest/teststep/10700") stepActions << bodyOf(r)[QStringLiteral("step")].toString();
+        QCOMPARE(stepActions, QStringList({QStringLiteral("Abrir carrito"), QStringLiteral("Aplicar cupón")}));
+        QCOMPARE(bodyOf(find("POST", "/rest/zapi/latest/teststep/10700"))[QStringLiteral("result")].toString(), QStringLiteral("Se abre"));
+        // La ejecución va con el id del Test recién creado.
+        QCOMPARE(bodyOf(find("POST", "/rest/zapi/latest/execution"))[QStringLiteral("issueId")].toString(), QStringLiteral("10700"));
+    }
+
+    // En un Jira traducido el tipo se llama de otra manera: el de los ajustes es el que manda.
+    void createsTheTestWithTheIssueTypeFromTheSettings() {
+        FakeHttpServer server;
+        routeProject(server, "Prueba");
+        routeZephyr(server, "/rest/zapi/latest");
+
+        TrackerSettings s = settingsFor(server.baseUrl());
+        s.zephyrTestType = QStringLiteral("Prueba");
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.publish(s, requestOf({caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {StepResult::Pass})}),
+                       [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.testsCreated, 1);
+    }
+
+    // Sin ese tipo de incidencia no hay Test que crear: se dice con su nombre y el ciclo sigue con
+    // los casos que ya lo tienen enlazado.
+    void saysSoWhenTheProjectHasNoTestIssueType() {
+        FakeHttpServer server;
+        routeProject(server, "Prueba");     // el proyecto no tiene ningún tipo llamado "Test"
         routeZephyr(server, "/rest/zapi/latest");
         const PublishRequest req = requestOf({caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {StepResult::Pass}),
                                               caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado, {StepResult::Pass})});
@@ -379,9 +467,93 @@ private slots:
         client.publish(settingsFor(server.baseUrl()), req, [&](const PublishResult& r) { out = r; done = true; });
         QTRY_VERIFY(done);
         QVERIFY(out.ok);
-        QCOMPARE(out.executions, 1);
+        QCOMPARE(out.executions, 1);        // el caso que ya tenía su Test sí se publica
+        QCOMPARE(out.testsCreated, 0);
         QCOMPARE(out.skipped.size(), 1);
         QVERIFY(out.skipped[0].contains(QStringLiteral("TC-103")));
+        QVERIFY2(out.skipped[0].contains(QStringLiteral("Test")), qPrintable(out.skipped[0]));
+    }
+
+    // Que Jira rechace el Test de un caso no tira el ciclo: se anota y se sigue con el siguiente.
+    void aCaseWhoseTestCannotBeCreatedIsSkippedButTheCycleIsPublished() {
+        FakeHttpServer server;
+        routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+        server.route("POST", "/rest/api/2/issue", [](const HttpRequest&) {
+            return HttpResponse::json(400, "{\"errors\":{\"summary\":\"El resumen es obligatorio\"}}");
+        });
+        const PublishRequest req = requestOf({caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {StepResult::Pass}),
+                                              caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado, {StepResult::Pass})});
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.publish(settingsFor(server.baseUrl()), req, [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(out.executions, 1);        // el siguiente caso sí se publica
+        QCOMPARE(out.testsCreated, 0);
+        QCOMPARE(out.skipped.size(), 1);
+        QVERIFY(out.skipped[0].contains(QStringLiteral("TC-103")));
+    }
+
+    // El caso que ya trae su clave no estrena Test: se ejecuta el que ya tiene enlazado.
+    void aCaseThatAlreadyHasItsTestDoesNotCreateAnother() {
+        FakeHttpServer server;
+        routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.publish(settingsFor(server.baseUrl()), requestOf({caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado, {StepResult::Pass})}),
+                       [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.executions, 1);
+        QCOMPARE(out.testsCreated, 0);
+        QVERIFY(out.createdTests.isEmpty());
+        for (const auto& r : server.requests) QVERIFY(r.path != "/rest/api/2/issue");
+    }
+
+    // El editor del caso crea su Test sin publicar ningún ciclo: mismo issue, mismos pasos.
+    void createsTheTestOfASingleCaseWithoutACycle() {
+        FakeHttpServer server;
+        routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+
+        PublishCase c = caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {});
+        c.title = QStringLiteral("Comprar con cupón");
+        c.design = {TestStep{QStringLiteral("Abrir carrito"), QStringLiteral("Se abre")},
+                    TestStep{QStringLiteral("Pagar"), QStringLiteral("Se confirma")}};
+
+        ZephyrClient client;
+        CreateTestResult out;
+        bool done = false;
+        client.createTest(settingsFor(server.baseUrl()), c, [&](const CreateTestResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.key, QStringLiteral("SHOP-77"));
+        QVERIFY(out.skipped.isEmpty());
+        int steps = 0;
+        for (const auto& r : server.requests) {
+            if (r.method == "POST" && r.path == "/rest/zapi/latest/teststep/10700") ++steps;
+            QVERIFY(r.path != "/rest/zapi/latest/cycle");   // no se crea ningún ciclo por el camino
+        }
+        QCOMPARE(steps, 2);
+    }
+
+    void aSingleTestSaysWhyItCouldNotBeCreated() {
+        FakeHttpServer server;
+        routeProject(server, "Prueba");   // el proyecto no tiene ningún tipo llamado "Test"
+        routeZephyr(server, "/rest/zapi/latest");
+        ZephyrClient client;
+        CreateTestResult out;
+        bool done = false;
+        client.createTest(settingsFor(server.baseUrl()), caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {}),
+                          [&](const CreateTestResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY2(out.error.contains(QStringLiteral("Test")), qPrintable(out.error));
+        for (const auto& r : server.requests) QVERIFY(r.path != "/rest/api/2/issue");
     }
 
     void unknownVersionStopsThePublicationBeforeCreatingAnything() {
@@ -454,7 +626,7 @@ private slots:
         QVERIFY(!out.retryable);
     }
 
-    // El Test de Zephyr y el caso de QAflow se editan por separado: si el Test tiene menos pasos,
+    // El Test enlazado y el caso de QAflow se editan por separado: si el Test tiene menos pasos,
     // los veredictos que sobran no se pierden en silencio.
     void stepsWithNoCounterpartInTheZephyrTestAreReported() {
         FakeHttpServer server;

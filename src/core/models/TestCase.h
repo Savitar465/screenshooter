@@ -65,7 +65,10 @@ struct TestCase {
     QStringList tags;           // etiquetas libres: "regresión", "smoke"…
     QString component;          // módulo o componente del producto
     QString jiraKey;            // historia o épica enlazada: SHOP-12
-    QString testKey;            // issue de tipo Test que representa el caso en Zephyr: SHOP-42
+    /// Issue de tipo Test que representa el caso en Zephyr (SHOP-42). El caso es reutilizable —se
+    /// ejecuta muchas veces y en varios planes—, así que su Test es siempre el mismo: se enlaza a
+    /// mano o lo estrena QAflow al publicar el primer ciclo, y desde ahí se reutiliza.
+    QString testKey;
 
     int unassignedShots() const;
     bool readyToBeMarkedListo() const;

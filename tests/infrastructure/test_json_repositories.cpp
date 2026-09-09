@@ -117,6 +117,7 @@ private slots:
         PlanRun p;
         p.id = QStringLiteral("PR-0001"); p.planId = QStringLiteral("PL-0001"); p.name = QStringLiteral("Regresión"); p.caseIds = {QStringLiteral("TC-104")};
         p.startedAt = r.startedAt; p.finishedAt = r.finishedAt;
+        p.zephyrCycleId = QStringLiteral("77"); p.publishedAt = r.finishedAt.addSecs(600);
         h.plans << p;
         QVERIFY(repo.saveHistory(h));
         const auto loaded = repo.loadHistory();
@@ -131,6 +132,10 @@ private slots:
         QCOMPARE(loaded->plans.size(), 1);
         QCOMPARE(loaded->plans[0].planId, QStringLiteral("PL-0001"));
         QVERIFY(loaded->plans[0].isFinished());
+        // Dónde se publicaron esos resultados sobrevive al cierre de la aplicación.
+        QVERIFY(loaded->plans[0].isPublished());
+        QCOMPARE(loaded->plans[0].zephyrCycleId, QStringLiteral("77"));
+        QCOMPARE(loaded->plans[0].publishedAt, p.publishedAt);
     }
 
     void sessionIsSavedAndCleared() {

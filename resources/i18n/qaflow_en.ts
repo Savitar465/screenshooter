@@ -437,6 +437,18 @@
         <source>Token personal (Jira 8.14 o superior)</source>
         <translation>Personal access token (Jira 8.14 or later)</translation>
     </message>
+    <message>
+        <source>- **Ciclo de Zephyr:** %1 · publicado el %2</source>
+        <translation>- **Zephyr cycle:** %1 · published on %2</translation>
+    </message>
+    <message>
+        <source>**Historia:** %1</source>
+        <translation>**Story:** %1</translation>
+    </message>
+    <message>
+        <source>**Test:** %1</source>
+        <translation>**Test:** %1</translation>
+    </message>
 </context>
 <context>
     <name>infrastructure</name>
@@ -661,14 +673,6 @@
         <translation>Zephyr did not return the id of the new cycle</translation>
     </message>
     <message>
-        <source>%1: sin clave de Test</source>
-        <translation>%1: no Test key</translation>
-    </message>
-    <message>
-        <source>%1: no se encontró el Test %2</source>
-        <translation>%1: Test %2 was not found</translation>
-    </message>
-    <message>
         <source>%1: no se pudo añadir al ciclo · %2</source>
         <translation>%1: could not be added to the cycle · %2</translation>
     </message>
@@ -703,6 +707,38 @@
     <message>
         <source>%1: no se pudo leer %2</source>
         <translation>%1: could not read %2</translation>
+    </message>
+    <message>
+        <source>Creado por QAflow a partir del caso %1</source>
+        <translation>Created by QAflow from case %1</translation>
+    </message>
+    <message>
+        <source> · el proyecto no tiene el tipo de incidencia «%1»</source>
+        <translation> · the project has no “%1” issue type</translation>
+    </message>
+    <message>
+        <source>%1: el proyecto no tiene el tipo de incidencia «%2» con el que crear el Test</source>
+        <translation>%1: the project has no “%2” issue type to create the Test with</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo crear el Test · %2</source>
+        <translation>%1: could not create the Test · %2</translation>
+    </message>
+    <message>
+        <source>Jira no devolvió el issue creado</source>
+        <translation>Jira did not return the new issue</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo crear el paso %2 del Test · %3</source>
+        <translation>%1: could not create step %2 of the Test · %3</translation>
+    </message>
+    <message>
+        <source>%1: no se encontró el Test %2</source>
+        <translation>%1: Test %2 was not found</translation>
+    </message>
+    <message>
+        <source>El proyecto no tiene el tipo de incidencia «%1» con el que crear el Test</source>
+        <translation>The project has no “%1” issue type to create the Test with</translation>
     </message>
 </context>
 <context>
@@ -1459,12 +1495,52 @@
         <translation>Attach existing logs, videos or images (you can also drag them onto the window)</translation>
     </message>
     <message>
-        <source>Issue de tipo Test que representa este caso en Zephyr. Sin él, el caso no se publica en el ciclo</source>
-        <translation>The Test issue that stands for this case in Zephyr. Without it the case is left out of the cycle</translation>
+        <source>Issue de tipo Test que representa este caso en Zephyr; se reutiliza en todos sus ciclos. Vacío: se crea al publicar, o aquí mismo con «Crear»</source>
+        <translation>The Test issue that stands for this case in Zephyr; every cycle reuses it. Leave it empty and it is created when publishing, or right here with “Create”</translation>
+    </message>
+    <message>
+        <source>Abrir el Test en Jira</source>
+        <translation>Open the Test in Jira</translation>
+    </message>
+    <message>
+        <source>Crear</source>
+        <translation>Create</translation>
     </message>
     <message>
         <source>Test de Zephyr</source>
         <translation>Zephyr Test</translation>
+    </message>
+    <message>
+        <source>Creando…</source>
+        <translation>Creating…</translation>
+    </message>
+    <message>
+        <source>Crear el Test en Zephyr con el título, las precondiciones y los pasos de este caso</source>
+        <translation>Create the Test in Zephyr with this case&apos;s title, preconditions and steps</translation>
+    </message>
+    <message>
+        <source>Activa la publicación en Zephyr en Ajustes para crear el Test de este caso</source>
+        <translation>Turn on publishing to Zephyr in Settings to create this case&apos;s Test</translation>
+    </message>
+    <message>
+        <source>Creando en Zephyr el Test de %1…</source>
+        <translation>Creating the Test of %1 in Zephyr…</translation>
+    </message>
+    <message>
+        <source>No se pudo crear el Test de %1 · %2</source>
+        <translation>Could not create the Test of %1 · %2</translation>
+    </message>
+    <message>
+        <source> · vuelve a intentarlo</source>
+        <translation> · try again</translation>
+    </message>
+    <message>
+        <source>Test %1 creado en Zephyr a partir de %2</source>
+        <translation>Test %1 created in Zephyr from %2</translation>
+    </message>
+    <message>
+        <source>Test %1 creado · %2 pasos se quedaron fuera</source>
+        <translation>Test %1 created · %2 steps were left out</translation>
     </message>
 </context>
 <context>
@@ -1776,30 +1852,12 @@
         <translation>The cycle “%1” will be created in Zephyr with %2 executions.</translation>
     </message>
     <message>
-        <source>
-
-Quedan fuera %1 casos sin clave de Test: %2.
-Indícala en el editor del caso para incluirlos.</source>
-        <translation>
-
-%1 cases are left out for having no Test key: %2.
-Set it in the case editor to include them.</translation>
-    </message>
-    <message>
-        <source>Ningún caso del ciclo tiene clave de Test de Zephyr</source>
-        <translation>No case in the cycle has a Zephyr Test key</translation>
-    </message>
-    <message>
         <source>Publicando en Zephyr…</source>
         <translation>Publishing to Zephyr…</translation>
     </message>
     <message>
         <source>No se pudo publicar en Zephyr · %1</source>
         <translation>Could not publish to Zephyr · %1</translation>
-    </message>
-    <message>
-        <source>Ciclo publicado en Zephyr · %1 ejecuciones, %2 pasos, %3 evidencias</source>
-        <translation>Cycle published to Zephyr · %1 executions, %2 steps, %3 attachments</translation>
     </message>
     <message>
         <source> · %1 sin publicar</source>
@@ -1816,6 +1874,64 @@ Set it in the case editor to include them.</translation>
     <message>
         <source>El ciclo se creó en Zephyr, pero %1 cosas se quedaron fuera.</source>
         <translation>The cycle was created in Zephyr, but %1 things were left out.</translation>
+    </message>
+    <message>
+        <source>El ciclo no tiene ninguna ejecución que publicar</source>
+        <translation>The cycle has no executions to publish</translation>
+    </message>
+    <message>
+        <source> · %1 Tests creados</source>
+        <translation> · %1 Tests created</translation>
+    </message>
+    <message>
+        <source>
+
+Antes se crearán en Jira %1 Tests, a partir de los casos que aún no tienen uno enlazado: %2.
+Su clave quedará en el caso y se reutilizará en los ciclos siguientes.</source>
+        <translation>
+
+%1 Tests will be created in Jira first, from the cases that have none linked yet: %2.
+Their key stays in the case and is reused by later cycles.</translation>
+    </message>
+    <message>
+        <source>
+
+OJO: estos resultados ya se publicaron el %1 (ciclo %2). Se creará un ciclo nuevo, no se actualiza aquél.</source>
+        <translation>
+
+HEADS-UP: these results were already published on %1 (cycle %2). A new cycle will be created; that one is not updated.</translation>
+    </message>
+    <message>
+        <source>Ciclo %1 publicado en Zephyr · %2 ejecuciones, %3 pasos, %4 evidencias</source>
+        <translation>Cycle %1 published to Zephyr · %2 executions, %3 steps, %4 pieces of evidence</translation>
+    </message>
+    <message>
+        <source>· Zephyr · ciclo %1</source>
+        <translation>· Zephyr · cycle %1</translation>
+    </message>
+    <message>
+        <source>Historia</source>
+        <translation>Story</translation>
+    </message>
+    <message>
+        <source>Abrir en Jira la historia enlazada al caso</source>
+        <translation>Open the story linked to the case in Jira</translation>
+    </message>
+    <message>
+        <source>Test</source>
+        <translation>Test</translation>
+    </message>
+    <message>
+        <source>Abrir en Jira el Test de Zephyr sobre el que se publican las ejecuciones de este caso</source>
+        <translation>Open in Jira the Zephyr Test this case&apos;s executions are published on</translation>
+    </message>
+    <message>
+        <source>Publicado en Zephyr el %1 · ciclo %2</source>
+        <translation>Published to Zephyr on %1 · cycle %2</translation>
+    </message>
+    <message>
+        <source>Publicado en Zephyr · ciclo %1</source>
+        <translation>Published to Zephyr · cycle %1</translation>
     </message>
 </context>
 <context>
@@ -3014,10 +3130,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <translation>Project version</translation>
     </message>
     <message>
-        <source>Cada caso publica su issue de tipo Test (campo «Test de Zephyr» del caso); los que no lo tengan se quedan fuera del ciclo.</source>
-        <translation>Each case publishes its Test issue (the case&apos;s “Zephyr Test” field); those without one are left out of the cycle.</translation>
-    </message>
-    <message>
         <source>Zephyr for Jira: los ciclos y sus ejecuciones se crean en la misma instancia con estas credenciales.</source>
         <translation>Zephyr for Jira: cycles and their executions are created on the same instance with these credentials.</translation>
     </message>
@@ -3032,6 +3144,18 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>No se pudo hablar con Zephyr · %1</source>
         <translation>Could not reach Zephyr · %1</translation>
+    </message>
+    <message>
+        <source>Tipo de incidencia con el que se crean los Tests; vacío usa «Test», el que instala Zephyr</source>
+        <translation>Issue type the Tests are created with; empty uses “Test”, the one Zephyr installs</translation>
+    </message>
+    <message>
+        <source>Tipo de incidencia del Test</source>
+        <translation>Test issue type</translation>
+    </message>
+    <message>
+        <source>Cada caso publica su ejecución sobre el issue de tipo Test que tiene enlazado; el que aún no lo tenga lo estrena a partir del caso (título, precondiciones y pasos) y su clave se guarda en el campo «Test de Zephyr».</source>
+        <translation>Each case publishes its execution on the Test issue it is linked to; the one with none yet gets a brand-new Test made from the case (title, preconditions and steps) and its key is saved in the “Zephyr Test” field.</translation>
     </message>
 </context>
 <context>
@@ -3231,6 +3355,14 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>Activa Zephyr en Ajustes para publicar los ciclos</source>
         <translation>Turn Zephyr on in Settings to publish cycles</translation>
+    </message>
+    <message>
+        <source>Activa Zephyr en Ajustes para crear el Test del caso</source>
+        <translation>Turn on Zephyr in Settings to create the case&apos;s Test</translation>
+    </message>
+    <message>
+        <source>El caso ya no existe</source>
+        <translation>The case no longer exists</translation>
     </message>
 </context>
 <context>

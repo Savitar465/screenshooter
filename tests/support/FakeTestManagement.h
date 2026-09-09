@@ -12,6 +12,9 @@ public:
     bool reachable = true;
     QList<PublishRequest> published;
     PublishResult resultToReturn;
+    /// Casos a los que se les ha pedido el Test desde el editor, y lo que se contesta.
+    QList<PublishCase> testsCreated;
+    CreateTestResult createResultToReturn;
 
     void testConnection(const TrackerSettings&, std::function<void(const ConnectionResult&)> done) override {
         if (reachable) done(ConnectionResult{true, QStringLiteral("API de Zephyr en /rest/zephyr/latest"), {}});
@@ -25,6 +28,16 @@ public:
             r.ok = true;
             r.cycleId = QStringLiteral("77");
             r.executions = request.cases.size();
+        }
+        done(r);
+    }
+
+    void createTest(const TrackerSettings&, const PublishCase& c, std::function<void(const CreateTestResult&)> done) override {
+        testsCreated << c;
+        CreateTestResult r = createResultToReturn;
+        if (!r.ok && r.error.isEmpty()) {
+            r.ok = true;
+            r.key = QStringLiteral("SHOP-77");
         }
         done(r);
     }

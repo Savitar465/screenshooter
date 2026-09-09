@@ -41,6 +41,9 @@ struct TrackerSettings {
     /// Publicar los ciclos de plan en Zephyr for Jira (misma instancia y credenciales). Sólo con Jira.
     bool zephyr = false;
     QString zephyrVersion;   // versión del proyecto a la que van los ciclos; vacío = sin programar
+    /// Tipo de incidencia con el que se crean los Tests que faltan; vacío = "Test", el que instala
+    /// Zephyr (en un Jira traducido puede llamarse de otra manera).
+    QString zephyrTestType;
 
     QString baseUrl() const;                    // url sin barra final
     QString issueUrl(const QString& key) const; // enlace al issue en el navegador

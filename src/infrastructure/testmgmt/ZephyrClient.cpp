@@ -29,8 +29,7 @@ struct ZephyrClient::Job {
     PublishRequest request;
     std::function<void(const PublishResult&)> done;
     PublishResult result;
-    QString projectId;
-    QString versionId = QString::fromLatin1(kUnscheduled);
+    Project project;
     QString locale;            // la del usuario de Jira, para las fechas del ciclo
     int index = 0;             // caso que se está publicando
     QString executionId;       // ejecución del caso en curso
@@ -79,6 +78,21 @@ QString ZephyrClient::cycleDate(const QDateTime& dt, const QString& jiraLocale) 
     return QStringLiteral("%1/%2/%3").arg(QString::number(date.day()),
                                           locale.toString(date, QStringLiteral("MMM")).left(3),
                                           QString::number(date.year() % 100).rightJustified(2, QLatin1Char('0')));
+}
+
+QString ZephyrClient::testTypeName(const TrackerSettings& s) {
+    const QString configured = s.zephyrTestType.trimmed();
+    // "Test" es el tipo de incidencia que instala Zephyr; en un Jira traducido se llama de otra
+    // manera y entonces lo dicen los ajustes.
+    return configured.isEmpty() ? QStringLiteral("Test") : configured;
+}
+
+QString ZephyrClient::testDescription(const PublishCase& c) {
+    QStringList parts;
+    if (!c.preconditions.trimmed().isEmpty()) parts << c.preconditions.trimmed();
+    // De dónde salió el Test: el caso de QAflow es el original, y así se sabe cuál editar.
+    parts << QCoreApplication::translate("infrastructure", "Creado por QAflow a partir del caso %1").arg(c.caseId);
+    return parts.join(QStringLiteral("\n\n"));
 }
 
 QNetworkRequest ZephyrClient::jira(const TrackerSettings& s, const QString& path) const {
@@ -133,40 +147,63 @@ void ZephyrClient::detect(const TrackerSettings& s, const QString& projectId, in
     });
 }
 
+void ZephyrClient::ensureApi(const TrackerSettings& s, const QString& projectId,
+                             std::function<void(bool, const QString&, bool)> done) {
+    if (!m_api.isEmpty() && m_apiFor == s.baseUrl()) { done(true, {}, false); return; }
+    detect(s, projectId, 0, std::move(done));
+}
+
 void ZephyrClient::resolveProject(const TrackerSettings& s, const QString& versionName,
-                                  std::function<void(bool, const QString&, const QString&, const QString&)> done) {
-    if (s.project.trimmed().isEmpty()) { done(false, {}, {}, QCoreApplication::translate("infrastructure", "Indica la clave del proyecto")); return; }
-    // Zephyr trabaja con ids numéricos, no con claves: hay que traducir SHOP → 13500 y la versión a su id.
-    get(jira(s, QStringLiteral("/rest/api/2/project/%1").arg(s.project.trimmed())), [versionName, done](const Response& r) {
-        if (!r.ok) { done(false, {}, {}, r.error); return; }
+                                  std::function<void(bool, const Project&, const QString&)> done) {
+    if (s.project.trimmed().isEmpty()) { done(false, {}, QCoreApplication::translate("infrastructure", "Indica la clave del proyecto")); return; }
+    // Zephyr trabaja con ids numéricos, no con claves: hay que traducir SHOP → 13500, la versión a
+    // su id y el tipo de incidencia "Test" al suyo, que es con el que se crean los Tests que faltan.
+    const QString typeWanted = testTypeName(s);
+    get(jira(s, QStringLiteral("/rest/api/2/project/%1").arg(s.project.trimmed())), [versionName, typeWanted, done](const Response& r) {
+        if (!r.ok) { done(false, {}, r.error); return; }
         const QJsonObject p = r.json.object();
-        const QString projectId = p[QStringLiteral("id")].toString();
-        if (projectId.isEmpty()) { done(false, {}, {}, QCoreApplication::translate("infrastructure", "Jira no devolvió el id del proyecto")); return; }
-        QString versionId = QString::fromLatin1(kUnscheduled);
+        Project project;
+        project.id = p[QStringLiteral("id")].toString();
+        project.versionId = QString::fromLatin1(kUnscheduled);
+        if (project.id.isEmpty()) { done(false, {}, QCoreApplication::translate("infrastructure", "Jira no devolvió el id del proyecto")); return; }
         const QString wanted = versionName.trimmed();
         if (!wanted.isEmpty()) {
             for (const auto& v : p[QStringLiteral("versions")].toArray()) {
                 const QJsonObject ver = v.toObject();
                 if (ver[QStringLiteral("name")].toString().compare(wanted, Qt::CaseInsensitive) == 0) {
-                    versionId = ver[QStringLiteral("id")].toString();
+                    project.versionId = ver[QStringLiteral("id")].toString();
                     break;
                 }
             }
-            if (versionId == QString::fromLatin1(kUnscheduled)) {
-                done(false, {}, {}, QCoreApplication::translate("infrastructure", "El proyecto no tiene la versión indicada: %1").arg(wanted));
+            if (project.versionId == QString::fromLatin1(kUnscheduled)) {
+                done(false, {}, QCoreApplication::translate("infrastructure", "El proyecto no tiene la versión indicada: %1").arg(wanted));
                 return;
             }
         }
-        done(true, projectId, versionId, {});
+        // Que el tipo no esté no impide publicar los casos que ya traen su Test: sólo se echa en
+        // falta al crear uno, y allí se dice con su nombre.
+        for (const auto& t : p[QStringLiteral("issueTypes")].toArray()) {
+            const QJsonObject type = t.toObject();
+            if (type[QStringLiteral("name")].toString().compare(typeWanted, Qt::CaseInsensitive) == 0) {
+                project.testTypeId = type[QStringLiteral("id")].toString();
+                break;
+            }
+        }
+        done(true, project, {});
     });
 }
 
 void ZephyrClient::testConnection(const TrackerSettings& s, std::function<void(const ConnectionResult&)> done) {
-    resolveProject(s, QString(), [this, s, done](bool ok, const QString& projectId, const QString&, const QString& error) {
+    resolveProject(s, QString(), [this, s, done](bool ok, const Project& project, const QString& error) {
         if (!ok) { done(ConnectionResult{false, {}, error}); return; }
-        detect(s, projectId, 0, [this, done](bool found, const QString& error, bool) {
+        detect(s, project.id, 0, [this, s, project, done](bool found, const QString& error, bool) {
             if (!found) { done(ConnectionResult{false, {}, error}); return; }
-            done(ConnectionResult{true, QCoreApplication::translate("infrastructure", "API de Zephyr en %1").arg(m_api), {}});
+            QString where = QCoreApplication::translate("infrastructure", "API de Zephyr en %1").arg(m_api);
+            // Sin ese tipo de incidencia no se pueden crear los Tests que faltan: mejor saberlo aquí
+            // que caso por caso al publicar.
+            if (project.testTypeId.isEmpty())
+                where += QCoreApplication::translate("infrastructure", " · el proyecto no tiene el tipo de incidencia «%1»").arg(testTypeName(s));
+            done(ConnectionResult{true, where, {}});
         });
     });
 }
@@ -183,13 +220,10 @@ void ZephyrClient::publish(const TrackerSettings& s, const PublishRequest& reque
         job->finish();
         return;
     }
-    resolveProject(s, request.versionName, [this, job](bool ok, const QString& projectId, const QString& versionId, const QString& error) {
+    resolveProject(s, request.versionName, [this, job](bool ok, const Project& project, const QString& error) {
         if (!ok) { job->result.error = error; job->finish(); return; }
-        job->projectId = projectId;
-        job->versionId = versionId;
-        const bool detected = !m_api.isEmpty() && m_apiFor == job->settings.baseUrl();
-        if (detected) { resolveLocale(job, [this, job]() { createCycle(job); }); return; }
-        detect(job->settings, projectId, 0, [this, job](bool found, const QString& detectError, bool retryable) {
+        job->project = project;
+        ensureApi(job->settings, project.id, [this, job](bool found, const QString& detectError, bool retryable) {
             if (!found) { job->result.error = detectError; job->result.retryable = retryable; job->finish(); return; }
             resolveLocale(job, [this, job]() { createCycle(job); });
         });
@@ -210,8 +244,8 @@ void ZephyrClient::resolveLocale(const std::shared_ptr<Job>& job, std::function<
 void ZephyrClient::createCycle(const std::shared_ptr<Job>& job, bool withDates) {
     const QJsonObject body{
         {"name", job->request.cycleName},
-        {"projectId", job->projectId},
-        {"versionId", job->versionId},
+        {"projectId", job->project.id},
+        {"versionId", job->project.versionId},
         {"description", job->request.description},
         {"startDate", withDates ? cycleDate(job->request.startedAt, job->locale) : QString()},
         {"endDate", withDates ? cycleDate(job->request.finishedAt, job->locale) : QString()},
@@ -246,12 +280,8 @@ void ZephyrClient::nextCase(const std::shared_ptr<Job>& job) {
         return;
     }
     const PublishCase& c = job->current();
-    if (c.testKey.trimmed().isEmpty()) {
-        job->skip(QCoreApplication::translate("infrastructure", "%1: sin clave de Test").arg(c.caseId));
-        ++job->index;
-        nextCase(job);
-        return;
-    }
+    // El caso manda: si todavía no está enlazado a un Test, se le crea uno a partir de él.
+    if (c.testKey.trimmed().isEmpty()) { createTestForCase(job); return; }
     // Zephyr crea la ejecución con el id numérico del issue, no con su clave.
     get(jira(job->settings, QStringLiteral("/rest/api/2/issue/%1?fields=id").arg(c.testKey.trimmed())), [this, job](const Response& r) {
         const PublishCase& c = job->current();
@@ -265,12 +295,106 @@ void ZephyrClient::nextCase(const std::shared_ptr<Job>& job) {
     });
 }
 
+void ZephyrClient::postTestIssue(const TrackerSettings& s, const Project& project, const PublishCase& c,
+                                 std::function<void(bool, const QString&, const QString&, const QString&, bool)> done) {
+    const QJsonObject fields{
+        {"project", QJsonObject{{"id", project.id}}},
+        {"issuetype", QJsonObject{{"id", project.testTypeId}}},
+        {"summary", c.title},
+        {"description", testDescription(c)},
+        // Las mismas etiquetas con las que JiraClient crea los defectos: buscar "qaflow" en Jira
+        // saca lo que ha salido de aquí, y el id del caso lo empareja con su original.
+        {"labels", QJsonArray{QStringLiteral("qaflow"), c.caseId}},
+    };
+    postJson(jira(s, QStringLiteral("/rest/api/2/issue")), QJsonDocument(QJsonObject{{"fields", fields}}), [done](const Response& r) {
+        const QString issueId = r.json.object()[QStringLiteral("id")].toString();
+        if (!r.ok) { done(false, {}, {}, r.error, r.retryable); return; }
+        if (issueId.isEmpty()) {
+            done(false, {}, {}, QCoreApplication::translate("infrastructure", "Jira no devolvió el issue creado"), false);
+            return;
+        }
+        done(true, issueId, r.json.object()[QStringLiteral("key")].toString(), {}, false);
+    });
+}
+
+void ZephyrClient::postTestSteps(const TrackerSettings& s, const QString& issueId, const PublishCase& c, int step,
+                                 const QStringList& failed, std::function<void(const QStringList&)> done) {
+    if (step >= c.design.size()) { done(failed); return; }
+    const TestStep& design = c.design[step];
+    // El paso de Zephyr son tres campos; QAflow no tiene datos de prueba aparte de la acción.
+    const QJsonObject body{
+        {"step", design.action},
+        {"data", QString()},
+        {"result", design.expected},
+    };
+    postJson(zephyr(s, QStringLiteral("/teststep/%1").arg(issueId)), QJsonDocument(body), [this, s, issueId, c, step, failed, done](const Response& r) {
+        // Un paso que no entra no tira el Test: se anota y se sigue con el resto, que valen igual.
+        QStringList sofar = failed;
+        if (!r.ok)
+            sofar << QCoreApplication::translate("infrastructure", "%1: no se pudo crear el paso %2 del Test · %3")
+                         .arg(c.caseId, QString::number(step + 1), r.error);
+        postTestSteps(s, issueId, c, step + 1, sofar, done);
+    });
+}
+
+void ZephyrClient::createTest(const TrackerSettings& s, const PublishCase& c, std::function<void(const CreateTestResult&)> done) {
+    resolveProject(s, QString(), [this, s, c, done](bool ok, const Project& project, const QString& error) {
+        if (!ok) { done(CreateTestResult{false, {}, {}, error, false}); return; }
+        if (project.testTypeId.isEmpty()) {
+            done(CreateTestResult{false, {}, {}, QCoreApplication::translate("infrastructure", "El proyecto no tiene el tipo de incidencia «%1» con el que crear el Test")
+                                                     .arg(testTypeName(s)), false});
+            return;
+        }
+        // Los pasos van por la API de Zephyr, así que hay que saber por qué ruta responde.
+        ensureApi(s, project.id, [this, s, c, project, done](bool found, const QString& detectError, bool retryable) {
+            if (!found) { done(CreateTestResult{false, {}, {}, detectError, retryable}); return; }
+            postTestIssue(s, project, c, [this, s, c, done](bool created, const QString& issueId, const QString& key,
+                                                            const QString& error, bool retryable) {
+                if (!created) { done(CreateTestResult{false, {}, {}, error, retryable}); return; }
+                postTestSteps(s, issueId, c, 0, {}, [key, done](const QStringList& failed) {
+                    done(CreateTestResult{true, key, failed, {}, false});
+                });
+            });
+        });
+    });
+}
+
+void ZephyrClient::createTestForCase(const std::shared_ptr<Job>& job) {
+    const PublishCase& c = job->current();
+    if (job->project.testTypeId.isEmpty()) {
+        job->skip(QCoreApplication::translate("infrastructure", "%1: el proyecto no tiene el tipo de incidencia «%2» con el que crear el Test")
+                      .arg(c.caseId, testTypeName(job->settings)));
+        ++job->index;
+        nextCase(job);
+        return;
+    }
+    postTestIssue(job->settings, job->project, c, [this, job](bool created, const QString& issueId, const QString& key,
+                                                              const QString& error, bool) {
+        const PublishCase& c = job->current();
+        if (!created) {
+            job->skip(QCoreApplication::translate("infrastructure", "%1: no se pudo crear el Test · %2").arg(c.caseId, error));
+            ++job->index;
+            nextCase(job);
+            return;
+        }
+        ++job->result.testsCreated;
+        job->result.createdTests.insert(c.caseId, key);
+        // La clave recién creada también vale para los avisos que vienen después de este punto.
+        job->request.cases[job->index].testKey = key;
+        postTestSteps(job->settings, issueId, c, 0, {}, [this, job, issueId](const QStringList& failed) {
+            // El veredicto del paso que no llegó a existir se cuenta luego, al leer los resultados.
+            job->result.skipped += failed;
+            executeCase(job, issueId);
+        });
+    });
+}
+
 void ZephyrClient::executeCase(const std::shared_ptr<Job>& job, const QString& issueId) {
     const QJsonObject body{
         {"issueId", issueId},
-        {"versionId", job->versionId},
+        {"versionId", job->project.versionId},
         {"cycleId", job->result.cycleId},
-        {"projectId", job->projectId},
+        {"projectId", job->project.id},
     };
     postJson(zephyr(job->settings, QStringLiteral("/execution")), QJsonDocument(body), [this, job, issueId](const Response& r) {
         const PublishCase& c = job->current();
@@ -321,8 +445,9 @@ void ZephyrClient::readStepResults(const std::shared_ptr<Job>& job, const QStrin
                 stepResultIds << id;
                 if (i < c.steps.size()) job->pendingSteps.append({id, c.steps[i]});
             }
-            // El Test de Zephyr y el caso de QAflow se editan por separado y se desincronizan: los
-            // veredictos que sobran no tienen dónde ir, y callárselo deja un ciclo a medias sin decirlo.
+            // El Test enlazado y el caso se editan por separado y se desincronizan; y en el que se
+            // acaba de crear puede haberse quedado fuera algún paso. Los veredictos que sobran no
+            // tienen dónde ir, y callárselo deja un ciclo a medias sin decirlo.
             if (c.steps.size() > results.size())
                 job->skip(QCoreApplication::translate("infrastructure", "%1: el Test %2 tiene %3 pasos y se ejecutaron %4; los %5 últimos veredictos se quedan fuera")
                               .arg(c.caseId, c.testKey).arg(results.size()).arg(c.steps.size()).arg(c.steps.size() - results.size()));

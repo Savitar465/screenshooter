@@ -178,7 +178,8 @@ muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`
 * **Pasos**: `insertStep`, `moveStep` y `removeStep` renumeran las capturas asignadas para que
   sigan a su paso (`remapShotSteps`).
 * **Duplicar** copia contenido y metadatos, no capturas ni resultado; el nuevo caso queda en
-  Borrador justo después del original.
+  Borrador justo después del original y **sin Test de Zephyr**: la copia es un caso nuevo, y
+  heredar `testKey` haría que dos casos publicaran sus ejecuciones sobre el mismo Test.
 * **Deshacer**: borrar un caso, un paso o una captura guarda una instantánea de la lista
   (`pushUndo`). `undo()` la restaura mientras no haya otra mutación ni pasen 20 s; después
   `commitUndo()` emite `filesReleased()` con los ficheros de capturas que ya nadie referencia y
@@ -367,25 +368,61 @@ Un 404 significa «esa ruta no está aquí» y se pasa a la siguiente; cualquier
 se informa tal cual en vez de disimularlo probando la otra.
 
 `TestPublishService` (application) traduce un `PlanReport` a un `PublishRequest`: sólo las filas
-ejecutadas, la clave del Test desde `TestCase::testKey` y las evidencias del caso que sigan en disco
-con el paso al que se asignaron. El cliente encadena entonces, por cada caso:
+ejecutadas, la clave del Test desde `TestCase::testKey`, el caso tal y como está escrito (título,
+precondiciones y pasos) y las evidencias del caso que sigan en disco con el paso al que se asignaron.
+El cliente encadena entonces, por cada caso:
 
 | Paso | Petición |
 |------|----------|
-| Resolver los ids | `GET /rest/api/2/project/{clave}` (Zephyr trabaja con ids numéricos, no con claves) y `GET /rest/api/2/issue/{testKey}?fields=id` |
+| Resolver los ids | `GET /rest/api/2/project/{clave}` (Zephyr trabaja con ids numéricos, no con claves): el del proyecto, el de la versión y el del tipo de incidencia de los Tests; y `GET /rest/api/2/issue/{testKey}?fields=id` para el caso que ya lo tiene enlazado |
 | Crear el ciclo | `POST {api}/cycle` con `projectId`, `versionId` y las fechas en el formato de Zephyr (`12/May/26`) |
+| Crear el Test que falta | `POST /rest/api/2/issue` (tipo Test, título y precondiciones del caso) y un `POST {api}/teststep/{issueId}` por paso |
 | Añadir el caso | `POST {api}/execution` → la respuesta viene indexada por el id de la ejecución creada |
 | Veredicto del caso | `PUT {api}/execution/{id}/execute` con 1 PASS · 2 FAIL · 4 BLOCKED |
 | Veredicto por paso | `GET {api}/stepResult?executionId=` y `PUT {api}/stepResult/{id}` (N/A queda sin ejecutar, -1) |
 | Evidencias | `POST {api}/attachment?entityId=&entityType=` — `TESTSTEPRESULT` las de un paso, `EXECUTION` las demás |
 
+**Un caso, un Test.** El caso de QAflow es reutilizable: se ejecuta muchas veces y en varios planes,
+así que su Test de Zephyr tiene que ser siempre el mismo para que el histórico de Zephyr cuente una
+sola historia por caso. `TestCase::testKey` es ese enlace, y sólo se rellena una vez: se pega la clave
+de un Test que ya exista o la estrena QAflow a partir del caso —título, precondiciones y pasos,
+etiquetado `qaflow` y con el id del caso— y desde ahí todos los ciclos van sobre él. Se crea desde dos
+sitios que comparten las mismas piezas (`postTestIssue()` y `postTestSteps()`), así que el issue es el
+mismo salga por donde salga:
+
+| Desde | Camino |
+|-------|--------|
+| El editor del caso, con «Crear» | `CasesView` → `TestPublishService::createTestFor()` → `ITestManagement::createTest()`, sin ciclo de por medio |
+| La publicación del ciclo, para el caso que aún no lo tiene | `ZephyrClient::createTestForCase()`, y la clave vuelve en `PublishResult::createdTests` |
+
+En los dos casos `TestPublishService` guarda la clave en el caso. El tipo de incidencia con el que se
+crean sale de los ajustes y por defecto es `Test`, el que instala Zephyr; en un Jira traducido se
+llama de otra manera, y si el proyecto no lo tiene se dice con su nombre —también al probar la
+conexión— en vez de fallar issue a issue sin explicar por qué.
+
+**Lo que se publica son los resultados, y el ciclo de plan recuerda dónde quedaron.** Al publicar con
+éxito, `TestPublishService` llama a `RunHistoryStore::markPublished()` y el `PlanRun` guarda
+`zephyrCycleId` y `publishedAt` (en `history.json`). Con eso, el informe del plan dice «Publicado en
+Zephyr el … · ciclo N» y, al pedir publicarlo otra vez, avisa de que Zephyr no actualiza el ciclo
+anterior sino que crea otro. El enlace queda así en los dos sentidos: el caso apunta a su Test, y cada
+ejecución de plan apunta al ciclo donde se publicaron sus resultados.
+
+**Y el historial lo enseña.** `PlanReportRow` lleva el `jiraKey` y el `testKey` del caso —los de hoy,
+que salen del catálogo por `PlanReport::CaseLookup`, no una foto del día de la ejecución—, así que
+cada caso del informe muestra sus dos enlaces como chips que abren el issue en el navegador
+(`HistoryView::issueLinks()` → `openJiraRequested`), y el detalle de una ejecución añade el ciclo de
+Zephyr del plan al que pertenece. El Markdown exportado lleva lo mismo: el ciclo en la cabecera y
+«**Historia:** … · **Test:** …» bajo cada caso, para que el informe pegado en un ticket diga con qué
+está enlazado sin abrir QAflow.
+
 El fallo de un caso no aborta el ciclo: se anota en `PublishResult::skipped` con su motivo y se sigue
 con el siguiente, que es lo que interesa cuando se publican decenas. Sí abortan los fallos previos
 (proyecto, versión inexistente o creación del ciclo), porque sin ellos no hay dónde publicar. Ahí
-entra también lo que se queda fuera sin ser un error de red: un caso sin clave de Test, una evidencia
-que ya no está en disco y los veredictos que sobran cuando el Test de Zephyr tiene menos pasos que el
-caso de QAflow — los dos se editan por separado y se desincronizan. El informe los enseña al terminar
-con su motivo, uno por línea, porque un contador de «3 sin publicar» no dice qué hay que arreglar.
+entra también lo que se queda fuera sin ser un error de red: un Test que Jira rechaza, un paso del
+Test que no entra, una evidencia que ya no está en disco y los veredictos que se quedan sin sitio
+cuando el Test tiene menos pasos que el caso — el Test enlazado y su caso se editan por separado y se
+desincronizan. El informe los enseña al terminar con su motivo, uno por línea, porque un contador de
+«3 sin publicar» no dice qué hay que arreglar.
 
 La ruta detectada se recuerda por instancia (`m_apiFor`), y una detección que no encuentra nada la
 olvida entera: dejar puesta la última que se probó hacía que la siguiente publicación contra una

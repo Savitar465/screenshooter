@@ -36,6 +36,8 @@ public:
 
 signals:
     void openCaseRequested(const QString& caseId);
+    /// Abrir en el navegador un issue de Jira (la historia del caso o su Test de Zephyr).
+    void openJiraRequested(const QString& key);
     void toast(const QString& message, const QString& color);
 
 private:
@@ -50,6 +52,8 @@ private:
     void renderRun(const RunRecord& run);
     void renderMetrics();
     QWidget* stepsList(const RunRecord& run) const;
+    /// Fila con la historia de Jira y el Test de Zephyr del caso; nullptr si no tiene ninguno.
+    QWidget* issueLinks(const QString& jiraKey, const QString& testKey);
     void exportMarkdown(const PlanReport& report);
     void copyMarkdown(const PlanReport& report);
     /// Crea en Zephyr el ciclo con las ejecuciones del informe, sus pasos y sus evidencias.

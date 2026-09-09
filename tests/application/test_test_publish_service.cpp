@@ -1,6 +1,6 @@
 // TestPublishService (application/): traduce el informe de un ciclo de plan a lo que espera la
-// herramienta de gestión de pruebas. Cubre qué casos entran, de dónde sale la clave del Test y
-// cómo viajan las evidencias con su paso.
+// herramienta de gestión de pruebas. Cubre qué casos entran, de dónde sale el Test de cada caso —el
+// enlazado o el que se crea a partir del caso— y cómo viajan las evidencias con su paso.
 
 #include "support/AppFixture.h"
 #include "support/FakeTestManagement.h"
@@ -54,7 +54,7 @@ private slots:
     void publishingIsOffUntilZephyrIsEnabledForJira() {
         AppFixture f;
         auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings);
         QVERIFY(!publish.enabled());                       // Zephyr desactivado en los ajustes
 
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
@@ -75,7 +75,7 @@ private slots:
         f.store.updateCase(QStringLiteral("TC-102"), [](TestCase& c) { c.testKey = QStringLiteral("SHOP-43"); });
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; s.zephyrVersion = QStringLiteral("2.3.0"); });
         auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings);
 
         const PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado},
                                               {QStringLiteral("TC-102"), Verdict::Fallido}},
@@ -96,14 +96,140 @@ private slots:
         QCOMPARE(req.startedAt, report.plan.startedAt);
     }
 
-    void casesWithoutTestKeyAreListedBeforePublishing() {
+    void casesWhoseTestWillBeCreatedAreListedBeforePublishing() {
         AppFixture f;
         f.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) { c.testKey = QStringLiteral("SHOP-42"); });
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
-        TestPublishService publish(std::make_shared<FakeTestManagement>(), f.store, f.settings);
+        TestPublishService publish(std::make_shared<FakeTestManagement>(), f.store, f.history, f.settings);
         const PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado},
                                               {QStringLiteral("TC-102"), Verdict::Superado}});
-        QCOMPARE(publish.casesWithoutTestKey(report), QStringList{QStringLiteral("TC-102")});
+        QCOMPARE(publish.casesNeedingTest(report), QStringList{QStringLiteral("TC-102")});
+    }
+
+    // El caso sin Test no se queda fuera: viaja con lo que hace falta para crearlo.
+    void casesWithoutTestKeyTravelWithTheirPreconditionsAndSteps() {
+        AppFixture f;
+        f.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) {
+            c.title = QStringLiteral("Comprar con cupón");
+            c.preconditions = QStringLiteral("Sesión iniciada con un usuario con carrito");
+            c.steps = {TestStep{QStringLiteral("Abrir carrito"), QStringLiteral("Se abre")},
+                       TestStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Descuenta")},
+                       TestStep{QStringLiteral("Pagar"), QStringLiteral("Se confirma")}};
+        });
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+
+        publish.publish(reportWith({{QStringLiteral("TC-101"), Verdict::Superado}}), [](const PublishResult&) {});
+        const PublishCase& sent = zephyr->published[0].cases[0];
+        QVERIFY(sent.testKey.isEmpty());
+        QCOMPARE(sent.preconditions, QStringLiteral("Sesión iniciada con un usuario con carrito"));
+        // Los pasos del Test son los del caso, no sólo los que llegaron a ejecutarse.
+        QCOMPARE(sent.design.size(), 3);
+        QCOMPARE(sent.design[1].action, QStringLiteral("Aplicar cupón"));
+        QCOMPARE(sent.design[1].expected, QStringLiteral("Descuenta"));
+        QCOMPARE(sent.steps.size(), 2);
+    }
+
+    // La clave del Test creado se enlaza al caso: la siguiente publicación reutiliza ese Test.
+    void theKeyOfACreatedTestIsSavedInTheCase() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        zephyr->resultToReturn.ok = true;
+        zephyr->resultToReturn.cycleId = QStringLiteral("77");
+        zephyr->resultToReturn.testsCreated = 1;
+        zephyr->resultToReturn.createdTests.insert(QStringLiteral("TC-101"), QStringLiteral("SHOP-77"));
+        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+
+        publish.publish(reportWith({{QStringLiteral("TC-101"), Verdict::Superado}}), [](const PublishResult&) {});
+        QCOMPARE(f.store.find(QStringLiteral("TC-101"))->testKey, QStringLiteral("SHOP-77"));
+
+        // Y la segunda vez ya viaja con ella en lugar de pedir otro Test.
+        publish.publish(reportWith({{QStringLiteral("TC-101"), Verdict::Superado}}), [](const PublishResult&) {});
+        QCOMPARE(zephyr->published[1].cases[0].testKey, QStringLiteral("SHOP-77"));
+    }
+
+    // El editor del caso pide su Test sin ciclo de por medio; la clave queda enlazada al caso.
+    void createsTheTestOfASingleCaseAndSavesItsKey() {
+        AppFixture f;
+        f.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) {
+            c.title = QStringLiteral("Comprar con cupón");
+            c.preconditions = QStringLiteral("Sesión iniciada");
+            c.steps = {TestStep{QStringLiteral("Abrir carrito"), QStringLiteral("Se abre")}};
+        });
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+
+        CreateTestResult out;
+        publish.createTestFor(QStringLiteral("TC-101"), [&](const CreateTestResult& r) { out = r; });
+        QVERIFY(out.ok);
+        QCOMPARE(out.key, QStringLiteral("SHOP-77"));
+        QCOMPARE(zephyr->testsCreated.size(), 1);
+        QCOMPARE(zephyr->testsCreated[0].title, QStringLiteral("Comprar con cupón"));
+        QCOMPARE(zephyr->testsCreated[0].preconditions, QStringLiteral("Sesión iniciada"));
+        QCOMPARE(zephyr->testsCreated[0].design.size(), 1);
+        QCOMPARE(f.store.find(QStringLiteral("TC-101"))->testKey, QStringLiteral("SHOP-77"));
+
+        // El caso que ya lo tiene no estrena otro: contesta con el que ya estaba enlazado.
+        publish.createTestFor(QStringLiteral("TC-101"), [&](const CreateTestResult& r) { out = r; });
+        QVERIFY(out.ok);
+        QCOMPARE(out.key, QStringLiteral("SHOP-77"));
+        QCOMPARE(zephyr->testsCreated.size(), 1);
+    }
+
+    void doesNotCreateTestsWhileZephyrIsOff() {
+        AppFixture f;
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+        CreateTestResult out;
+        publish.createTestFor(QStringLiteral("TC-101"), [&](const CreateTestResult& r) { out = r; });
+        QVERIFY(!out.ok);
+        QVERIFY(!out.error.isEmpty());
+        QVERIFY(zephyr->testsCreated.isEmpty());
+        QVERIFY(f.store.find(QStringLiteral("TC-101"))->testKey.isEmpty());
+    }
+
+    // Los resultados publicados quedan enlazados a su ciclo de Zephyr: sin eso, saber si un ciclo
+    // ya se publicó (y dónde) era ir a mirarlo a Jira.
+    void thePlanRunRemembersTheZephyrCycleItWasPublishedTo() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+
+        const QString planRunId = f.history.startPlan(QStringLiteral("Regresión Sprint 14"), {QStringLiteral("TC-101")});
+        RunRecord rec;
+        rec.caseId = QStringLiteral("TC-101");
+        rec.planRunId = planRunId;
+        rec.verdict = Verdict::Superado;
+        rec.startedAt = QDateTime(QDate(2026, 5, 12), QTime(9, 0));
+        rec.finishedAt = QDateTime(QDate(2026, 5, 12), QTime(9, 5));
+        rec.steps = {RunRecordStep{QStringLiteral("Abrir"), QStringLiteral("Se abre"), StepResult::Pass, {}, 30}};
+        f.history.addRun(rec);
+        f.history.finishPlan(planRunId);
+        QVERIFY(!f.history.findPlan(planRunId)->isPublished());
+
+        publish.publish(f.history.report(planRunId), [](const PublishResult&) {});
+        const PlanRun* run = f.history.findPlan(planRunId);
+        QVERIFY(run->isPublished());
+        QCOMPARE(run->zephyrCycleId, QStringLiteral("77"));   // el ciclo que devolvió Zephyr
+        QVERIFY(run->publishedAt.isValid());
+    }
+
+    // Un fallo no deja el ciclo de plan marcado como publicado.
+    void aFailedPublicationDoesNotMarkThePlanRun() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        zephyr->resultToReturn.error = QStringLiteral("Host not found");
+        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+
+        const QString planRunId = f.history.startPlan(QStringLiteral("Regresión"), {QStringLiteral("TC-101")});
+        f.history.finishPlan(planRunId);
+        publish.publish(f.history.report(planRunId), [](const PublishResult&) {});
+        QVERIFY(!f.history.findPlan(planRunId)->isPublished());
     }
 
     // Las evidencias que existen en disco viajan con el paso al que se asignaron.
@@ -119,7 +245,7 @@ private slots:
         });
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings);
 
         publish.publish(reportWith({{QStringLiteral("TC-101"), Verdict::Superado}}), [](const PublishResult&) {});
         const QList<PublishAttachment> sent = zephyr->published[0].cases[0].attachments;

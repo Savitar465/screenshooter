@@ -81,9 +81,10 @@ private:
     QLabel* m_cycleSummary = nullptr;
     ProgressCells* m_cycleCells = nullptr;
     QPushButton* m_cycleReport = nullptr;
-    QPushButton* m_cycleZephyr = nullptr;
     QWidget* m_cyclesSection = nullptr;
-    QLabel* m_cyclesHeader = nullptr;
+    QPushButton* m_cyclesHeader = nullptr;
+    QWidget* m_cyclesContent = nullptr;
+    QString m_displayedPlanId;
     QVBoxLayout* m_cyclesList = nullptr;
     QLabel* m_inPlanHeader = nullptr;
     QVBoxLayout* m_inPlan = nullptr;

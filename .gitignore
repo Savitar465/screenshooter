@@ -58,3 +58,4 @@ Thumbs.db
 
 # CMake presets locales (rutas de Qt de esta maquina)
 CMakeUserPresets.json
+/.codex/

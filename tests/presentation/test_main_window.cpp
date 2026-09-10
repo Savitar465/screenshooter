@@ -519,6 +519,13 @@ private slots:
 
         f.window->navigate(Screen::Plan);
         QTest::qWait(50);
+        auto* history = f.window->findChild<QPushButton*>(QStringLiteral("cycleHistoryToggle"));
+        QVERIFY(history);
+        QVERIFY(!history->isChecked());
+        auto* current = f.window->findChild<QFrame*>(QStringLiteral("currentPlanCycle"));
+        QVERIFY(current);
+        QVERIFY(current->isHidden());
+        QTest::mouseClick(history, Qt::LeftButton);
         auto* test = f.window->findChild<QPushButton*>(QStringLiteral("cycleTest-%1").arg(runs[0].id));
         QVERIFY(test);
         QCOMPARE(test->text(), QStringLiteral("Test SHOP-77"));

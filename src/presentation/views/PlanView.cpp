@@ -44,7 +44,7 @@ QLabel* verdictPill(Verdict v) {
 }
 QLabel* mutedPill(const QString& text) { return ui::pill(text, theme::tint(theme::Muted, 38), theme::Muted); }
 QString when(const QDateTime& dt) { return dt.isValid() ? dt.toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QStringLiteral("—"); }
-/// Ciclos que muestra el historial del plan sin desplegarlo, para que la lista de casos siga a la vista.
+/// Ciclos que muestra inicialmente el historial al desplegarlo.
 constexpr int kRecentCycles = 5;
 } // namespace
 
@@ -205,6 +205,7 @@ void PlanView::buildEditor(QHBoxLayout* root) {
 
     // Ciclo actual
     m_cycleCard = ui::card("card");
+    m_cycleCard->setObjectName(QStringLiteral("currentPlanCycle"));
     auto* ch = ui::hbox(m_cycleCard, 0, 0);
     ch->addWidget(ui::accentBar(theme::Blue));
     auto* cbody = new QWidget;
@@ -214,10 +215,6 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     auto* cth = ui::hbox(ctop, 0, 10);
     m_cycleTitle = ui::label(QString(), "eyebrow");
     cth->addWidget(m_cycleTitle, 1);
-    m_cycleZephyr = ui::button(tr("Actualizar en Zephyr"), "primary");
-    m_cycleZephyr->setObjectName(QStringLiteral("updateZephyr"));
-    m_cycleZephyr->setStyleSheet(QStringLiteral("padding:5px 10px;font-size:12px;border-radius:8px;"));
-    cth->addWidget(m_cycleZephyr);
     m_cycleReport = ui::button(tr("Ver informe"), "outline");
     m_cycleReport->setStyleSheet(QStringLiteral("padding:5px 10px;font-size:12px;border-radius:8px;"));
     cth->addWidget(m_cycleReport);
@@ -226,23 +223,21 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     cv->addWidget(m_cycleSummary);
     m_cycleCells = new ProgressCells;
     cv->addWidget(m_cycleCells);
-    // Ocultos cuando no hay ciclo, pero reservan su sitio: así la tarjeta no cambia de altura.
-    for (QWidget* w : {static_cast<QWidget*>(m_cycleCells), static_cast<QWidget*>(m_cycleReport)}) {
-        QSizePolicy sp = w->sizePolicy();
-        sp.setRetainSizeWhenHidden(true);
-        w->setSizePolicy(sp);
-    }
     ch->addWidget(cbody, 1);
     v->addWidget(m_cycleCard);
 
     // Historial de ciclos: un resumen por ejecución del plan, la más reciente primero
     m_cyclesSection = new QWidget;
     auto* hv = ui::vbox(m_cyclesSection, 0, 6);
-    m_cyclesHeader = ui::label(QString(), "eyebrow");
+    m_cyclesHeader = ui::button(QString(), "outline");
+    m_cyclesHeader->setObjectName(QStringLiteral("cycleHistoryToggle"));
+    m_cyclesHeader->setCheckable(true);
+    m_cyclesHeader->setStyleSheet(QStringLiteral("text-align:left;padding:10px 12px;"));
+    connect(m_cyclesHeader, &QPushButton::toggled, this, [this]() { refreshCycles(); });
     hv->addWidget(m_cyclesHeader);
-    auto* cyclesList = new QWidget;
-    m_cyclesList = ui::vbox(cyclesList, 0, 6);
-    hv->addWidget(cyclesList);
+    m_cyclesContent = new QWidget;
+    m_cyclesList = ui::vbox(m_cyclesContent, 0, 6);
+    hv->addWidget(m_cyclesContent);
     v->addWidget(m_cyclesSection);
 
     // Acciones rápidas
@@ -294,7 +289,12 @@ void PlanView::buildEditor(QHBoxLayout* root) {
 void PlanView::refreshEditor() {
     const TestPlan* p = m_plans.active();
     m_editor->setVisible(p != nullptr);
-    if (!p) return;
+    if (!p) { m_displayedPlanId.clear(); return; }
+    if (m_displayedPlanId != p->id) {
+        m_displayedPlanId = p->id;
+        m_allCycles = false;
+        m_cyclesHeader->setChecked(false);
+    }
     const int cycles = m_plans.cycleCount(p->id);
     m_eyebrow->setText(tr("%1 · CREADO %2 · %3").arg(p->id, p->createdAt.isValid() ? p->createdAt.toString(QStringLiteral("dd/MM/yyyy")) : QStringLiteral("—"),
                                                                  cycles == 1 ? tr("1 CICLO") : tr("%1 CICLOS").arg(cycles)));
@@ -316,18 +316,10 @@ void PlanView::refreshCycle() {
     if (!p) return;
     const auto cycle = m_plans.latestCycle(p->id);
     m_cycleReport->disconnect();
-    m_cycleZephyr->disconnect();
-    m_cycleZephyr->hide();
-    if (!cycle) {
-        m_cycleTitle->setText(tr("CICLO ACTUAL"));
-        m_cycleSummary->setText(tr("Este plan aún no se ha ejecutado. Pulsa «Iniciar ciclo» para empezar."));
-        m_cycleCells->setColors({});
-        m_cycleCells->hide();
-        m_cycleReport->hide();
-        return;
-    }
+    m_cycleCard->setVisible(cycle && !cycle->plan.isFinished());
+    if (!cycle || cycle->plan.isFinished()) return;
     const PlanReport& r = *cycle;
-    m_cycleTitle->setText(QStringLiteral("%1 · %2 · %3").arg(r.plan.isFinished() ? tr("ÚLTIMO CICLO") : tr("CICLO EN CURSO"), r.plan.id, when(r.plan.startedAt)));
+    m_cycleTitle->setText(QStringLiteral("%1 · %2 · %3").arg(tr("CICLO EN CURSO"), r.plan.id, when(r.plan.startedAt)));
     m_cycleSummary->setText(tr("<b>%1/%2 ejecutados</b> · <span style=\"color:%7\">%3 ✓</span> · <span style=\"color:%8\">%4 ✗</span> · <span style=\"color:%9\">%5 bloq.</span> · %6 % de éxito")
                                 .arg(r.executed).arg(r.total()).arg(r.passed).arg(r.failed).arg(r.blocked).arg(r.successRate())
                                 .arg(theme::Green, theme::Red, theme::Amber));
@@ -337,23 +329,24 @@ void PlanView::refreshCycle() {
     m_cycleCells->show();
     m_cycleReport->show();
     connect(m_cycleReport, &QPushButton::clicked, this, [this, id = r.plan.id]() { emit cycleReportRequested(id); });
-    if (m_publish && m_publish->enabled() && r.plan.isPublished() && r.plan.isFinished() && r.executed > 0) {
-        m_cycleZephyr->setToolTip(tr("Vuelve a mandar al ciclo %1 de Zephyr el veredicto de cada caso y de cada paso, y sube las evidencias que falten").arg(r.plan.zephyrCycleId));
-        m_cycleZephyr->show();
-        connect(m_cycleZephyr, &QPushButton::clicked, this, [this, r]() {
-            ZephyrPublishFlow::run(this, *m_publish, r, true, [this](const QString& m, const QString& c) { emit toast(m, c); });
-        });
-    }
 }
 
 void PlanView::refreshCycles() {
     const TestPlan* p = m_plans.active();
     if (!p) return;
     ui::clearLayout(m_cyclesList);
-    const QList<PlanReport> cycles = m_plans.cycles(p->id);
+    QList<PlanReport> cycles = m_plans.cycles(p->id);
+    const auto current = m_plans.latestCycle(p->id);
+    if (current && !current->plan.isFinished()) {
+        cycles.removeIf([&current](const PlanReport& r) { return r.plan.id == current->plan.id; });
+    }
+    const bool expanded = m_cyclesHeader->isChecked();
+    m_cyclesContent->setVisible(expanded);
     m_cyclesSection->setVisible(!cycles.isEmpty());
     if (cycles.isEmpty()) return;
-    m_cyclesHeader->setText(cycles.size() == 1 ? tr("HISTORIAL DE CICLOS · 1 CICLO") : tr("HISTORIAL DE CICLOS · %1 CICLOS").arg(cycles.size()));
+    const QString title = cycles.size() == 1 ? tr("HISTORIAL DE CICLOS · 1 CICLO") : tr("HISTORIAL DE CICLOS · %1 CICLOS").arg(cycles.size());
+    m_cyclesHeader->setText(QStringLiteral("%1 %2").arg(expanded ? QStringLiteral("▾") : QStringLiteral("▸"), title));
+    if (!expanded) return;
 
     const int shown = m_allCycles ? cycles.size() : qMin(cycles.size(), kRecentCycles);
     for (int i = 0; i < shown; ++i) {

@@ -28,6 +28,7 @@ struct Sample {
         retry = first;   // repetición posterior del mismo caso: es la que cuenta
         retry.id = QStringLiteral("R-2"); retry.startedAt = first.finishedAt; retry.finishedAt = retry.startedAt.addSecs(30); retry.durationSecs = 30;
         retry.verdict = Verdict::Superado; retry.steps[1].result = StepResult::Pass; retry.steps[1].note.clear();
+        retry.testKey = QStringLiteral("SHOP-42");   // el Test que se creó para esta ejecución al publicar
 
         blocked.id = QStringLiteral("R-3"); blocked.caseId = QStringLiteral("TC-2"); blocked.caseTitle = QStringLiteral("Pago"); blocked.planRunId = plan.id;
         blocked.startedAt = retry.finishedAt; blocked.finishedAt = blocked.startedAt.addSecs(90); blocked.durationSecs = 90;
@@ -39,9 +40,8 @@ struct Sample {
 
     PlanReport build() const {
         return PlanReport::build(plan, {first, retry, blocked, foreign}, [](const QString& id) {
-            // El catálogo: título y los enlaces del caso (historia de Jira y Test de Zephyr).
-            return PlanReport::CaseInfo{QStringLiteral("Título de ") + id, QStringLiteral("SHOP-9"),
-                                        id == QStringLiteral("TC-1") ? QStringLiteral("SHOP-42") : QString()};
+            // El catálogo: título y la historia de Jira del caso.
+            return PlanReport::CaseInfo{QStringLiteral("Título de ") + id, QStringLiteral("SHOP-9")};
         });
     }
 };
@@ -92,15 +92,16 @@ private slots:
         QVERIFY(md.contains(QStringLiteral("**Historia:** SHOP-9 · **Test:** SHOP-42")));
     }
 
-    // Las filas llevan los enlaces del caso: la historia de Jira y el Test de Zephyr.
-    void rowsCarryTheLinksOfTheirCase() {
+    // Las filas llevan la historia de Jira del caso y el Test de Zephyr de la ejecución publicada.
+    void rowsCarryTheStoryOfTheirCaseAndTheTestOfTheirRun() {
         const PlanReport r = Sample().build();
         QCOMPARE(r.rows[0].caseId, QStringLiteral("TC-1"));
         QCOMPARE(r.rows[0].jiraKey, QStringLiteral("SHOP-9"));
-        QCOMPARE(r.rows[0].testKey, QStringLiteral("SHOP-42"));
-        QVERIFY(r.rows[1].testKey.isEmpty());        // el caso que aún no tiene Test
-        QVERIFY(!r.rows[2].executed);                // y el pendiente también los trae
+        QCOMPARE(r.rows[0].testKey, QStringLiteral("SHOP-42"));   // el de la ejecución que cuenta (la repetición)
+        QVERIFY(r.rows[1].testKey.isEmpty());        // ejecución que aún no se publicó
+        QVERIFY(!r.rows[2].executed);                // el pendiente trae la historia pero no tiene Test
         QCOMPARE(r.rows[2].jiraKey, QStringLiteral("SHOP-9"));
+        QVERIFY(r.rows[2].testKey.isEmpty());
     }
 
     // Publicado el ciclo, el informe dice en cuál de Zephyr quedaron sus resultados.

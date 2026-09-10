@@ -514,6 +514,88 @@ private slots:
         for (const auto& r : server.requests) QVERIFY(r.path != "/rest/api/2/issue");
     }
 
+    // ---- Actualizar un ciclo ya publicado -------------------------------------------------------
+
+    // Con `cycleId` no se crea ciclo: se reutiliza la ejecución que el Test ya tiene en él, se
+    // fijan los veredictos otra vez y sólo se suben las evidencias que aún no están. Un caso que
+    // se quedó fuera la vez anterior (sin ejecución en el ciclo) se añade.
+    void updatesThePublishedCycleInsteadOfCreatingAnother() {
+        QTemporaryDir dir;
+        const QString shot = dir.filePath(QStringLiteral("cap_001.png"));
+        { QFile f(shot); QVERIFY(f.open(QIODevice::WriteOnly)); f.write("PNGDATA"); }
+        const QString log = dir.filePath(QStringLiteral("adj_002.log"));
+        { QFile f(log); QVERIFY(f.open(QIODevice::WriteOnly)); f.write("LOG"); }
+
+        FakeHttpServer server;
+        routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+        server.route("GET", "/rest/zapi/latest/cycle/77", [](const HttpRequest&) { return HttpResponse::json(200, "{\"id\":77,\"name\":\"Regresión\"}"); });
+        // SHOP-42 (10600) ya tiene ejecución en el ciclo 77 (y otra en un ciclo anterior); SHOP-43 (10601), ninguna.
+        server.route("GET", "/rest/zapi/latest/execution", [](const HttpRequest& r) {
+            if (r.path.contains("issueId=10600"))
+                return HttpResponse::json(200, "{\"executions\":[{\"id\":400,\"cycleId\":70,\"issueId\":10600},{\"id\":501,\"cycleId\":77,\"issueId\":10600}],\"recordsCount\":2}");
+            return HttpResponse::json(200, "{\"executions\":[],\"recordsCount\":0}");
+        });
+        server.route("GET", "/rest/api/2/issue/SHOP-43", [](const HttpRequest&) { return HttpResponse::json(200, "{\"id\":\"10601\",\"key\":\"SHOP-43\"}"); });
+        // La evidencia del paso 2 ya está subida a su resultado; la del caso entero, no.
+        server.route("GET", "/rest/zapi/latest/attachment/attachmentsByEntity", [](const HttpRequest& r) {
+            if (r.path.contains("entityId=9002")) return HttpResponse::json(200, "{\"data\":[{\"fileId\":1,\"fileName\":\"cap_001.png\"}]}");
+            return HttpResponse::json(200, "{\"data\":[]}");
+        });
+
+        PublishCase first = caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado, {StepResult::Pass, StepResult::Pass});
+        first.attachments << PublishAttachment{shot, 2} << PublishAttachment{log, 0};
+        const PublishCase second = caseOf(QStringLiteral("TC-105"), QStringLiteral("SHOP-43"), Verdict::Fallido, {StepResult::Fail, StepResult::Pass});
+        PublishRequest request = requestOf({first, second});
+        request.cycleId = QStringLiteral("77");
+
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.publish(settingsFor(server.baseUrl()), request, [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.cycleId, QStringLiteral("77"));
+        QCOMPARE(out.executions, 2);
+        QCOMPARE(out.steps, 4);
+        QCOMPARE(out.attachments, 1);   // sólo la que faltaba
+        QVERIFY2(out.skipped.isEmpty(), qPrintable(out.skipped.join(QStringLiteral(" | "))));
+
+        int cyclesCreated = 0, executionsCreated = 0;
+        QStringList verdicts, attachmentPaths;
+        for (const auto& r : server.requests) {
+            if (r.method == "POST" && r.path == "/rest/zapi/latest/cycle") ++cyclesCreated;
+            if (r.method == "POST" && r.path == "/rest/zapi/latest/execution") { ++executionsCreated; QCOMPARE(bodyOf(r)[QStringLiteral("issueId")].toString(), QStringLiteral("10601")); }
+            if (r.method == "PUT" && r.path.startsWith("/rest/zapi/latest/execution/")) verdicts << QString::fromUtf8(r.path);
+            if (r.method == "POST" && r.path.startsWith("/rest/zapi/latest/attachment")) attachmentPaths << QString::fromUtf8(r.path);
+        }
+        QCOMPARE(cyclesCreated, 0);                  // el ciclo ya existe
+        QCOMPARE(executionsCreated, 1);              // sólo para el caso que no estaba en él
+        QCOMPARE(verdicts.size(), 2);
+        QVERIFY(verdicts[0].contains(QStringLiteral("/execution/501/execute")));   // la ejecución reutilizada
+        QCOMPARE(attachmentPaths.size(), 1);
+        QVERIFY(attachmentPaths[0].contains(QStringLiteral("entityId=501")) && attachmentPaths[0].contains(QStringLiteral("entityType=EXECUTION")));
+    }
+
+    void updatingACycleThatNoLongerExistsFailsBeforeTouchingAnything() {
+        FakeHttpServer server;
+        routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+        server.route("GET", "/rest/zapi/latest/cycle/77", [](const HttpRequest&) { return HttpResponse::json(404, "{\"errorDesc\":\"Cycle not found\"}"); });
+        PublishRequest request = requestOf({caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado, {StepResult::Pass})});
+        request.cycleId = QStringLiteral("77");
+
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.publish(settingsFor(server.baseUrl()), request, [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY2(out.error.contains(QStringLiteral("77")), qPrintable(out.error));
+        QVERIFY(!out.retryable);
+        for (const auto& r : server.requests) QVERIFY(r.method != "POST" && r.method != "PUT");
+    }
+
     void unknownVersionStopsThePublicationBeforeCreatingAnything() {
         FakeHttpServer server;
         routeProject(server);

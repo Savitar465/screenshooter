@@ -1,6 +1,7 @@
 #include "Settings.h"
 
 #include <QCoreApplication>
+#include <QUrl>
 
 #include <algorithm>
 
@@ -69,6 +70,17 @@ QString TrackerSettings::issueUrl(const QString& key) const {
         case TrackerKind::AzureDevOps: return base + QLatin1Char('/') + proj + QStringLiteral("/_workitems/edit/") + key;
     }
     return {};
+}
+
+QString TrackerSettings::zephyrCycleUrl(const QString& cycleName) const {
+    const QString base = baseUrl();
+    const QString name = cycleName.trimmed();
+    if (kind != TrackerKind::Jira || base.isEmpty() || name.isEmpty()) return {};
+    auto quoted = [](QString s) { return QLatin1Char('"') + s.replace(QLatin1Char('\\'), QStringLiteral("\\\\")).replace(QLatin1Char('"'), QStringLiteral("\\\"")) + QLatin1Char('"'); };
+    QString zql = QStringLiteral("cycleName = ") + quoted(name);
+    if (!project.trimmed().isEmpty()) zql = QStringLiteral("project = ") + quoted(project.trimmed()) + QStringLiteral(" AND ") + zql;
+    // La consulta viaja en el fragmento, como la escribe el propio Zephyr: `#?query=project%20%3D%20…`.
+    return base + QStringLiteral("/secure/enav/#?query=") + QString::fromLatin1(QUrl::toPercentEncoding(zql));
 }
 
 QString TrackerSettings::projectLabel() const {

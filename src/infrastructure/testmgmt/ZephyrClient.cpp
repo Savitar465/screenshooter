@@ -10,6 +10,8 @@
 #include <QLocale>
 #include <QUrl>
 
+#include <algorithm>
+
 namespace qaflow {
 
 namespace {
@@ -38,6 +40,8 @@ struct ZephyrClient::Job {
     QList<Upload> uploads;     // evidencias del caso, ya resueltas a su destino
 
     const PublishCase& current() const { return request.cases[index]; }
+    /// ¿Se actualiza un ciclo ya publicado en vez de crear uno?
+    bool updating() const { return !request.cycleId.trimmed().isEmpty(); }
     void skip(const QString& reason) { result.skipped << reason; }
     void finish() { done(result); }
 };
@@ -87,11 +91,14 @@ QString ZephyrClient::testTypeName(const TrackerSettings& s) {
     return configured.isEmpty() ? QStringLiteral("Test") : configured;
 }
 
-QString ZephyrClient::testDescription(const PublishCase& c) {
+QString ZephyrClient::testDescription(const PublishCase& c, const QString& cycleName) {
     QStringList parts;
     if (!c.preconditions.trimmed().isEmpty()) parts << c.preconditions.trimmed();
-    // De dónde salió el Test: el caso de QAflow es el original, y así se sabe cuál editar.
-    parts << QCoreApplication::translate("infrastructure", "Creado por QAflow a partir del caso %1").arg(c.caseId);
+    // De dónde salió el Test: el caso de QAflow es el original, y el ciclo lo distingue de los
+    // Tests del mismo caso en otros ciclos, que son otros issues.
+    parts << (cycleName.trimmed().isEmpty()
+                  ? QCoreApplication::translate("infrastructure", "Creado por QAflow a partir del caso %1").arg(c.caseId)
+                  : QCoreApplication::translate("infrastructure", "Creado por QAflow a partir del caso %1 para el ciclo «%2»").arg(c.caseId, cycleName.trimmed()));
     return parts.join(QStringLiteral("\n\n"));
 }
 
@@ -225,7 +232,7 @@ void ZephyrClient::publish(const TrackerSettings& s, const PublishRequest& reque
         job->project = project;
         ensureApi(job->settings, project.id, [this, job](bool found, const QString& detectError, bool retryable) {
             if (!found) { job->result.error = detectError; job->result.retryable = retryable; job->finish(); return; }
-            resolveLocale(job, [this, job]() { createCycle(job); });
+            resolveLocale(job, [this, job]() { if (job->updating()) checkCycle(job); else createCycle(job); });
         });
     });
 }
@@ -273,6 +280,24 @@ void ZephyrClient::createCycle(const std::shared_ptr<Job>& job, bool withDates) 
     });
 }
 
+void ZephyrClient::checkCycle(const std::shared_ptr<Job>& job) {
+    const QString cycleId = job->request.cycleId.trimmed();
+    get(zephyr(job->settings, QStringLiteral("/cycle/%1").arg(cycleId)), [this, job, cycleId](const Response& r) {
+        if (!r.ok) {
+            // Borrado en Zephyr desde que se publicó: no hay nada que actualizar, y decirlo evita
+            // que las ejecuciones se cuelguen de un ciclo que ya no está.
+            job->result.error = r.status == 404 || r.status == 400
+                                    ? QCoreApplication::translate("infrastructure", "El ciclo %1 ya no existe en Zephyr: publica los resultados como ciclo nuevo").arg(cycleId)
+                                    : r.error;
+            job->result.retryable = r.retryable;
+            job->finish();
+            return;
+        }
+        job->result.cycleId = cycleId;
+        nextCase(job);
+    });
+}
+
 void ZephyrClient::nextCase(const std::shared_ptr<Job>& job) {
     if (job->index >= job->request.cases.size()) {
         job->result.ok = true;
@@ -280,7 +305,8 @@ void ZephyrClient::nextCase(const std::shared_ptr<Job>& job) {
         return;
     }
     const PublishCase& c = job->current();
-    // El caso manda: si todavía no está enlazado a un Test, se le crea uno a partir de él.
+    // La ejecución manda: si aún no tiene Test (este informe no se había publicado), se le crea
+    // uno a partir del caso; si lo tiene, es una republicación y se reutiliza.
     if (c.testKey.trimmed().isEmpty()) { createTestForCase(job); return; }
     // Zephyr crea la ejecución con el id numérico del issue, no con su clave.
     get(jira(job->settings, QStringLiteral("/rest/api/2/issue/%1?fields=id").arg(c.testKey.trimmed())), [this, job](const Response& r) {
@@ -295,13 +321,13 @@ void ZephyrClient::nextCase(const std::shared_ptr<Job>& job) {
     });
 }
 
-void ZephyrClient::postTestIssue(const TrackerSettings& s, const Project& project, const PublishCase& c,
+void ZephyrClient::postTestIssue(const TrackerSettings& s, const Project& project, const PublishCase& c, const QString& cycleName,
                                  std::function<void(bool, const QString&, const QString&, const QString&, bool)> done) {
     const QJsonObject fields{
         {"project", QJsonObject{{"id", project.id}}},
         {"issuetype", QJsonObject{{"id", project.testTypeId}}},
         {"summary", c.title},
-        {"description", testDescription(c)},
+        {"description", testDescription(c, cycleName)},
         // Las mismas etiquetas con las que JiraClient crea los defectos: buscar "qaflow" en Jira
         // saca lo que ha salido de aquí, y el id del caso lo empareja con su original.
         {"labels", QJsonArray{QStringLiteral("qaflow"), c.caseId}},
@@ -346,7 +372,7 @@ void ZephyrClient::createTestForCase(const std::shared_ptr<Job>& job) {
         nextCase(job);
         return;
     }
-    postTestIssue(job->settings, job->project, c, [this, job](bool created, const QString& issueId, const QString& key,
+    postTestIssue(job->settings, job->project, c, job->request.cycleName, [this, job](bool created, const QString& issueId, const QString& key,
                                                               const QString& error, bool) {
         const PublishCase& c = job->current();
         if (!created) {
@@ -368,6 +394,33 @@ void ZephyrClient::createTestForCase(const std::shared_ptr<Job>& job) {
 }
 
 void ZephyrClient::executeCase(const std::shared_ptr<Job>& job, const QString& issueId) {
+    if (!job->updating()) { createExecution(job, issueId); return; }
+    findExecution(job, issueId, [this, job, issueId](const QString& executionId) {
+        // Sin ejecución en el ciclo: se quedó fuera la vez anterior (o su Test se acaba de crear).
+        if (executionId.isEmpty()) { createExecution(job, issueId); return; }
+        job->executionId = executionId;
+        markExecution(job, issueId);
+    });
+}
+
+void ZephyrClient::findExecution(const std::shared_ptr<Job>& job, const QString& issueId, std::function<void(const QString&)> done) {
+    get(zephyr(job->settings, QStringLiteral("/execution?issueId=%1").arg(issueId)), [job, done](const Response& r) {
+        if (!r.ok) { done({}); return; }
+        // ZAPI contesta {"executions":[…]}; la ruta del plugin, a veces la lista a secas.
+        const QJsonArray list = r.json.isArray() ? r.json.array() : r.json.object()[QStringLiteral("executions")].toArray();
+        const QString wanted = job->request.cycleId.trimmed();
+        auto asString = [](const QJsonValue& v) { return v.isString() ? v.toString() : QString::number(v.toInt()); };
+        for (const auto& v : list) {
+            const QJsonObject e = v.toObject();
+            if (asString(e[QStringLiteral("cycleId")]) != wanted) continue;
+            done(asString(e[QStringLiteral("id")]));
+            return;
+        }
+        done({});
+    });
+}
+
+void ZephyrClient::createExecution(const std::shared_ptr<Job>& job, const QString& issueId) {
     const QJsonObject body{
         {"issueId", issueId},
         {"versionId", job->project.versionId},
@@ -391,21 +444,26 @@ void ZephyrClient::executeCase(const std::shared_ptr<Job>& job, const QString& i
             nextCase(job);
             return;
         }
-        const QJsonObject status{{"status", QString::number(zephyrStatus(c.verdict))}};
-        putWithComment(zephyr(job->settings, QStringLiteral("/execution/%1/execute").arg(job->executionId)), status,
-                       QCoreApplication::translate("infrastructure", "Publicado por QAflow · %1").arg(formatDuration(c.durationSecs)),
-                       [this, job, issueId](const Response& exec) {
-                           const PublishCase& c = job->current();
-                           if (!exec.ok) {
-                               job->skip(QCoreApplication::translate("infrastructure", "%1: no se pudo fijar el veredicto · %2").arg(c.caseId, exec.error));
-                               ++job->index;
-                               nextCase(job);
-                               return;
-                           }
-                           ++job->result.executions;
-                           readStepResults(job, issueId);
-                       });
+        markExecution(job, issueId);
     });
+}
+
+void ZephyrClient::markExecution(const std::shared_ptr<Job>& job, const QString& issueId) {
+    const PublishCase& c = job->current();
+    const QJsonObject status{{"status", QString::number(zephyrStatus(c.verdict))}};
+    putWithComment(zephyr(job->settings, QStringLiteral("/execution/%1/execute").arg(job->executionId)), status,
+                   QCoreApplication::translate("infrastructure", "Publicado por QAflow · %1").arg(formatDuration(c.durationSecs)),
+                   [this, job, issueId](const Response& exec) {
+                       const PublishCase& c = job->current();
+                       if (!exec.ok) {
+                           job->skip(QCoreApplication::translate("infrastructure", "%1: no se pudo fijar el veredicto · %2").arg(c.caseId, exec.error));
+                           ++job->index;
+                           nextCase(job);
+                           return;
+                       }
+                       ++job->result.executions;
+                       readStepResults(job, issueId);
+                   });
 }
 
 void ZephyrClient::readStepResults(const std::shared_ptr<Job>& job, const QString& issueId) {
@@ -439,7 +497,32 @@ void ZephyrClient::readStepResults(const std::shared_ptr<Job>& job, const QStrin
             else
                 job->uploads.append(Upload{a.path, job->executionId, "EXECUTION"});
         }
-        writeNextStep(job, issueId);
+        if (!job->updating()) { writeNextStep(job, issueId); return; }
+        // Al actualizar, lo ya subido se queda: sólo van las evidencias nuevas de cada destino.
+        QList<QPair<QString, QByteArray>> entities;
+        for (const auto& u : job->uploads) {
+            const auto e = qMakePair(u.entityId, u.entityType);
+            if (!entities.contains(e)) entities << e;
+        }
+        dropUploadedEvidence(job, entities, [this, job, issueId]() { writeNextStep(job, issueId); });
+    });
+}
+
+void ZephyrClient::dropUploadedEvidence(const std::shared_ptr<Job>& job, QList<QPair<QString, QByteArray>> entities, std::function<void()> done) {
+    if (entities.isEmpty()) { done(); return; }
+    const auto entity = entities.takeFirst();
+    const QString path = QStringLiteral("/attachment/attachmentsByEntity?entityId=%1&entityType=%2").arg(entity.first, QString::fromLatin1(entity.second));
+    get(zephyr(job->settings, path), [this, job, entity, entities, done](const Response& r) {
+        if (r.ok) {
+            QStringList names;
+            const QJsonArray data = r.json.isArray() ? r.json.array() : r.json.object()[QStringLiteral("data")].toArray();
+            for (const auto& v : data) names << v.toObject()[QStringLiteral("fileName")].toString();
+            job->uploads.erase(std::remove_if(job->uploads.begin(), job->uploads.end(), [&](const Upload& u) {
+                                   return u.entityId == entity.first && u.entityType == entity.second && names.contains(QFileInfo(u.path).fileName());
+                               }), job->uploads.end());
+        }
+        // Si no se puede leer lo que hay, se sube igual: una evidencia repetida molesta menos que una que falta.
+        dropUploadedEvidence(job, entities, done);
     });
 }
 

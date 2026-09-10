@@ -117,7 +117,7 @@ int TestCase::unassignedShots() const {
 }
 
 QString TestCase::searchText() const {
-    return (QStringList{id, title, suite, component, jiraKey, testKey} + tags).join(QLatin1Char(' ')).toLower();
+    return (QStringList{id, title, suite, component, jiraKey} + tags).join(QLatin1Char(' ')).toLower();
 }
 
 QStringList parseTags(const QString& text) {

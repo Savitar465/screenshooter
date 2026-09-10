@@ -22,6 +22,7 @@ QJsonObject toJson(const RunRecord& r) {
         {"id", r.id}, {"caseId", r.caseId}, {"caseTitle", r.caseTitle}, {"suite", r.suite},
         {"planRunId", r.planRunId}, {"startedAt", isoOrEmpty(r.startedAt)}, {"finishedAt", isoOrEmpty(r.finishedAt)},
         {"verdict", toString(r.verdict)}, {"plannedSteps", r.plannedSteps}, {"durationSecs", r.durationSecs}, {"steps", steps},
+        {"testKey", r.testKey},
     };
 }
 
@@ -36,6 +37,7 @@ RunRecord runFromJson(const QJsonObject& o) {
     r.finishedAt = QDateTime::fromString(o["finishedAt"].toString(), Qt::ISODate);
     r.verdict = verdictFromString(o["verdict"].toString());
     r.plannedSteps = o["plannedSteps"].toInt();
+    r.testKey = o["testKey"].toString();
     for (const auto& v : o["steps"].toArray()) {
         const auto s = v.toObject();
         r.steps.append(RunRecordStep{s["action"].toString(), s["expected"].toString(), stepResultFromString(s["result"].toString()), s["note"].toString(), s["durationSecs"].toInt()});

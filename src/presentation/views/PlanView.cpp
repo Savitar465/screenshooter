@@ -2,10 +2,12 @@
 
 #include "application/PlanStore.h"
 #include "application/TestCaseStore.h"
+#include "application/TestPublishService.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/ProgressCells.h"
 #include "presentation/widgets/Ui.h"
+#include "presentation/widgets/ZephyrPublishFlow.h"
 
 #include <QCoreApplication>
 #include <QGridLayout>
@@ -42,9 +44,12 @@ QLabel* verdictPill(Verdict v) {
 }
 QLabel* mutedPill(const QString& text) { return ui::pill(text, theme::tint(theme::Muted, 38), theme::Muted); }
 QString when(const QDateTime& dt) { return dt.isValid() ? dt.toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QStringLiteral("—"); }
+/// Ciclos que muestra el historial del plan sin desplegarlo, para que la lista de casos siga a la vista.
+constexpr int kRecentCycles = 5;
 } // namespace
 
-PlanView::PlanView(TestCaseStore& cases, PlanStore& plans, QWidget* parent) : QWidget(parent), m_cases(cases), m_plans(plans) {
+PlanView::PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* publish, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_plans(plans), m_publish(publish) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildEditor(root);
@@ -52,6 +57,11 @@ PlanView::PlanView(TestCaseStore& cases, PlanStore& plans, QWidget* parent) : QW
     connect(&m_plans, &PlanStore::plansChanged, this, [this]() { refreshList(); refreshEditor(); });
     connect(&m_plans, &PlanStore::planChanged, this, [this]() { refreshList(); refreshEditor(); });
     connect(&m_cases, &TestCaseStore::caseChanged, this, &PlanView::refreshRows);
+    refreshList();
+    refreshEditor();
+}
+
+void PlanView::refresh() {
     refreshList();
     refreshEditor();
 }
@@ -204,6 +214,10 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     auto* cth = ui::hbox(ctop, 0, 10);
     m_cycleTitle = ui::label(QString(), "eyebrow");
     cth->addWidget(m_cycleTitle, 1);
+    m_cycleZephyr = ui::button(tr("Actualizar en Zephyr"), "primary");
+    m_cycleZephyr->setObjectName(QStringLiteral("updateZephyr"));
+    m_cycleZephyr->setStyleSheet(QStringLiteral("padding:5px 10px;font-size:12px;border-radius:8px;"));
+    cth->addWidget(m_cycleZephyr);
     m_cycleReport = ui::button(tr("Ver informe"), "outline");
     m_cycleReport->setStyleSheet(QStringLiteral("padding:5px 10px;font-size:12px;border-radius:8px;"));
     cth->addWidget(m_cycleReport);
@@ -220,6 +234,16 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     }
     ch->addWidget(cbody, 1);
     v->addWidget(m_cycleCard);
+
+    // Historial de ciclos: un resumen por ejecución del plan, la más reciente primero
+    m_cyclesSection = new QWidget;
+    auto* hv = ui::vbox(m_cyclesSection, 0, 6);
+    m_cyclesHeader = ui::label(QString(), "eyebrow");
+    hv->addWidget(m_cyclesHeader);
+    auto* cyclesList = new QWidget;
+    m_cyclesList = ui::vbox(cyclesList, 0, 6);
+    hv->addWidget(cyclesList);
+    v->addWidget(m_cyclesSection);
 
     // Acciones rápidas
     auto* quick = new QWidget;
@@ -283,6 +307,7 @@ void PlanView::refreshEditor() {
     m_start->setEnabled(!p->archived);
     m_start->setToolTip(p->archived ? tr("Desarchiva el plan para ejecutarlo") : QString());
     refreshCycle();
+    refreshCycles();
     refreshRows();
 }
 
@@ -291,6 +316,8 @@ void PlanView::refreshCycle() {
     if (!p) return;
     const auto cycle = m_plans.latestCycle(p->id);
     m_cycleReport->disconnect();
+    m_cycleZephyr->disconnect();
+    m_cycleZephyr->hide();
     if (!cycle) {
         m_cycleTitle->setText(tr("CICLO ACTUAL"));
         m_cycleSummary->setText(tr("Este plan aún no se ha ejecutado. Pulsa «Iniciar ciclo» para empezar."));
@@ -301,7 +328,7 @@ void PlanView::refreshCycle() {
     }
     const PlanReport& r = *cycle;
     m_cycleTitle->setText(QStringLiteral("%1 · %2 · %3").arg(r.plan.isFinished() ? tr("ÚLTIMO CICLO") : tr("CICLO EN CURSO"), r.plan.id, when(r.plan.startedAt)));
-    m_cycleSummary->setText(QStringLiteral("<b>%1/%2 ejecutados</b> · <span style=\"color:%7\">%3 ✓</span> · <span style=\"color:%8\">%4 ✗</span> · <span style=\"color:%9\">%5 bloq.</span> · %6 % de éxito")
+    m_cycleSummary->setText(tr("<b>%1/%2 ejecutados</b> · <span style=\"color:%7\">%3 ✓</span> · <span style=\"color:%8\">%4 ✗</span> · <span style=\"color:%9\">%5 bloq.</span> · %6 % de éxito")
                                 .arg(r.executed).arg(r.total()).arg(r.passed).arg(r.failed).arg(r.blocked).arg(r.successRate())
                                 .arg(theme::Green, theme::Red, theme::Amber));
     QStringList colors;
@@ -310,6 +337,162 @@ void PlanView::refreshCycle() {
     m_cycleCells->show();
     m_cycleReport->show();
     connect(m_cycleReport, &QPushButton::clicked, this, [this, id = r.plan.id]() { emit cycleReportRequested(id); });
+    if (m_publish && m_publish->enabled() && r.plan.isPublished() && r.plan.isFinished() && r.executed > 0) {
+        m_cycleZephyr->setToolTip(tr("Vuelve a mandar al ciclo %1 de Zephyr el veredicto de cada caso y de cada paso, y sube las evidencias que falten").arg(r.plan.zephyrCycleId));
+        m_cycleZephyr->show();
+        connect(m_cycleZephyr, &QPushButton::clicked, this, [this, r]() {
+            ZephyrPublishFlow::run(this, *m_publish, r, true, [this](const QString& m, const QString& c) { emit toast(m, c); });
+        });
+    }
+}
+
+void PlanView::refreshCycles() {
+    const TestPlan* p = m_plans.active();
+    if (!p) return;
+    ui::clearLayout(m_cyclesList);
+    const QList<PlanReport> cycles = m_plans.cycles(p->id);
+    m_cyclesSection->setVisible(!cycles.isEmpty());
+    if (cycles.isEmpty()) return;
+    m_cyclesHeader->setText(cycles.size() == 1 ? tr("HISTORIAL DE CICLOS · 1 CICLO") : tr("HISTORIAL DE CICLOS · %1 CICLOS").arg(cycles.size()));
+
+    const int shown = m_allCycles ? cycles.size() : qMin(cycles.size(), kRecentCycles);
+    for (int i = 0; i < shown; ++i) {
+        const PlanReport& r = cycles[i];
+        const bool finished = r.plan.isFinished();
+        auto* row = ui::card("card");
+        auto* g = ui::hbox(row, 0, 0);
+        g->addWidget(ui::accentBar(finished ? verdictColor(r.verdict()) : theme::Blue));
+        auto* body = new QWidget;
+        auto* bv = ui::vbox(body, 0, 6);
+        bv->setContentsMargins(14, 10, 14, 10);
+
+        auto* top = new QWidget;
+        auto* th = ui::hbox(top, 0, 8);
+        auto* num = ui::label(QStringLiteral("#%1").arg(cycles.size() - i), "mono-muted");
+        num->setFixedWidth(30);
+        th->addWidget(num);
+        th->addWidget(ui::label(r.plan.id, "mono-muted"));
+        auto* date = ui::label(when(r.plan.startedAt), "muted-sm");
+        th->addWidget(date);
+        th->addStretch(1);
+        if (r.plan.isPublished()) th->addWidget(ui::pill(tr("PUBLICADO"), theme::tint(theme::Cyan, 38), theme::Cyan));
+        th->addWidget(finished ? verdictPill(r.verdict()) : mutedPill(tr("EN CURSO")));
+        auto* report = ui::button(tr("Ver informe"), "outline");
+        report->setStyleSheet(QStringLiteral("padding:3px 8px;font-size:11.5px;border-radius:7px;"));
+        report->setToolTip(tr("Abrir el informe completo en el historial"));
+        connect(report, &QPushButton::clicked, this, [this, id = r.plan.id]() { emit cycleReportRequested(id); });
+        th->addWidget(report);
+        bv->addWidget(top);
+
+        // Resumen numérico y, si hay un ciclo anterior terminado, cómo cambió la tasa de éxito
+        QString summary = tr("<b>%1/%2 ejecutados</b> · <span style=\"color:%7\">%3 ✓</span> · <span style=\"color:%8\">%4 ✗</span> · <span style=\"color:%9\">%5 bloq.</span> · %6 % de éxito")
+                              .arg(r.executed).arg(r.total()).arg(r.passed).arg(r.failed).arg(r.blocked).arg(r.successRate())
+                              .arg(theme::Green, theme::Red, theme::Amber);
+        if (r.durationSecs > 0) summary += QStringLiteral(" · %1").arg(formatDuration(r.durationSecs));
+        if (finished && i + 1 < cycles.size() && cycles[i + 1].plan.isFinished()) {
+            const int delta = r.successRate() - cycles[i + 1].successRate();
+            const QString color = delta > 0 ? theme::Green : delta < 0 ? theme::Red : theme::Muted;
+            const QString text = delta > 0 ? tr("▲ +%1 pts").arg(delta) : delta < 0 ? tr("▼ %1 pts").arg(delta) : tr("= igual");
+            summary += QStringLiteral(" · <span style=\"color:%1\">%2</span>").arg(color, text);
+        }
+        auto* sum = new QLabel(summary);
+        sum->setStyleSheet(QStringLiteral("font-size:12.5px;color:%1;").arg(theme::Text));
+        bv->addWidget(sum);
+
+        auto* cells = new ProgressCells;
+        QStringList colors, results;
+        for (const auto& c : r.rows) {
+            colors << (c.executed ? verdictColor(c.run.verdict) : theme::Border);
+            results << QStringLiteral("%1 · %2 · %3").arg(c.caseId, c.title.isEmpty() ? tr("(sin título)") : c.title, c.executed ? label(c.run.verdict) : tr("Pendiente"));
+        }
+        cells->setColors(colors);
+        bv->addWidget(cells);
+        // Los resultados caso a caso, sin salir de la pantalla
+        row->setToolTip(results.join(QLatin1Char('\n')));
+        if (auto* zephyr = zephyrBlock(r)) bv->addWidget(zephyr);
+
+        g->addWidget(body, 1);
+        m_cyclesList->addWidget(row);
+    }
+    if (cycles.size() > kRecentCycles) {
+        auto* foot = new QWidget;
+        auto* fh = ui::hbox(foot, 0, 0);
+        auto* more = ui::button(m_allCycles ? tr("Mostrar solo los últimos %1").arg(kRecentCycles) : tr("Mostrar los %1 ciclos").arg(cycles.size()), "chip-lg");
+        connect(more, &QPushButton::clicked, this, [this]() { m_allCycles = !m_allCycles; refreshCycles(); });
+        fh->addWidget(more);
+        fh->addStretch(1);
+        m_cyclesList->addWidget(foot);
+    }
+}
+
+QWidget* PlanView::zephyrBlock(const PlanReport& r) {
+    const PlanRun& plan = r.plan;
+    const bool canPublish = m_publish && m_publish->enabled() && plan.isFinished() && r.executed > 0;
+    if (!plan.isPublished() && !canPublish) return nullptr;
+    auto* block = new QWidget;
+    auto* v = ui::vbox(block, 0, 4);
+    v->setContentsMargins(0, 4, 0, 0);
+    auto* head = new QWidget;
+    auto* hh = ui::hbox(head, 0, 8);
+    const QString small = QStringLiteral("padding:3px 8px;font-size:11.5px;border-radius:7px;");
+    auto flow = [this, r](bool update) {
+        ZephyrPublishFlow::run(this, *m_publish, r, update, [this](const QString& m, const QString& c) { emit toast(m, c); });
+    };
+    if (plan.isPublished()) {
+        auto* published = ui::label(tr("Publicado en Zephyr el %1 · ciclo %2").arg(when(plan.publishedAt), plan.zephyrCycleId), "muted-sm");
+        published->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Green));
+        hh->addWidget(published, 1);
+        if (const QString url = m_publish ? m_publish->cycleUrl(r) : QString(); !url.isEmpty()) {
+            auto* open = ui::button(tr("Abrir en Jira"), "chip");
+            open->setObjectName(QStringLiteral("openZephyrCycle-%1").arg(plan.id));
+            open->setToolTip(tr("Abre en el navegador las ejecuciones de este ciclo en Zephyr"));
+            connect(open, &QPushButton::clicked, this, [this, url]() { emit openUrlRequested(url); });
+            hh->addWidget(open);
+        }
+        if (canPublish) {
+            auto* update = ui::button(tr("Actualizar en Zephyr"), "primary");
+            update->setObjectName(QStringLiteral("updateZephyr-%1").arg(plan.id));
+            update->setStyleSheet(small);
+            update->setToolTip(tr("Vuelve a mandar al ciclo %1 de Zephyr el veredicto de cada caso y de cada paso, y sube las evidencias que falten").arg(plan.zephyrCycleId));
+            connect(update, &QPushButton::clicked, this, [flow]() { flow(true); });
+            hh->addWidget(update);
+        }
+    } else {
+        hh->addWidget(ui::label(tr("Sin publicar en Zephyr"), "muted-sm"), 1);
+        auto* publish = ui::button(tr("Publicar en Zephyr"), "outline");
+        publish->setObjectName(QStringLiteral("publishZephyr-%1").arg(plan.id));
+        publish->setStyleSheet(small);
+        publish->setToolTip(tr("Crea el ciclo en Zephyr con estas ejecuciones, el veredicto de cada paso y sus evidencias"));
+        connect(publish, &QPushButton::clicked, this, [flow]() { flow(false); });
+        hh->addWidget(publish);
+    }
+    v->addWidget(head);
+    if (!plan.isPublished()) return block;
+
+    // Cada ejecución publicada con su propio Test: el de este ciclo, no el del último que se publicó.
+    for (const auto& row : r.rows) {
+        if (!row.executed) continue;
+        auto* line = new QWidget;
+        auto* lh = ui::hbox(line, 0, 8);
+        auto* id = ui::label(row.caseId, "mono-muted");
+        id->setFixedWidth(54);
+        lh->addWidget(id);
+        auto* title = ui::label(ui::elide(row.title.isEmpty() ? tr("(sin título)") : row.title, 70), "muted-sm");
+        lh->addWidget(title, 1);
+        if (row.testKey.trimmed().isEmpty()) {
+            auto* none = mutedPill(tr("SIN TEST"));
+            none->setToolTip(tr("Esta ejecución se quedó sin Test al publicar; «Actualizar en Zephyr» se lo crea"));
+            lh->addWidget(none);
+        } else {
+            auto* test = ui::button(tr("Test %1").arg(row.testKey.trimmed()), "chip");
+            test->setObjectName(QStringLiteral("cycleTest-%1").arg(row.run.id));
+            test->setToolTip(tr("Abrir en Jira el Test de Zephyr creado para esta ejecución"));
+            connect(test, &QPushButton::clicked, this, [this, key = row.testKey.trimmed()]() { emit openJiraRequested(key); });
+            lh->addWidget(test);
+        }
+        v->addWidget(line);
+    }
+    return block;
 }
 
 void PlanView::refreshRows() {

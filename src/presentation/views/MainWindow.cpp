@@ -55,9 +55,9 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
 
     m_stack = new QStackedWidget;
     m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence);
-    m_plan = new PlanView(*ctx.cases, *ctx.plan);
+    m_plan = new PlanView(*ctx.cases, *ctx.plan, ctx.publish);
     m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence);
-    m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish, ctx.evidence);
+    m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish, ctx.evidence, ctx.run);
     m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger, *ctx.evidence);
     m_stack->insertWidget(static_cast<int>(Screen::Casos), m_cases);
     m_stack->insertWidget(static_cast<int>(Screen::Plan), m_plan);
@@ -351,6 +351,16 @@ void MainWindow::wireSignals() {
         showToast(tr("Ciclo de \"%1\" iniciado · %2 casos").arg(name).arg(ids.size()), theme::Green);
     });
     connect(m_plan, &PlanView::cycleReportRequested, this, [this](const QString& planRunId) { m_history->showPlan(planRunId); navigate(Screen::Historial); });
+    // Activar o desactivar Zephyr en los ajustes cambia qué botones ofrecen los ciclos.
+    connect(m_ctx.settings, &SettingsStore::trackerChanged, m_plan, &PlanView::refresh);
+    connect(m_ctx.settings, &SettingsStore::trackerChanged, m_history, &HistoryView::refresh);
+    connect(m_plan, &PlanView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_history, &HistoryView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_plan, &PlanView::openJiraRequested, this, [this](const QString& key) {
+        const TrackerSettings& t = m_ctx.settings->tracker();
+        if (t.baseUrl().isEmpty()) { showToast(tr("Configura la URL del gestor en Ajustes"), theme::Amber); return; }
+        QDesktopServices::openUrl(QUrl(t.issueUrl(key)));
+    });
 
     // Ejecución
     connect(m_run, &RunView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);

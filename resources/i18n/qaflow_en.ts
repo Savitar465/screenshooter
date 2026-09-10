@@ -736,6 +736,14 @@
         <source>%1: no se encontró el Test %2</source>
         <translation>%1: Test %2 was not found</translation>
     </message>
+    <message>
+        <source>Creado por QAflow a partir del caso %1 para el ciclo «%2»</source>
+        <translation>Created by QAflow from case %1 for the cycle “%2”</translation>
+    </message>
+    <message>
+        <source>El ciclo %1 ya no existe en Zephyr: publica los resultados como ciclo nuevo</source>
+        <translation>Cycle %1 no longer exists in Zephyr: publish the results as a new cycle</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::AnnotationEditor</name>
@@ -1772,64 +1780,6 @@
         <translation>Creates the Zephyr cycle with these executions, each step&apos;s verdict and its evidence</translation>
     </message>
     <message>
-        <source>Se creará el ciclo «%1» en Zephyr con %2 ejecuciones.</source>
-        <translation>The cycle “%1” will be created in Zephyr with %2 executions.</translation>
-    </message>
-    <message>
-        <source>Publicando en Zephyr…</source>
-        <translation>Publishing to Zephyr…</translation>
-    </message>
-    <message>
-        <source>No se pudo publicar en Zephyr · %1</source>
-        <translation>Could not publish to Zephyr · %1</translation>
-    </message>
-    <message>
-        <source> · %1 sin publicar</source>
-        <translation> · %1 not published</translation>
-    </message>
-    <message>
-        <source> · vuelve a intentarlo</source>
-        <translation> · try again</translation>
-    </message>
-    <message>
-        <source>Publicado con salvedades</source>
-        <translation>Published with exceptions</translation>
-    </message>
-    <message>
-        <source>El ciclo se creó en Zephyr, pero %1 cosas se quedaron fuera.</source>
-        <translation>The cycle was created in Zephyr, but %1 things were left out.</translation>
-    </message>
-    <message>
-        <source>El ciclo no tiene ninguna ejecución que publicar</source>
-        <translation>The cycle has no executions to publish</translation>
-    </message>
-    <message>
-        <source> · %1 Tests creados</source>
-        <translation> · %1 Tests created</translation>
-    </message>
-    <message>
-        <source>
-
-Antes se crearán en Jira %1 Tests, a partir de los casos que aún no tienen uno enlazado: %2.
-Su clave quedará en el caso y se reutilizará en los ciclos siguientes.</source>
-        <translation>
-
-%1 Tests will be created in Jira first, from the cases that have none linked yet: %2.
-Their key stays in the case and is reused by later cycles.</translation>
-    </message>
-    <message>
-        <source>
-
-OJO: estos resultados ya se publicaron el %1 (ciclo %2). Se creará un ciclo nuevo, no se actualiza aquél.</source>
-        <translation>
-
-HEADS-UP: these results were already published on %1 (cycle %2). A new cycle will be created; that one is not updated.</translation>
-    </message>
-    <message>
-        <source>Ciclo %1 publicado en Zephyr · %2 ejecuciones, %3 pasos, %4 evidencias</source>
-        <translation>Cycle %1 published to Zephyr · %2 executions, %3 steps, %4 pieces of evidence</translation>
-    </message>
-    <message>
         <source>· Zephyr · ciclo %1</source>
         <translation>· Zephyr · cycle %1</translation>
     </message>
@@ -1846,10 +1796,6 @@ HEADS-UP: these results were already published on %1 (cycle %2). A new cycle wil
         <translation>Test</translation>
     </message>
     <message>
-        <source>Abrir en Jira el Test de Zephyr sobre el que se publican las ejecuciones de este caso</source>
-        <translation>Open in Jira the Zephyr Test this case&apos;s executions are published on</translation>
-    </message>
-    <message>
         <source>Publicado en Zephyr el %1 · ciclo %2</source>
         <translation>Published to Zephyr on %1 · cycle %2</translation>
     </message>
@@ -1860,6 +1806,86 @@ HEADS-UP: these results were already published on %1 (cycle %2). A new cycle wil
     <message>
         <source>EVIDENCIAS · %1</source>
         <translation>EVIDENCE · %1</translation>
+    </message>
+    <message>
+        <source>Eliminar…</source>
+        <translation>Delete…</translation>
+    </message>
+    <message>
+        <source>Eliminar este informe del historial, con sus ejecuciones y evidencias</source>
+        <translation>Delete this report from the history, with its runs and evidence</translation>
+    </message>
+    <message>
+        <source>Eliminar informe</source>
+        <translation>Delete report</translation>
+    </message>
+    <message>
+        <source>¿Eliminar el informe &quot;%1&quot; (%2)?</source>
+        <translation>Delete the report &quot;%1&quot; (%2)?</translation>
+    </message>
+    <message>
+        <source>El ciclo no tiene ejecuciones.</source>
+        <translation>The cycle has no runs.</translation>
+    </message>
+    <message>
+        <source>Se eliminará del historial su única ejecución</source>
+        <translation>Its only run will be removed from the history</translation>
+    </message>
+    <message>
+        <source>Se eliminarán del historial sus %1 ejecuciones</source>
+        <translation>Its %1 runs will be removed from the history</translation>
+    </message>
+    <message>
+        <source> y la evidencia capturada en ella, que se borra del disco</source>
+        <translation> along with the evidence captured in it, which is deleted from disk</translation>
+    </message>
+    <message>
+        <source> y las %1 evidencias capturadas en ellas, que se borran del disco</source>
+        <translation> along with the %1 pieces of evidence captured in them, which are deleted from disk</translation>
+    </message>
+    <message>
+        <source> El ciclo ya publicado en Zephyr no se toca.</source>
+        <translation> The cycle already published to Zephyr is left untouched.</translation>
+    </message>
+    <message>
+        <source> Esta acción no se puede deshacer.</source>
+        <translation> This cannot be undone.</translation>
+    </message>
+    <message>
+        <source>Eliminar</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Informe %1 eliminado</source>
+        <translation>Report %1 deleted</translation>
+    </message>
+    <message>
+        <source>Abrir en Jira el Test de Zephyr que se creó para esta ejecución al publicar el informe</source>
+        <translation>Open in Jira the Zephyr Test created for this run when the report was published</translation>
+    </message>
+    <message>
+        <source>Actualizar en Zephyr</source>
+        <translation>Update in Zephyr</translation>
+    </message>
+    <message>
+        <source>Vuelve a mandar al ciclo %1 de Zephyr el veredicto de cada caso y de cada paso, y sube las evidencias que falten</source>
+        <translation>Sends each case and step verdict to Zephyr cycle %1 again and uploads any missing evidence</translation>
+    </message>
+    <message>
+        <source>Publicar como ciclo nuevo</source>
+        <translation>Publish as a new cycle</translation>
+    </message>
+    <message>
+        <source>Abrir el ciclo en Jira</source>
+        <translation>Open the cycle in Jira</translation>
+    </message>
+    <message>
+        <source>Abre en el navegador las ejecuciones de este ciclo en Zephyr</source>
+        <translation>Opens in the browser the executions of this cycle in Zephyr</translation>
     </message>
 </context>
 <context>
@@ -2496,6 +2522,98 @@ HEADS-UP: these results were already published on %1 (cycle %2). A new cycle wil
     <message>
         <source>Cancelar</source>
         <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>HISTORIAL DE CICLOS · 1 CICLO</source>
+        <translation>CYCLE HISTORY · 1 CYCLE</translation>
+    </message>
+    <message>
+        <source>HISTORIAL DE CICLOS · %1 CICLOS</source>
+        <translation>CYCLE HISTORY · %1 CYCLES</translation>
+    </message>
+    <message>
+        <source>PUBLICADO</source>
+        <translation>PUBLISHED</translation>
+    </message>
+    <message>
+        <source>▲ +%1 pts</source>
+        <translation>▲ +%1 pts</translation>
+    </message>
+    <message>
+        <source>▼ %1 pts</source>
+        <translation>▼ %1 pts</translation>
+    </message>
+    <message>
+        <source>= igual</source>
+        <translation>= same</translation>
+    </message>
+    <message>
+        <source>Pendiente</source>
+        <translation>Pending</translation>
+    </message>
+    <message>
+        <source>Mostrar solo los últimos %1</source>
+        <translation>Show only the last %1</translation>
+    </message>
+    <message>
+        <source>Mostrar los %1 ciclos</source>
+        <translation>Show all %1 cycles</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;%1/%2 ejecutados&lt;/b&gt; · &lt;span style=&quot;color:%7&quot;&gt;%3 ✓&lt;/span&gt; · &lt;span style=&quot;color:%8&quot;&gt;%4 ✗&lt;/span&gt; · &lt;span style=&quot;color:%9&quot;&gt;%5 bloq.&lt;/span&gt; · %6 % de éxito</source>
+        <translation>&lt;b&gt;%1/%2 executed&lt;/b&gt; · &lt;span style=&quot;color:%7&quot;&gt;%3 ✓&lt;/span&gt; · &lt;span style=&quot;color:%8&quot;&gt;%4 ✗&lt;/span&gt; · &lt;span style=&quot;color:%9&quot;&gt;%5 blocked&lt;/span&gt; · %6 % success</translation>
+    </message>
+    <message>
+        <source>Actualizar en Zephyr</source>
+        <translation>Update in Zephyr</translation>
+    </message>
+    <message>
+        <source>Vuelve a mandar al ciclo %1 de Zephyr el veredicto de cada caso y de cada paso, y sube las evidencias que falten</source>
+        <translation>Sends each case and step verdict to Zephyr cycle %1 again and uploads any missing evidence</translation>
+    </message>
+    <message>
+        <source>Abrir el informe completo en el historial</source>
+        <translation>Open the full report in the history</translation>
+    </message>
+    <message>
+        <source>Publicado en Zephyr el %1 · ciclo %2</source>
+        <translation>Published to Zephyr on %1 · cycle %2</translation>
+    </message>
+    <message>
+        <source>Sin publicar en Zephyr</source>
+        <translation>Not published to Zephyr</translation>
+    </message>
+    <message>
+        <source>Publicar en Zephyr</source>
+        <translation>Publish to Zephyr</translation>
+    </message>
+    <message>
+        <source>Crea el ciclo en Zephyr con estas ejecuciones, el veredicto de cada paso y sus evidencias</source>
+        <translation>Creates the Zephyr cycle with these executions, each step&apos;s verdict and its evidence</translation>
+    </message>
+    <message>
+        <source>SIN TEST</source>
+        <translation>NO TEST</translation>
+    </message>
+    <message>
+        <source>Esta ejecución se quedó sin Test al publicar; «Actualizar en Zephyr» se lo crea</source>
+        <translation>This run was left without a Test when publishing; “Update in Zephyr” creates it</translation>
+    </message>
+    <message>
+        <source>Test %1</source>
+        <translation>Test %1</translation>
+    </message>
+    <message>
+        <source>Abrir en Jira el Test de Zephyr creado para esta ejecución</source>
+        <translation>Open in Jira the Zephyr Test created for this run</translation>
+    </message>
+    <message>
+        <source>Abrir en Jira</source>
+        <translation>Open in Jira</translation>
+    </message>
+    <message>
+        <source>Abre en el navegador las ejecuciones de este ciclo en Zephyr</source>
+        <translation>Opens in the browser the executions of this cycle in Zephyr</translation>
     </message>
 </context>
 <context>
@@ -3284,6 +3402,10 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <source>Activa Zephyr en Ajustes para publicar los ciclos</source>
         <translation>Turn Zephyr on in Settings to publish cycles</translation>
     </message>
+    <message>
+        <source>Este informe no está publicado en Zephyr: publícalo primero</source>
+        <translation>This report is not published to Zephyr: publish it first</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::Thumbnail</name>
@@ -3301,6 +3423,111 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>Termina al menos un ciclo de un plan para ver su evolución.</source>
         <translation>Finish at least one cycle of a plan to see its trend.</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::ZephyrPublishFlow</name>
+    <message>
+        <source>El ciclo no tiene ninguna ejecución que publicar</source>
+        <translation>The cycle has no executions to publish</translation>
+    </message>
+    <message>
+        <source>Se actualizará el ciclo %1 de Zephyr con las %2 ejecuciones del informe: el veredicto de cada caso y de cada paso, y las evidencias que aún no estén subidas.</source>
+        <translation>Zephyr cycle %1 will be updated with the %2 executions of the report: each case and step verdict, and any evidence not yet uploaded.</translation>
+    </message>
+    <message>
+        <source>
+
+Cada ejecución va sobre el Test que ya tiene.</source>
+        <translation>
+
+Each run goes to the Test it already has.</translation>
+    </message>
+    <message>
+        <source>
+
+%1 ejecuciones se quedaron sin Test la vez anterior y estrenarán el suyo: %2.</source>
+        <translation>
+
+%1 runs were left without a Test last time and will get their own: %2.</translation>
+    </message>
+    <message>
+        <source>Se creará el ciclo «%1» en Zephyr con %2 ejecuciones.</source>
+        <translation>The cycle “%1” will be created in Zephyr with %2 executions.</translation>
+    </message>
+    <message>
+        <source>
+
+Antes se crearán en Jira %1 Tests, uno por ejecución, a partir de los casos: %2.
+Cada informe enlaza sus propios Tests; los de otros ciclos no se tocan.</source>
+        <translation>
+
+First, %1 Tests will be created in Jira, one per run, from the cases: %2.
+Each report links its own Tests; those of other cycles are left untouched.</translation>
+    </message>
+    <message>
+        <source>
+
+OJO: estos resultados ya se publicaron el %1 (ciclo %2). Se creará un ciclo nuevo, no se actualiza aquél; para eso está «Actualizar en Zephyr».</source>
+        <translation>
+
+HEADS-UP: these results were already published on %1 (cycle %2). A new cycle will be created; that one is not updated — use “Update in Zephyr” for that.</translation>
+    </message>
+    <message>
+        <source>Actualizar en Zephyr</source>
+        <translation>Update in Zephyr</translation>
+    </message>
+    <message>
+        <source>Publicar en Zephyr</source>
+        <translation>Publish to Zephyr</translation>
+    </message>
+    <message>
+        <source>Actualizando en Zephyr…</source>
+        <translation>Updating in Zephyr…</translation>
+    </message>
+    <message>
+        <source>Publicando en Zephyr…</source>
+        <translation>Publishing to Zephyr…</translation>
+    </message>
+    <message>
+        <source>No se pudo actualizar el ciclo en Zephyr · %1</source>
+        <translation>Could not update the cycle in Zephyr · %1</translation>
+    </message>
+    <message>
+        <source>No se pudo publicar en Zephyr · %1</source>
+        <translation>Could not publish to Zephyr · %1</translation>
+    </message>
+    <message>
+        <source> · vuelve a intentarlo</source>
+        <translation> · try again</translation>
+    </message>
+    <message>
+        <source>Ciclo %1 actualizado en Zephyr · %2 ejecuciones, %3 pasos, %4 evidencias</source>
+        <translation>Cycle %1 updated in Zephyr · %2 executions, %3 steps, %4 pieces of evidence</translation>
+    </message>
+    <message>
+        <source>Ciclo %1 publicado en Zephyr · %2 ejecuciones, %3 pasos, %4 evidencias</source>
+        <translation>Cycle %1 published to Zephyr · %2 executions, %3 steps, %4 pieces of evidence</translation>
+    </message>
+    <message>
+        <source> · %1 Tests creados</source>
+        <translation> · %1 Tests created</translation>
+    </message>
+    <message>
+        <source> · %1 sin publicar</source>
+        <translation> · %1 not published</translation>
+    </message>
+    <message>
+        <source>Publicado con salvedades</source>
+        <translation>Published with exceptions</translation>
+    </message>
+    <message>
+        <source>El ciclo se actualizó en Zephyr, pero %1 cosas se quedaron fuera.</source>
+        <translation>The cycle was updated in Zephyr, but %1 things were left out.</translation>
+    </message>
+    <message>
+        <source>El ciclo se creó en Zephyr, pero %1 cosas se quedaron fuera.</source>
+        <translation>The cycle was created in Zephyr, but %1 things were left out.</translation>
     </message>
 </context>
 </TS>

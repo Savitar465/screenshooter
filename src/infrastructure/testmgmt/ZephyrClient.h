@@ -40,7 +40,7 @@ public:
     /// instala Zephyr.
     static QString testTypeName(const TrackerSettings& s);
     /// Descripción del Test creado a partir de un caso: sus precondiciones y de dónde sale.
-    static QString testDescription(const PublishCase& c);
+    static QString testDescription(const PublishCase& c, const QString& cycleName);
 
 private:
     struct Job;   // estado de una publicación en curso (encadena decenas de peticiones)
@@ -73,16 +73,27 @@ private:
     /// `withDates` a false repite el ciclo sin fechas cuando Zephyr rechaza el formato de las suyas.
     void createCycle(const std::shared_ptr<Job>& job, bool withDates = true);
     /// Crea en Jira el issue de tipo Test que representa al caso (título y precondiciones).
-    void postTestIssue(const TrackerSettings& s, const Project& project, const PublishCase& c,
+    void postTestIssue(const TrackerSettings& s, const Project& project, const PublishCase& c, const QString& cycleName,
                        std::function<void(bool ok, const QString& issueId, const QString& key, const QString& error, bool retryable)> done);
     /// Añade al Test los pasos del caso, uno a uno; devuelve con su motivo los que no entraron.
     void postTestSteps(const TrackerSettings& s, const QString& issueId, const PublishCase& c, int step,
                        const QStringList& failed, std::function<void(const QStringList& failed)> done);
 
+    /// Al actualizar: comprueba que el ciclo sigue existiendo en Zephyr antes de tocarlo.
+    void checkCycle(const std::shared_ptr<Job>& job);
+
     void nextCase(const std::shared_ptr<Job>& job);
     /// Estrena en Jira el Test del caso que aún no está enlazado a ninguno y sigue con su ejecución.
     void createTestForCase(const std::shared_ptr<Job>& job);
     void executeCase(const std::shared_ptr<Job>& job, const QString& issueId);
+    /// Al actualizar: la ejecución que ese Test ya tiene en el ciclo (vacía si ninguna).
+    void findExecution(const std::shared_ptr<Job>& job, const QString& issueId, std::function<void(const QString& executionId)> done);
+    void createExecution(const std::shared_ptr<Job>& job, const QString& issueId);
+    /// Fija el veredicto de la ejecución (recién creada o reutilizada) y sigue con sus pasos.
+    void markExecution(const std::shared_ptr<Job>& job, const QString& issueId);
+    /// Al actualizar: descarta las evidencias que ya están en su destino (mismo nombre de fichero),
+    /// entidad a entidad, para no duplicarlas.
+    void dropUploadedEvidence(const std::shared_ptr<Job>& job, QList<QPair<QString, QByteArray>> entities, std::function<void()> done);
     /// Lee los resultados de paso que Zephyr crea con la ejecución y reparte las evidencias.
     void readStepResults(const std::shared_ptr<Job>& job, const QString& issueId);
     void writeNextStep(const std::shared_ptr<Job>& job, const QString& issueId);

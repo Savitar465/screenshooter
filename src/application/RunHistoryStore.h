@@ -36,6 +36,9 @@ public:
     void finishPlan(const QString& planRunId);
     /// Anota en el ciclo de plan el ciclo de Zephyr en el que se publicaron sus resultados.
     void markPublished(const QString& planRunId, const QString& zephyrCycleId);
+    /// Guarda en cada ejecución (R-0007 → SHOP-77) el Test de Zephyr que se creó para ella al
+    /// publicarla: volver a publicar ese informe reutiliza esos Tests en vez de estrenar otros.
+    void assignTestKeys(const QHash<QString, QString>& testKeyByRunId);
     /// Migración de datos anteriores a que la evidencia fuera de la ejecución: las evidencias
     /// sueltas de cada caso pasan a su última ejecución, y las de un caso que nunca se ejecutó se
     /// descartan (los ficheros no se tocan). `runningCaseId` es el caso que se está ejecutando
@@ -44,6 +47,11 @@ public:
     int adoptLooseEvidence(const QString& runningCaseId = QString());
     /// Añade una ejecución terminada. Asigna el id y devuelve el registro guardado.
     RunRecord addRun(RunRecord record);
+    /// Elimina un ciclo de plan con sus ejecuciones y las evidencias de éstas (los ficheros se
+    /// liberan a través de TestCaseStore). Si a algún caso se le borró su última ejecución, su
+    /// «última ejecución» vuelve a ser la más reciente que quede. Definitivo: no se puede deshacer.
+    /// Falso si el ciclo no existe. No comprueba si está en curso: eso lo decide quien llama.
+    bool removePlanRun(const QString& planRunId);
 
     /// Escribe el historial en disco. Falso (y `saveFailed`) si no se pudo.
     bool save();

@@ -77,9 +77,9 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 | Pantalla          | Qué hace                                                                   |
 |-------------------|----------------------------------------------------------------------------|
 | Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira, pasos reordenables e insertables y sus últimas ejecuciones, cada una con un clic para abrir sus resultados en el historial (las evidencias son de cada ejecución y se ven allí); duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
-| Planes            | Varios planes (crear, duplicar, archivar, eliminar), casos en orden de ejecución propio, progreso del ciclo actual con enlace a su informe, estimación basada en las duraciones reales del historial (3 min/paso si no hay datos) y arranque de un ciclo nuevo |
+| Planes            | Varios planes (crear, duplicar, archivar, eliminar), casos en orden de ejecución propio, progreso del ciclo actual con enlace a su informe, historial de ciclos del plan con el resultado de cada uno (ejecutados, superados, fallidos, bloqueados, tasa de éxito y su variación respecto al ciclo anterior, enlace al informe y, con Zephyr, dónde se publicó, el Test de cada ejecución y los botones de publicar o actualizar el ciclo), estimación basada en las duraciones reales del historial (3 min/paso si no hay datos) y arranque de un ciclo nuevo |
 | Ejecución         | Tres columnas: el caso con su progreso y la lista de pasos (veredicto corregible en cada uno), el paso actual con Pasa / Falla / Bloq. / N/A (teclas P / F / B / S), paso anterior (Retroceso), **atajos globales** para avanzar de paso sin volver a la ventana (Ctrl+Alt+P / Ctrl+Alt+F / Ctrl+Alt+A), cronómetro por paso y por caso, visor grande de la evidencia elegida con «Asignar a» y observaciones, y la columna de capturas con las evidencias de esta ejecución. Sobrevive al cierre de la aplicación |
-| Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración y sus evidencias, con lo que está enlazado en Jira y Zephyr), informes de plan con exportación a Markdown y publicación en Zephyr y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
+| Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración y sus evidencias, con lo que está enlazado en Jira y Zephyr), informes de plan con exportación a Markdown, publicación en Zephyr y eliminación (con sus ejecuciones y evidencias; el ciclo en curso no se puede borrar) y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
 | Reportar bug      | Formulario prellenado con el paso fallido y campos reales del gestor (tipo, prioridad, asignado, componentes, versión, etiquetas) cargados del proyecto, con las personas buscadas en Jira según se escribe; crea el issue en Jira, GitHub, GitLab o Azure DevOps y sube las capturas; lista de bugs reportados con su estado y cola offline con reintento |
 | Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; atajos de la ejecución; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, modo de autenticación en Jira y credenciales en el llavero del sistema), publicación de ciclos en Zephyr y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
 
@@ -107,19 +107,24 @@ un ciclo de plan, «Publicar en Zephyr» crea el *test cycle* con una ejecución
 cada paso y las evidencias colgadas donde corresponde — las de un paso en su resultado y las del caso
 en la ejecución.
 
-**Un caso, un Test.** Como el caso se ejecuta muchas veces y en varios planes, su issue de tipo
-**Test** es siempre el mismo: el campo «Test de Zephyr» del editor lo enlaza (`SHOP-42`) y todos los
-ciclos se publican sobre él. Ese campo se rellena una vez, y de dos maneras: pegando la clave de un
-Test que ya exista, o pulsando **«Crear»**, que lo estrena en Jira con el título, las precondiciones y
-los pasos del caso y anota su clave. El caso que llegue a la publicación sin Test lo estrena ahí
-mismo, y la aplicación enumera antes cuáles van a estrenarlo. Al terminar, si algo se ha quedado fuera
+**Cada informe, sus Tests.** Cada ciclo de plan es único, así que al publicarlo cada ejecución
+estrena su propio issue de tipo **Test** en Jira, creado con el título, las precondiciones y los pasos
+del caso (y con el nombre del ciclo en la descripción, para distinguirlo). La clave queda en esa
+ejecución: el informe de otro ciclo del mismo caso enlaza su propio Test, nunca el del último que se
+publicó, y sólo republicar el mismo informe reutiliza los Tests que ya tiene. Antes de publicar, la
+aplicación enumera los casos cuya ejecución va a estrenar Test. Al terminar, si algo se ha quedado fuera
 —un Test que Jira rechazó, una evidencia que ya no está en disco o los veredictos que sobran cuando el
 Test tiene menos pasos que el caso— lo detalla con su motivo en vez de limitarse a contarlo.
 
-Publicado el ciclo, el informe del plan lo recuerda: enseña «Publicado en Zephyr el … · ciclo N» y, si
-se pide publicarlo otra vez, avisa de que Zephyr creará un ciclo nuevo en vez de actualizar aquél.
-Además, cada caso del informe —y el detalle de cada ejecución— muestra con qué está enlazado: su
-historia de Jira y su Test de Zephyr, en chips que abren el issue en el navegador. El Markdown
+Publicado el ciclo, el informe del plan lo recuerda: enseña «Publicado en Zephyr el … · ciclo N», con
+el botón **«Abrir el ciclo en Jira»** (la búsqueda de ejecuciones de Zephyr filtrada por ese ciclo,
+que es la pantalla estable de Zephyr Server), y ofrece **«Actualizar en Zephyr»**, que vuelve a mandar a ese mismo ciclo el veredicto de cada caso y
+de cada paso, añade las ejecuciones que se quedaron fuera (creando su Test si hace falta) y sube sólo
+las evidencias que aún no estén; «Publicar como ciclo nuevo» sigue disponible, con aviso. La pantalla
+de Planes ofrece lo mismo en cada ciclo de su historial y lista, en los publicados, cada ejecución con
+su Test enlazado.
+Además, cada caso del informe —y el detalle de cada ejecución— muestra con qué está enlazado: la
+historia de Jira del caso y el Test de Zephyr de esa ejecución, en chips que abren el issue en el navegador. El Markdown
 exportado lo lleva también, para que el informe pegado en un ticket se explique solo.
 
 Se activa en Ajustes, bajo el gestor de incidencias: usa la misma instancia y las mismas credenciales

@@ -127,9 +127,6 @@ QString TestCaseStore::duplicateCase(const QString& id) {
     c.status = CaseStatus::Borrador;
     c.lastRun = LastRun{};
     c.shots.clear();
-    // La copia es un caso nuevo: heredar la clave haría que dos casos publicaran sus ejecuciones
-    // sobre el mismo Test de Zephyr. Se enlaza o se crea cuando toque.
-    c.testKey.clear();
     // Justo después del original, para que se vea de dónde sale.
     const int pos = static_cast<int>(src - m_cases.constData()) + 1;
     m_cases.insert(pos, c);
@@ -265,6 +262,25 @@ int TestCaseStore::adoptLooseShots(const QString& caseId, const QString& runId) 
                        tc.shots.end());
     });
     return loose;
+}
+
+int TestCaseStore::releaseShotsOfRuns(const QStringList& runIds) {
+    if (runIds.isEmpty()) return 0;
+    commitUndo();   // lo que hubiera pendiente de deshacer ya no es restaurable con coherencia
+    QStringList files, touched;
+    for (auto& c : m_cases) {
+        const int before = c.shots.size();
+        c.shots.erase(std::remove_if(c.shots.begin(), c.shots.end(), [&](const Screenshot& s) {
+                          if (!runIds.contains(s.runId)) return false;
+                          files << s.path;
+                          return true;
+                      }), c.shots.end());
+        if (c.shots.size() != before) touched << c.id;
+    }
+    for (const auto& id : touched) touch(id);
+    files.removeAll(QString());
+    if (!files.isEmpty()) emit filesReleased(files);
+    return files.size();
 }
 
 void TestCaseStore::removeShot(const QString& id, int shotId) {

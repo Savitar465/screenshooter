@@ -43,6 +43,9 @@ struct RunRecord {
     QList<RunRecordStep> steps;   // sólo los pasos que llegaron a ejecutarse
     int plannedSteps = 0;         // pasos que tenía el caso ("3 de 5" cuando se bloquea)
     qint64 durationSecs = 0;      // tiempo real de ejecución (suma de los pasos; excluye el tiempo con la app cerrada)
+    /// Test de Zephyr creado para esta ejecución al publicar su informe (SHOP-77). Cada ejecución
+    /// tiene el suyo: dos ciclos del mismo caso son dos Tests distintos. Vacío hasta publicarla.
+    QString testKey;
 
     int count(StepResult r) const;
     bool hasNotes() const;

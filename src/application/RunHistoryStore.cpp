@@ -18,6 +18,15 @@ QString nextId(const QList<T>& items, const QString& prefix) {
     }
     return prefix + QStringLiteral("%1").arg(maxNum + 1, 4, 10, QLatin1Char('0'));
 }
+
+RunOutcome outcomeOf(Verdict v) {
+    switch (v) {
+        case Verdict::Superado: return RunOutcome::Passed;
+        case Verdict::Fallido: return RunOutcome::Failed;
+        case Verdict::Bloqueado: return RunOutcome::Blocked;
+    }
+    return RunOutcome::None;
+}
 } // namespace
 
 RunHistoryStore::RunHistoryStore(std::shared_ptr<IRunHistoryRepository> repo, TestCaseStore& cases, QObject* parent)
@@ -56,7 +65,7 @@ PlanReport RunHistoryStore::report(const QString& planRunId) const {
     if (!plan) return PlanReport{};
     return PlanReport::build(*plan, runsForPlan(planRunId), [this](const QString& caseId) {
         const TestCase* c = m_cases.find(caseId);
-        return c ? PlanReport::CaseInfo{c->title, c->jiraKey, c->testKey} : PlanReport::CaseInfo{};
+        return c ? PlanReport::CaseInfo{c->title, c->jiraKey} : PlanReport::CaseInfo{};
     });
 }
 
@@ -111,11 +120,48 @@ void RunHistoryStore::markPublished(const QString& planRunId, const QString& zep
     }
 }
 
+void RunHistoryStore::assignTestKeys(const QHash<QString, QString>& testKeyByRunId) {
+    bool changed = false;
+    for (auto& r : m_history.runs) {
+        const QString key = testKeyByRunId.value(r.id).trimmed();
+        if (key.isEmpty() || r.testKey == key) continue;
+        r.testKey = key;
+        changed = true;
+    }
+    if (changed) persist();
+}
+
 RunRecord RunHistoryStore::addRun(RunRecord record) {
     record.id = nextId(m_history.runs, QStringLiteral("R-"));
     m_history.runs.append(record);
     persist();
     return record;
+}
+
+bool RunHistoryStore::removePlanRun(const QString& planRunId) {
+    auto plan = std::find_if(m_history.plans.begin(), m_history.plans.end(), [&](const PlanRun& p) { return p.id == planRunId; });
+    if (plan == m_history.plans.end()) return false;
+
+    // Los casos cuya «última ejecución» es una de las que se van: sólo a ésos hay que recalcularla.
+    QStringList runIds, staleCases;
+    for (const auto& r : m_history.runs) {
+        if (r.planRunId != planRunId) continue;
+        runIds << r.id;
+        const QList<RunRecord> ofCase = runsForCase(r.caseId);   // la más reciente primero
+        if (!ofCase.isEmpty() && ofCase.first().planRunId == planRunId && !staleCases.contains(r.caseId)) staleCases << r.caseId;
+    }
+    m_history.plans.erase(plan);
+    m_history.runs.erase(std::remove_if(m_history.runs.begin(), m_history.runs.end(), [&](const RunRecord& r) { return r.planRunId == planRunId; }),
+                         m_history.runs.end());
+
+    m_cases.releaseShotsOfRuns(runIds);
+    for (const auto& caseId : staleCases) {
+        const QList<RunRecord> left = runsForCase(caseId);
+        const LastRun last = left.isEmpty() ? LastRun{} : LastRun{outcomeOf(left.first().verdict), left.first().finishedAt};
+        m_cases.updateCase(caseId, [last](TestCase& c) { c.lastRun = last; });
+    }
+    persist();
+    return true;
 }
 
 bool RunHistoryStore::save() {

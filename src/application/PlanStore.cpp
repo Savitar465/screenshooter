@@ -258,6 +258,19 @@ std::optional<PlanReport> PlanStore::latestCycle(const QString& planId) const {
     return m_history.report(latest->id);
 }
 
+QList<PlanReport> PlanStore::cycles(const QString& planId) const {
+    QList<const PlanRun*> runs;
+    for (const auto& r : m_history.plans()) if (r.planId == planId) runs.append(&r);
+    // Del más reciente al más antiguo; a igual inicio, el de id mayor (se creó después).
+    std::stable_sort(runs.begin(), runs.end(), [](const PlanRun* a, const PlanRun* b) {
+        return a->startedAt != b->startedAt ? a->startedAt > b->startedAt : a->id > b->id;
+    });
+    QList<PlanReport> out;
+    out.reserve(runs.size());
+    for (const PlanRun* r : runs) out.append(m_history.report(r->id));
+    return out;
+}
+
 int PlanStore::cycleCount(const QString& planId) const {
     int n = 0;
     for (const auto& r : m_history.plans()) if (r.planId == planId) ++n;

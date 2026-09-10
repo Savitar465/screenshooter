@@ -178,6 +178,7 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/FlashOverlay.cpp
         src/presentation/widgets/ProgressCells.h
         src/presentation/widgets/ProgressCells.cpp
+        src/presentation/widgets/ZephyrPublishFlow.cpp
         src/presentation/widgets/MetricBars.h
         src/presentation/widgets/MetricBars.cpp
         src/presentation/widgets/Thumbnail.h

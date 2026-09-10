@@ -101,6 +101,73 @@ private slots:
         QVERIFY(f.store.find(QStringLiteral("TC-101"))->shots.first().runId.isEmpty());
     }
 
+    void removingAPlanRunDropsItsRunsAndEvidenceAndRefreshesTheLastRun() {
+        AppFixture f;
+        // TC-103 ya tiene una ejecución suelta superada: es la que debe quedar como "última".
+        f.run.start(QStringLiteral("TC-103"));
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        const QDateTime looseAt = f.store.find(QStringLiteral("TC-103"))->lastRun.at;
+
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        const QString planRunId = f.run.planRunId();
+        f.store.addShot(QStringLiteral("TC-103"), Screenshot{1, 1, QStringLiteral("cap_001.png"), QStringLiteral("/tmp/qaflow-test/cap_001.png"), {}});
+        f.run.mark(StepResult::Fail);
+        f.run.finish();
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        QCOMPARE(f.history.runsForPlan(planRunId).size(), 2);
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.outcome, RunOutcome::Failed);
+        QCOMPARE(f.store.find(QStringLiteral("TC-107"))->lastRun.outcome, RunOutcome::Passed);
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->shots.size(), 1);
+        QVERIFY(!f.store.find(QStringLiteral("TC-103"))->shots.first().runId.isEmpty());   // sellada a su ejecución
+
+        QSignalSpy released(&f.store, &TestCaseStore::filesReleased);
+        QSignalSpy changed(&f.history, &RunHistoryStore::historyChanged);
+        const int saves = f.historyRepo->saves;
+        QVERIFY(f.history.removePlanRun(planRunId));
+
+        QVERIFY(!f.history.findPlan(planRunId));
+        QVERIFY(f.history.runsForPlan(planRunId).isEmpty());
+        QCOMPARE(f.history.runs().size(), 1);   // la suelta sigue
+        QCOMPARE(f.history.plans().size(), 0);
+        QCOMPARE(f.historyRepo->saves, saves + 1);
+        QCOMPARE(changed.count(), 1);
+        // Las evidencias de esas ejecuciones se sueltan y sus ficheros se liberan.
+        QVERIFY(f.store.find(QStringLiteral("TC-103"))->shots.isEmpty());
+        QCOMPARE(released.count(), 1);
+        QCOMPARE(released.first().first().toStringList(), QStringList{QStringLiteral("/tmp/qaflow-test/cap_001.png")});
+        // La "última ejecución" vuelve a la anterior que queda, o a "sin ejecutar" si no queda ninguna.
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.outcome, RunOutcome::Passed);
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.at, looseAt);
+        QCOMPARE(f.store.find(QStringLiteral("TC-107"))->lastRun.outcome, RunOutcome::None);
+
+        QVERIFY(!f.history.removePlanRun(planRunId));   // ya no existe
+    }
+
+    void removingAPlanRunLeavesOtherCyclesAndTheirEvidenceAlone() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Ciclo 1"));
+        const QString first = f.run.planRunId();
+        f.store.addShot(QStringLiteral("TC-103"), Screenshot{1, 1, QStringLiteral("cap_001.png"), QStringLiteral("/tmp/qaflow-test/cap_001.png"), {}});
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Ciclo 2"));
+        const QString second = f.run.planRunId();
+        f.run.mark(StepResult::Block);
+        f.run.finish();
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.outcome, RunOutcome::Blocked);
+
+        QSignalSpy released(&f.store, &TestCaseStore::filesReleased);
+        QVERIFY(f.history.removePlanRun(second));
+        QVERIFY(f.history.findPlan(first));
+        QCOMPARE(f.history.runsForPlan(first).size(), 1);
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->shots.size(), 1);   // la del ciclo 1 sigue
+        QCOMPARE(released.count(), 0);                                       // nada que borrar del disco
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.outcome, RunOutcome::Passed);
+        QCOMPARE(f.history.report(first).executed, 1);
+    }
+
     void finishPlanIsIdempotent() {
         AppFixture f;
         const QString id = f.history.startPlan(QStringLiteral("Uno"), {QStringLiteral("TC-103")});

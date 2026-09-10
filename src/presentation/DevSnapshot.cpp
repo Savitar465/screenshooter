@@ -160,8 +160,24 @@ void run(MainWindow& window, AppContext& ctx) {
             window.finishRun();
             window.showMetrics();
         }},
-        {"09-planes", [&] { ctx.plan->createPlan(QStringLiteral("Smoke release 2.3")); ctx.plan->toggle(QStringLiteral("TC-101")); ctx.plan->setActive(QStringLiteral("PL-0001")); window.navigate(Screen::Plan); }},
-        {"05-ajustes", [&] { window.openSettings(); }, [&] { return window.settingsWindow(); }},
+        {"09-planes", [&] {
+            // El primer ciclo, publicado en Zephyr con el Test de cada ejecución: así el historial de
+            // ciclos enseña el bloque de Zephyr (Tests enlazados y «Actualizar en Zephyr»).
+            ctx.settings->updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+            QHash<QString, QString> tests;
+            int n = 77;
+            for (const auto& r : ctx.history->runsForPlan(QStringLiteral("PR-0001"))) tests.insert(r.id, QStringLiteral("SHOP-%1").arg(n++));
+            ctx.history->assignTestKeys(tests);
+            ctx.history->markPublished(QStringLiteral("PR-0001"), QStringLiteral("77"));
+            ctx.plan->createPlan(QStringLiteral("Smoke release 2.3"));
+            ctx.plan->toggle(QStringLiteral("TC-101"));
+            ctx.plan->setActive(QStringLiteral("PL-0001"));
+            window.navigate(Screen::Plan);
+        }},
+        {"05-ajustes", [&] {
+            ctx.settings->updateTracker([](TrackerSettings& s) { s.zephyr = false; });   // como estaba, para la captura de ajustes
+            window.openSettings();
+        }, [&] { return window.settingsWindow(); }},
         {"06-casos-en-ejecucion", [&] {
             if (QWidget* settings = window.settingsWindow()) settings->close();
             window.navigate(Screen::Casos);
@@ -173,7 +189,9 @@ void run(MainWindow& window, AppContext& ctx) {
     QObject::connect(timer, &QTimer::timeout, [&window, dir, timer, shots, i = 0]() mutable {
         if (i >= shots.size()) { timer->stop(); QApplication::quit(); return; }
         shots[i].prepare();
-        QApplication::processEvents();
+        // Cada LayoutRequest recalcula un widget y encola el de su padre, así que una pantalla
+        // recién construida tarda varias vueltas del bucle de eventos en asentarse.
+        for (int pass = 0; pass < 8; ++pass) QApplication::processEvents();
         QWidget* target = shots[i].target ? shots[i].target() : &window;
         if (!target) target = &window;
         target->grab().save(QDir(dir).filePath(QString::fromLatin1(shots[i].name) + QStringLiteral(".png")));

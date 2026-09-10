@@ -47,6 +47,10 @@ struct TrackerSettings {
 
     QString baseUrl() const;                    // url sin barra final
     QString issueUrl(const QString& key) const; // enlace al issue en el navegador
+    /// Enlace a un ciclo de Zephyr en Jira: la búsqueda de ejecuciones (ZQL) del proyecto filtrada
+    /// por el nombre del ciclo, que es la pantalla estable de Zephyr Server. Vacío si el gestor no
+    /// es Jira o faltan la URL o el nombre.
+    QString zephyrCycleUrl(const QString& cycleName) const;
     /// Qué es `project` para este gestor ("Clave del proyecto", "owner/repo", …).
     QString projectLabel() const;
     QString projectPlaceholder() const;

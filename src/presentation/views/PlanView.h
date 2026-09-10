@@ -15,18 +15,30 @@ namespace qaflow {
 class TestCaseStore;
 class PlanStore;
 class ProgressCells;
+class TestPublishService;
+struct PlanReport;
 
 /// Pantalla "Planes": lista de planes (activos y archivados) a la izquierda; a la derecha el
-/// plan abierto: casos en orden de ejecución, ciclo actual y arranque de un ciclo nuevo.
+/// plan abierto: casos en orden de ejecución, ciclo actual, historial de ciclos con sus
+/// resultados y arranque de un ciclo nuevo.
 class PlanView : public QWidget {
     Q_OBJECT
 public:
-    PlanView(TestCaseStore& cases, PlanStore& plans, QWidget* parent = nullptr);
+    /// `publish` puede ser nullptr (tests, o sin Zephyr): entonces los ciclos no se publican ni se
+    /// actualizan desde aquí, aunque los ya publicados siguen enseñando sus Tests.
+    PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* publish = nullptr, QWidget* parent = nullptr);
+
+    /// Vuelve a pintar la pantalla (p. ej. al activar o desactivar Zephyr en los ajustes).
+    void refresh();
 
 signals:
     void startPlanRequested(const QStringList& caseIds, const QString& planName, const QString& planId);
     /// Abrir en el historial el informe de un ciclo.
     void cycleReportRequested(const QString& planRunId);
+    /// Abrir en el navegador el Test de Zephyr de una ejecución.
+    void openJiraRequested(const QString& key);
+    /// Abrir en el navegador una URL ya construida (el ciclo de Zephyr en Jira).
+    void openUrlRequested(const QString& url);
     void toast(const QString& message, const QString& color);
 
 private:
@@ -35,6 +47,10 @@ private:
     void refreshList();
     void refreshEditor();
     void refreshCycle();
+    void refreshCycles();
+    /// Bloque de Zephyr de un ciclo: dónde se publicó y el Test de cada ejecución, con «Actualizar
+    /// en Zephyr»; o «Publicar en Zephyr» si aún no se publicó. nullptr si no procede ninguno.
+    QWidget* zephyrBlock(const PlanReport& report);
     void refreshRows();
     void newPlan();
     void duplicateActive();
@@ -43,8 +59,10 @@ private:
 
     TestCaseStore& m_cases;
     PlanStore& m_plans;
+    TestPublishService* m_publish;
     bool m_selfEdit = false;
     bool m_showArchived = false;
+    bool m_allCycles = false;   // la sección de historial muestra todos los ciclos o sólo los últimos
 
     // lista
     QLayout* m_filterRow = nullptr;
@@ -63,6 +81,10 @@ private:
     QLabel* m_cycleSummary = nullptr;
     ProgressCells* m_cycleCells = nullptr;
     QPushButton* m_cycleReport = nullptr;
+    QPushButton* m_cycleZephyr = nullptr;
+    QWidget* m_cyclesSection = nullptr;
+    QLabel* m_cyclesHeader = nullptr;
+    QVBoxLayout* m_cyclesList = nullptr;
     QLabel* m_inPlanHeader = nullptr;
     QVBoxLayout* m_inPlan = nullptr;
     QLabel* m_availableHeader = nullptr;

@@ -27,13 +27,13 @@ PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOf
     for (const auto& caseId : plan.caseIds) {
         PlanReportRow row;
         row.caseId = caseId;
-        // Los enlaces salen del caso de hoy: son con los que se publica, no una foto de aquel día.
+        // La historia sale del caso de hoy; el Test, de la ejecución: es el que se creó al publicarla.
         const CaseInfo info = caseOf ? caseOf(caseId) : CaseInfo{};
         row.jiraKey = info.jiraKey;
-        row.testKey = info.testKey;
         if (const auto it = latest.constFind(caseId); it != latest.cend()) {
             row.executed = true;
             row.run = **it;
+            row.testKey = row.run.testKey;
             row.title = row.run.caseTitle;
             row.suite = row.run.suite;
             ++r.executed;

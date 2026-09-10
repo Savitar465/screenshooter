@@ -182,8 +182,7 @@ muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`
   historial (`openRunRequested` → `HistoryView::showRun()`), que es donde están sus pasos con su
   veredicto, sus evidencias y con qué está enlazada en Jira y Zephyr.
 * **Duplicar** copia contenido y metadatos, no capturas ni resultado; el nuevo caso queda en
-  Borrador justo después del original y **sin Test de Zephyr**: la copia es un caso nuevo, y
-  heredar `testKey` haría que dos casos publicaran sus ejecuciones sobre el mismo Test.
+  Borrador justo después del original.
 * **Deshacer**: borrar un caso, un paso o una captura guarda una instantánea de la lista
   (`pushUndo`). `undo()` la restaura mientras no haya otra mutación ni pasen 20 s; después
   `commitUndo()` emite `filesReleased()` con los ficheros de capturas que ya nadie referencia y
@@ -205,7 +204,12 @@ el plan por si vuelven a estar listos; los borrados se retiran de todos los plan
 Un **ciclo** es una ejecución del plan: `RunController::startSequence()` abre un `PlanRun` en el
 historial con el `planId` del plan. `PlanStore::latestCycle(planId)` devuelve el `PlanReport` del
 ciclo más reciente (terminado o en curso), que es lo que muestran la pantalla de planes y el
-bloque «Plan» de la barra de estado como progreso. Archivar un plan sólo lo oculta y bloquea
+bloque «Plan» de la barra de estado como progreso; `cycles(planId)` devuelve todos los ciclos del
+plan, del más reciente al más antiguo, con los que `PlanView` pinta el «Historial de ciclos»: una
+fila por ciclo con su veredicto, cuántos casos se ejecutaron y cómo acabaron, la variación de la
+tasa de éxito respecto al ciclo anterior terminado y las celdas de cada caso (el tooltip lista los
+resultados caso a caso; el clic abre el informe en el historial). Se muestran los cinco últimos y un
+botón despliega el resto. Archivar un plan sólo lo oculta y bloquea
 «Iniciar ciclo»; eliminarlo no toca el historial. Sin planes guardados se crea uno por defecto con
 los casos de ejemplo.
 
@@ -256,7 +260,12 @@ lo calcula a partir del `PlanRun` y sus registros (si un caso se repitió dentro
 produce el informe exportable; la vista sólo abre el diálogo de guardado o copia al portapapeles.
 
 `HistoryView` lista planes y ejecuciones sueltas (las de un plan se ven dentro de su informe, o con
-el filtro «Casos»). `MainWindow::finishRun()` es la acción «Finalizar»: continúa con el siguiente
+el filtro «Casos»). Un informe se puede eliminar desde su cabecera: `RunHistoryStore::removePlanRun()`
+quita el `PlanRun` y sus `RunRecord`, suelta las evidencias de esas ejecuciones
+(`TestCaseStore::releaseShotsOfRuns()`, que emite `filesReleased` para que `EvidenceService` borre
+los ficheros) y, a los casos cuya «última ejecución» era una de las borradas, les deja la más
+reciente que quede. Es definitivo, sin deshacer, y la vista no lo ofrece para el ciclo en curso
+(`RunController::planRunId()`), que sigue recibiendo ejecuciones. `MainWindow::finishRun()` es la acción «Finalizar»: continúa con el siguiente
 caso del plan, abre el informe cuando el plan termina o vuelve a la lista de casos.
 
 ## Captura de pantalla
@@ -391,13 +400,14 @@ Un 404 significa «esa ruta no está aquí» y se pasa a la siguiente; cualquier
 se informa tal cual en vez de disimularlo probando la otra.
 
 `TestPublishService` (application) traduce un `PlanReport` a un `PublishRequest`: sólo las filas
-ejecutadas, la clave del Test desde `TestCase::testKey`, el caso tal y como está escrito (título,
-precondiciones y pasos) y las evidencias del caso que sigan en disco con el paso al que se asignaron.
+ejecutadas, cada una con su `runId` y el Test que ya tenga (`RunRecord::testKey`), el caso tal y como
+está escrito (título, precondiciones y pasos) y las evidencias de esa ejecución que sigan en disco con
+el paso al que se asignaron.
 El cliente encadena entonces, por cada caso:
 
 | Paso | Petición |
 |------|----------|
-| Resolver los ids | `GET /rest/api/2/project/{clave}` (Zephyr trabaja con ids numéricos, no con claves): el del proyecto, el de la versión y el del tipo de incidencia de los Tests; y `GET /rest/api/2/issue/{testKey}?fields=id` para el caso que ya lo tiene enlazado |
+| Resolver los ids | `GET /rest/api/2/project/{clave}` (Zephyr trabaja con ids numéricos, no con claves): el del proyecto, el de la versión y el del tipo de incidencia de los Tests; y `GET /rest/api/2/issue/{testKey}?fields=id` para la ejecución que ya tiene Test (republicación) |
 | Crear el ciclo | `POST {api}/cycle` con `projectId`, `versionId` y las fechas en el formato de Zephyr (`12/May/26`) |
 | Crear el Test que falta | `POST /rest/api/2/issue` (tipo Test, título y precondiciones del caso) y un `POST {api}/teststep/{issueId}` por paso |
 | Añadir el caso | `POST {api}/execution` → la respuesta viene indexada por el id de la ejecución creada |
@@ -405,30 +415,42 @@ El cliente encadena entonces, por cada caso:
 | Veredicto por paso | `GET {api}/stepResult?executionId=` y `PUT {api}/stepResult/{id}` (N/A queda sin ejecutar, -1) |
 | Evidencias | `POST {api}/attachment?entityId=&entityType=` — `TESTSTEPRESULT` las de un paso, `EXECUTION` las demás |
 
-**Un caso, un Test.** El caso de QAflow es reutilizable: se ejecuta muchas veces y en varios planes,
-así que su Test de Zephyr tiene que ser siempre el mismo para que el histórico de Zephyr cuente una
-sola historia por caso. `TestCase::testKey` es ese enlace, y sólo se rellena una vez: se pega la clave
-de un Test que ya exista o la estrena QAflow a partir del caso —título, precondiciones y pasos,
-etiquetado `qaflow` y con el id del caso— y desde ahí todos los ciclos van sobre él. Se crea desde dos
-sitios que comparten las mismas piezas (`postTestIssue()` y `postTestSteps()`), así que el issue es el
-mismo salga por donde salga:
+**Cada ejecución, su Test.** Cada informe de plan es único, y un caso de QAflow se ejecuta en muchos
+ciclos: si todos compartieran un Test, publicar el último ciclo cambiaría lo que enlazan los informes
+anteriores. Por eso el Test de Zephyr es de la ejecución, no del caso: `RunRecord::testKey` (en
+`history.json`) guarda el que se creó para ella al publicar su informe, y el caso no tiene ninguno.
+`TestPublishService::requestFor()` manda cada ejecución con su `runId` y con el Test que ya tenga; a
+la que no tiene, `ZephyrClient::createTestForCase()` se lo estrena a partir del caso —título,
+precondiciones y pasos, etiquetado `qaflow` y con el id del caso, y con el nombre del ciclo en la
+descripción para distinguirlo de los Tests del mismo caso en otros ciclos— y la clave vuelve en
+`PublishResult::createdTests`. Con ella, `TestPublishService` llama a
+`RunHistoryStore::assignTestKeys()`, que la guarda en la ejecución aunque el ciclo haya fallado a
+medias: el Test ya existe en Jira y el reintento debe reutilizarlo, no duplicarlo. Republicar un
+informe viaja, por tanto, con sus Tests; publicar otro ciclo del mismo caso estrena otros. El
+`PlanReport` toma `row.testKey` de la ejecución (la historia de Jira sí sale del caso de hoy).
 
-| Desde | Camino |
-|-------|--------|
-| El editor del caso, con «Crear» | `CasesView` → `TestPublishService::createTestFor()` → `ITestManagement::createTest()`, sin ciclo de por medio |
-| La publicación del ciclo, para el caso que aún no lo tiene | `ZephyrClient::createTestForCase()`, y la clave vuelve en `PublishResult::createdTests` |
-
-En los dos casos `TestPublishService` guarda la clave en el caso. El tipo de incidencia con el que se
-crean sale de los ajustes y por defecto es `Test`, el que instala Zephyr; en un Jira traducido se
-llama de otra manera, y si el proyecto no lo tiene se dice con su nombre —también al probar la
-conexión— en vez de fallar issue a issue sin explicar por qué.
+El tipo de incidencia con el que se crean sale de los ajustes y por defecto es `Test`, el que instala
+Zephyr; en un Jira traducido se llama de otra manera, y si el proyecto no lo tiene se dice con su
+nombre —también al probar la conexión— en vez de fallar issue a issue sin explicar por qué.
 
 **Lo que se publica son los resultados, y el ciclo de plan recuerda dónde quedaron.** Al publicar con
 éxito, `TestPublishService` llama a `RunHistoryStore::markPublished()` y el `PlanRun` guarda
 `zephyrCycleId` y `publishedAt` (en `history.json`). Con eso, el informe del plan dice «Publicado en
-Zephyr el … · ciclo N» y, al pedir publicarlo otra vez, avisa de que Zephyr no actualiza el ciclo
-anterior sino que crea otro. El enlace queda así en los dos sentidos: el caso apunta a su Test, y cada
-ejecución de plan apunta al ciclo donde se publicaron sus resultados.
+Zephyr el … · ciclo N», un enlace al ciclo en Jira y dos acciones: **actualizar** ese ciclo o publicar
+otro. El enlace lo construye `TrackerSettings::zephyrCycleUrl()` (`TestPublishService::cycleUrl()` le
+pasa el nombre con el que se publicó, plan y fecha): Zephyr Server no expone una página con id
+estable para un ciclo, así que apunta a la búsqueda de ejecuciones, `/secure/enav/#?query=` con la
+ZQL `project = "CLAVE" AND cycleName = "nombre"`, que lista exactamente las de ese ciclo. Actualizar
+(`TestPublishService::update()`) manda la misma petición con `PublishRequest::cycleId`: el cliente
+comprueba que el ciclo sigue existiendo (`GET {api}/cycle/{id}`), busca para cada Test la ejecución
+que ya tiene en él (`GET {api}/execution?issueId=`) y la reutiliza —o la crea, si ese caso se quedó
+fuera la vez anterior—, vuelve a fijar veredictos y pasos, y antes de subir las evidencias descarta
+las que ya están en su destino (`GET {api}/attachment/attachmentsByEntity`, por nombre de fichero).
+Publicar otra vez sin actualizar avisa de que Zephyr creará un ciclo nuevo. El diálogo previo, la
+llamada y el resumen del resultado están en `ZephyrPublishFlow` (presentation/widgets), que comparten
+`HistoryView` y `PlanView`: la pantalla de planes enseña en cada ciclo publicado sus ejecuciones con
+el Test de cada una y el botón de actualizar, y en los no publicados el de publicar. El enlace queda así en los dos sentidos: cada ejecución de caso apunta a
+su Test, y cada ejecución de plan apunta al ciclo donde se publicaron sus resultados.
 
 **Y el historial lo enseña.** `PlanReportRow` lleva el `jiraKey` y el `testKey` del caso —los de hoy,
 que salen del catálogo por `PlanReport::CaseLookup`, no una foto del día de la ejecución—, así que

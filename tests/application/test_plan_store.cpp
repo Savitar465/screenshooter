@@ -149,6 +149,38 @@ private slots:
         QCOMPARE(f.history.findPlan(f.run.planRunId())->planId, planId);
     }
 
+    void cyclesListsEveryRunOfThePlanMostRecentFirst() {
+        AppFixture f;
+        const QString planId = f.plans.activeId();
+        QVERIFY(f.plans.cycles(planId).isEmpty());
+
+        f.run.startSequence({QStringLiteral("TC-103")}, f.plans.active()->name, planId);
+        const QString first = f.run.planRunId();
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, f.plans.active()->name, planId);
+        const QString second = f.run.planRunId();
+        f.run.mark(StepResult::Fail);
+        f.run.finish();
+
+        const QList<PlanReport> cycles = f.plans.cycles(planId);
+        QCOMPARE(cycles.size(), 2);
+        QCOMPARE(cycles[0].plan.id, second);          // el más reciente primero, aunque siga en curso
+        QVERIFY(!cycles[0].plan.isFinished());
+        QCOMPARE(cycles[0].executed, 1);
+        QCOMPARE(cycles[0].total(), 2);
+        QCOMPARE(cycles[0].failed, 1);
+        QCOMPARE(cycles[1].plan.id, first);
+        QVERIFY(cycles[1].plan.isFinished());
+        QCOMPARE(cycles[1].successRate(), 100);
+        QCOMPARE(cycles[0].plan.id, f.plans.latestCycle(planId)->plan.id);
+
+        // Los ciclos de otro plan no se mezclan
+        const QString other = f.plans.createPlan(QStringLiteral("Otro"));
+        QVERIFY(f.plans.cycles(other).isEmpty());
+        QCOMPARE(f.plans.cycles(planId).size(), 2);
+    }
+
     // ---- Estimación --------------------------------------------------------------------
 
     void estimateFallsBackToThreeMinutesPerStep() {

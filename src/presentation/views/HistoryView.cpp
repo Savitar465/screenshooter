@@ -1,6 +1,7 @@
 #include "HistoryView.h"
 
 #include "application/EvidenceService.h"
+#include "application/RunController.h"
 #include "application/RunHistoryStore.h"
 #include "application/TestPublishService.h"
 #include "application/TestCaseStore.h"
@@ -13,6 +14,7 @@
 #include "presentation/widgets/MetricBars.h"
 #include "presentation/widgets/ProgressCells.h"
 #include "presentation/widgets/Ui.h"
+#include "presentation/widgets/ZephyrPublishFlow.h"
 
 #include <QCoreApplication>
 #include <QApplication>
@@ -81,8 +83,8 @@ struct Entry {
 } // namespace
 
 HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish,
-                         EvidenceService* evidence, QWidget* parent)
-    : QWidget(parent), m_cases(cases), m_history(history), m_publish(publish), m_evidence(evidence) {
+                         EvidenceService* evidence, RunController* run, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_history(history), m_publish(publish), m_evidence(evidence), m_run(run) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildDetailPane(root);
@@ -224,6 +226,11 @@ void HistoryView::refreshList() {
     m_listLayout->addStretch(1);
 }
 
+void HistoryView::refresh() {
+    refreshList();
+    refreshDetail();
+}
+
 void HistoryView::showPlan(const QString& planRunId) {
     if (m_mode == Mode::Metrics || m_mode == Mode::Runs) { m_mode = Mode::All; refreshFilters(); }
     m_selectedPlan = planRunId;
@@ -288,9 +295,12 @@ void HistoryView::refreshDetail() {
 void HistoryView::renderPlan(const PlanReport& report) {
     const PlanRun& plan = report.plan;
 
-    // Cabecera + acciones
+    // Cabecera: el título con su estado y, debajo, las acciones en una fila que se ajusta al ancho
+    // (con Zephyr son cinco botones, y en una pantalla estrecha aplastaban al título).
     auto* head = new QWidget;
-    auto* hh = ui::hbox(head, 0, 16);
+    auto* hv = ui::vbox(head, 0, 10);
+    auto* actions = new QWidget;
+    auto* ah = new FlowLayout(actions, 0, 8, 8);
     auto* titleBlock = new QWidget;
     auto* tv = ui::vbox(titleBlock, 0, 2);
     tv->addWidget(ui::label(tr("INFORME DE PLAN · %1 · %2").arg(plan.id, when(plan.startedAt)), "eyebrow"));
@@ -318,24 +328,55 @@ void HistoryView::renderPlan(const PlanReport& report) {
         published->setObjectName(QStringLiteral("planPublished"));
         published->setWordWrap(true);
         published->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Green));
-        tv->addWidget(published);
+        auto* where = new QWidget;
+        auto* wh = ui::hbox(where, 0, 8);
+        wh->addWidget(published, 1);
+        // Y un salto al ciclo en Jira, para ver allí las ejecuciones tal y como quedaron.
+        if (const QString url = m_publish ? m_publish->cycleUrl(report) : QString(); !url.isEmpty()) {
+            auto* open = ui::button(tr("Abrir el ciclo en Jira"), "chip");
+            open->setObjectName(QStringLiteral("openZephyrCycle"));
+            open->setToolTip(tr("Abre en el navegador las ejecuciones de este ciclo en Zephyr"));
+            connect(open, &QPushButton::clicked, this, [this, url]() { emit openUrlRequested(url); });
+            wh->addWidget(open, 0, Qt::AlignVCenter);
+        }
+        tv->addWidget(where);
     }
-    hh->addWidget(titleBlock, 1);
+    hv->addWidget(titleBlock);
     auto* exportBtn = ui::button(tr("Exportar Markdown…"), "outline");
     connect(exportBtn, &QPushButton::clicked, this, [this, report]() { exportMarkdown(report); });
     auto* copyBtn = ui::button(tr("Copiar"), "outline");
     copyBtn->setToolTip(tr("Copiar el informe en Markdown al portapapeles"));
     connect(copyBtn, &QPushButton::clicked, this, [this, report]() { copyMarkdown(report); });
-    hh->addWidget(exportBtn, 0, Qt::AlignTop);
-    hh->addWidget(copyBtn, 0, Qt::AlignTop);
+    ah->addWidget(exportBtn);
+    ah->addWidget(copyBtn);
     // Sólo cuando el ciclo ha terminado: publicar uno a medias dejaría el ciclo incompleto en Zephyr.
     if (m_publish && m_publish->enabled() && plan.isFinished() && report.executed > 0) {
-        auto* zephyrBtn = ui::button(tr("Publicar en Zephyr"), "primary");
+        // Ya publicado: lo normal es actualizar aquel ciclo; crear otro queda como opción secundaria.
+        if (plan.isPublished()) {
+            auto* updateBtn = ui::button(tr("Actualizar en Zephyr"), "primary");
+            updateBtn->setObjectName(QStringLiteral("updateZephyr"));
+            updateBtn->setToolTip(tr("Vuelve a mandar al ciclo %1 de Zephyr el veredicto de cada caso y de cada paso, y sube las evidencias que falten").arg(plan.zephyrCycleId));
+            connect(updateBtn, &QPushButton::clicked, this, [this, report]() { updateInZephyr(report); });
+            ah->addWidget(updateBtn);
+        }
+        auto* zephyrBtn = ui::button(plan.isPublished() ? tr("Publicar como ciclo nuevo") : tr("Publicar en Zephyr"), plan.isPublished() ? "outline" : "primary");
         zephyrBtn->setObjectName(QStringLiteral("publishZephyr"));
         zephyrBtn->setToolTip(tr("Crea el ciclo en Zephyr con estas ejecuciones, el veredicto de cada paso y sus evidencias"));
         connect(zephyrBtn, &QPushButton::clicked, this, [this, report]() { publishToZephyr(report); });
-        hh->addWidget(zephyrBtn, 0, Qt::AlignTop);
+        ah->addWidget(zephyrBtn);
     }
+    // El ciclo en curso no se elimina: la ejecución sigue escribiendo en él. Un ciclo sin terminar
+    // que no es el actual quedó a medias (la sesión se perdió) y sí puede irse.
+    const bool inProgress = !plan.isFinished() && (!m_run || m_run->planRunId() == plan.id);
+    if (!inProgress) {
+        auto* deleteBtn = ui::button(tr("Eliminar…"), "outline");
+        deleteBtn->setObjectName(QStringLiteral("deletePlan"));
+        deleteBtn->setToolTip(tr("Eliminar este informe del historial, con sus ejecuciones y evidencias"));
+        deleteBtn->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Red));
+        connect(deleteBtn, &QPushButton::clicked, this, [this, report]() { deletePlan(report); });
+        ah->addWidget(deleteBtn);
+    }
+    hv->addWidget(actions);
     m_detailLayout->addWidget(head);
 
     // Resumen
@@ -383,7 +424,7 @@ void HistoryView::renderPlan(const PlanReport& report) {
             th->addWidget(ui::pill(tr("PENDIENTE"), theme::tint(theme::Muted, 38), theme::Muted));
         }
         cv->addWidget(top);
-        // Con qué está enlazado el caso: su historia de Jira y el Test sobre el que se publica.
+        // Con qué está enlazado: la historia de Jira del caso y el Test que se creó para esta ejecución.
         if (auto* links = issueLinks(row.jiraKey, row.testKey)) cv->addWidget(links);
         if (row.executed) cv->addWidget(stepsList(row.run));
         if (row.executed)
@@ -520,9 +561,9 @@ void HistoryView::renderRun(const RunRecord& run) {
     }
     sh->addStretch(1);
     tv->addWidget(sub);
-    // Y con qué está enlazado el caso que se ejecutó.
-    if (const TestCase* c = m_cases.find(run.caseId))
-        if (auto* links = issueLinks(c->jiraKey, c->testKey)) tv->addWidget(links);
+    // Y con qué está enlazado: la historia del caso y el Test de Zephyr de esta ejecución.
+    const TestCase* linked = m_cases.find(run.caseId);
+    if (auto* links = issueLinks(linked ? linked->jiraKey : QString(), run.testKey)) tv->addWidget(links);
     hh->addWidget(titleBlock, 1);
     auto* open = ui::button(tr("Abrir caso"), "outline");
     connect(open, &QPushButton::clicked, this, [this, id = run.caseId]() { emit openCaseRequested(id); });
@@ -578,7 +619,7 @@ QWidget* HistoryView::issueLinks(const QString& jiraKey, const QString& testKey)
         h->addWidget(b);
     };
     add("linkJira", tr("Historia"), jira, tr("Abrir en Jira la historia enlazada al caso"));
-    add("linkTest", tr("Test"), test, tr("Abrir en Jira el Test de Zephyr sobre el que se publican las ejecuciones de este caso"));
+    add("linkTest", tr("Test"), test, tr("Abrir en Jira el Test de Zephyr que se creó para esta ejecución al publicar el informe"));
     h->addStretch(1);
     return row;
 }
@@ -661,48 +702,44 @@ void HistoryView::exportMarkdown(const PlanReport& report) {
 }
 
 void HistoryView::publishToZephyr(const PlanReport& report) {
-    const QStringList nuevos = m_publish->casesNeedingTest(report);
-    QString aviso = tr("Se creará el ciclo «%1» en Zephyr con %2 ejecuciones.").arg(m_publish->requestFor(report).cycleName).arg(report.executed);
-    if (!nuevos.isEmpty())
-        aviso += tr("\n\nAntes se crearán en Jira %1 Tests, a partir de los casos que aún no tienen uno enlazado: %2.\nSu clave quedará en el caso y se reutilizará en los ciclos siguientes.")
-                     .arg(nuevos.size()).arg(nuevos.join(QStringLiteral(", ")));
-    // Publicar dos veces no actualiza el ciclo anterior: crea otro. Mejor decirlo antes.
-    if (const PlanRun* p = m_history.findPlan(report.plan.id); p && p->isPublished())
-        aviso += tr("\n\nOJO: estos resultados ya se publicaron el %1 (ciclo %2). Se creará un ciclo nuevo, no se actualiza aquél.")
-                     .arg(when(p->publishedAt), p->zephyrCycleId);
-    if (report.executed <= 0) {
-        emit toast(tr("El ciclo no tiene ninguna ejecución que publicar"), theme::Amber);
-        return;
-    }
-    if (QMessageBox::question(this, tr("Publicar en Zephyr"), aviso, QMessageBox::Ok | QMessageBox::Cancel) != QMessageBox::Ok) return;
+    ZephyrPublishFlow::run(this, *m_publish, report, false, [this](const QString& m, const QString& c) { emit toast(m, c); });
+}
 
-    emit toast(tr("Publicando en Zephyr…"), theme::Cyan);
-    m_publish->publish(report, [this](const PublishResult& r) {
-        if (!r.ok) {
-            QString error = tr("No se pudo publicar en Zephyr · %1").arg(r.error);
-            if (r.retryable) error += tr(" · vuelve a intentarlo");
-            emit toast(error, theme::Red);
-            return;
-        }
-        QString msg = tr("Ciclo %1 publicado en Zephyr · %2 ejecuciones, %3 pasos, %4 evidencias")
-                          .arg(r.cycleId).arg(r.executions).arg(r.steps).arg(r.attachments);
-        if (r.testsCreated > 0) msg += tr(" · %1 Tests creados").arg(r.testsCreated);
-        if (!r.skipped.isEmpty()) msg += tr(" · %1 sin publicar").arg(r.skipped.size());
-        emit toast(msg, r.skipped.isEmpty() ? theme::Green : theme::Amber);
-        // Un contador no dice qué arreglar: lo que se quedó fuera va con su motivo, uno por línea.
-        if (!r.skipped.isEmpty()) {
-            QMessageBox box(QMessageBox::Warning, tr("Publicado con salvedades"),
-                            tr("El ciclo se creó en Zephyr, pero %1 cosas se quedaron fuera.").arg(r.skipped.size()),
-                            QMessageBox::Ok, this);
-            box.setDetailedText(r.skipped.join(QLatin1Char('\n')));
-            box.exec();
-        }
-    });
+void HistoryView::updateInZephyr(const PlanReport& report) {
+    ZephyrPublishFlow::run(this, *m_publish, report, true, [this](const QString& m, const QString& c) { emit toast(m, c); });
 }
 
 void HistoryView::copyMarkdown(const PlanReport& report) {
     QApplication::clipboard()->setText(report.toMarkdown());
     emit toast(tr("Informe copiado al portapapeles"), theme::Cyan);
+}
+
+void HistoryView::deletePlan(const PlanReport& report) {
+    const PlanRun& plan = report.plan;
+    const QList<RunRecord> runs = m_history.runsForPlan(plan.id);
+    int evidence = 0;
+    for (const auto& r : runs) if (const TestCase* c = m_cases.find(r.caseId)) evidence += c->shotsOfRun(r.id).size();
+
+    QMessageBox box(QMessageBox::Warning, tr("Eliminar informe"), tr("¿Eliminar el informe \"%1\" (%2)?").arg(plan.name, plan.id), QMessageBox::NoButton, this);
+    QString detail;
+    if (runs.isEmpty()) detail = tr("El ciclo no tiene ejecuciones.");
+    else {
+        detail = runs.size() == 1 ? tr("Se eliminará del historial su única ejecución") : tr("Se eliminarán del historial sus %1 ejecuciones").arg(runs.size());
+        if (evidence == 1) detail += tr(" y la evidencia capturada en ella, que se borra del disco");
+        else if (evidence > 1) detail += tr(" y las %1 evidencias capturadas en ellas, que se borran del disco").arg(evidence);
+        detail += QStringLiteral(".");
+    }
+    if (plan.isPublished()) detail += tr(" El ciclo ya publicado en Zephyr no se toca.");
+    detail += tr(" Esta acción no se puede deshacer.");
+    box.setInformativeText(detail);
+    auto* del = box.addButton(tr("Eliminar"), QMessageBox::DestructiveRole);
+    box.addButton(tr("Cancelar"), QMessageBox::RejectRole);
+    box.exec();
+    if (box.clickedButton() != del) return;
+
+    m_selectedPlan.clear();   // antes de borrar: al cambiar el historial la vista elige otro elemento
+    if (!m_history.removePlanRun(plan.id)) return;
+    emit toast(tr("Informe %1 eliminado").arg(plan.id), theme::Cyan);
 }
 
 } // namespace qaflow

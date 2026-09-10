@@ -73,10 +73,8 @@ struct TestCase {
     QStringList tags;           // etiquetas libres: "regresión", "smoke"…
     QString component;          // módulo o componente del producto
     QString jiraKey;            // historia o épica enlazada: SHOP-12
-    /// Issue de tipo Test que representa el caso en Zephyr (SHOP-42). El caso es reutilizable —se
-    /// ejecuta muchas veces y en varios planes—, así que su Test es siempre el mismo: se enlaza a
-    /// mano o lo estrena QAflow al publicar el primer ciclo, y desde ahí se reutiliza.
-    QString testKey;
+    // El Test de Zephyr no es del caso sino de cada ejecución (`RunRecord::testKey`): un caso se
+    // ejecuta en muchos ciclos y cada informe enlaza los Tests que se crearon al publicarlo.
 
     /// Evidencias de una ejecución concreta; con `runId` vacío, las de la ejecución en curso.
     QList<Screenshot> shotsOfRun(const QString& runId) const;

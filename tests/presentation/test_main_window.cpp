@@ -439,13 +439,13 @@ private slots:
     void thePlanReportShowsWhatEachCaseIsLinkedTo() {
         WindowFixture f;
         // Con Zephyr activo la cabecera lleva además el botón de publicar: es la fila más apretada.
-        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
-        f.app.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) { c.testKey = QStringLiteral("SHOP-42"); });
+        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; s.url = QStringLiteral("https://jira.acme.com"); s.project = QStringLiteral("SHOP"); });
         const QString planRunId = f.app.history.startPlan(QStringLiteral("Regresión Sprint 14 · candidata de release"), {QStringLiteral("TC-101")});
         RunRecord rec;
         rec.caseId = QStringLiteral("TC-101");
         rec.caseTitle = QStringLiteral("Iniciar sesión");
         rec.planRunId = planRunId;
+        rec.testKey = QStringLiteral("SHOP-42");   // el Test que se creó para esta ejecución al publicarla
         rec.verdict = Verdict::Superado;
         rec.startedAt = QDateTime::currentDateTime().addSecs(-300);
         rec.finishedAt = QDateTime::currentDateTime();
@@ -474,6 +474,13 @@ private slots:
         auto* published = f.window->findChild<QLabel*>(QStringLiteral("planPublished"));
         QVERIFY(published);
         QVERIFY2(published->text().contains(QStringLiteral("77")), qPrintable(published->text()));
+        // Y el salto al ciclo en Jira: la búsqueda de ejecuciones de ese ciclo.
+        QSignalSpy opened(history, &HistoryView::openUrlRequested);
+        auto* cycleBtn = f.window->findChild<QPushButton*>(QStringLiteral("openZephyrCycle"));
+        QVERIFY(cycleBtn);
+        QTest::mouseClick(cycleBtn, Qt::LeftButton);
+        QCOMPARE(opened.count(), 1);
+        QVERIFY2(opened.first().first().toString().startsWith(QStringLiteral("https://jira.acme.com/secure/enav/#?query=")), qPrintable(opened.first().first().toString()));
         // Y se ve entero: apretado contra los botones de la cabecera se quedaba en "Publicado el 0".
         QVERIFY2(published->width() >= published->sizeHint().width(),
                  qPrintable(QStringLiteral("ancho %1 < necesario %2 · texto: %3")
@@ -485,6 +492,77 @@ private slots:
         auto* cycle = f.window->findChild<QLabel*>(QStringLiteral("runZephyrCycle"));
         QVERIFY(cycle);
         QVERIFY2(cycle->text().contains(QStringLiteral("77")), qPrintable(cycle->text()));
+    }
+
+    // En la pantalla de planes, un ciclo publicado enseña el Test de cada ejecución y ofrece
+    // actualizar el ciclo de Zephyr; uno sin publicar, publicarlo.
+    void thePlanScreenShowsTheZephyrTestOfEachPublishedRun() {
+        WindowFixture f;
+        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        const QString planId = f.app.plans.activeId();
+        // Ciclo 1, publicado: una ejecución con Test y otra que se quedó sin él.
+        f.app.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"), planId);
+        const QString published = f.app.run.planRunId();
+        f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        f.app.run.mark(StepResult::Pass);
+        f.window->finishRun();
+        const QList<RunRecord> runs = f.app.history.runsForPlan(published);
+        QCOMPARE(runs.size(), 2);
+        f.app.history.assignTestKeys({{runs[0].id, QStringLiteral("SHOP-77")}});
+        f.app.history.markPublished(published, QStringLiteral("77"));
+        // Ciclo 2, terminado y sin publicar.
+        f.app.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Regresión"), planId);
+        const QString unpublished = f.app.run.planRunId();
+        f.app.run.mark(StepResult::Pass);
+        f.window->finishRun();
+
+        f.window->navigate(Screen::Plan);
+        QTest::qWait(50);
+        auto* test = f.window->findChild<QPushButton*>(QStringLiteral("cycleTest-%1").arg(runs[0].id));
+        QVERIFY(test);
+        QCOMPARE(test->text(), QStringLiteral("Test SHOP-77"));
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("cycleTest-%1").arg(runs[1].id)));   // sin Test: sin chip
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("updateZephyr-%1").arg(published)));
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("publishZephyr-%1").arg(published)));
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("publishZephyr-%1").arg(unpublished)));
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("updateZephyr-%1").arg(unpublished)));
+
+        // Sin Zephyr en los ajustes no se ofrece ni publicar ni actualizar, pero los Tests se siguen viendo.
+        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = false; });
+        QTest::qWait(50);
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("cycleTest-%1").arg(runs[0].id)));
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("updateZephyr-%1").arg(published)));
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("publishZephyr-%1").arg(unpublished)));
+    }
+
+    void thePlanReportOffersDeletingEveryCycleButTheOneInProgress() {
+        WindowFixture f;
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        f.window->navigate(Screen::Historial);
+
+        // Un ciclo terminado se puede eliminar.
+        f.app.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Terminado"));
+        const QString finished = f.app.run.planRunId();
+        f.app.run.mark(StepResult::Pass);
+        f.window->finishRun();
+        history->showPlan(finished);
+        QTest::qWait(50);
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("deletePlan")));
+
+        // El que se está ejecutando, no: la ejecución sigue escribiendo en él.
+        f.app.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("En curso"));
+        const QString running = f.app.run.planRunId();
+        history->showPlan(running);
+        QTest::qWait(50);
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("deletePlan")));
+
+        // Al borrar el terminado, el historial deja de listarlo y el informe abierto pasa a otro.
+        QVERIFY(f.app.history.removePlanRun(finished));
+        QTest::qWait(50);
+        QVERIFY(!f.app.history.findPlan(finished));
+        QVERIFY(f.app.history.findPlan(running));
     }
 
     // Zephyr se activa en Ajustes y sólo se ofrece con Jira, que es donde vive el plugin.

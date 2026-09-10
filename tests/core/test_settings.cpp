@@ -2,6 +2,7 @@
 
 #include "core/models/Settings.h"
 
+#include <QUrl>
 #include <QtTest>
 
 using namespace qaflow;
@@ -20,6 +21,32 @@ private slots:
         TrackerSettings t;
         t.url = QStringLiteral("https://acme.atlassian.net///");
         QCOMPARE(t.baseUrl(), QStringLiteral("https://acme.atlassian.net"));
+    }
+
+    // El ciclo de Zephyr no tiene una página con id estable en Jira Server: el enlace es la búsqueda
+    // de ejecuciones (ZQL) del proyecto filtrada por el nombre del ciclo, con la consulta en el fragmento.
+    void zephyrCycleUrlIsTheExecutionSearchOfThatCycle() {
+        TrackerSettings t;
+        t.kind = TrackerKind::Jira;
+        t.url = QStringLiteral("https://jira.acme.com/");
+        t.project = QStringLiteral("SHOP");
+        const QString url = t.zephyrCycleUrl(QStringLiteral("Regresión Sprint 14 · 12/05/2026"));
+        QVERIFY2(url.startsWith(QStringLiteral("https://jira.acme.com/secure/enav/#?query=")), qPrintable(url));
+        const QString zql = QUrl::fromPercentEncoding(url.mid(url.indexOf(QStringLiteral("query=")) + 6).toLatin1());
+        QCOMPARE(zql, QStringLiteral("project = \"SHOP\" AND cycleName = \"Regresión Sprint 14 · 12/05/2026\""));
+        QVERIFY(!url.contains(QLatin1Char(' ')));   // todo codificado
+
+        QCOMPARE(t.zephyrCycleUrl(QStringLiteral("Ciclo \"beta\"")), QString(QStringLiteral("https://jira.acme.com/secure/enav/#?query=")
+                     + QString::fromLatin1(QUrl::toPercentEncoding(QStringLiteral("project = \"SHOP\" AND cycleName = \"Ciclo \\\"beta\\\"\"")))));
+        t.project.clear();
+        QVERIFY(t.zephyrCycleUrl(QStringLiteral("Ciclo")).contains(QStringLiteral("cycleName")));
+        QVERIFY(!t.zephyrCycleUrl(QStringLiteral("Ciclo")).contains(QStringLiteral("project")));
+        QVERIFY(t.zephyrCycleUrl(QString()).isEmpty());
+        t.kind = TrackerKind::GitHub;
+        QVERIFY(t.zephyrCycleUrl(QStringLiteral("Ciclo")).isEmpty());   // Zephyr es de Jira
+        t.kind = TrackerKind::Jira;
+        t.url.clear();
+        QVERIFY(t.zephyrCycleUrl(QStringLiteral("Ciclo")).isEmpty());
     }
 
     void issueUrlPerTracker() {

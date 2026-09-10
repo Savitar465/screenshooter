@@ -72,6 +72,9 @@ public:
     /// a la ejecución indicada; con `runId` vacío se descartan, porque no hay ejecución donde
     /// enseñarlas. Devuelve cuántas se movieron o descartaron. Los ficheros no se tocan.
     int adoptLooseShots(const QString& caseId, const QString& runId);
+    /// Quita de todos los casos las evidencias de esas ejecuciones (se borran del historial) y
+    /// libera sus ficheros. Sin deshacer: el borrado de una ejecución es definitivo. Devuelve cuántas.
+    int releaseShotsOfRuns(const QStringList& runIds);
     void removeShot(const QString& id, int shotId);
     void assignShotStep(const QString& id, int shotId, int step);
     void moveShot(const QString& id, int shotId, int delta);

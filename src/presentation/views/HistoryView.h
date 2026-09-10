@@ -13,6 +13,7 @@ class QHBoxLayout;
 namespace qaflow {
 
 class EvidenceService;
+class RunController;
 class TestCaseStore;
 class RunHistoryStore;
 class TrendChart;
@@ -26,9 +27,11 @@ class HistoryView : public QWidget {
     Q_OBJECT
 public:
     /// `publish` puede ser nullptr (tests, o sin Zephyr configurado): entonces no se ofrece publicar;
-    /// `evidence` también (sin él las evidencias se ven pero no se anotan ni se copian).
+    /// `evidence` también (sin él las evidencias se ven pero no se anotan ni se copian); y `run`
+    /// dice qué ciclo está en curso, que es el único que no se puede eliminar (sin él, ninguno
+    /// de los no terminados).
     HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish = nullptr,
-                EvidenceService* evidence = nullptr, QWidget* parent = nullptr);
+                EvidenceService* evidence = nullptr, RunController* run = nullptr, QWidget* parent = nullptr);
 
     void showPlan(const QString& planRunId);
     void showRun(const QString& runId);
@@ -36,11 +39,15 @@ public:
     void showCase(const QString& caseId);
     /// Panel de métricas: tasa de éxito por suite y evolución entre ciclos.
     void showMetrics();
+    /// Vuelve a pintar la pantalla (p. ej. al activar o desactivar Zephyr en los ajustes).
+    void refresh();
 
 signals:
     void openCaseRequested(const QString& caseId);
     /// Abrir en el navegador un issue de Jira (la historia del caso o su Test de Zephyr).
     void openJiraRequested(const QString& key);
+    /// Abrir en el navegador una URL ya construida (el ciclo de Zephyr en Jira).
+    void openUrlRequested(const QString& url);
     void toast(const QString& message, const QString& color);
 
 private:
@@ -63,11 +70,16 @@ private:
     void copyMarkdown(const PlanReport& report);
     /// Crea en Zephyr el ciclo con las ejecuciones del informe, sus pasos y sus evidencias.
     void publishToZephyr(const PlanReport& report);
+    /// Actualiza el ciclo de Zephyr en el que el informe ya está publicado.
+    void updateInZephyr(const PlanReport& report);
+    /// Pide confirmación y elimina el ciclo con sus ejecuciones y evidencias.
+    void deletePlan(const PlanReport& report);
 
     TestCaseStore& m_cases;
     RunHistoryStore& m_history;
     TestPublishService* m_publish;
     EvidenceService* m_evidence;
+    RunController* m_run;
     Mode m_mode = Mode::All;
     QString m_search;
     QString m_selectedPlan;

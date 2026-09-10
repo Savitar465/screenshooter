@@ -111,7 +111,7 @@ private slots:
         RunRecord r;
         r.id = QStringLiteral("R-0001"); r.caseId = QStringLiteral("TC-104"); r.caseTitle = QStringLiteral("Pago"); r.suite = QStringLiteral("Checkout");
         r.planRunId = QStringLiteral("PR-0001"); r.startedAt = QDateTime(QDate(2026, 3, 1), QTime(10, 0)); r.finishedAt = r.startedAt.addSecs(90);
-        r.verdict = Verdict::Bloqueado; r.plannedSteps = 3; r.durationSecs = 90;
+        r.verdict = Verdict::Bloqueado; r.plannedSteps = 3; r.durationSecs = 90; r.testKey = QStringLiteral("SHOP-42");
         r.steps = {RunRecordStep{QStringLiteral("a"), QStringLiteral("e"), StepResult::Pass, QString(), 30}, RunRecordStep{QStringLiteral("b"), QStringLiteral("f"), StepResult::Block, QStringLiteral("caído"), 60}};
         h.runs << r;
         PlanRun p;
@@ -129,6 +129,7 @@ private slots:
         QCOMPARE(loaded->runs[0].steps[1].note, QStringLiteral("caído"));
         QCOMPARE(loaded->runs[0].steps[1].durationSecs, 60);
         QCOMPARE(loaded->runs[0].durationSecs, 90);
+        QCOMPARE(loaded->runs[0].testKey, QStringLiteral("SHOP-42"));   // el Test de la ejecución sobrevive al cierre
         QCOMPARE(loaded->plans.size(), 1);
         QCOMPARE(loaded->plans[0].planId, QStringLiteral("PL-0001"));
         QVERIFY(loaded->plans[0].isFinished());

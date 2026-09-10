@@ -58,6 +58,8 @@ public:
 
     /// Último ciclo (ejecución) de un plan, terminado o en curso. nullopt si nunca se ejecutó.
     std::optional<PlanReport> latestCycle(const QString& planId) const;
+    /// Todos los ciclos de un plan con sus resultados, el más reciente primero.
+    QList<PlanReport> cycles(const QString& planId) const;
     int cycleCount(const QString& planId) const;
 
     /// Escribe la colección en disco. Falso (y `saveFailed`) si no se pudo.

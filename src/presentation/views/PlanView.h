@@ -3,6 +3,7 @@
 #include <QWidget>
 
 class QLabel;
+class QComboBox;
 class QLineEdit;
 class QLayout;
 class QVBoxLayout;
@@ -95,6 +96,7 @@ private:
     QString m_displayedPlanId;
     QVBoxLayout* m_cyclesList = nullptr;
     QLineEdit* m_caseSearch = nullptr;
+    QComboBox* m_suiteFilter = nullptr;
     CasePager m_inPlanPager;
     CasePager m_availablePager;
     QLabel* m_inPlanHeader = nullptr;

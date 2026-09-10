@@ -10,6 +10,8 @@
 #include "presentation/widgets/ZephyrPublishFlow.h"
 
 #include <QCoreApplication>
+#include <QComboBox>
+#include <QSignalBlocker>
 #include <QGridLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -249,7 +251,22 @@ void PlanView::buildEditor(QHBoxLayout* root) {
         m_inPlanPager.page = m_availablePager.page = 0;
         refreshRows();
     });
-    v->addWidget(m_caseSearch);
+    auto* searchRow = new QWidget;
+    auto* searchLayout = ui::hbox(searchRow, 0, 8);
+    searchLayout->addWidget(m_caseSearch, 1);
+    m_suiteFilter = new QComboBox;
+    m_suiteFilter->setObjectName(QStringLiteral("planSuiteFilter"));
+    m_suiteFilter->setAccessibleName(tr("Filtrar por suite"));
+    m_suiteFilter->setToolTip(tr("Filtrar por suite"));
+    m_suiteFilter->setMinimumWidth(180);
+    m_suiteFilter->setMaximumWidth(260);
+    m_suiteFilter->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    connect(m_suiteFilter, &QComboBox::currentIndexChanged, this, [this]() {
+        m_inPlanPager.page = m_availablePager.page = 0;
+        refreshRows();
+    });
+    searchLayout->addWidget(m_suiteFilter);
+    v->addWidget(searchRow);
 
     // Acciones rápidas
     auto* quick = new QWidget;
@@ -307,6 +324,7 @@ void PlanView::refreshEditor() {
         m_displayedPlanId = p->id;
         m_allCycles = false;
         m_inPlanPager.page = m_availablePager.page = 0;
+        m_suiteFilter->setCurrentIndex(0);
         m_caseSearch->clear();
         m_cyclesHeader->setChecked(false);
     }
@@ -538,8 +556,24 @@ void PlanView::refreshRows() {
     if (!p) return;
     const QStringList ordered = m_plans.orderedCaseIds();
 
+    // Actualizar las suites sin perder el filtro ni disparar refrescos recursivos.
+    {
+        const QSignalBlocker blocker(m_suiteFilter);
+        const QVariant previous = m_suiteFilter->currentData();
+        m_suiteFilter->clear();
+        m_suiteFilter->addItem(tr("Todas las suites"));
+        m_suiteFilter->addItem(tr("Sin suite"), QStringLiteral(""));
+        for (const auto& suite : m_cases.suites()) m_suiteFilter->addItem(suite, suite);
+        const int index = previous.isValid() ? m_suiteFilter->findData(previous) : 0;
+        m_suiteFilter->setCurrentIndex(qMax(0, index));
+        if (index < 0) m_inPlanPager.page = m_availablePager.page = 0;
+    }
     const QString query = m_caseSearch->text().trimmed();
-    auto matches = [&query](const TestCase& c) { return c.searchText().contains(query, Qt::CaseInsensitive); };
+    const QVariant suite = m_suiteFilter->currentData();
+    auto matches = [&query, &suite](const TestCase& c) {
+        const bool matchesSuite = !suite.isValid() || (suite.toString().isEmpty() ? c.suite.trimmed().isEmpty() : c.suite == suite.toString());
+        return matchesSuite && c.searchText().contains(query, Qt::CaseInsensitive);
+    };
     QList<int> matchingPositions;
     for (int i = 0; i < ordered.size(); ++i) {
         const auto* c = m_cases.find(ordered[i]);

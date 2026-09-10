@@ -2635,6 +2635,18 @@
         <source>No hay casos que coincidan con la búsqueda.</source>
         <translation>No cases match your search.</translation>
     </message>
+    <message>
+        <source>Filtrar por suite</source>
+        <translation>Filter by suite</translation>
+    </message>
+    <message>
+        <source>Todas las suites</source>
+        <translation>All suites</translation>
+    </message>
+    <message>
+        <source>Sin suite</source>
+        <translation>No suite</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::RunController</name>

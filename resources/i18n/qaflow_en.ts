@@ -2615,6 +2615,26 @@
         <source>Abre en el navegador las ejecuciones de este ciclo en Zephyr</source>
         <translation>Opens in the browser the executions of this cycle in Zephyr</translation>
     </message>
+    <message>
+        <source>Buscar casos por ID, título, suite, etiqueta o componente…</source>
+        <translation>Search cases by ID, title, suite, tag or component…</translation>
+    </message>
+    <message>
+        <source>Anterior</source>
+        <translation>Previous</translation>
+    </message>
+    <message>
+        <source>Siguiente</source>
+        <translation>Next</translation>
+    </message>
+    <message>
+        <source>%1–%2 de %3 casos · Página %4 de %5</source>
+        <translation>%1–%2 of %3 cases · Page %4 of %5</translation>
+    </message>
+    <message>
+        <source>No hay casos que coincidan con la búsqueda.</source>
+        <translation>No cases match your search.</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::RunController</name>

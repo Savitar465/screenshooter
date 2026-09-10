@@ -51,6 +51,14 @@ private:
     /// Bloque de Zephyr de un ciclo: dónde se publicó y el Test de cada ejecución, con «Actualizar
     /// en Zephyr»; o «Publicar en Zephyr» si aún no se publicó. nullptr si no procede ninguno.
     QWidget* zephyrBlock(const PlanReport& report);
+    struct CasePager {
+        int page = 0;
+        QLabel* summary = nullptr;
+        QPushButton* previous = nullptr;
+        QPushButton* next = nullptr;
+    };
+    QWidget* buildCasePager(CasePager& pager, const QString& name);
+    void refreshCasePager(CasePager& pager, int count);
     void refreshRows();
     void newPlan();
     void duplicateActive();
@@ -86,6 +94,9 @@ private:
     QWidget* m_cyclesContent = nullptr;
     QString m_displayedPlanId;
     QVBoxLayout* m_cyclesList = nullptr;
+    QLineEdit* m_caseSearch = nullptr;
+    CasePager m_inPlanPager;
+    CasePager m_availablePager;
     QLabel* m_inPlanHeader = nullptr;
     QVBoxLayout* m_inPlan = nullptr;
     QLabel* m_availableHeader = nullptr;

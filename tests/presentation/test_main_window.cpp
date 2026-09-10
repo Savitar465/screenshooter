@@ -11,6 +11,7 @@
 #include "application/EvidenceService.h"
 #include "presentation/views/HistoryView.h"
 #include "presentation/views/MainWindow.h"
+#include "presentation/views/PlanView.h"
 #include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/Thumbnail.h"
@@ -496,6 +497,64 @@ private slots:
 
     // En la pantalla de planes, un ciclo publicado enseña el Test de cada ejecución y ofrece
     // actualizar el ciclo de Zephyr; uno sin publicar, publicarlo.
+    void planCaseSearchPaginatesAndPreservesSelection() {
+        AppFixture f;
+        QList<TestCase> incoming;
+        for (int i = 0; i < 21; ++i) {
+            TestCase c;
+            c.id = QStringLiteral("PAGE-%1").arg(i, 2, 10, QLatin1Char('0'));
+            c.title = QStringLiteral("Caso paginado %1").arg(i);
+            c.tags = {QStringLiteral("paginacion")};
+            incoming.append(c);
+        }
+        f.store.mergeCases(incoming);
+        PlanView view(f.store, f.plans);
+        view.show();
+        auto* search = view.findChild<QLineEdit*>(QStringLiteral("planCaseSearch"));
+        auto* next = view.findChild<QPushButton*>(QStringLiteral("availableNextPage"));
+        auto* previous = view.findChild<QPushButton*>(QStringLiteral("availablePreviousPage"));
+        auto* summary = view.findChild<QLabel*>(QStringLiteral("availablePageSummary"));
+        QVERIFY(search && next && previous && summary);
+        auto flush = [] { QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete); };
+        search->setText(QStringLiteral("  PAGINACION  "));
+        flush();
+        QVERIFY(summary->text().contains(QStringLiteral("1–10 de 21")));
+        QVERIFY(!previous->isEnabled());
+        next->click();
+        next->click();
+        flush();
+        QVERIFY(summary->text().contains(QStringLiteral("21–21 de 21")));
+        QVERIFY(!next->isEnabled());
+        auto* add = view.findChild<QPushButton*>(QStringLiteral("addPlanCase-PAGE-20"));
+        QVERIFY(add);
+        add->click();
+        flush();
+        QVERIFY(f.plans.active()->contains(QStringLiteral("PAGE-20")));
+        QVERIFY(summary->text().contains(QStringLiteral("11–20 de 20")));
+        search->setText(QStringLiteral("page-20"));
+        flush();
+        QVERIFY(summary->text().contains(QStringLiteral("0–0 de 0")));
+        auto* remove = view.findChild<QPushButton*>(QStringLiteral("removePlanCase-PAGE-20"));
+        QVERIFY(remove);
+        remove->click();
+        flush();
+        QVERIFY(!f.plans.active()->contains(QStringLiteral("PAGE-20")));
+        QVERIFY(summary->text().contains(QStringLiteral("1–1 de 1")));
+        search->clear();
+        f.plans.selectAll();
+        flush();
+        auto* selectedNext = view.findChild<QPushButton*>(QStringLiteral("inPlanNextPage"));
+        QVERIFY(selectedNext && selectedNext->isEnabled());
+        const auto selected = f.plans.orderedCaseIds();
+        selectedNext->click();
+        search->setText(QStringLiteral("sin coincidencias"));
+        QCOMPARE(f.plans.orderedCaseIds(), selected);
+        auto* selectedSummary = view.findChild<QLabel*>(QStringLiteral("inPlanPageSummary"));
+        QVERIFY(selectedSummary->text().contains(QStringLiteral("0–0 de 0")));
+        search->clear();
+        QVERIFY(selectedSummary->text().contains(QStringLiteral("1–10")));
+    }
+
     void thePlanScreenShowsTheZephyrTestOfEachPublishedRun() {
         WindowFixture f;
         f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });

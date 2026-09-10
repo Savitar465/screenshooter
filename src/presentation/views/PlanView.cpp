@@ -46,6 +46,7 @@ QLabel* mutedPill(const QString& text) { return ui::pill(text, theme::tint(theme
 QString when(const QDateTime& dt) { return dt.isValid() ? dt.toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QStringLiteral("—"); }
 /// Ciclos que muestra inicialmente el historial al desplegarlo.
 constexpr int kRecentCycles = 5;
+constexpr int kCasesPerPage = 10;
 } // namespace
 
 PlanView::PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* publish, QWidget* parent)
@@ -240,6 +241,16 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     hv->addWidget(m_cyclesContent);
     v->addWidget(m_cyclesSection);
 
+    m_caseSearch = new QLineEdit;
+    m_caseSearch->setObjectName(QStringLiteral("planCaseSearch"));
+    m_caseSearch->setPlaceholderText(tr("Buscar casos por ID, título, suite, etiqueta o componente…"));
+    m_caseSearch->setClearButtonEnabled(true);
+    connect(m_caseSearch, &QLineEdit::textChanged, this, [this]() {
+        m_inPlanPager.page = m_availablePager.page = 0;
+        refreshRows();
+    });
+    v->addWidget(m_caseSearch);
+
     // Acciones rápidas
     auto* quick = new QWidget;
     auto* qh = ui::hbox(quick, 0, 8);
@@ -264,11 +275,13 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     auto* inPlan = new QWidget;
     m_inPlan = ui::vbox(inPlan, 0, 6);
     v->addWidget(inPlan);
+    v->addWidget(buildCasePager(m_inPlanPager, QStringLiteral("inPlan")));
     m_availableHeader = ui::label(QString(), "eyebrow");
     v->addWidget(m_availableHeader);
     auto* available = new QWidget;
     m_available = ui::vbox(available, 0, 6);
     v->addWidget(available);
+    v->addWidget(buildCasePager(m_availablePager, QStringLiteral("available")));
 
     auto* footer = new QWidget;
     auto* fh = ui::hbox(footer, 0, 0);
@@ -293,6 +306,8 @@ void PlanView::refreshEditor() {
     if (m_displayedPlanId != p->id) {
         m_displayedPlanId = p->id;
         m_allCycles = false;
+        m_inPlanPager.page = m_availablePager.page = 0;
+        m_caseSearch->clear();
         m_cyclesHeader->setChecked(false);
     }
     const int cycles = m_plans.cycleCount(p->id);
@@ -488,16 +503,57 @@ QWidget* PlanView::zephyrBlock(const PlanReport& r) {
     return block;
 }
 
+QWidget* PlanView::buildCasePager(CasePager& pager, const QString& name) {
+    auto* bar = new QWidget;
+    auto* h = ui::hbox(bar, 0, 8);
+    pager.summary = ui::label(QString(), "muted-sm");
+    pager.summary->setObjectName(name + QStringLiteral("PageSummary"));
+    pager.previous = ui::button(tr("Anterior"), "outline");
+    pager.previous->setObjectName(name + QStringLiteral("PreviousPage"));
+    pager.next = ui::button(tr("Siguiente"), "outline");
+    pager.next->setObjectName(name + QStringLiteral("NextPage"));
+    connect(pager.previous, &QPushButton::clicked, this, [this, &pager]() { --pager.page; refreshRows(); });
+    connect(pager.next, &QPushButton::clicked, this, [this, &pager]() { ++pager.page; refreshRows(); });
+    h->addWidget(pager.summary, 1);
+    h->addWidget(pager.previous);
+    h->addWidget(pager.next);
+    return bar;
+}
+
+void PlanView::refreshCasePager(CasePager& pager, int count) {
+    const int pages = qMax(1, (count + kCasesPerPage - 1) / kCasesPerPage);
+    pager.page = qBound(0, pager.page, pages - 1);
+    const int first = count == 0 ? 0 : pager.page * kCasesPerPage + 1;
+    const int last = qMin(count, (pager.page + 1) * kCasesPerPage);
+    pager.summary->setText(tr("%1–%2 de %3 casos · Página %4 de %5")
+                              .arg(first).arg(last).arg(count).arg(pager.page + 1).arg(pages));
+    pager.previous->setVisible(pages > 1);
+    pager.next->setVisible(pages > 1);
+    pager.previous->setEnabled(pager.page > 0);
+    pager.next->setEnabled(pager.page + 1 < pages);
+}
+
 void PlanView::refreshRows() {
     const TestPlan* p = m_plans.active();
     if (!p) return;
     const QStringList ordered = m_plans.orderedCaseIds();
-    const auto cycle = m_plans.latestCycle(p->id);
 
+    const QString query = m_caseSearch->text().trimmed();
+    auto matches = [&query](const TestCase& c) { return c.searchText().contains(query, Qt::CaseInsensitive); };
+    QList<int> matchingPositions;
+    for (int i = 0; i < ordered.size(); ++i) {
+        const auto* c = m_cases.find(ordered[i]);
+        if (c && matches(*c)) matchingPositions.append(i);
+    }
+    refreshCasePager(m_inPlanPager, matchingPositions.size());
     ui::clearLayout(m_inPlan);
     m_inPlanHeader->setText(tr("EN EL PLAN · %1 · EN ORDEN DE EJECUCIÓN").arg(ordered.size()));
     if (ordered.isEmpty()) m_inPlan->addWidget(ui::label(tr("Ningún caso todavía. Añade casos de la lista de abajo."), "muted-sm"));
-    for (int i = 0; i < ordered.size(); ++i) {
+    if (!ordered.isEmpty() && matchingPositions.isEmpty())
+        m_inPlan->addWidget(ui::label(tr("No hay casos que coincidan con la búsqueda."), "muted-sm"));
+    const int inPlanEnd = qMin(int(matchingPositions.size()), (m_inPlanPager.page + 1) * kCasesPerPage);
+    for (int index = m_inPlanPager.page * kCasesPerPage; index < inPlanEnd; ++index) {
+        const int i = matchingPositions[index];
         const TestCase* c = m_cases.find(ordered[i]);
         if (!c) continue;
         auto* row = ui::card("card");
@@ -523,12 +579,6 @@ void PlanView::refreshRows() {
         auto* steps = ui::label(tr("%1 pasos").arg(c->steps.size()), "muted-sm");
         steps->setFixedWidth(52);
         g->addWidget(steps);
-        // Resultado en el último ciclo
-        QLabel* res = nullptr;
-        if (cycle) for (const auto& r : cycle->rows) if (r.caseId == c->id) res = r.executed ? verdictPill(r.run.verdict) : mutedPill(tr("PENDIENTE"));
-        if (!res) res = mutedPill(QStringLiteral("—"));
-        res->setFixedWidth(78);
-        g->addWidget(res);
         auto* up = ui::button(QStringLiteral("▲"), "icon-move");
         up->setEnabled(i > 0);
         up->setToolTip(tr("Ejecutar antes"));
@@ -538,6 +588,7 @@ void PlanView::refreshRows() {
         down->setToolTip(tr("Ejecutar después"));
         connect(down, &QPushButton::clicked, this, [this, cid = c->id]() { m_plans.moveCase(cid, +1); });
         auto* remove = ui::button(QStringLiteral("×"), "icon");
+        remove->setObjectName(QStringLiteral("removePlanCase-%1").arg(c->id));
         remove->setToolTip(tr("Quitar del plan"));
         connect(remove, &QPushButton::clicked, this, [this, cid = c->id]() { m_plans.toggle(cid); });
         for (auto* b : {up, down, remove}) b->setFixedSize(24, 22);
@@ -549,10 +600,18 @@ void PlanView::refreshRows() {
 
     ui::clearLayout(m_available);
     int available = 0;
+    QList<const TestCase*> matchingAvailable;
     for (const auto& c : m_cases.cases()) {
         if (c.status == CaseStatus::Obsoleto || p->contains(c.id)) continue;
         ++available;
+        if (matches(c)) matchingAvailable.append(&c);
+    }
+    refreshCasePager(m_availablePager, matchingAvailable.size());
+    const int availableEnd = qMin(int(matchingAvailable.size()), (m_availablePager.page + 1) * kCasesPerPage);
+    for (int index = m_availablePager.page * kCasesPerPage; index < availableEnd; ++index) {
+        const auto& c = *matchingAvailable[index];
         auto* row = ui::button(QString(), "plan-row");
+        row->setObjectName(QStringLiteral("addPlanCase-%1").arg(c.id));
         row->setToolTip(tr("Añadir al plan"));
         auto* g = ui::hbox(row, 0, 8);
         g->setContentsMargins(14, 8, 14, 8);
@@ -582,6 +641,8 @@ void PlanView::refreshRows() {
     }
     m_availableHeader->setText(tr("DISPONIBLES · %1").arg(available));
     if (available == 0) m_available->addWidget(ui::label(tr("Todos los casos están en el plan."), "muted-sm"));
+    else if (matchingAvailable.isEmpty())
+        m_available->addWidget(ui::label(tr("No hay casos que coincidan con la búsqueda."), "muted-sm"));
 }
 
 // ---- Acciones ------------------------------------------------------------------------------

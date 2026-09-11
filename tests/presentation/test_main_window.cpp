@@ -26,6 +26,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QProgressBar>
 #include <QUrl>
 #include <QtTest>
 
@@ -137,6 +138,38 @@ private slots:
         // El bloque de la ejecución lleva a su pantalla.
         QTest::mouseClick(f.window->findChild<QPushButton*>(QStringLiteral("statusRun")), Qt::LeftButton);
         QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Run));
+    }
+
+    void statusStripShowsOnlyTheRunningPlanOrStandaloneCase() {
+        WindowFixture f;
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("statusPlan")));
+        auto* progress = f.window->findChild<QProgressBar*>(QStringLiteral("statusRunProgress"));
+        QVERIFY(progress);
+        QVERIFY(!progress->isVisible());
+
+        const QString planId = f.app.plans.activeId();
+        f.app.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-102")}, QStringLiteral("Plan en ejecución"), planId);
+        QVERIFY(f.statusText("statusRun").contains(QStringLiteral("Plan en ejecución")));
+        QVERIFY(!f.statusText("statusRun").contains(QStringLiteral("TC-101")));
+        QVERIFY(progress->isVisible());
+        QCOMPARE(progress->value(), 0);
+
+        // Abrir otro plan no cambia el indicador de la ejecución real.
+        f.app.plans.createPlan(QStringLiteral("Otro plan"));
+        QVERIFY(f.statusText("statusRun").contains(QStringLiteral("Plan en ejecución")));
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        QCOMPARE(progress->value(), 50);
+        QTest::mouseClick(f.window->findChild<QPushButton*>(QStringLiteral("statusRun")), Qt::LeftButton);
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+
+        f.app.run.abandon();
+        QVERIFY(f.statusText("statusRun").contains(QStringLiteral("Sin ejecución")));
+        QVERIFY(!progress->isVisible());
+        f.app.run.start(QStringLiteral("TC-101"));
+        QVERIFY(f.statusText("statusRun").contains(QStringLiteral("TC-101")));
+        QVERIFY(!f.statusText("statusRun").contains(QStringLiteral("Plan en ejecución")));
+        QVERIFY(!progress->isVisible());
     }
 
     void menuActionsHaveStandardShortcuts() {

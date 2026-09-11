@@ -16,9 +16,8 @@ class PlanStore;
 class RunController;
 class RunHistoryStore;
 
-/// Barra de estado del pie de la ventana. Recoge lo que antes mostraban las tarjetas del sidebar:
-/// la ejecución en curso, la tasa de éxito global con su tendencia y el plan activo con el progreso
-/// de su ciclo. Cada bloque es clicable y lleva a su pantalla.
+/// Barra inferior con un único indicador para el plan o caso en ejecución y métricas globales.
+/// Cada bloque es clicable y lleva a su pantalla.
 class StatusStrip : public QFrame {
     Q_OBJECT
 public:
@@ -44,9 +43,7 @@ private:
     QLabel* m_rate;
     QLabel* m_rateDetail;
     QLabel* m_trend;
-    QLabel* m_planName;
-    QLabel* m_planCycle;
-    QProgressBar* m_planBar;
+    QProgressBar* m_runBar;
 };
 
 } // namespace qaflow

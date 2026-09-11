@@ -17,13 +17,6 @@ namespace qaflow {
 
 namespace {
 constexpr int kHeight = 34;
-
-QFrame* separator() {
-    auto* f = new QFrame;
-    f->setFixedSize(1, 16);
-    f->setStyleSheet(QStringLiteral("background:%1;").arg(theme::Border));
-    return f;
-}
 } // namespace
 
 StatusStrip::StatusStrip(TestCaseStore& cases, PlanStore& plan, RunController& run, RunHistoryStore& history, QWidget* parent)
@@ -33,7 +26,7 @@ StatusStrip::StatusStrip(TestCaseStore& cases, PlanStore& plan, RunController& r
     auto* h = ui::hbox(this, 0, 6);
     h->setContentsMargins(10, 4, 10, 4);
 
-    // Ejecución en curso
+    // Un único bloque para la ejecución de un plan o un caso.
     QHBoxLayout* runBody;
     auto* runItem = item(tr("Ir a la ejecución en curso"), &runBody);
     runItem->setObjectName(QStringLiteral("statusRun"));
@@ -41,6 +34,12 @@ StatusStrip::StatusStrip(TestCaseStore& cases, PlanStore& plan, RunController& r
     runBody->addWidget(m_runDot);
     m_runText = ui::label(QString(), "muted-sm");
     runBody->addWidget(m_runText);
+    m_runBar = new QProgressBar;
+    m_runBar->setObjectName(QStringLiteral("statusRunProgress"));
+    m_runBar->setTextVisible(false);
+    m_runBar->setRange(0, 100);
+    m_runBar->setFixedSize(64, 6);
+    runBody->addWidget(m_runBar);
     connect(runItem, &QPushButton::clicked, this, [this]() { emit navigate(Screen::Run); });
     h->addWidget(runItem);
     h->addStretch(1);
@@ -59,28 +58,9 @@ StatusStrip::StatusStrip(TestCaseStore& cases, PlanStore& plan, RunController& r
     metricBody->addWidget(m_trend);
     connect(metricItem, &QPushButton::clicked, this, [this]() { emit metricsRequested(); });
     h->addWidget(metricItem);
-    h->addWidget(separator());
-
-    // Plan activo y progreso de su ciclo
-    QHBoxLayout* planBody;
-    auto* planItem = item(tr("Abrir el plan activo"), &planBody);
-    planItem->setObjectName(QStringLiteral("statusPlan"));
-    planBody->addWidget(ui::label(tr("PLAN"), "eyebrow"));
-    m_planName = new QLabel;
-    m_planName->setStyleSheet(QStringLiteral("font-size:12px;font-weight:700;"));
-    planBody->addWidget(m_planName);
-    m_planCycle = ui::label(QString(), "muted-sm");
-    planBody->addWidget(m_planCycle);
-    m_planBar = new QProgressBar;
-    m_planBar->setTextVisible(false);
-    m_planBar->setRange(0, 100);
-    m_planBar->setFixedSize(64, 6);
-    planBody->addWidget(m_planBar);
-    connect(planItem, &QPushButton::clicked, this, [this]() { emit navigate(Screen::Plan); });
-    h->addWidget(planItem);
 
     // Las etiquetas no deben robar el clic a su bloque.
-    for (auto* item : {runItem, metricItem, planItem})
+    for (auto* item : {runItem, metricItem})
         for (auto* child : item->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
 
     connect(&m_cases, &TestCaseStore::casesChanged, this, &StatusStrip::refresh);
@@ -105,10 +85,20 @@ void StatusStrip::refresh() {
     // Ejecución en curso
     const RunState& r = m_run.state();
     const TestCase* running = m_run.isRunning() ? m_cases.find(r.caseId) : nullptr;
-    m_runDot->setVisible(running != nullptr);
-    m_runText->setText(running ? tr("%1 · %2 · paso %3 de %4").arg(running->id, ui::elide(running->title, 34)).arg(r.idx + 1).arg(running->steps.size())
-                               : tr("Sin ejecución en curso"));
-    m_runText->setStyleSheet(QStringLiteral("font-size:12px;color:%1;").arg(running ? theme::Text : theme::Muted));
+    const auto* runningPlan = m_history.findPlan(m_run.planRunId());
+    const bool planInProgress = runningPlan && !runningPlan->isFinished();
+    m_runDot->setVisible(planInProgress || running);
+    m_runBar->setVisible(planInProgress);
+    if (planInProgress) {
+        const auto report = m_history.report(runningPlan->id);
+        m_runText->setText(tr("Plan: %1 · ciclo en curso · %2/%3 casos")
+                              .arg(ui::elide(runningPlan->name, 34)).arg(report.executed).arg(report.total()));
+        m_runBar->setValue(report.total() ? report.executed * 100 / report.total() : 0);
+    } else {
+        m_runText->setText(running ? tr("%1 · %2 · paso %3 de %4").arg(running->id, ui::elide(running->title, 34)).arg(r.idx + 1).arg(running->steps.size())
+                                   : tr("Sin ejecución en curso"));
+    }
+    m_runText->setStyleSheet(QStringLiteral("font-size:12px;color:%1;").arg(planInProgress || running ? theme::Text : theme::Muted));
 
     // Tasa de éxito global (última ejecución de cada caso) y tendencia entre ciclos
     const MetricsSummary sum = metrics::summary(m_cases.cases());
@@ -128,17 +118,6 @@ void StatusStrip::refresh() {
         m_trend->setStyleSheet(QStringLiteral("font-size:12px;color:%1;").arg(theme::Muted));
     }
 
-    // Plan activo y su ciclo
-    m_planName->setText(plan ? ui::elide(plan->name, 28) : QStringLiteral("—"));
-    const auto cycle = plan ? m_plan.latestCycle(plan->id) : std::nullopt;
-    if (cycle) {
-        m_planCycle->setText(QStringLiteral("%1 %2/%3").arg(cycle->plan.isFinished() ? tr("último ciclo") : tr("ciclo en curso"))
-                                 .arg(cycle->executed).arg(cycle->total()));
-        m_planBar->setValue(cycle->total() ? cycle->executed * 100 / cycle->total() : 0);
-    } else {
-        m_planCycle->setText(tr("sin ciclos · %1 casos").arg(plan ? m_plan.orderedCaseIds().size() : 0));
-        m_planBar->setValue(0);
-    }
 }
 
 } // namespace qaflow

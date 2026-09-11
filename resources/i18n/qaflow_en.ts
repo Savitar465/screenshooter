@@ -3493,6 +3493,10 @@ Press “Take screenshot” or drag a file onto the window.</translation>
 <context>
     <name>qaflow::StatusStrip</name>
     <message>
+        <source>Plan: %1 · ciclo en curso · %2/%3 casos</source>
+        <translation>Plan: %1 · cycle in progress · %2/%3 cases</translation>
+    </message>
+    <message>
         <source>Ir a la ejecución en curso</source>
         <translation>Go to the run in progress</translation>
     </message>

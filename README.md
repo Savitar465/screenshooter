@@ -8,7 +8,31 @@ Jira, GitHub, GitLab o Azure DevOps. Qt 6 Widgets · C++20.
 
 Interfaz en español o inglés, tema oscuro o claro, menú con atajos estándar e icono en la bandeja del sistema.
 Navegación en un rail de iconos al estilo de los IDE de JetBrains (el nombre y el atajo, en el tooltip) y barra de
-estado con la ejecución en curso, la tasa de éxito y el plan activo.
+estado con la ejecución en curso, la tasa de éxito y el plan activo. La barra superior reúne el selector
+de proyecto, el buscador de casos y planes para ejecutar y los controles de ejecución.
+
+## Proyectos
+
+El selector de la barra superior cambia de proyecto; el menú `⋯` permite crear uno vacío o renombrar
+el actual. El cambio se realiza dentro de la misma ventana, conservando su tamaño y posición.
+Se recuerda el último proyecto abierto. Los datos anteriores siguen en **Proyecto principal**,
+conservando sus archivos y rutas de evidencias.
+
+Cada proyecto tiene sus propios casos, planes, ejecuciones, bugs y código de proyecto Jira.
+En Ajustes, el código Jira está en la sección **Configuración del proyecto**, separada de los ajustes
+generales de conexión. La conexión con Jira/Zephyr, las credenciales, la carpeta de capturas, el idioma, el tema y los atajos
+son ajustes generales. Las suites forman un catálogo común: una suite creada en un proyecto puede
+seleccionarse en cualquier otro, sin compartir los casos. Las suites existentes se incorporan al catálogo.
+Las evidencias se guardan en subcarpetas por proyecto dentro de la carpeta general de capturas para
+que los archivos de distintos proyectos no se sobrescriban.
+El catálogo se guarda en `projects.json`; los proyectos nuevos usan `projects/<id>/` dentro de la
+carpeta de datos. El proyecto principal mantiene la ubicación original.
+
+Para ejecutar, elige un caso o plan en el desplegable derecho (puedes escribir para buscar) y pulsa
+**▶** o **F5**. Al abrir un caso o plan, la barra selecciona ese objetivo. Durante la ejecución puedes
+volver a ella desde su indicador, finalizar un caso terminado o detener la ejecución con **■**.
+Antes de cambiar de proyecto, finaliza o detén la ejecución y las capturas; los cambios se guardan
+antes de abrir el otro proyecto. Si el guardado falla, se mantiene el proyecto actual.
 
 ## Requisitos
 
@@ -58,7 +82,7 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 | Ctrl+F               | Buscar caso                         |
 | Ctrl+D               | Duplicar caso                       |
 | Ctrl+Z               | Deshacer el último borrado          |
-| F5                   | Ejecutar el caso seleccionado       |
+| F5                   | Ejecutar el caso o plan de la barra |
 | Ctrl+Shift+S         | Capturar pantalla (configurable; global, funciona sin el foco en la app; una segunda pulsación cancela la cuenta atrás) |
 | Ctrl+Shift+G         | Iniciar o detener la grabación de GIF (configurable, global) |
 | Ctrl+Alt+P           | Pasa el paso actual y avanza al siguiente (configurable, global) |

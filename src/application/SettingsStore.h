@@ -33,6 +33,8 @@ public:
     bool secretsAreSecure() const;
 
 signals:
+    /// Cambios persistidos (no se emite al recargar los ajustes compartidos).
+    void saved();
     void trackerChanged();
     void captureChanged();
     /// Idioma, tema o comportamiento de bandeja. Idioma y tema requieren reconstruir la ventana.

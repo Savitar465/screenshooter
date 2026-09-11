@@ -73,6 +73,7 @@ CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& 
     buildListPane(root);
     buildEditor(root);
 
+    connect(&m_store, &TestCaseStore::suitesChanged, this, &CasesView::refreshFilters);
     connect(&m_store, &TestCaseStore::casesChanged, this, [this]() { refreshFilters(); refreshList(); });
     connect(&m_store, &TestCaseStore::selectionChanged, this, [this](const QString&) { refreshList(); loadEditor(); });
     connect(&m_store, &TestCaseStore::caseChanged, this, &CasesView::onCaseChanged);
@@ -294,8 +295,6 @@ void CasesView::buildEditor(QHBoxLayout* root) {
         m_store.updateCase(id, [](TestCase& tc) { if (tc.status == CaseStatus::Borrador && tc.readyToBeMarkedListo()) tc.status = CaseStatus::Listo; });
         emit toast(tr("%1 guardado").arg(id), theme::Green);
     });
-    auto* runBtn = ui::button(tr("▶ Ejecutar"), "success");
-    connect(runBtn, &QPushButton::clicked, this, [this]() { if (!m_store.selectedId().isEmpty()) emit runRequested(m_store.selectedId()); });
     auto* more = ui::button(QStringLiteral("⋯"), "outline");
     more->setToolTip(tr("Más acciones"));
     more->setFixedWidth(40);
@@ -306,7 +305,6 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     menu->addAction(tr("Eliminar caso…"), this, &CasesView::removeSelected);
     more->setMenu(menu);
     hh->addWidget(save, 0, Qt::AlignTop);
-    hh->addWidget(runBtn, 0, Qt::AlignTop);
     hh->addWidget(more, 0, Qt::AlignTop);
     v->addWidget(head);
 

@@ -61,6 +61,8 @@ target_link_libraries(qaflow_core PUBLIC Qt6::Core PRIVATE qaflow_warnings)
 
 # application: casos de uso y estado observable (QObject + señales), sin UI.
 add_library(qaflow_application STATIC
+        src/application/ProjectStore.h
+        src/application/ProjectStore.cpp
         src/application/AppContext.h
         src/application/SeedData.h
         src/application/SeedData.cpp
@@ -89,6 +91,8 @@ target_link_libraries(qaflow_application PUBLIC qaflow_core Qt6::Gui PRIVATE qaf
 
 # infrastructure: implementaciones concretas de las interfaces de core (disco, red, pantalla, llavero).
 add_library(qaflow_infrastructure STATIC
+        src/infrastructure/persistence/JsonProjectRepository.h
+        src/infrastructure/persistence/JsonProjectRepository.cpp
         src/infrastructure/persistence/JsonTestCaseRepository.h
         src/infrastructure/persistence/JsonTestCaseRepository.cpp
         src/infrastructure/persistence/JsonRunHistoryRepository.h
@@ -213,13 +217,15 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/SettingsView.cpp
         src/presentation/views/SettingsDialog.h
         src/presentation/views/SettingsDialog.cpp
+        src/presentation/views/WorkspaceWindow.h
+        src/presentation/views/WorkspaceWindow.cpp
         src/presentation/views/MainWindow.h
         src/presentation/views/MainWindow.cpp
 )
 target_link_libraries(qaflow_presentation PUBLIC qaflow_application Qt6::Widgets PRIVATE qaflow_warnings)
 
 # ---- Ejecutable (raíz de composición) ---------------------------------------
-qt_add_executable(qaflow main.cpp resources/resources.qrc)
+qt_add_executable(qaflow main.cpp src/bootstrap/ProjectSession.cpp src/bootstrap/ProjectSession.h resources/resources.qrc)
 target_link_libraries(qaflow PRIVATE qaflow_presentation qaflow_infrastructure qaflow_warnings)
 target_compile_definitions(qaflow PRIVATE QAFLOW_VERSION="${PROJECT_VERSION}")
 set_target_properties(qaflow PROPERTIES WIN32_EXECUTABLE ON MACOSX_BUNDLE ON OUTPUT_NAME qaflow)

@@ -163,3 +163,8 @@ QFrame[role="toast"] QLabel { font-weight: 600; font-size: 13px; }
 
 /* Botones con menú desplegable: sin flecha indicadora (el "⋯" ya lo sugiere). */
 QPushButton::menu-indicator { image: none; width: 0px; }
+
+/* Barra de proyectos y ejecución */
+QFrame#ideNavbar { background: @panel; border: none; border-bottom: 1px solid @border; border-radius: 0; }
+QPushButton#navbarRun:disabled, QPushButton#navbarStop:disabled { background: @elevated; color: @disabled; border-color: @border; }
+QComboBox#runTargetSelector:disabled, QComboBox#projectSelector:disabled { color: @muted; }

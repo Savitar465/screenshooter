@@ -58,8 +58,10 @@ void SettingsStore::updateTracker(const std::function<void(TrackerSettings&)>& m
         TrackerSettings persisted = m_tracker;
         if (m_secrets) persisted.token.clear();   // el token no viaja al fichero de ajustes
         m_repo->saveTracker(persisted);
+        if (m_tracker.kind != before) m_tracker.project = m_repo->loadTracker().project;
     }
     emit trackerChanged();
+    emit saved();
 }
 
 void SettingsStore::updateCapture(const std::function<void(CaptureSettings&)>& mutate) {
@@ -67,18 +69,21 @@ void SettingsStore::updateCapture(const std::function<void(CaptureSettings&)>& m
     m_capture.clamp();
     if (m_repo) m_repo->saveCapture(m_capture);
     emit captureChanged();
+    emit saved();
 }
 
 void SettingsStore::updateApp(const std::function<void(AppSettings&)>& mutate) {
     mutate(m_app);
     if (m_repo) m_repo->saveApp(m_app);
     emit appChanged();
+    emit saved();
 }
 
 void SettingsStore::updateRunShortcuts(const std::function<void(RunShortcuts&)>& mutate) {
     mutate(m_runShortcuts);
     if (m_repo) m_repo->saveRunShortcuts(m_runShortcuts);
     emit runShortcutsChanged();
+    emit saved();
 }
 
 QString SettingsStore::secretBackend() const {

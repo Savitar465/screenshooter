@@ -24,15 +24,24 @@ TrackerSettings QSettingsRepository::loadTracker() {
     t.zephyr = s.value(QStringLiteral("zephyr"), false).toBool();
     t.zephyrVersion = s.value(QStringLiteral("zephyrVersion")).toString();
     t.zephyrTestType = s.value(QStringLiteral("zephyrTestType")).toString();
+    s.endGroup();
+    if (!m_projectId.isEmpty() && t.kind == TrackerKind::Jira) {
+        // Conservar el código histórico del proyecto principal antes de usar otros gestores.
+        const QString legacyKey = QStringLiteral("projects/default/tracker/project");
+        if (!s.contains(legacyKey)) s.setValue(legacyKey, t.project);
+        t.project = s.value(QStringLiteral("projects/%1/tracker/project").arg(m_projectId)).toString();
+    }
     return t;
 }
 
 void QSettingsRepository::saveTracker(const TrackerSettings& t) {
     QSettings s;
+    const TrackerKind previousKind = trackerKindFromString(s.value(QStringLiteral("tracker/kind"), toString(TrackerKind::Jira)).toString());
     s.beginGroup(QStringLiteral("tracker"));
     s.setValue(QStringLiteral("kind"), toString(t.kind));
     s.setValue(QStringLiteral("url"), t.url);
-    s.setValue(QStringLiteral("project"), t.project);
+    if (m_projectId.isEmpty() || t.kind != TrackerKind::Jira)
+        s.setValue(QStringLiteral("project"), t.project);
     s.setValue(QStringLiteral("user"), t.user);
     s.setValue(QStringLiteral("jiraAuth"), toString(t.jiraAuth));
     s.setValue(QStringLiteral("connected"), t.connected);
@@ -45,6 +54,8 @@ void QSettingsRepository::saveTracker(const TrackerSettings& t) {
     s.endGroup();
     // El token en claro de versiones anteriores desaparece del fichero.
     s.remove(QStringLiteral("jira/token"));
+    if (!m_projectId.isEmpty() && t.kind == TrackerKind::Jira && previousKind == TrackerKind::Jira)
+        s.setValue(QStringLiteral("projects/%1/tracker/project").arg(m_projectId), t.project);
 }
 
 CaptureSettings QSettingsRepository::loadCapture() {

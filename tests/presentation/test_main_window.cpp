@@ -497,6 +497,57 @@ private slots:
 
     // En la pantalla de planes, un ciclo publicado enseña el Test de cada ejecución y ofrece
     // actualizar el ciclo de Zephyr; uno sin publicar, publicarlo.
+    void projectSettingsHaveTheirOwnSection() {
+        WindowFixture f;
+        f.window->openSettings();
+        auto* dialog = f.window->settingsWindow();
+        QVERIFY(dialog);
+        auto* project = dialog->findChild<QWidget*>(QStringLiteral("projectSettingsSection"));
+        auto* general = dialog->findChild<QWidget*>(QStringLiteral("generalTrackerSettings"));
+        auto* code = dialog->findChild<QLineEdit*>(QStringLiteral("settingsJiraProject"));
+        QVERIFY(project && general && code);
+        QVERIFY(project->isAncestorOf(code));
+        QVERIFY(!general->isAncestorOf(code));
+        const QString url = f.app.settings.tracker().url;
+        code->selectAll();
+        QTest::keyClicks(code, "NEW");
+        QCOMPARE(f.app.settings.tracker().project, QStringLiteral("NEW"));
+        QCOMPARE(f.app.settings.tracker().url, url);
+        f.app.settings.updateTracker([](TrackerSettings& t) { t.kind = TrackerKind::GitHub; });
+        QVERIFY(project->isHidden());
+        QVERIFY(!general->isHidden());
+    }
+
+    void navbarRunsCasesAndPlansAndPreventsReplacingAnActiveRun() {
+        WindowFixture f;
+        auto* targets = f.window->findChild<QComboBox*>(QStringLiteral("runTargetSelector"));
+        auto* run = f.window->findChild<QPushButton*>(QStringLiteral("navbarRun"));
+        auto* stop = f.window->findChild<QPushButton*>(QStringLiteral("navbarStop"));
+        auto* finish = f.window->findChild<QPushButton*>(QStringLiteral("navbarFinish"));
+        QVERIFY(targets && run && stop && finish);
+        QVERIFY(run->isEnabled());
+        QVERIFY(!stop->isEnabled());
+        targets->setCurrentIndex(targets->findData(QStringLiteral("case:TC-103")));
+        run->click();
+        QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-103"));
+        QVERIFY(f.app.run.planRunId().isEmpty());
+        QVERIFY(!run->isEnabled());
+        QVERIFY(!targets->isEnabled());
+        QVERIFY(stop->isEnabled());
+        f.app.run.mark(StepResult::Pass);
+        QVERIFY(!finish->isHidden());
+        finish->click();
+        QVERIFY(f.app.run.state().caseId.isEmpty());
+        QVERIFY(run->isEnabled());
+        f.window->navigate(Screen::Plan);
+        QCOMPARE(targets->currentData().toString(), QStringLiteral("plan:") + f.app.plans.activeId());
+        run->click();
+        QVERIFY(!f.app.run.planRunId().isEmpty());
+        QCOMPARE(f.app.run.state().caseId, f.app.plans.orderedCaseIds().first());
+        QCOMPARE(f.app.run.queuedCount(), f.app.plans.orderedCaseIds().size() - 1);
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+    }
+
     void planCaseSearchPaginatesAndPreservesSelection() {
         AppFixture f;
         QList<TestCase> incoming;

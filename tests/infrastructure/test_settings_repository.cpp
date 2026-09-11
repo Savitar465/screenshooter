@@ -23,6 +23,36 @@ private slots:
     }
     void init() { QSettings().clear(); }
 
+    void onlyJiraCodeIsScopedAndLegacyProjectCodesAreRetained() {
+        QSettings raw;
+        raw.setValue(QStringLiteral("tracker/url"), QStringLiteral("https://shared.example"));
+        raw.setValue(QStringLiteral("tracker/project"), QStringLiteral("MAIN"));
+        raw.setValue(QStringLiteral("projects/a/tracker/project"), QStringLiteral("A"));
+        raw.setValue(QStringLiteral("projects/a/tracker/url"), QStringLiteral("https://old-private.example"));
+        raw.setValue(QStringLiteral("capture/folder"), QStringLiteral("/shared"));
+        raw.setValue(QStringLiteral("projects/a/capture/folder"), QStringLiteral("/old-private"));
+        QSettingsRepository a(QStringLiteral("a")), b(QStringLiteral("b")), main(QStringLiteral("default"));
+        QCOMPARE(a.loadTracker().project, QStringLiteral("A"));
+        QCOMPARE(main.loadTracker().project, QStringLiteral("MAIN"));
+        QVERIFY(b.loadTracker().project.isEmpty());
+        QCOMPARE(a.loadTracker().url, QStringLiteral("https://shared.example"));
+        QCOMPARE(a.loadCapture().folder, QStringLiteral("/shared"));
+        auto t = b.loadTracker();
+        t.project = QStringLiteral("B"); t.url = QStringLiteral("https://updated.example"); t.zephyr = true;
+        b.saveTracker(t);
+        QCOMPARE(a.loadTracker().url, t.url);
+        QVERIFY(a.loadTracker().zephyr);
+        QCOMPARE(a.loadTracker().project, QStringLiteral("A"));
+        QCOMPARE(main.loadTracker().project, QStringLiteral("MAIN"));
+        t.kind = TrackerKind::GitHub; t.project = QStringLiteral("org/repo");
+        b.saveTracker(t);
+        QCOMPARE(a.loadTracker().project, QStringLiteral("org/repo"));
+        t.kind = TrackerKind::Jira;
+        b.saveTracker(t);
+        QCOMPARE(b.loadTracker().project, QStringLiteral("B"));
+        QCOMPARE(a.loadTracker().project, QStringLiteral("A"));
+    }
+
     void runShortcutsRoundTrip() {
         QSettingsRepository repo;
         QCOMPARE(repo.loadRunShortcuts().passAndNext, RunShortcuts{}.passAndNext);   // sin fichero: los de fábrica

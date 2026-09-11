@@ -39,7 +39,6 @@ public:
     void exportCases(CaseTransferService::Format format);
 
 signals:
-    void runRequested(const QString& caseId);
     void historyRequested(const QString& caseId);
     /// Abrir en el historial los resultados de una ejecución concreta del caso.
     void openRunRequested(const QString& runId);

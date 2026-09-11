@@ -21,7 +21,7 @@ struct PlanReport;
 
 /// Pantalla "Planes": lista de planes (activos y archivados) a la izquierda; a la derecha el
 /// plan abierto: casos en orden de ejecución, ciclo actual, historial de ciclos con sus
-/// resultados y arranque de un ciclo nuevo.
+/// resultados. Los ciclos se inician desde la barra superior de la ventana.
 class PlanView : public QWidget {
     Q_OBJECT
 public:
@@ -33,7 +33,6 @@ public:
     void refresh();
 
 signals:
-    void startPlanRequested(const QStringList& caseIds, const QString& planName, const QString& planId);
     /// Abrir en el historial el informe de un ciclo.
     void cycleReportRequested(const QString& planRunId);
     /// Abrir en el navegador el Test de Zephyr de una ejecución.
@@ -103,7 +102,6 @@ private:
     QVBoxLayout* m_inPlan = nullptr;
     QLabel* m_availableHeader = nullptr;
     QVBoxLayout* m_available = nullptr;
-    QPushButton* m_start = nullptr;
 };
 
 } // namespace qaflow

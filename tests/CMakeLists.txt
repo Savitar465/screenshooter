@@ -45,7 +45,10 @@ qaflow_add_test(infrastructure test_tracker_clients LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_zephyr_client LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_gif_encoder LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_global_hotkey LIBS qaflow_infrastructure)
+qaflow_add_test(infrastructure test_project_repository LIBS qaflow_infrastructure qaflow_application)
 
 # presentation: ventana completa sobre repositorios en memoria (plataforma offscreen)
 qaflow_add_test(presentation test_main_window LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
 qaflow_add_test(presentation test_evidence_widgets LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
+
+qaflow_add_test(presentation test_project_session LIBS qaflow_presentation qaflow_infrastructure SOURCES ${CMAKE_SOURCE_DIR}/src/bootstrap/ProjectSession.cpp)

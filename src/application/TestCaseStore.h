@@ -12,6 +12,8 @@
 
 namespace qaflow {
 
+class ProjectStore;
+
 /// Fuente de verdad de los casos de prueba. Toda mutación pasa por aquí y emite señales.
 ///
 /// Las operaciones destructivas (borrar caso, paso o captura) guardan una instantánea que
@@ -36,6 +38,7 @@ public:
     TestCase* find(const QString& id);
     /// Suites en uso, ordenadas. Una suite existe mientras algún caso la use.
     QStringList suites() const;
+    void setSuiteCatalog(ProjectStore* catalog);
     /// Etiquetas en uso, ordenadas.
     QStringList tags() const;
 
@@ -94,6 +97,7 @@ public:
     int executedCount() const;
 
 signals:
+    void suitesChanged();
     void casesChanged();                  // lista completa (alta/baja/reorden)
     void caseChanged(const QString& id);  // un caso concreto
     void selectionChanged(const QString& id);
@@ -105,6 +109,8 @@ signals:
     void saveFailed(const QString& what);
 
 private:
+    ProjectStore* m_suiteCatalog = nullptr;
+    void registerLocalSuites();
     struct UndoEntry {
         QString label;
         QList<TestCase> snapshot;

@@ -59,6 +59,7 @@ PlanView::PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* p
 
     connect(&m_plans, &PlanStore::plansChanged, this, [this]() { refreshList(); refreshEditor(); });
     connect(&m_plans, &PlanStore::planChanged, this, [this]() { refreshList(); refreshEditor(); });
+    connect(&m_cases, &TestCaseStore::suitesChanged, this, &PlanView::refreshRows);
     connect(&m_cases, &TestCaseStore::caseChanged, this, &PlanView::refreshRows);
     refreshList();
     refreshEditor();
@@ -299,21 +300,6 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     m_available = ui::vbox(available, 0, 6);
     v->addWidget(available);
     v->addWidget(buildCasePager(m_availablePager, QStringLiteral("available")));
-
-    auto* footer = new QWidget;
-    auto* fh = ui::hbox(footer, 0, 0);
-    fh->addStretch(1);
-    m_start = ui::button(tr("▶ Iniciar ciclo"), "success");
-    m_start->setStyleSheet(QStringLiteral("padding:10px 18px;font-size:13.5px;font-weight:800;"));
-    connect(m_start, &QPushButton::clicked, this, [this]() {
-        const TestPlan* p = m_plans.active();
-        if (!p) return;
-        const QStringList ids = m_plans.orderedCaseIds();
-        if (ids.isEmpty()) { emit toast(tr("Añade al menos un caso al plan"), theme::Amber); return; }
-        emit startPlanRequested(ids, p->name, p->id);
-    });
-    fh->addWidget(m_start);
-    v->addWidget(footer);
 }
 
 void PlanView::refreshEditor() {
@@ -337,8 +323,6 @@ void PlanView::refreshEditor() {
     m_steps->setText(QString::number(m_plans.totalSteps()));
     m_time->setText(m_plans.estimatedTime());
     m_basis->setText(m_plans.estimateBasis());
-    m_start->setEnabled(!p->archived);
-    m_start->setToolTip(p->archived ? tr("Desarchiva el plan para ejecutarlo") : QString());
     refreshCycle();
     refreshCycles();
     refreshRows();

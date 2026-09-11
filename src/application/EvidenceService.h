@@ -30,6 +30,9 @@ public:
 
     /// Grabador de pantalla (opcional: sin él `canRecord()` es false).
     void setRecorder(std::shared_ptr<IScreenRecorder> recorder);
+    /// Subcarpeta del proyecto dentro de la carpeta general de capturas.
+    void setProjectId(const QString& id) { m_projectId = id; }
+    QString captureFolder() const;
     bool canRecord() const { return m_recorder != nullptr; }
 
     /// Captura según los ajustes, para la ejecución en curso. Con retardo, primero cuenta atrás
@@ -40,6 +43,7 @@ public:
     /// Inicia o detiene la grabación de GIF de la ejecución en curso.
     void toggleRecording();
     bool isRecording() const;
+    bool isBusy() const { return m_busy; }
 
     /// Copia ficheros existentes a la carpeta de capturas y los adjunta. Devuelve cuántos se adjuntaron.
     int attachFiles(const QStringList& paths);
@@ -61,7 +65,7 @@ signals:
 private:
     QString targetCaseId() const;
     int targetStep(const QString& caseId) const;
-    bool ensureFolder(QString* error) const;
+    bool ensureFolder(const QString& folder, QString* error) const;
     void grabNow();
 
     std::shared_ptr<IScreenCapture> m_capture;
@@ -72,6 +76,7 @@ private:
     QTimer m_countdown;
     int m_countdownLeft = 0;
     bool m_busy = false;
+    QString m_projectId;
 };
 
 } // namespace qaflow

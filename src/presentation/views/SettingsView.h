@@ -56,6 +56,9 @@ private:
     QLineEdit* m_url;
     QLabel* m_projectLabel;
     QLineEdit* m_project;
+    QWidget* m_projectField;
+    QWidget* m_projectSection;
+    QLineEdit* m_jiraProject;
     QWidget* m_authField;
     QComboBox* m_jiraAuth;
     QGridLayout* m_projectGrid;

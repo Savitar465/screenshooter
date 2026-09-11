@@ -1,6 +1,7 @@
 #include "TestCaseStore.h"
 
 #include "application/SeedData.h"
+#include "application/ProjectStore.h"
 
 #include <QSet>
 #include <algorithm>
@@ -19,6 +20,8 @@ void remapShotSteps(TestCase& c, F newStepFor) {
 
 TestCaseStore::TestCaseStore(std::shared_ptr<ITestCaseRepository> repo, QObject* parent)
     : QObject(parent), m_repo(std::move(repo)) {
+    connect(this, &TestCaseStore::casesChanged, this, &TestCaseStore::registerLocalSuites);
+    connect(this, &TestCaseStore::caseChanged, this, &TestCaseStore::registerLocalSuites);
     // Las ediciones de texto llegan tecla a tecla; agrupamos las escrituras a disco.
     m_saveTimer.setSingleShot(true);
     m_saveTimer.setInterval(400);
@@ -70,8 +73,25 @@ TestCase* TestCaseStore::find(const QString& id) {
     return it == m_cases.end() ? nullptr : &*it;
 }
 
+void TestCaseStore::setSuiteCatalog(ProjectStore* catalog) {
+    if (m_suiteCatalog == catalog) return;
+    if (m_suiteCatalog) disconnect(m_suiteCatalog, nullptr, this, nullptr);
+    m_suiteCatalog = catalog;
+    if (!catalog) return;
+    connect(catalog, &ProjectStore::suitesChanged, this, &TestCaseStore::suitesChanged);
+    registerLocalSuites();
+    emit suitesChanged();
+}
+
+void TestCaseStore::registerLocalSuites() {
+    if (!m_suiteCatalog) return;
+    QStringList names;
+    for (const auto& c : m_cases) if (!c.suite.trimmed().isEmpty()) names.append(c.suite);
+    m_suiteCatalog->registerSuites(names);
+}
+
 QStringList TestCaseStore::suites() const {
-    QStringList out;
+    QStringList out = m_suiteCatalog ? m_suiteCatalog->suites() : QStringList{};
     for (const auto& c : m_cases) if (!c.suite.trimmed().isEmpty() && !out.contains(c.suite)) out << c.suite;
     std::sort(out.begin(), out.end(), [](const QString& a, const QString& b) { return a.localeAwareCompare(b) < 0; });
     return out;
@@ -141,9 +161,8 @@ void TestCaseStore::removeCase(const QString& id) {
     if (!c) return;
     QStringList files;
     for (const auto& s : c->shots) files << s.path;
-    pushUndo(tr("%1 eliminado").arg(id), files);
-
     const int pos = static_cast<int>(c - m_cases.constData());
+    pushUndo(tr("%1 eliminado").arg(id), files);
     m_cases.removeAt(pos);
     scheduleSave();
     if (m_selectedId == id) {

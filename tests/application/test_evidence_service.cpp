@@ -58,6 +58,29 @@ struct Fixture {
 class EvidenceServiceTest : public QObject {
     Q_OBJECT
 private slots:
+    void projectsShareTheCaptureSettingWithoutOverwritingEvidence() {
+        Fixture a, b;
+        b.app.settings.updateCapture([&](CaptureSettings& c) { c.folder = a.folder.path(); });
+        a.evidence.setProjectId(QStringLiteral("project-a"));
+        b.evidence.setProjectId(QStringLiteral("project-b"));
+        a.evidence.captureForSelectedCase();
+        const auto first = a.selected().shots.last();
+        QFile original(first.path);
+        QVERIFY(original.open(QIODevice::ReadOnly));
+        const auto bytes = original.readAll(); original.close();
+        b.evidence.captureForSelectedCase();
+        const auto second = b.selected().shots.last();
+        QCOMPARE(first.fileName, second.fileName);
+        QVERIFY(first.path != second.path);
+        QVERIFY(QFile::exists(second.path));
+        QVERIFY(original.open(QIODevice::ReadOnly));
+        QCOMPARE(original.readAll(), bytes);
+        const QString log = a.writeFile(QStringLiteral("log.txt"), QByteArray("log"));
+        QCOMPARE(a.evidence.attachFiles({log}), 1);
+        QCOMPARE(b.evidence.attachFiles({log}), 1);
+        QVERIFY(a.selected().shots.last().path != b.selected().shots.last().path);
+    }
+
     // ---- Captura -----------------------------------------------------------------------
 
     // Sin ejecución en curso no se captura: la evidencia es de la ejecución.

@@ -14,6 +14,9 @@ class QAction;
 class QActionGroup;
 class QSystemTrayIcon;
 class QMenu;
+class QComboBox;
+class QPushButton;
+class QLabel;
 
 namespace qaflow {
 
@@ -38,6 +41,7 @@ public:
     explicit MainWindow(AppContext& ctx, QWidget* parent = nullptr);
 
     void navigate(Screen s);
+    void setProjectActive(bool active);
     Screen currentScreen() const { return m_current; }
     /// Acción "Finalizar" de la ejecución: sigue con el plan, muestra su informe o vuelve a los casos.
     void finishRun();
@@ -58,6 +62,9 @@ public:
     /// la ventana y el menú.
     void attachFiles(const QList<QUrl>& urls);
 
+signals:
+    void projectSwitchRequested(const QString& id);
+
 protected:
     void resizeEvent(QResizeEvent* e) override;
     void closeEvent(QCloseEvent* e) override;
@@ -66,6 +73,10 @@ protected:
     void dropEvent(QDropEvent* e) override;
 
 private:
+    QWidget* buildNavbar();
+    void refreshNavbar();
+    void runSelectedTarget();
+    void selectContextTarget();
     void buildMenus();
     void buildTray();
     void wireSignals();
@@ -88,6 +99,13 @@ private:
     FlashOverlay* m_flash;
     Screen m_current = Screen::Casos;
 
+    QComboBox* m_projects = nullptr;
+    QPushButton* m_projectMenu = nullptr;
+    QComboBox* m_runTarget = nullptr;
+    QPushButton* m_navRun = nullptr;
+    QPushButton* m_navStop = nullptr;
+    QPushButton* m_navFinish = nullptr;
+    QPushButton* m_navStatus = nullptr;
     QAction* m_actCapture = nullptr;
     QAction* m_actRecord = nullptr;
     QAction* m_actAttach = nullptr;

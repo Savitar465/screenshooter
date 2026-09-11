@@ -18,6 +18,18 @@
         <source>Publicado desde QAflow · %1 de %2 casos ejecutados · %3 % de éxito</source>
         <translation>Published from QAflow · %1 of %2 cases executed · %3 % passed</translation>
     </message>
+    <message>
+        <source>Proyectos</source>
+        <translation>Projects</translation>
+    </message>
+    <message>
+        <source>No se pudo abrir el catálogo de proyectos. Revisa projects.json y los permisos de la carpeta de datos.</source>
+        <translation>Could not open the project catalog. Check projects.json and the data folder permissions.</translation>
+    </message>
+    <message>
+        <source>Finaliza o detén la ejecución y las capturas antes de cambiar de proyecto</source>
+        <translation>Finish or stop the run and captures before switching projects</translation>
+    </message>
 </context>
 <context>
     <name>RecorderOverlay</name>
@@ -2249,6 +2261,106 @@
         <source>%1 · paso %2 de %3 · %4</source>
         <translation>%1 · step %2 of %3 · %4</translation>
     </message>
+    <message>
+        <source>Proyecto activo</source>
+        <translation>Active project</translation>
+    </message>
+    <message>
+        <source>Gestionar proyectos</source>
+        <translation>Manage projects</translation>
+    </message>
+    <message>
+        <source>Nuevo proyecto…</source>
+        <translation>New project…</translation>
+    </message>
+    <message>
+        <source>Nuevo proyecto</source>
+        <translation>New project</translation>
+    </message>
+    <message>
+        <source>Nombre del proyecto:</source>
+        <translation>Project name:</translation>
+    </message>
+    <message>
+        <source>Renombrar proyecto…</source>
+        <translation>Rename project…</translation>
+    </message>
+    <message>
+        <source>Renombrar proyecto</source>
+        <translation>Rename project</translation>
+    </message>
+    <message>
+        <source>Caso o plan a ejecutar</source>
+        <translation>Case or plan to run</translation>
+    </message>
+    <message>
+        <source>Buscar caso o plan…</source>
+        <translation>Search cases or plans…</translation>
+    </message>
+    <message>
+        <source>Ejecutar selección (F5)</source>
+        <translation>Run selection (F5)</translation>
+    </message>
+    <message>
+        <source>Ejecutar selección</source>
+        <translation>Run selection</translation>
+    </message>
+    <message>
+        <source>Detener ejecución</source>
+        <translation>Stop execution</translation>
+    </message>
+    <message>
+        <source>¿Detener la ejecución y descartar los pasos del caso que aún no ha terminado?</source>
+        <translation>Stop the run and discard the steps of the unfinished case?</translation>
+    </message>
+    <message>
+        <source>Finalizar caso</source>
+        <translation>Finish case</translation>
+    </message>
+    <message>
+        <source>Proyecto principal</source>
+        <translation>Main project</translation>
+    </message>
+    <message>
+        <source>Finaliza o detén la ejecución antes de cambiar de proyecto</source>
+        <translation>Finish or stop the run before switching projects</translation>
+    </message>
+    <message>
+        <source>Cambiar proyecto</source>
+        <translation>Switch project</translation>
+    </message>
+    <message>
+        <source>Plan · %1 · %2</source>
+        <translation>Plan · %1 · %2</translation>
+    </message>
+    <message>
+        <source>Caso · %1 · %2</source>
+        <translation>Case · %1 · %2</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>Listo para finalizar</source>
+        <translation>Ready to finish</translation>
+    </message>
+    <message>
+        <source>En ejecución</source>
+        <translation>Running</translation>
+    </message>
+    <message>
+        <source>&amp;Ejecutar selección de la barra superior</source>
+        <translation>&amp;Run toolbar selection</translation>
+    </message>
+    <message>
+        <source>Selecciona un caso o plan de la lista para ejecutarlo</source>
+        <translation>Select a case or plan from the list to run it</translation>
+    </message>
+    <message>
+        <source>Ajustes · %1</source>
+        <translation>Settings · %1</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::PlanStore</name>
@@ -3235,6 +3347,42 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <source>Cada caso publica su ejecución sobre el issue de tipo Test que tiene enlazado; el que aún no lo tenga lo estrena a partir del caso (título, precondiciones y pasos) y su clave se guarda en el campo «Test de Zephyr».</source>
         <translation>Each case publishes its execution on the Test issue it is linked to; the one with none yet gets a brand-new Test made from the case (title, preconditions and steps) and its key is saved in the “Zephyr Test” field.</translation>
     </message>
+    <message>
+        <source>CÓDIGO JIRA · PROYECTO ACTUAL</source>
+        <translation>JIRA CODE · CURRENT PROJECT</translation>
+    </message>
+    <message>
+        <source>Este código pertenece al proyecto actual. Los demás ajustes son generales.</source>
+        <translation>This code belongs to the current project. All other settings are shared.</translation>
+    </message>
+    <message>
+        <source>Ajuste general para todos los proyectos</source>
+        <translation>Shared setting for all projects</translation>
+    </message>
+    <message>
+        <source> Los ajustes de conexión y Zephyr se comparten entre todos los proyectos.</source>
+        <translation> Connection and Zephyr settings are shared across all projects.</translation>
+    </message>
+    <message>
+        <source>Configuración del proyecto</source>
+        <translation>Project settings</translation>
+    </message>
+    <message>
+        <source>El código Jira se aplica únicamente al proyecto abierto.</source>
+        <translation>The Jira code applies only to the open project.</translation>
+    </message>
+    <message>
+        <source>Código del proyecto Jira</source>
+        <translation>Jira project code</translation>
+    </message>
+    <message>
+        <source>El idioma y el tema se aplican al instante.</source>
+        <translation>Language and theme changes apply immediately.</translation>
+    </message>
+    <message>
+        <source>Conexión general con el gestor</source>
+        <translation>Shared issue tracker connection</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ShotCard</name>
@@ -3560,6 +3708,29 @@ HEADS-UP: these results were already published on %1 (cycle %2). A new cycle wil
     <message>
         <source>El ciclo se creó en Zephyr, pero %1 cosas se quedaron fuera.</source>
         <translation>The cycle was created in Zephyr, but %1 things were left out.</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::ProjectStore</name>
+    <message>
+        <source>No se pudo leer el catálogo de proyectos.</source>
+        <translation>Could not read the project catalog.</translation>
+    </message>
+    <message>
+        <source>No se pudo crear el proyecto. Comprueba la carpeta de datos.</source>
+        <translation>Could not create the project. Check the data folder.</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar el nombre del proyecto.</source>
+        <translation>Could not save the project name.</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar el proyecto activo.</source>
+        <translation>Could not save the active project.</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar el catálogo de suites.</source>
+        <translation>Could not save the suite catalog.</translation>
     </message>
 </context>
 </TS>

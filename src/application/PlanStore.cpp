@@ -5,6 +5,7 @@
 #include "application/TestCaseStore.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace qaflow {
 
@@ -35,7 +36,7 @@ PlanStore::PlanStore(std::shared_ptr<ITestCaseRepository> repo, TestCaseStore& c
         bool changed = false;
         for (auto& p : m_plans) {
             const int before = p.caseIds.size();
-            p.caseIds.erase(std::remove_if(p.caseIds.begin(), p.caseIds.end(), [this](const QString& id) { return !m_cases.find(id); }), p.caseIds.end());
+            p.caseIds.erase(std::remove_if(p.caseIds.begin(), p.caseIds.end(), [this](const QString& id) { return !std::as_const(m_cases).find(id); }), p.caseIds.end());
             changed = changed || p.caseIds.size() != before;
         }
         if (changed) persist();
@@ -46,7 +47,7 @@ PlanStore::PlanStore(std::shared_ptr<ITestCaseRepository> repo, TestCaseStore& c
 
 void PlanStore::load() {
     auto loaded = m_repo ? m_repo->loadPlans() : std::nullopt;
-    if (loaded && !loaded->plans.isEmpty()) {
+    if (loaded) {
         m_plans = loaded->plans;
         m_activeId = loaded->activeId;
     } else {
@@ -60,7 +61,7 @@ void PlanStore::load() {
     if (!find(m_activeId)) {
         m_activeId.clear();
         for (const auto& p : m_plans) if (!p.archived) { m_activeId = p.id; break; }
-        if (m_activeId.isEmpty()) m_activeId = m_plans.first().id;
+        if (m_activeId.isEmpty() && !m_plans.isEmpty()) m_activeId = m_plans.first().id;
     }
     emit plansChanged();
     emit planChanged();
@@ -197,8 +198,8 @@ void PlanStore::sortByPriority() {
     if (!p) return;
     QStringList ordered = orderedCaseIds();
     std::stable_sort(ordered.begin(), ordered.end(), [this](const QString& a, const QString& b) {
-        const TestCase* ca = m_cases.find(a);
-        const TestCase* cb = m_cases.find(b);
+        const TestCase* ca = std::as_const(m_cases).find(a);
+        const TestCase* cb = std::as_const(m_cases).find(b);
         return priorityRank(ca ? ca->priority : Priority::Baja) < priorityRank(cb ? cb->priority : Priority::Baja);
     });
     p->caseIds = ordered;
@@ -210,7 +211,7 @@ QStringList PlanStore::orderedCaseIds(const QString& planId) const {
     if (!p) return {};
     QStringList out;
     for (const auto& id : p->caseIds) {
-        const TestCase* c = m_cases.find(id);
+        const TestCase* c = std::as_const(m_cases).find(id);
         if (c && c->status != CaseStatus::Obsoleto) out << id;
     }
     return out;
@@ -218,7 +219,7 @@ QStringList PlanStore::orderedCaseIds(const QString& planId) const {
 
 int PlanStore::totalSteps() const {
     int n = 0;
-    for (const auto& id : orderedCaseIds()) if (const auto* c = m_cases.find(id)) n += c->steps.size();
+    for (const auto& id : orderedCaseIds()) if (const auto* c = std::as_const(m_cases).find(id)) n += c->steps.size();
     return n;
 }
 
@@ -226,7 +227,7 @@ int PlanStore::estimatedSecs() const {
     const double globalPerStep = averageSecsPerStep(m_history.runs());
     double total = 0;
     for (const auto& id : orderedCaseIds()) {
-        const TestCase* c = m_cases.find(id);
+        const TestCase* c = std::as_const(m_cases).find(id);
         if (!c) continue;
         const double own = averageSecsPerStep(m_history.runsForCase(id));
         const double perStep = own > 0 ? own : globalPerStep > 0 ? globalPerStep : kDefaultSecsPerStep;

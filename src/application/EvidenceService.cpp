@@ -42,8 +42,12 @@ int EvidenceService::targetStep(const QString& caseId) const {
     return (m_run.isRunning() && m_run.state().caseId == caseId) ? m_run.state().idx + 1 : 0;
 }
 
-bool EvidenceService::ensureFolder(QString* error) const {
-    const QString folder = m_settings.capture().folder;
+QString EvidenceService::captureFolder() const {
+    const QString base = m_settings.capture().folder;
+    return m_projectId.isEmpty() ? base : QDir(base).filePath(m_projectId);
+}
+
+bool EvidenceService::ensureFolder(const QString& folder, QString* error) const {
     QDir dir(folder);
     if (dir.exists() || dir.mkpath(QStringLiteral("."))) return true;
     if (error) *error = tr("No se pudo crear la carpeta %1").arg(folder);
@@ -74,15 +78,16 @@ void EvidenceService::grabNow() {
     if (caseId.isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return; }
     m_busy = true;
     const CaptureSettings cfg = m_settings.capture();
-    m_capture->capture(cfg.mode, [this, caseId, cfg](const CaptureResult& r) {
+    const QString folder = captureFolder();
+    m_capture->capture(cfg.mode, [this, caseId, cfg, folder](const CaptureResult& r) {
         m_busy = false;
         if (!r.ok) { emit failed(r.error); return; }
         QString error;
-        if (!ensureFolder(&error)) { emit failed(error); return; }
+        if (!ensureFolder(folder, &error)) { emit failed(error); return; }
         // El nombre lleva el número de secuencia que tendrá la evidencia: se reserva al guardar.
         const int seq = m_cases.nextShotSequence();
         const QString name = QStringLiteral("cap_%1.%2").arg(seq, 3, 10, QLatin1Char('0')).arg(cfg.extension());
-        const QString path = QDir(cfg.folder).filePath(name);
+        const QString path = QDir(folder).filePath(name);
         const char* fmt = cfg.extension() == QStringLiteral("jpg") ? "JPG" : cfg.extension() == QStringLiteral("webp") ? "WEBP" : "PNG";
         if (!r.image.save(path, fmt)) { emit failed(tr("No se pudo guardar %1").arg(path)); return; }
         m_cases.addShot(caseId, Screenshot{seq, targetStep(caseId), name, path});
@@ -102,8 +107,9 @@ void EvidenceService::toggleRecording() {
     if (m_busy || m_countdownLeft > 0) return;
     const QString caseId = targetCaseId();
     if (caseId.isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return; }
+    const QString folder = captureFolder();
     QString error;
-    if (!ensureFolder(&error)) { emit failed(error); return; }
+    if (!ensureFolder(folder, &error)) { emit failed(error); return; }
     const CaptureSettings cfg = m_settings.capture();
     RecordingOptions opts;
     opts.mode = cfg.mode == CaptureMode::FullScreen ? CaptureMode::FullScreen : CaptureMode::Region;
@@ -111,7 +117,7 @@ void EvidenceService::toggleRecording() {
     opts.maxSecs = cfg.gifMaxSecs;
     const int seq = m_cases.nextShotSequence();
     const QString name = QStringLiteral("rec_%1.gif").arg(seq, 3, 10, QLatin1Char('0'));
-    opts.outputPath = QDir(cfg.folder).filePath(name);
+    opts.outputPath = QDir(folder).filePath(name);
     m_busy = true;
     m_recorder->start(opts, [this, caseId, seq, name](const RecordingResult& r) {
         m_busy = false;
@@ -130,9 +136,10 @@ void EvidenceService::toggleRecording() {
 int EvidenceService::attachFiles(const QStringList& paths) {
     const QString caseId = targetCaseId();
     if (caseId.isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return 0; }
+    const QString folder = captureFolder();
     QString error;
-    if (!ensureFolder(&error)) { emit failed(error); return 0; }
-    const QDir dir(m_settings.capture().folder);
+    if (!ensureFolder(folder, &error)) { emit failed(error); return 0; }
+    const QDir dir(folder);
     QStringList added;
     for (const QString& src : paths) {
         const QFileInfo info(src);

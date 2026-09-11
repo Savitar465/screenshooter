@@ -99,10 +99,22 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     hv->addWidget(ui::label(tr("Ajustes e integraciones"), "h1"));
     v->addWidget(head);
 
+    // Configuración exclusiva del proyecto, separada de la conexión general.
+    QVBoxLayout* projectBody;
+    m_projectSection = section(theme::Blue, tr("Configuración del proyecto"),
+                               tr("El código Jira se aplica únicamente al proyecto abierto."), nullptr, &projectBody);
+    m_projectSection->setObjectName(QStringLiteral("projectSettingsSection"));
+    m_jiraProject = new QLineEdit;
+    m_jiraProject->setObjectName(QStringLiteral("settingsJiraProject"));
+    m_jiraProject->setProperty("role", QStringLiteral("mono"));
+    m_jiraProject->setPlaceholderText(QStringLiteral("SHOP"));
+    projectBody->addWidget(field(tr("Código del proyecto Jira"), m_jiraProject));
+    v->addWidget(m_projectSection);
+
     // General: idioma, tema y bandeja
     QVBoxLayout* gb;
     auto* general = section(theme::Violet, QStringLiteral("General"),
-                            tr("El idioma y el tema se aplican al instante reconstruyendo la ventana."), nullptr, &gb);
+                            tr("El idioma y el tema se aplican al instante."), nullptr, &gb);
     auto* grow = new QWidget;
     auto* gg = new QGridLayout(grow);
     gg->setContentsMargins(0, 0, 0, 0);
@@ -146,7 +158,8 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     m_badge->setToolTip(tr("Probar la conexión"));
     connect(m_badge, &QPushButton::clicked, this, &SettingsView::testConnection);
     QVBoxLayout* tb;
-    auto* tracker = section(theme::Blue, tr("Gestor de incidencias"), QString(), m_badge, &tb, &m_kindHint);
+    auto* tracker = section(theme::Blue, tr("Conexión general con el gestor"), QString(), m_badge, &tb, &m_kindHint);
+    tracker->setObjectName(QStringLiteral("generalTrackerSettings"));
 
     auto* krow = new QWidget;
     auto* kg = new QGridLayout(krow);
@@ -203,7 +216,8 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
         m_selfEdit = false;
         refreshTracker();
     });
-    pg->addWidget(field(tr("Proyecto"), m_project, &m_projectLabel), 0, 0);
+    m_projectField = field(tr("Proyecto"), m_project, &m_projectLabel);
+    pg->addWidget(m_projectField, 0, 0);
     pg->addWidget(m_authField, 0, 1);
     pg->setColumnStretch(0, 1);
     pg->setColumnStretch(1, 1);
@@ -288,6 +302,7 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     };
     bind(m_url, [](TrackerSettings& s, const QString& t) { s.url = t; });
     bind(m_project, [](TrackerSettings& s, const QString& t) { s.project = t; });
+    bind(m_jiraProject, [](TrackerSettings& s, const QString& t) { if (s.kind == TrackerKind::Jira) s.project = t; });
     bind(m_user, [](TrackerSettings& s, const QString& t) { s.user = t; });
     bind(m_token, [](TrackerSettings& s, const QString& t) { s.token = t; });
 
@@ -477,14 +492,18 @@ void SettingsView::refreshTracker() {
     const TrackerSettings& t = m_settings.tracker();
     ui::setFlag(m_badge, "active", t.connected);
     m_badge->setText(t.connected ? tr("●  Conectado") : tr("●  Desconectado"));
-    m_kindHint->setText(hintFor(t));
+    m_kindHint->setText(hintFor(t) + tr(" Los ajustes de conexión y Zephyr se comparten entre todos los proyectos."));
     m_projectLabel->setText(t.projectLabel().toUpper());
+    m_project->setToolTip(t.kind == TrackerKind::Jira ? tr("Este código pertenece al proyecto actual. Los demás ajustes son generales.") : tr("Ajuste general para todos los proyectos"));
     m_project->setPlaceholderText(t.projectPlaceholder());
     m_url->setPlaceholderText(t.defaultUrl());
     // La autenticación sólo se elige en Jira; el usuario, sólo cuando ese modo lo pide. Las columnas
     // que quedan sin campo pierden su peso para que el de al lado ocupe la fila entera.
     const bool jira = t.kind == TrackerKind::Jira;
+    m_projectSection->setVisible(jira);
+    m_projectField->setVisible(!jira);
     m_authField->setVisible(jira);
+    m_projectGrid->setColumnStretch(0, jira ? 0 : 1);
     m_projectGrid->setColumnStretch(1, jira ? 1 : 0);
     m_userField->setVisible(t.needsUser());
     m_credGrid->setColumnStretch(0, t.needsUser() ? 1 : 0);
@@ -502,6 +521,7 @@ void SettingsView::refreshTracker() {
     m_kind->setCurrentText(toString(t.kind));
     m_url->setText(t.url);
     m_project->setText(t.project);
+    m_jiraProject->setText(jira ? t.project : QString());
     m_jiraAuth->setCurrentIndex(std::max(0, m_jiraAuth->findData(static_cast<int>(t.jiraAuth))));
     m_user->setText(t.user);
     m_token->setText(t.token);

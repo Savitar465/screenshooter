@@ -22,6 +22,7 @@ class PlanStore;
 class RunHistoryStore;
 class IssuePublishService;
 class RequirementSourceService;
+class BugReportService;
 class ProjectStore;
 class TextArea;
 
@@ -54,6 +55,9 @@ signals:
     /// allí su issue. La vista no cambia de proyecto por su cuenta.
     void startTestingRequested(const QString& projectId, const ExternalRequirement& requirement,
                                const QString& connection, const QDateTime& fetchedAt);
+    /// Código de Jira pedido al crear un proyecto: sólo su propia sesión tiene abiertos sus ajustes, así que
+    /// lo guarda quien las coordina.
+    void projectJiraKeyRequested(const QString& projectId, const QString& jiraProject);
 
 protected:
     void showEvent(QShowEvent* e) override;
@@ -79,6 +83,8 @@ private:
     void loadRequirementDetail();
     /// Resuelve en qué proyecto se prueba el requerimiento y, según sea éste u otro, lo abre o lo pide.
     void startTesting(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt);
+    /// Ningún proyecto trabaja el sistema del requerimiento: se elige uno existente o se crea, y allí empiezan.
+    void askForProject(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt);
     /// Nombre del proyecto que trabaja ese sistema de GESREQ; vacío si ninguno lo tiene vinculado.
     QString projectNameForSystem(const QString& systemCode) const;
     void refreshJira(const Issue& issue);
@@ -99,6 +105,7 @@ private:
     RunHistoryStore& m_history;
     RequirementSourceService* m_requirements;
     IssuePublishService* m_publish;
+    BugReportService* m_bugs;   // sólo para ofrecer el código Jira al crear un proyecto desde la bandeja
     ProjectStore* m_projects;
     QString m_projectId;
     IssueFilter m_filter;

@@ -8,6 +8,7 @@
 #include "presentation/views/HistoryView.h"
 #include "presentation/views/IssuesView.h"
 #include "presentation/views/PlanView.h"
+#include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/RunView.h"
 #include "presentation/views/SettingsDialog.h"
 #include "presentation/views/Sidebar.h"
@@ -133,11 +134,16 @@ QWidget* MainWindow::buildNavbar() {
     auto* menu = new QMenu(m_projectMenu);
     menu->addAction(tr("Nuevo proyecto…"), this, [this]() {
         if (!m_ctx.projects) return;
-        bool ok = false;
-        const QString name = QInputDialog::getText(this, tr("Nuevo proyecto"), tr("Nombre del proyecto:"), QLineEdit::Normal, {}, &ok);
-        if (!ok || name.trimmed().isEmpty()) return;
-        const QString id = m_ctx.projects->create(name);
-        if (!id.isEmpty()) emit projectSwitchRequested(id);
+        // El alta ofrece además los dos códigos del proyecto, opcionales: el de Jira y el sistema de GESREQ.
+        auto* dialog = new ProjectSetupDialog(*m_ctx.projects, QString(), false, m_ctx.bugs, m_ctx.requirements, this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dialog, &QDialog::accepted, this, [this, dialog]() {
+            const QString id = dialog->projectId();
+            if (id.isEmpty()) return;
+            emit projectJiraKeyRequested(id, dialog->jiraProject());
+            emit projectSwitchRequested(id);
+        });
+        dialog->open();
     });
     menu->addAction(tr("Renombrar proyecto…"), this, [this]() {
         if (!m_ctx.projects) return;
@@ -544,6 +550,7 @@ void MainWindow::wireSignals() {
     connect(m_issuesView, &IssuesView::settingsRequested, this, &MainWindow::openSettings);
     // Iniciar las pruebas de un requerimiento de otro proyecto: lo resuelve quien coordina las sesiones.
     connect(m_issuesView, &IssuesView::startTestingRequested, this, &MainWindow::startTestingRequested);
+    connect(m_issuesView, &IssuesView::projectJiraKeyRequested, this, &MainWindow::projectJiraKeyRequested);
     connect(m_ctx.issues, &IssueStore::loadFailed, this, [this](const QString& message) { showToast(message, theme::Red); });
     // El store avisa al cargar, antes de que exista la ventana: aquí se repite para que se vea.
     if (m_ctx.issues->isReadOnly())

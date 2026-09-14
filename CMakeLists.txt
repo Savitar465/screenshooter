@@ -237,6 +237,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/JiraPublishDialog.cpp
         src/presentation/views/RequirementImportDialog.h
         src/presentation/views/RequirementImportDialog.cpp
+        src/presentation/views/ProjectSetupDialog.h
+        src/presentation/views/ProjectSetupDialog.cpp
         src/presentation/views/PlanView.h
         src/presentation/views/PlanView.cpp
         src/presentation/views/SettingsView.h

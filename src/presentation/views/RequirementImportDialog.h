@@ -17,7 +17,8 @@ namespace qaflow {
 ///
 /// La bandeja es del usuario, no del proyecto: los requerimientos de otros sistemas también se ven, y
 /// desde cualquiera de ellos se pueden iniciar las pruebas, que ocurren en el proyecto vinculado a su
-/// sistema. Consultar y previsualizar nunca cambia de proyecto: sólo «Iniciar pruebas» lo pide.
+/// sistema. Si ninguno trabaja ese sistema, empezar sigue valiendo: primero se elige o se crea el proyecto.
+/// Consultar y previsualizar nunca cambia de proyecto: sólo «Iniciar pruebas» lo pide.
 class RequirementImportDialog : public QDialog {
     Q_OBJECT
 public:

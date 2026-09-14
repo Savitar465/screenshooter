@@ -149,8 +149,13 @@ void RequirementImportDialog::refreshButtons() {
     m_import->setText(n > 0 ? tr("Importar %1").arg(n) : tr("Importar"));
     m_import->setEnabled(n > 0);
     const QString project = m_current && m_projectForSystem ? m_projectForSystem(m_current->systemCode) : QString();
-    m_start->setText(project.isEmpty() ? tr("Iniciar pruebas") : tr("Iniciar pruebas en %1").arg(project));
-    m_start->setEnabled(m_current.has_value() && !project.isEmpty());
+    // Que ningún proyecto trabaje ese sistema no impide empezar: antes de abrir el issue se elige o se crea.
+    m_start->setText(!m_current ? tr("Iniciar pruebas")
+                                : project.isEmpty() ? tr("Crear proyecto e iniciar") : tr("Iniciar pruebas en %1").arg(project));
+    m_start->setEnabled(m_current.has_value());
+    m_start->setToolTip(m_current && project.isEmpty()
+                            ? tr("Ningún proyecto trabaja ese sistema: antes de empezar se elige uno o se crea")
+                            : tr("Abre el issue del requerimiento elegido en el proyecto que trabaja su sistema"));
 }
 
 void RequirementImportDialog::accept() {

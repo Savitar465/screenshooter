@@ -73,6 +73,9 @@ signals:
     /// abrir allí su issue. La ventana no cambia de proyecto por su cuenta.
     void startTestingRequested(const QString& projectId, const ExternalRequirement& requirement,
                                const QString& connection, const QDateTime& fetchedAt);
+    /// Código de Jira elegido al crear un proyecto: los ajustes son de cada proyecto y sólo los tiene
+    /// abiertos su sesión, así que lo guarda quien las coordina.
+    void projectJiraKeyRequested(const QString& projectId, const QString& jiraProject);
 
 protected:
     void resizeEvent(QResizeEvent* e) override;

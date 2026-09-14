@@ -100,6 +100,8 @@ int main(int argc, char* argv[]) {
     ProjectSession* current = nullptr;
     std::function<void(const QString&)> switchProject;
     std::function<void(ProjectSession&)> buildWindow;
+    // Se declara antes porque las ventanas que construye `buildWindow` ya piden la sesión de otro proyecto.
+    std::function<ProjectSession&(const QString&)> getSession;
 
     auto bindHotkeys = [&]() {
         const CaptureSettings& c = current->settings->capture();
@@ -152,11 +154,20 @@ int main(int argc, char* argv[]) {
                 current->window->startTesting(requirement, connection, fetchedAt);
             });
         });
+        // El código Jira de un proyecto vive en sus ajustes, que sólo tiene abiertos su sesión: al crearlo
+        // desde otra ventana se guarda aquí, antes de que el cambio de proyecto los recargue.
+        QObject::connect(session.window.get(), &MainWindow::projectJiraKeyRequested, &app,
+                         [&, owner = &session](const QString& id, const QString& key) {
+            if (owner != current || key.isEmpty() || !projects.find(id)) return;
+            getSession(id).settings->updateTracker([&key](TrackerSettings& s) {
+                if (s.kind == TrackerKind::Jira) s.project = key;
+            });
+        });
         workspace.showProject(session.window.get());
         if (reopenSettings) session.window->openSettings();
     };
 
-    auto getSession = [&](const QString& id) -> ProjectSession& {
+    getSession = [&](const QString& id) -> ProjectSession& {
         auto& stored = sessions[id];
         if (stored) return *stored;
         stored = std::make_unique<ProjectSession>(projects, id, secrets, requirementSource);

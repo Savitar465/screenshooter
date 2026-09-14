@@ -585,12 +585,23 @@ trabaja (`ProjectStore::projectForRequirementSystem`). «Iniciar pruebas» resue
 |-----------|----------|
 | Es el proyecto activo | `IssueStore::openForRequirement()` abre su issue aquí mismo: lo crea la primera vez y luego reutiliza el que hay, con sus casos, planes y lo escrito en QAflow |
 | Es otro proyecto | La vista sólo lo pide (`IssuesView::startTestingRequested` → `MainWindow`); la raíz de composición guarda el actual, activa el destino y allí abre el issue (`MainWindow::startTesting`) |
-| Ningún proyecto tiene ese sistema vinculado | No se toca nada: se avisa y se abren los ajustes para vincularlo |
+| Ningún proyecto tiene ese sistema vinculado | `ProjectSetupDialog` pregunta en cuál se prueban: uno que ya existe (se le vincula el sistema) o uno nuevo, con el sistema ya escrito y su código Jira opcional; hecho eso se sigue por una de las dos filas anteriores |
 | Ejecución o captura en curso | `ProjectSession::canLeave()` no deja salir y dice qué hay que terminar; si el guardado falla, el cambio se cancela y no se inicia nada |
 
 Ninguna vista cambia de proyecto por su cuenta, y consultar la bandeja o previsualizar la importación
 tampoco: sólo «Iniciar pruebas» lo pide. `canLeave()` es la misma regla que usa el selector de proyectos de
 la barra, así que empezar unas pruebas y cambiar de proyecto a mano se comportan igual.
+
+**Alta de proyecto (`ProjectSetupDialog`).** El mismo diálogo sirve para «Nuevo proyecto…» de la barra y para
+la bandeja de GESREQ, y en los dos casos los dos códigos del proyecto son opcionales: el de Jira y el sistema
+de GESREQ, ambos con «Buscar…» (`ChoiceDialog`) sobre lo que hay en cada sistema. Desde la bandeja llega
+además el sistema ya escrito y se puede elegir un proyecto que ya existe en vez de crear otro —lo habitual
+cuando está creado pero nadie le vinculó el sistema—; el aviso de debajo dice con qué proyecto choca lo
+escrito, o qué sistema deja de trabajar el elegido, y nada se guarda a medias: si el sistema es de otro
+proyecto el diálogo no se cierra. El sistema se guarda en el catálogo al aceptar; el código Jira no, porque
+vive en los ajustes de cada proyecto y sólo los tiene abiertos su sesión: el diálogo lo devuelve y la ventana
+lo pide con `projectJiraKeyRequested`, que la raíz de composición aplica sobre la sesión de ese proyecto
+antes de activarlo.
 
 **Publicación en el gestor.** `IssuePublishService` (application) crea la representación del issue en Jira,
 o enlaza una que ya existe, y guarda en `Issue::publication` las tres identidades juntas: el requerimiento

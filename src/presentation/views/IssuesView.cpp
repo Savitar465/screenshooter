@@ -3,6 +3,7 @@
 #include "application/AppContext.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/views/JiraPublishDialog.h"
+#include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/RequirementImportDialog.h"
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/TextArea.h"
@@ -115,7 +116,8 @@ QPushButton* unlinkButton(const QString& tip) {
 
 IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
     : QWidget(parent), m_issues(*ctx.issues), m_cases(*ctx.cases), m_plans(*ctx.plan), m_history(*ctx.history),
-      m_requirements(ctx.requirements), m_publish(ctx.issuePublish), m_projects(ctx.projects), m_projectId(ctx.projectId) {
+      m_requirements(ctx.requirements), m_publish(ctx.issuePublish), m_bugs(ctx.bugs), m_projects(ctx.projects),
+      m_projectId(ctx.projectId) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildDetail(root);
@@ -977,9 +979,7 @@ QString IssuesView::projectNameForSystem(const QString& systemCode) const {
 void IssuesView::startTesting(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt) {
     const QString target = m_projects ? m_projects->projectForRequirementSystem(requirement.systemCode) : QString();
     if (target.isEmpty()) {
-        emit toast(tr("Ningún proyecto trabaja los requerimientos de %1: vincúlale ese sistema a uno en Ajustes → Configuración del proyecto")
-                       .arg(requirement.systemCode), theme::Amber);
-        emit settingsRequested();
+        askForProject(requirement, connection, fetchedAt);
         return;
     }
     // Ya se está en el proyecto del requerimiento: se abre su issue sin cambiar de proyecto.
@@ -988,6 +988,26 @@ void IssuesView::startTesting(const ExternalRequirement& requirement, const QStr
         return;
     }
     emit startTestingRequested(target, requirement, connection, fetchedAt);
+}
+
+void IssuesView::askForProject(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt) {
+    if (!m_projects) {
+        emit toast(tr("Ningún proyecto trabaja los requerimientos de %1: vincúlale ese sistema a uno en Ajustes → Configuración del proyecto")
+                       .arg(requirement.systemCode), theme::Amber);
+        emit settingsRequested();
+        return;
+    }
+    // Se elige o se crea el proyecto y, ya vinculado el sistema, se empieza como en cualquier otro caso.
+    auto* dialog = new ProjectSetupDialog(*m_projects, requirement.systemCode, true, m_bugs, m_requirements, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &QDialog::accepted, this, [this, dialog, requirement, connection, fetchedAt]() {
+        const QString id = dialog->projectId();
+        if (id.isEmpty()) return;
+        emit projectJiraKeyRequested(id, dialog->jiraProject());
+        if (id == m_projectId) openRequirement(requirement, connection, fetchedAt);
+        else emit startTestingRequested(id, requirement, connection, fetchedAt);
+    });
+    dialog->open();
 }
 
 void IssuesView::openRequirement(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt) {

@@ -13,6 +13,7 @@
 #include "presentation/views/MainWindow.h"
 #include "presentation/views/PlanView.h"
 #include "presentation/views/JiraPublishDialog.h"
+#include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/RequirementImportDialog.h"
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/EvidencePreview.h"
@@ -29,6 +30,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QPushButton>
 #include <QProgressBar>
 #include <QUrl>
@@ -996,9 +998,10 @@ private slots:
         QCOMPARE(others->count(), 2);
         QVERIFY(!start->isEnabled());   // sin elegir requerimiento no hay pruebas que empezar
 
-        // El de un sistema que nadie trabaja no se puede empezar; dice a dónde iría el que sí.
+        // El de un sistema que nadie trabaja dice que no tiene proyecto, pero se puede empezar igual:
+        // primero se elige o se crea (ver startingTestsOfASystemNobodyWorksAsksForItsProject).
         others->setCurrentRow(1);
-        QVERIFY(!start->isEnabled());
+        QVERIFY(start->isEnabled());
         QVERIFY2(others->item(1)->text().contains(QStringLiteral("ningún proyecto")), qPrintable(others->item(1)->text()));
         others->setCurrentRow(0);
         QVERIFY(start->isEnabled());
@@ -1023,6 +1026,143 @@ private slots:
         QCOMPARE(f.app.issues.selectedId(), issue.id);
         QCOMPARE(f.window->currentScreen(), Screen::Issues);
         QTRY_VERIFY(!f.window->findChild<RequirementImportDialog*>());
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    // Empezar las pruebas de un requerimiento cuyo sistema no trabaja nadie: el diálogo de alta crea el
+    // proyecto con sus dos códigos (el de Jira se pide aparte, porque es de los ajustes de ese proyecto) y
+    // las pruebas siguen allí.
+    void startingTestsOfASystemNobodyWorksAsksForItsProject() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        const QString mineId = projects.activeId();
+        QVERIFY(projects.setRequirementSystem(mineId, QStringLiteral("SUMA TRANSITO")));
+        f.ctx.projects = &projects;
+        f.ctx.projectId = mineId;
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        ExternalRequirement r;
+        r.id = QStringLiteral("2026001");
+        r.systemCode = QStringLiteral("SUMA2SALIDA");
+        r.system = QStringLiteral("SUMA2SALIDA-SALIDAS");
+        r.summary = QStringLiteral("Salidas de almacén");
+        r.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+        f.app.requirementSource->inbox = {r};
+
+        QSignalSpy started(f.window.get(), &MainWindow::startTestingRequested);
+        QSignalSpy jiraKey(f.window.get(), &MainWindow::projectJiraKeyRequested);
+        f.window->navigate(Screen::Issues);
+        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
+        auto* import = f.window->findChild<RequirementImportDialog*>();
+        QVERIFY(import);
+        import->findChild<QListWidget*>(QStringLiteral("importOtherList"))->setCurrentRow(0);
+        auto* start = import->findChild<QPushButton*>(QStringLiteral("importStartTesting"));
+        QVERIFY(start->isEnabled());
+        QVERIFY2(start->text().contains(QStringLiteral("Crear proyecto")), qPrintable(start->text()));
+        start->click();
+
+        auto* setup = f.window->findChild<ProjectSetupDialog*>();
+        QVERIFY(setup);
+        // Llega con el sistema escrito y con un nombre de partida, que se puede cambiar.
+        QCOMPARE(setup->findChild<QLineEdit*>(QStringLiteral("projectSetupSystem"))->text(), QStringLiteral("SUMA2SALIDA"));
+        auto* name = setup->findChild<QLineEdit*>(QStringLiteral("projectSetupName"));
+        QCOMPARE(name->text(), QStringLiteral("SUMA2SALIDA"));
+        name->setText(QStringLiteral("Salidas"));
+        setup->findChild<QLineEdit*>(QStringLiteral("projectSetupJira"))->setText(QStringLiteral("SAL"));
+        setup->findChild<QPushButton*>(QStringLiteral("projectSetupAccept"))->click();
+
+        QCOMPARE(projects.projects().size(), 2);
+        const QString created = projects.projectForRequirementSystem(QStringLiteral("SUMA2SALIDA"));
+        QVERIFY(!created.isEmpty());
+        QCOMPARE(projects.find(created)->name, QStringLiteral("Salidas"));
+        QCOMPARE(jiraKey.count(), 1);
+        QCOMPARE(jiraKey.first().at(0).toString(), created);
+        QCOMPARE(jiraKey.first().at(1).toString(), QStringLiteral("SAL"));
+        QCOMPARE(started.count(), 1);
+        QCOMPARE(started.first().at(0).toString(), created);
+        QCOMPARE(started.first().at(1).value<ExternalRequirement>().id, QStringLiteral("2026001"));
+        QVERIFY(f.app.issues.issues().isEmpty());   // el issue es del proyecto nuevo, no de éste
+        QTRY_VERIFY(!f.window->findChild<ProjectSetupDialog*>());
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    // El mismo diálogo vincula el sistema a un proyecto que ya existe; si es el abierto, las pruebas
+    // empiezan aquí mismo sin pedir cambio de proyecto.
+    void theProjectOfARequirementCanBeOneThatAlreadyExists() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        const QString mineId = projects.activeId();
+        QVERIFY(projects.setRequirementSystem(mineId, QStringLiteral("SUMA TRANSITO")));
+        f.ctx.projects = &projects;
+        f.ctx.projectId = mineId;
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        ExternalRequirement r;
+        r.id = QStringLiteral("2026002");
+        r.systemCode = QStringLiteral("SEGRAN");
+        r.system = QStringLiteral("SEGRAN-RIESGOS");
+        r.summary = QStringLiteral("Módulo de riesgos");
+        r.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+        f.app.requirementSource->inbox = {r};
+
+        QSignalSpy started(f.window.get(), &MainWindow::startTestingRequested);
+        f.window->navigate(Screen::Issues);
+        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
+        auto* import = f.window->findChild<RequirementImportDialog*>();
+        QVERIFY(import);
+        import->findChild<QListWidget*>(QStringLiteral("importOtherList"))->setCurrentRow(0);
+        import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
+
+        auto* setup = f.window->findChild<ProjectSetupDialog*>();
+        QVERIFY(setup);
+        auto* target = setup->findChild<QComboBox*>(QStringLiteral("projectSetupTarget"));
+        QVERIFY(target);
+        const int mine = target->findData(mineId);
+        QVERIFY(mine > 0);   // el primero es «Proyecto nuevo…»
+        target->setCurrentIndex(mine);
+        // Elegido un proyecto que ya existe, ni su nombre ni su código Jira se tocan aquí.
+        QVERIFY(setup->findChild<QLineEdit*>(QStringLiteral("projectSetupName"))->parentWidget()->isHidden());
+        QVERIFY2(setup->findChild<QLabel*>(QStringLiteral("projectSetupNote"))->text().contains(QStringLiteral("SUMA TRANSITO")),
+                 qPrintable(setup->findChild<QLabel*>(QStringLiteral("projectSetupNote"))->text()));
+        setup->findChild<QPushButton*>(QStringLiteral("projectSetupAccept"))->click();
+
+        QCOMPARE(projects.projects().size(), 1);   // no se creó ninguno
+        QCOMPARE(projects.find(mineId)->requirementSystem, QStringLiteral("SEGRAN"));
+        QCOMPARE(started.count(), 0);              // es el proyecto abierto: se abre aquí mismo
+        QCOMPARE(f.app.issues.issues().size(), 1);
+        QCOMPARE(f.app.issues.issues().first().requirement.data.id, QStringLiteral("2026002"));
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    // «Nuevo proyecto…» de la barra: el nombre es lo único obligatorio; los dos códigos son opcionales.
+    void theNewProjectDialogTakesBothCodesAndTheyAreOptional() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        f.ctx.projects = &projects;
+        f.ctx.projectId = projects.activeId();
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        QSignalSpy switched(f.window.get(), &MainWindow::projectSwitchRequested);
+        f.window->findChild<QPushButton*>(QStringLiteral("projectMenu"))->menu()->actions().at(0)->trigger();
+
+        auto* setup = f.window->findChild<ProjectSetupDialog*>();
+        QVERIFY(setup);
+        QVERIFY(!setup->findChild<QComboBox*>(QStringLiteral("projectSetupTarget")));   // aquí sólo se crea
+        auto* accept = setup->findChild<QPushButton*>(QStringLiteral("projectSetupAccept"));
+        accept->click();   // sin nombre no se crea nada y el diálogo sigue abierto
+        QCOMPARE(projects.projects().size(), 1);
+        QVERIFY(f.window->findChild<ProjectSetupDialog*>());
+        setup->findChild<QLineEdit*>(QStringLiteral("projectSetupName"))->setText(QStringLiteral("Riesgos"));
+        accept->click();
+
+        QCOMPARE(projects.projects().size(), 2);
+        QCOMPARE(switched.count(), 1);
+        const QString created = switched.first().at(0).toString();
+        QCOMPARE(projects.find(created)->name, QStringLiteral("Riesgos"));
+        QVERIFY(projects.find(created)->requirementSystem.isEmpty());   // sin sistema: se vincula cuando toque
         f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
     }
 

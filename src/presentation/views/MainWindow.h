@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/models/Requirement.h"
 #include "presentation/Screen.h"
 
 #include <QMainWindow>
@@ -27,6 +28,7 @@ class CasesView;
 class RunView;
 class HistoryView;
 class BugView;
+class IssuesView;
 class PlanView;
 class SettingsDialog;
 class Toast;
@@ -45,6 +47,9 @@ public:
     Screen currentScreen() const { return m_current; }
     /// Acción "Finalizar" de la ejecución: sigue con el plan, muestra su informe o vuelve a los casos.
     void finishRun();
+    /// Abre en este proyecto, ya activo, el issue desde el que se prueba ese requerimiento de GESREQ,
+    /// creándolo si es la primera vez. Lo llama quien coordina el cambio de proyecto.
+    void startTesting(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt);
     void showToast(const QString& message, const QString& color);
     /// Abre el historial en el panel de métricas.
     void showMetrics();
@@ -64,6 +69,10 @@ public:
 
 signals:
     void projectSwitchRequested(const QString& id);
+    /// Las pruebas de ese requerimiento se hacen en otro proyecto: hay que guardar éste, activar aquél y
+    /// abrir allí su issue. La ventana no cambia de proyecto por su cuenta.
+    void startTestingRequested(const QString& projectId, const ExternalRequirement& requirement,
+                               const QString& connection, const QDateTime& fetchedAt);
 
 protected:
     void resizeEvent(QResizeEvent* e) override;
@@ -94,6 +103,7 @@ private:
     RunView* m_run;
     HistoryView* m_history;
     BugView* m_bug;
+    IssuesView* m_issuesView;
     SettingsDialog* m_settings = nullptr;   // se crea al abrirla por primera vez
     Toast* m_toast;
     FlashOverlay* m_flash;

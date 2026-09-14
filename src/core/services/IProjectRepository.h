@@ -9,6 +9,9 @@ namespace qaflow {
 struct Project {
     QString id;
     QString name;
+    /// Sistema de GESREQ ("SUMA TRANSITO") cuyos requerimientos se trabajan en este proyecto; vacío si
+    /// ninguno. Un sistema sólo puede estar vinculado a un proyecto.
+    QString requirementSystem;
 };
 struct ProjectCollection {
     QString activeId;

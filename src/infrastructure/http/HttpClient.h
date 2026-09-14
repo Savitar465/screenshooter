@@ -2,9 +2,11 @@
 
 #include <QHash>
 #include <QJsonDocument>
+#include <QList>
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
 #include <QObject>
+#include <QPair>
 #include <functional>
 
 class QHttpMultiPart;
@@ -40,8 +42,14 @@ protected:
     void postMultipart(const QNetworkRequest& req, QHttpMultiPart* multi, Handler done);
     /// Sube un fichero como POST binario (Content-Type application/octet-stream).
     void postFile(const QNetworkRequest& req, const QString& path, Handler done);
+    /// POST de formulario (application/x-www-form-urlencoded), como el que envía un navegador.
+    void postForm(const QNetworkRequest& req, const QList<QPair<QString, QString>>& fields, Handler done);
+    /// Olvida las cookies recibidas: la siguiente petición sale sin sesión.
+    void clearCookies();
 
     static QNetworkRequest jsonRequest(const QString& url);
+    /// Petición de una página web (HTML), con el mismo tiempo máximo que las de la API.
+    static QNetworkRequest pageRequest(const QString& url);
     /// Crea la parte multipart "file" de un fichero local (nullptr si no se puede abrir).
     static QHttpMultiPart* multipartFile(const QString& path, const QByteArray& fieldName = "file");
     /// Rutas que existen en disco, en el mismo orden.

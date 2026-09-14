@@ -25,6 +25,7 @@ qaflow_add_test(core test_plan_report LIBS qaflow_core)
 qaflow_add_test(core test_case_filter LIBS qaflow_core)
 qaflow_add_test(core test_case_formats LIBS qaflow_core)
 qaflow_add_test(core test_metrics LIBS qaflow_core)
+qaflow_add_test(core test_issue LIBS qaflow_core)
 
 # application: stores y controlador sobre repositorios en memoria
 qaflow_add_test(application test_test_case_store LIBS qaflow_application)
@@ -36,6 +37,9 @@ qaflow_add_test(application test_bug_store LIBS qaflow_application)
 qaflow_add_test(application test_bug_report_service LIBS qaflow_application)
 qaflow_add_test(application test_evidence_service LIBS qaflow_application)
 qaflow_add_test(application test_test_publish_service LIBS qaflow_application)
+qaflow_add_test(application test_requirement_source_service LIBS qaflow_application)
+qaflow_add_test(application test_issue_store LIBS qaflow_application)
+qaflow_add_test(application test_issue_publish_service LIBS qaflow_application)
 
 # infrastructure: repositorios JSON en un directorio temporal, QSettings en un fichero temporal
 # y clientes REST contra un servidor HTTP falso en localhost
@@ -43,12 +47,20 @@ qaflow_add_test(infrastructure test_json_repositories LIBS qaflow_infrastructure
 qaflow_add_test(infrastructure test_settings_repository LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_tracker_clients LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_zephyr_client LIBS qaflow_infrastructure)
+qaflow_add_test(infrastructure test_gesreq_parser LIBS qaflow_infrastructure)
+qaflow_add_test(infrastructure test_gesreq_client LIBS qaflow_infrastructure)
+# Copias anonimizadas de las páginas de GESREQ (tests/fixtures/gesreq) con las que se prueba el extractor.
+foreach (gesreq_test test_gesreq_parser test_gesreq_client)
+    target_compile_definitions(${gesreq_test} PRIVATE QAFLOW_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+endforeach ()
 qaflow_add_test(infrastructure test_gif_encoder LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_global_hotkey LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_project_repository LIBS qaflow_infrastructure qaflow_application)
+qaflow_add_test(infrastructure test_issue_repository LIBS qaflow_infrastructure)
 
 # presentation: ventana completa sobre repositorios en memoria (plataforma offscreen)
 qaflow_add_test(presentation test_main_window LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
 qaflow_add_test(presentation test_evidence_widgets LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
+qaflow_add_test(presentation test_choice_dialog LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
 
 qaflow_add_test(presentation test_project_session LIBS qaflow_presentation qaflow_infrastructure SOURCES ${CMAKE_SOURCE_DIR}/src/bootstrap/ProjectSession.cpp)

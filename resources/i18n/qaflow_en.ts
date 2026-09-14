@@ -461,6 +461,62 @@
         <source>**Test:** %1</source>
         <translation>**Test:** %1</translation>
     </message>
+    <message>
+        <source>Este gestor no permite elegir el proyecto de una lista</source>
+        <translation>This tracker does not offer a list of projects to choose from</translation>
+    </message>
+    <message>
+        <source>Pendiente</source>
+        <translation>Pending</translation>
+    </message>
+    <message>
+        <source>En preparación</source>
+        <translation>Preparing</translation>
+    </message>
+    <message>
+        <source>En pruebas</source>
+        <translation>Testing</translation>
+    </message>
+    <message>
+        <source>Finalizado</source>
+        <translation>Done</translation>
+    </message>
+    <message>
+        <source>Estado</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>Descripción corta</source>
+        <translation>Short description</translation>
+    </message>
+    <message>
+        <source>Prioridad</source>
+        <translation>Priority</translation>
+    </message>
+    <message>
+        <source>Sistema</source>
+        <translation>System</translation>
+    </message>
+    <message>
+        <source>Asignado desde</source>
+        <translation>Assigned from</translation>
+    </message>
+    <message>
+        <source>Asignado hasta</source>
+        <translation>Assigned until</translation>
+    </message>
+    <message>
+        <source>Funcionario solicitante</source>
+        <translation>Requesting officer</translation>
+    </message>
+    <message>
+        <source>Unidad solicitante</source>
+        <translation>Requesting unit</translation>
+    </message>
+    <message>
+        <source>Este gestor no publica los issues de QAflow</source>
+        <translation>This tracker does not publish the QAflow issues</translation>
+    </message>
 </context>
 <context>
     <name>infrastructure</name>
@@ -755,6 +811,102 @@
     <message>
         <source>El ciclo %1 ya no existe en Zephyr: publica los resultados como ciclo nuevo</source>
         <translation>Cycle %1 no longer exists in Zephyr: publish the results as a new cycle</translation>
+    </message>
+    <message>
+        <source>Indica la dirección de GESREQ</source>
+        <translation>Enter the GESREQ address</translation>
+    </message>
+    <message>
+        <source>La dirección de GESREQ no es válida: %1</source>
+        <translation>The GESREQ address is not valid: %1</translation>
+    </message>
+    <message>
+        <source>Indica el usuario y la contraseña de GESREQ</source>
+        <translation>Enter the GESREQ user and password</translation>
+    </message>
+    <message>
+        <source>No se pudo conectar con GESREQ · %1</source>
+        <translation>Could not connect to GESREQ · %1</translation>
+    </message>
+    <message>
+        <source>GESREQ no responde en esa dirección; revisa la URL y su ruta (/greq) · %1</source>
+        <translation>GESREQ does not answer at that address; check the URL and its path (/greq) · %1</translation>
+    </message>
+    <message>
+        <source>GESREQ rechazó el usuario o la contraseña</source>
+        <translation>GESREQ rejected the user or the password</translation>
+    </message>
+    <message>
+        <source>GESREQ rechazó el inicio de sesión: %1</source>
+        <translation>GESREQ rejected the sign-in: %1</translation>
+    </message>
+    <message>
+        <source>GESREQ respondió al inicio de sesión con una página que no se reconoce</source>
+        <translation>GESREQ answered the sign-in with a page that is not recognised</translation>
+    </message>
+    <message>
+        <source>GESREQ no conserva la sesión: vuelve a pedir el inicio de sesión justo después de entrar</source>
+        <translation>GESREQ does not keep the session: it asks to sign in again right after signing in</translation>
+    </message>
+    <message>
+        <source>%1 requerimientos en la bandeja de control de calidad</source>
+        <translation>%1 requirements in the quality control inbox</translation>
+    </message>
+    <message>
+        <source>La bandeja de GESREQ no tiene la estructura esperada: %1</source>
+        <translation>The GESREQ inbox does not have the expected structure: %1</translation>
+    </message>
+    <message>
+        <source>«%1» no es un número de requerimiento de GESREQ</source>
+        <translation>“%1” is not a GESREQ requirement number</translation>
+    </message>
+    <message>
+        <source>GESREQ no devuelve datos del requerimiento %1: no existe o tu usuario no puede verlo</source>
+        <translation>GESREQ returns no data for requirement %1: it does not exist or your user cannot see it</translation>
+    </message>
+    <message>
+        <source>La ficha del requerimiento %1 no tiene la estructura esperada: %2</source>
+        <translation>The page of requirement %1 does not have the expected structure: %2</translation>
+    </message>
+    <message>
+        <source>no está la tabla de requerimientos</source>
+        <translation>the requirements table is missing</translation>
+    </message>
+    <message>
+        <source>falta la columna «%1»</source>
+        <translation>the “%1” column is missing</translation>
+    </message>
+    <message>
+        <source>la fila %1 tiene %2 columnas y la cabecera %3</source>
+        <translation>row %1 has %2 columns and the header has %3</translation>
+    </message>
+    <message>
+        <source>la fila %1 no empieza por un número de requerimiento («%2»)</source>
+        <translation>row %1 does not start with a requirement number (“%2”)</translation>
+    </message>
+    <message>
+        <source>la página no es la ficha de un requerimiento</source>
+        <translation>the page is not a requirement page</translation>
+    </message>
+    <message>
+        <source>llegó la ficha del requerimiento %1 en lugar de la del %2</source>
+        <translation>got the page of requirement %1 instead of the one of %2</translation>
+    </message>
+    <message>
+        <source>falta el campo «Estado» en los datos del requerimiento %1</source>
+        <translation>the “Estado” field is missing from the data of requirement %1</translation>
+    </message>
+    <message>
+        <source>GESREQ no ofrece el catálogo de sistemas: %1</source>
+        <translation>GESREQ does not offer the catalog of systems: %1</translation>
+    </message>
+    <message>
+        <source>no está la lista de sistemas</source>
+        <translation>the list of systems is missing</translation>
+    </message>
+    <message>
+        <source>%1 no existe en %2</source>
+        <translation>%1 does not exist in %2</translation>
     </message>
 </context>
 <context>
@@ -1263,10 +1415,6 @@
         <translation>%1 saved</translation>
     </message>
     <message>
-        <source>▶ Ejecutar</source>
-        <translation>▶ Run</translation>
-    </message>
-    <message>
         <source>Más acciones</source>
         <translation>More actions</translation>
     </message>
@@ -1485,6 +1633,37 @@
     <message>
         <source> · %1 evidencias</source>
         <translation> · %1 pieces of evidence</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::ChoiceDialog</name>
+    <message>
+        <source>Buscar por código o nombre…</source>
+        <translation>Search by code or name…</translation>
+    </message>
+    <message>
+        <source>Reintentar</source>
+        <translation>Retry</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Elegir</source>
+        <translation>Choose</translation>
+    </message>
+    <message>
+        <source>No hay nada que elegir</source>
+        <translation>Nothing to choose from</translation>
+    </message>
+    <message>
+        <source>%1 disponibles</source>
+        <translation>%1 available</translation>
+    </message>
+    <message>
+        <source>%1 de %2</source>
+        <translation>%1 of %2</translation>
     </message>
 </context>
 <context>
@@ -1976,6 +2155,646 @@
     </message>
 </context>
 <context>
+    <name>qaflow::IssuePublishService</name>
+    <message>
+        <source>Requerimiento GESREQ %1</source>
+        <translation>GESREQ requirement %1</translation>
+    </message>
+    <message>
+        <source>Sistema</source>
+        <translation>System</translation>
+    </message>
+    <message>
+        <source>Estado en GESREQ</source>
+        <translation>Status in GESREQ</translation>
+    </message>
+    <message>
+        <source>Descripción corta</source>
+        <translation>Short description</translation>
+    </message>
+    <message>
+        <source>Asignado a QA</source>
+        <translation>Assigned to QA</translation>
+    </message>
+    <message>
+        <source>Solicitante</source>
+        <translation>Requester</translation>
+    </message>
+    <message>
+        <source>Ficha</source>
+        <translation>Record</translation>
+    </message>
+    <message>
+        <source>Notas de QA</source>
+        <translation>QA notes</translation>
+    </message>
+    <message>
+        <source>Publicado desde QAflow · %1</source>
+        <translation>Published from QAflow · %1</translation>
+    </message>
+    <message>
+        <source>El issue ya no existe</source>
+        <translation>The issue no longer exists</translation>
+    </message>
+    <message>
+        <source>Configura la conexión con el gestor y su proyecto en Ajustes</source>
+        <translation>Set up the connection with the tracker and its project in Settings</translation>
+    </message>
+    <message>
+        <source>El issue no está publicado</source>
+        <translation>The issue is not published</translation>
+    </message>
+    <message>
+        <source>Indica la clave del issue del gestor</source>
+        <translation>Enter the key of the tracker issue</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::IssueStore</name>
+    <message>
+        <source>No se pudieron leer los issues del proyecto: no se guardarán cambios en ellos para no perderlos</source>
+        <translation>The project issues could not be read: no changes will be saved to them so they are not lost</translation>
+    </message>
+    <message>
+        <source>los issues</source>
+        <translation>the issues</translation>
+    </message>
+    <message>
+        <source>Issue sin título</source>
+        <translation>Untitled issue</translation>
+    </message>
+    <message>
+        <source>Requerimiento %1</source>
+        <translation>Requirement %1</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::IssuesView</name>
+    <message>
+        <source>Issues</source>
+        <translation>Issues</translation>
+    </message>
+    <message>
+        <source>+ Nuevo</source>
+        <translation>+ New</translation>
+    </message>
+    <message>
+        <source>Issue creado a mano, sin requerimiento de GESREQ</source>
+        <translation>Issue created by hand, without a GESREQ requirement</translation>
+    </message>
+    <message>
+        <source>Nuevo issue</source>
+        <translation>New issue</translation>
+    </message>
+    <message>
+        <source>Consultar GESREQ</source>
+        <translation>Check GESREQ</translation>
+    </message>
+    <message>
+        <source>Buscar por título, número de GREQ, sistema, solicitante…</source>
+        <translation>Search by title, GREQ number, system, requester…</translation>
+    </message>
+    <message>
+        <source>Estado</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>Prioridad</source>
+        <translation>Priority</translation>
+    </message>
+    <message>
+        <source>Jira</source>
+        <translation>Jira</translation>
+    </message>
+    <message>
+        <source>Publicados</source>
+        <translation>Published</translation>
+    </message>
+    <message>
+        <source>Sin publicar</source>
+        <translation>Not published</translation>
+    </message>
+    <message>
+        <source>Vincula antes un sistema de GESREQ a este proyecto en Ajustes</source>
+        <translation>First link a GESREQ system to this project in Settings</translation>
+    </message>
+    <message>
+        <source>Leer la bandeja de control de calidad e importar los requerimientos de %1</source>
+        <translation>Read the quality control inbox and import the requirements of %1</translation>
+    </message>
+    <message>
+        <source>CAMBIOS</source>
+        <translation>CHANGES</translation>
+    </message>
+    <message>
+        <source>FUERA DE LA BANDEJA</source>
+        <translation>OUT OF THE INBOX</translation>
+    </message>
+    <message>
+        <source>Todavía no hay issues. Consulta GESREQ para importar tus requerimientos o crea uno a mano.</source>
+        <translation>No issues yet. Check GESREQ to import your requirements or create one by hand.</translation>
+    </message>
+    <message>
+        <source>Ningún issue coincide con los filtros.</source>
+        <translation>No issue matches the filters.</translation>
+    </message>
+    <message>
+        <source>%1 issues</source>
+        <translation>%1 issues</translation>
+    </message>
+    <message>
+        <source>%1 de %2 issues</source>
+        <translation>%1 of %2 issues</translation>
+    </message>
+    <message>
+        <source>Selecciona un issue de la lista, consulta GESREQ para importar los requerimientos de tu bandeja o crea uno a mano.</source>
+        <translation>Select an issue from the list, check GESREQ to import the requirements in your inbox or create one by hand.</translation>
+    </message>
+    <message>
+        <source>Eliminar…</source>
+        <translation>Delete…</translation>
+    </message>
+    <message>
+        <source>Borra el issue; sus casos, planes y resultados se conservan</source>
+        <translation>Deletes the issue; its cases, plans and results are kept</translation>
+    </message>
+    <message>
+        <source>Estado del trabajo de QA en QAflow: no cambia con el estado del requerimiento en GESREQ ni con el de Jira</source>
+        <translation>Status of the QA work in QAflow: it does not change with the status of the requirement in GESREQ or in Jira</translation>
+    </message>
+    <message>
+        <source>Estado de QA</source>
+        <translation>QA status</translation>
+    </message>
+    <message>
+        <source>REQUERIMIENTO DE GESREQ</source>
+        <translation>GESREQ REQUIREMENT</translation>
+    </message>
+    <message>
+        <source>Cargar ficha</source>
+        <translation>Load record</translation>
+    </message>
+    <message>
+        <source>Leer de GESREQ la ficha completa: alcance, secciones y adjuntos</source>
+        <translation>Read the full record from GESREQ: scope, sections and attachments</translation>
+    </message>
+    <message>
+        <source>Abrir en GESREQ</source>
+        <translation>Open in GESREQ</translation>
+    </message>
+    <message>
+        <source>Abre la ficha en el navegador (hace falta haber entrado en GESREQ)</source>
+        <translation>Opens the record in the browser (you need to be signed in to GESREQ)</translation>
+    </message>
+    <message>
+        <source>Marcar como revisado</source>
+        <translation>Mark as reviewed</translation>
+    </message>
+    <message>
+        <source>NOTAS DE QA</source>
+        <translation>QA NOTES</translation>
+    </message>
+    <message>
+        <source>Ambiente, datos de prueba, acuerdos… Son de QAflow: consultar GESREQ no las cambia.</source>
+        <translation>Environment, test data, agreements… They belong to QAflow: checking GESREQ does not change them.</translation>
+    </message>
+    <message>
+        <source>+ Nuevo caso</source>
+        <translation>+ New case</translation>
+    </message>
+    <message>
+        <source>Crea un caso con el título del issue, lo vincula y lo abre para escribir sus pasos</source>
+        <translation>Creates a case with the issue title, links it and opens it to write its steps</translation>
+    </message>
+    <message>
+        <source>Vincular caso…</source>
+        <translation>Link case…</translation>
+    </message>
+    <message>
+        <source>Un caso puede validar varios issues</source>
+        <translation>A case can validate several issues</translation>
+    </message>
+    <message>
+        <source>+ Plan con sus casos</source>
+        <translation>+ Plan with its cases</translation>
+    </message>
+    <message>
+        <source>Crea un plan con los casos del issue y lo abre para ajustarlo</source>
+        <translation>Creates a plan with the issue cases and opens it to adjust it</translation>
+    </message>
+    <message>
+        <source>Vincular plan…</source>
+        <translation>Link plan…</translation>
+    </message>
+    <message>
+        <source>GESREQ %1 · %2</source>
+        <translation>GESREQ %1 · %2</translation>
+    </message>
+    <message>
+        <source>Creado a mano</source>
+        <translation>Created by hand</translation>
+    </message>
+    <message>
+        <source>Sin publicar en Jira</source>
+        <translation>Not published in Jira</translation>
+    </message>
+    <message>
+        <source>(vacío)</source>
+        <translation>(empty)</translation>
+    </message>
+    <message>
+        <source>⚠ Cambió en GESREQ desde la última revisión:</source>
+        <translation>⚠ Changed in GESREQ since the last review:</translation>
+    </message>
+    <message>
+        <source>Ya no está en tu bandeja de control de calidad (se vio por última vez el %1). El issue y sus pruebas se conservan.</source>
+        <translation>It is no longer in your quality control inbox (last seen on %1). The issue and its tests are kept.</translation>
+    </message>
+    <message>
+        <source>Sistema</source>
+        <translation>System</translation>
+    </message>
+    <message>
+        <source>Descripción corta</source>
+        <translation>Short description</translation>
+    </message>
+    <message>
+        <source>Estado en GESREQ</source>
+        <translation>Status in GESREQ</translation>
+    </message>
+    <message>
+        <source>Prioridad en GESREQ</source>
+        <translation>Priority in GESREQ</translation>
+    </message>
+    <message>
+        <source>Asignado a QA</source>
+        <translation>Assigned to QA</translation>
+    </message>
+    <message>
+        <source>Solicitado</source>
+        <translation>Requested</translation>
+    </message>
+    <message>
+        <source>Solicitante</source>
+        <translation>Requester</translation>
+    </message>
+    <message>
+        <source>Usuario</source>
+        <translation>User</translation>
+    </message>
+    <message>
+        <source>Importado</source>
+        <translation>Imported</translation>
+    </message>
+    <message>
+        <source>%1 · última lectura %2</source>
+        <translation>%1 · last read %2</translation>
+    </message>
+    <message>
+        <source>Actualizar ficha</source>
+        <translation>Refresh record</translation>
+    </message>
+    <message>
+        <source>Ficha leída el %1</source>
+        <translation>Record read on %1</translation>
+    </message>
+    <message>
+        <source>Abrir en el navegador</source>
+        <translation>Open in the browser</translation>
+    </message>
+    <message>
+        <source>CASOS DE PRUEBA · %1</source>
+        <translation>TEST CASES · %1</translation>
+    </message>
+    <message>
+        <source>Sin casos. Crea uno o vincula los que ya validan este requerimiento.</source>
+        <translation>No cases. Create one or link the ones that already validate this requirement.</translation>
+    </message>
+    <message>
+        <source>(sin título)</source>
+        <translation>(untitled)</translation>
+    </message>
+    <message>
+        <source>Ya no existe en los casos del proyecto</source>
+        <translation>No longer exists among the project cases</translation>
+    </message>
+    <message>
+        <source>Abrir</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>Desvincular el caso del issue (el caso no se borra)</source>
+        <translation>Unlink the case from the issue (the case is not deleted)</translation>
+    </message>
+    <message>
+        <source>PLANES · %1</source>
+        <translation>PLANS · %1</translation>
+    </message>
+    <message>
+        <source>Sin planes. Crea uno con los casos del issue o vincula uno existente.</source>
+        <translation>No plans. Create one with the issue cases or link an existing one.</translation>
+    </message>
+    <message>
+        <source>%1 (archivado)</source>
+        <translation>%1 (archived)</translation>
+    </message>
+    <message>
+        <source>Ya no existe en los planes del proyecto</source>
+        <translation>No longer exists among the project plans</translation>
+    </message>
+    <message>
+        <source>%1 casos</source>
+        <translation>%1 cases</translation>
+    </message>
+    <message>
+        <source> · último ciclo: %1 de %2 ejecutados, %3 superados</source>
+        <translation> · last cycle: %1 of %2 run, %3 passed</translation>
+    </message>
+    <message>
+        <source>Desvincular el plan del issue (el plan no se borra)</source>
+        <translation>Unlink the plan from the issue (the plan is not deleted)</translation>
+    </message>
+    <message>
+        <source>RESULTADOS · %1 EJECUCIONES</source>
+        <translation>RESULTS · %1 RUNS</translation>
+    </message>
+    <message>
+        <source>Todavía no se ha ejecutado ningún caso del issue.</source>
+        <translation>No case of the issue has been run yet.</translation>
+    </message>
+    <message>
+        <source>%1 · ciclo del %2</source>
+        <translation>%1 · cycle of %2</translation>
+    </message>
+    <message>
+        <source>Ejecución suelta</source>
+        <translation>Standalone run</translation>
+    </message>
+    <message>
+        <source> · plan del issue</source>
+        <translation> · issue plan</translation>
+    </message>
+    <message>
+        <source>Ver</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <source>Abrir la ejecución en el historial</source>
+        <translation>Open the run in the history</translation>
+    </message>
+    <message>
+        <source>y %1 más en el historial</source>
+        <translation>and %1 more in the history</translation>
+    </message>
+    <message>
+        <source>Vincula un sistema de GESREQ a este proyecto en Ajustes → Configuración del proyecto</source>
+        <translation>Link a GESREQ system to this project in Settings → Project settings</translation>
+    </message>
+    <message>
+        <source>Consultando…</source>
+        <translation>Checking…</translation>
+    </message>
+    <message>
+        <source>No se pudo consultar GESREQ · %1</source>
+        <translation>Could not check GESREQ · %1</translation>
+    </message>
+    <message>
+        <source>%1 issues creados · %2 actualizados</source>
+        <translation>%1 issues created · %2 updated</translation>
+    </message>
+    <message>
+        <source>%1 creado y vinculado a %2</source>
+        <translation>%1 created and linked to %2</translation>
+    </message>
+    <message>
+        <source>Vincular caso a %1</source>
+        <translation>Link case to %1</translation>
+    </message>
+    <message>
+        <source>%1 creado con %2 casos de %3</source>
+        <translation>%1 created with %2 cases of %3</translation>
+    </message>
+    <message>
+        <source>Vincular plan a %1</source>
+        <translation>Link plan to %1</translation>
+    </message>
+    <message>
+        <source>Leyendo…</source>
+        <translation>Reading…</translation>
+    </message>
+    <message>
+        <source>No se pudo leer la ficha de GESREQ · %1</source>
+        <translation>Could not read the GESREQ record · %1</translation>
+    </message>
+    <message>
+        <source>Ficha del requerimiento %1 actualizada</source>
+        <translation>Record of requirement %1 updated</translation>
+    </message>
+    <message>
+        <source>Eliminar issue</source>
+        <translation>Delete issue</translation>
+    </message>
+    <message>
+        <source>¿Eliminar %1? Sus casos, planes y resultados no se borran.</source>
+        <translation>Delete %1? Its cases, plans and results are not deleted.</translation>
+    </message>
+    <message>
+        <source>PUBLICACIÓN EN EL GESTOR</source>
+        <translation>PUBLICATION IN THE TRACKER</translation>
+    </message>
+    <message>
+        <source>Publicar…</source>
+        <translation>Publish…</translation>
+    </message>
+    <message>
+        <source>Crea el issue en el gestor a partir de este, revisándolo antes</source>
+        <translation>Creates the issue in the tracker from this one, reviewing it first</translation>
+    </message>
+    <message>
+        <source>Vincular issue…</source>
+        <translation>Link issue…</translation>
+    </message>
+    <message>
+        <source>Enlaza uno que ya existe en el gestor en vez de crear otro</source>
+        <translation>Links one that already exists in the tracker instead of creating another</translation>
+    </message>
+    <message>
+        <source>Abrir el issue del gestor en el navegador</source>
+        <translation>Open the tracker issue in the browser</translation>
+    </message>
+    <message>
+        <source>Actualizar estado</source>
+        <translation>Refresh status</translation>
+    </message>
+    <message>
+        <source>Desvincular</source>
+        <translation>Unlink</translation>
+    </message>
+    <message>
+        <source>QAflow olvida la representación; en el gestor no se borra nada</source>
+        <translation>QAflow forgets the link; nothing is deleted in the tracker</translation>
+    </message>
+    <message>
+        <source>Actualizar en el gestor…</source>
+        <translation>Update in the tracker…</translation>
+    </message>
+    <message>
+        <source>⚠ El título o la descripción cambiaron desde lo último que se publicó. En el gestor sigue lo anterior.</source>
+        <translation>⚠ The title or the description changed since the last publication. The tracker still has the previous one.</translation>
+    </message>
+    <message>
+        <source>⚠ El último envío se cortó sin respuesta (%1): puede haberse creado igualmente. Búscalo en %2 por la etiqueta %3 y vincúlalo; si no está, vuelve a publicar.</source>
+        <translation>⚠ The last send was cut off without an answer (%1): it may have been created anyway. Look for it in %2 by the label %3 and link it; if it is not there, publish again.</translation>
+    </message>
+    <message>
+        <source>Tipo: %1</source>
+        <translation>Type: %1</translation>
+    </message>
+    <message>
+        <source>Vinculado el %1 · lo creó otra persona en el gestor</source>
+        <translation>Linked on %1 · somebody else created it in the tracker</translation>
+    </message>
+    <message>
+        <source>Publicado desde QAflow el %1</source>
+        <translation>Published from QAflow on %1</translation>
+    </message>
+    <message>
+        <source>Estado del gestor sin consultar</source>
+        <translation>Tracker status not checked yet</translation>
+    </message>
+    <message>
+        <source>Estado en el gestor: %1 · consultado el %2</source>
+        <translation>Status in the tracker: %1 · checked on %2</translation>
+    </message>
+    <message>
+        <source>Configura la conexión con el gestor y su proyecto en Ajustes para publicar este issue.</source>
+        <translation>Set up the connection with the tracker and its project in Settings to publish this issue.</translation>
+    </message>
+    <message>
+        <source>Sin publicar. Se crearía en %1.</source>
+        <translation>Not published. It would be created in %1.</translation>
+    </message>
+    <message>
+        <source>%1 actualizado en el gestor</source>
+        <translation>%1 updated in the tracker</translation>
+    </message>
+    <message>
+        <source>%1 creado en el gestor</source>
+        <translation>%1 created in the tracker</translation>
+    </message>
+    <message>
+        <source>El envío se cortó sin respuesta: comprueba en el gestor si se creó antes de reintentar · %1</source>
+        <translation>The send was cut off without an answer: check in the tracker whether it was created before retrying · %1</translation>
+    </message>
+    <message>
+        <source>No se pudo actualizar en el gestor · %1</source>
+        <translation>Could not update in the tracker · %1</translation>
+    </message>
+    <message>
+        <source>No se pudo crear en el gestor · %1</source>
+        <translation>Could not create in the tracker · %1</translation>
+    </message>
+    <message>
+        <source>Configura la conexión con el gestor y su proyecto en Ajustes</source>
+        <translation>Set up the connection with the tracker and its project in Settings</translation>
+    </message>
+    <message>
+        <source>Envío sin confirmar</source>
+        <translation>Unconfirmed send</translation>
+    </message>
+    <message>
+        <source>El último envío de %1 se cortó sin respuesta y puede haberse creado en %2. Búscalo allí por la etiqueta %1.
+
+¿Crear otro de todos modos?</source>
+        <translation>The last send of %1 was cut off without an answer and it may have been created in %2. Look for it there by the label %1.
+
+Create another one anyway?</translation>
+    </message>
+    <message>
+        <source>Vincular issue del gestor</source>
+        <translation>Link tracker issue</translation>
+    </message>
+    <message>
+        <source>Clave del issue que ya existe en %1:</source>
+        <translation>Key of the issue that already exists in %1:</translation>
+    </message>
+    <message>
+        <source>%1 vinculado a este issue</source>
+        <translation>%1 linked to this issue</translation>
+    </message>
+    <message>
+        <source>No se pudo vincular · %1</source>
+        <translation>Could not link · %1</translation>
+    </message>
+    <message>
+        <source>¿Olvidar la relación con %1? En el gestor no se borra nada.</source>
+        <translation>Forget the link with %1? Nothing is deleted in the tracker.</translation>
+    </message>
+    <message>
+        <source>No se pudo consultar el estado en el gestor · %1</source>
+        <translation>Could not check the status in the tracker · %1</translation>
+    </message>
+    <message>
+        <source>Tu bandeja de control de calidad no tiene requerimientos</source>
+        <translation>Your quality control inbox has no requirements</translation>
+    </message>
+    <message>
+        <source>Ningún proyecto trabaja los requerimientos de %1: vincúlale ese sistema a uno en Ajustes → Configuración del proyecto</source>
+        <translation>No project works the requirements of %1: link that system to one in Settings → Project settings</translation>
+    </message>
+    <message>
+        <source>%1 · pruebas del requerimiento %2</source>
+        <translation>%1 · tests of requirement %2</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::JiraPublishDialog</name>
+    <message>
+        <source>Publicar en el gestor</source>
+        <translation>Publish in the tracker</translation>
+    </message>
+    <message>
+        <source>Actualizar en el gestor</source>
+        <translation>Update in the tracker</translation>
+    </message>
+    <message>
+        <source>Crear el issue en %1</source>
+        <translation>Create the issue in %1</translation>
+    </message>
+    <message>
+        <source>Actualizar el issue en %1</source>
+        <translation>Update the issue in %1</translation>
+    </message>
+    <message>
+        <source>Título</source>
+        <translation>Title</translation>
+    </message>
+    <message>
+        <source>Tipo de incidencia</source>
+        <translation>Issue type</translation>
+    </message>
+    <message>
+        <source>Descripción</source>
+        <translation>Description</translation>
+    </message>
+    <message>
+        <source>Se crea con las etiquetas %1, con las que se encuentra en el gestor.</source>
+        <translation>It is created with the labels %1, which is how it is found in the tracker.</translation>
+    </message>
+    <message>
+        <source>Se reescriben el título y la descripción del issue en el gestor; lo que alguien haya editado allí se pierde. El resto de campos (tipo, estado, asignación…) no se toca.</source>
+        <translation>The title and the description of the issue are rewritten in the tracker; anything somebody edited there is lost. The other fields (type, status, assignment…) are not touched.</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Crear en el gestor</source>
+        <translation>Create in the tracker</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::MainWindow</name>
     <message>
         <source>Ejecución de %1 recuperada de la sesión anterior</source>
@@ -2098,10 +2917,6 @@
         <translation>E&amp;xecution</translation>
     </message>
     <message>
-        <source>&amp;Ejecutar caso seleccionado</source>
-        <translation>&amp;Run selected case</translation>
-    </message>
-    <message>
         <source>&amp;Capturar pantalla</source>
         <translation>&amp;Take screenshot</translation>
     </message>
@@ -2160,10 +2975,6 @@
     <message>
         <source>Deshacer</source>
         <translation>Undo</translation>
-    </message>
-    <message>
-        <source>Ciclo de &quot;%1&quot; iniciado · %2 casos</source>
-        <translation>Cycle of &quot;%1&quot; started · %2 cases</translation>
     </message>
     <message>
         <source>Enviados %1 bugs que estaban pendientes: %2</source>
@@ -2248,10 +3059,6 @@
     <message>
         <source>Paso &amp;anterior</source>
         <translation>Previous &amp;step</translation>
-    </message>
-    <message>
-        <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Iniciar o detener la grabación de GIF&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Adjuntar archivos como evidencia (o arrástralos a la ventana)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en una miniatura&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Falla el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vuelve al paso anterior (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir los ajustes&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Volver al paso anterior&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
-        <translation>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicate case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take a screenshot (system-wide when the system allows it; press again to cancel the countdown)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Start or stop the GIF recording&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Attach files as evidence (or drag them onto the window)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a thumbnail&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the evidence at full size (← → navigate, Ctrl+E annotates, Ctrl+C copies)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pass the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Fail the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go back to the previous step (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the settings&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict of the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Back to the previous step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
     </message>
     <message>
         <source>%1 · ejecución terminada · %2</source>
@@ -2360,6 +3167,18 @@
     <message>
         <source>Ajustes · %1</source>
         <translation>Settings · %1</translation>
+    </message>
+    <message>
+        <source>I&amp;ssues</source>
+        <translation>I&amp;ssues</translation>
+    </message>
+    <message>
+        <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Iniciar o detener la grabación de GIF&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Adjuntar archivos como evidencia (o arrástralos a la ventana)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en una miniatura&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Falla el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vuelve al paso anterior (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir los ajustes&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Volver al paso anterior&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
+        <translation>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicate case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take a screenshot (system-wide when the system allows it; press again to cancel the countdown)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Start or stop the GIF recording&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Attach files as evidence (or drag them onto the window)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a thumbnail&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the evidence at full size (← → navigate, Ctrl+E annotates, Ctrl+C copies)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pass the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Fail the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go back to the previous step (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the settings&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict of the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Back to the previous step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
+    </message>
+    <message>
+        <source>No se pudieron leer los issues del proyecto: no se guardarán cambios en ellos para no perderlos</source>
+        <translation>The project issues could not be read: no changes will be saved to them so they are not lost</translation>
     </message>
 </context>
 <context>
@@ -2504,14 +3323,6 @@
         <translation>Sort by priority</translation>
     </message>
     <message>
-        <source>▶ Iniciar ciclo</source>
-        <translation>▶ Start cycle</translation>
-    </message>
-    <message>
-        <source>Añade al menos un caso al plan</source>
-        <translation>Add at least one test case to the plan</translation>
-    </message>
-    <message>
         <source>%1 · CREADO %2 · %3</source>
         <translation>%1 · CREATED %2 · %3</translation>
     </message>
@@ -2522,22 +3333,6 @@
     <message>
         <source>%1 CICLOS</source>
         <translation>%1 CYCLES</translation>
-    </message>
-    <message>
-        <source>Desarchiva el plan para ejecutarlo</source>
-        <translation>Unarchive the plan to run it</translation>
-    </message>
-    <message>
-        <source>CICLO ACTUAL</source>
-        <translation>CURRENT CYCLE</translation>
-    </message>
-    <message>
-        <source>Este plan aún no se ha ejecutado. Pulsa «Iniciar ciclo» para empezar.</source>
-        <translation>This plan has not been run yet. Click «Start cycle» to begin.</translation>
-    </message>
-    <message>
-        <source>ÚLTIMO CICLO</source>
-        <translation>LAST CYCLE</translation>
     </message>
     <message>
         <source>CICLO EN CURSO</source>
@@ -2558,10 +3353,6 @@
     <message>
         <source>%1 pasos</source>
         <translation>%1 steps</translation>
-    </message>
-    <message>
-        <source>PENDIENTE</source>
-        <translation>PENDING</translation>
     </message>
     <message>
         <source>Ejecutar antes</source>
@@ -2758,6 +3549,124 @@
     <message>
         <source>Sin suite</source>
         <translation>No suite</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::ProjectStore</name>
+    <message>
+        <source>No se pudo leer el catálogo de proyectos.</source>
+        <translation>Could not read the project catalog.</translation>
+    </message>
+    <message>
+        <source>No se pudo crear el proyecto. Comprueba la carpeta de datos.</source>
+        <translation>Could not create the project. Check the data folder.</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar el nombre del proyecto.</source>
+        <translation>Could not save the project name.</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar el proyecto activo.</source>
+        <translation>Could not save the active project.</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar el catálogo de suites.</source>
+        <translation>Could not save the suite catalog.</translation>
+    </message>
+    <message>
+        <source>El sistema «%1» de GESREQ ya está vinculado al proyecto «%2».</source>
+        <translation>GESREQ system “%1” is already linked to project “%2”.</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar el sistema de GESREQ del proyecto.</source>
+        <translation>Could not save the GESREQ system of the project.</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::RequirementImportDialog</name>
+    <message>
+        <source>Importar requerimientos de GESREQ</source>
+        <translation>Import GESREQ requirements</translation>
+    </message>
+    <message>
+        <source>Requerimientos de %1 en tu bandeja</source>
+        <translation>Requirements of %1 in your inbox</translation>
+    </message>
+    <message>
+        <source>%1 nuevos</source>
+        <translation>%1 new</translation>
+    </message>
+    <message>
+        <source>%1 con cambios</source>
+        <translation>%1 with changes</translation>
+    </message>
+    <message>
+        <source>%1 ya importados</source>
+        <translation>%1 already imported</translation>
+    </message>
+    <message>
+        <source>%1 importados ya no están en la bandeja (se conservan)</source>
+        <translation>%1 imported are no longer in the inbox (they are kept)</translation>
+    </message>
+    <message>
+        <source>nuevo</source>
+        <translation>new</translation>
+    </message>
+    <message>
+        <source>%1 · cambió: %2</source>
+        <translation>%1 · changed: %2</translation>
+    </message>
+    <message>
+        <source>%1 · sin cambios</source>
+        <translation>%1 · no changes</translation>
+    </message>
+    <message>
+        <source> · asignado %1 – %2</source>
+        <translation> · assigned %1 – %2</translation>
+    </message>
+    <message>
+        <source>Importar un requerimiento que ya tiene issue sólo actualiza lo que viene de GESREQ: el título, las notas, el estado, la prioridad y los casos y planes del issue no cambian.</source>
+        <translation>Importing a requirement that already has an issue only updates what comes from GESREQ: the title, notes, status, priority and the cases and plans of the issue do not change.</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Importar</source>
+        <translation>Import</translation>
+    </message>
+    <message>
+        <source>Importar %1</source>
+        <translation>Import %1</translation>
+    </message>
+    <message>
+        <source>%1 de otros sistemas, que no se importan aquí</source>
+        <translation>%1 from other systems, which are not imported here</translation>
+    </message>
+    <message>
+        <source>EN OTROS SISTEMAS DE TU BANDEJA</source>
+        <translation>IN OTHER SYSTEMS OF YOUR INBOX</translation>
+    </message>
+    <message>
+        <source>ningún proyecto trabaja %1</source>
+        <translation>no project works %1</translation>
+    </message>
+    <message>
+        <source>se prueba en %1</source>
+        <translation>tested in %1</translation>
+    </message>
+    <message>
+        <source>Iniciar pruebas</source>
+        <translation>Start testing</translation>
+    </message>
+    <message>
+        <source>Abre el issue del requerimiento elegido en el proyecto que trabaja su sistema</source>
+        <translation>Opens the issue of the chosen requirement in the project that works its system</translation>
+    </message>
+    <message>
+        <source>Iniciar pruebas en %1</source>
+        <translation>Start testing in %1</translation>
     </message>
 </context>
 <context>
@@ -3064,10 +3973,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <translation>Settings and integrations</translation>
     </message>
     <message>
-        <source>El idioma y el tema se aplican al instante reconstruyendo la ventana.</source>
-        <translation>The language and the theme are applied instantly by rebuilding the window.</translation>
-    </message>
-    <message>
         <source>Como el sistema</source>
         <translation>Same as system</translation>
     </message>
@@ -3094,10 +3999,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>Probar la conexión</source>
         <translation>Test the connection</translation>
-    </message>
-    <message>
-        <source>Gestor de incidencias</source>
-        <translation>Issue tracker</translation>
     </message>
     <message>
         <source>Gestor</source>
@@ -3348,10 +4249,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <translation>Each case publishes its execution on the Test issue it is linked to; the one with none yet gets a brand-new Test made from the case (title, preconditions and steps) and its key is saved in the “Zephyr Test” field.</translation>
     </message>
     <message>
-        <source>CÓDIGO JIRA · PROYECTO ACTUAL</source>
-        <translation>JIRA CODE · CURRENT PROJECT</translation>
-    </message>
-    <message>
         <source>Este código pertenece al proyecto actual. Los demás ajustes son generales.</source>
         <translation>This code belongs to the current project. All other settings are shared.</translation>
     </message>
@@ -3368,10 +4265,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <translation>Project settings</translation>
     </message>
     <message>
-        <source>El código Jira se aplica únicamente al proyecto abierto.</source>
-        <translation>The Jira code applies only to the open project.</translation>
-    </message>
-    <message>
         <source>Código del proyecto Jira</source>
         <translation>Jira project code</translation>
     </message>
@@ -3382,6 +4275,114 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>Conexión general con el gestor</source>
         <translation>Shared issue tracker connection</translation>
+    </message>
+    <message>
+        <source>Se aplica únicamente al proyecto abierto; las conexiones con el gestor y con GESREQ son comunes a todos.</source>
+        <translation>Applies only to the open project; the connections with the tracker and with GESREQ are shared by all projects.</translation>
+    </message>
+    <message>
+        <source>Código del sistema en GESREQ: lo que va antes del guion en la columna «Sistema» de la bandeja</source>
+        <translation>System code in GESREQ: what comes before the dash in the “Sistema” column of the inbox</translation>
+    </message>
+    <message>
+        <source>Sistema de GESREQ</source>
+        <translation>GESREQ system</translation>
+    </message>
+    <message>
+        <source>Probar la conexión con GESREQ</source>
+        <translation>Test the connection with GESREQ</translation>
+    </message>
+    <message>
+        <source>Conexión general con GESREQ</source>
+        <translation>General connection with GESREQ</translation>
+    </message>
+    <message>
+        <source>Sistema de gestión de requerimientos del que se importan los asignados a tu usuario para control de calidad. La conexión es común a todos los proyectos; el sistema de cada proyecto se elige en «Configuración del proyecto».</source>
+        <translation>Requirements management system from which the requirements assigned to your user for quality control are imported. The connection is shared by all projects; the system of each project is chosen in “Project settings”.</translation>
+    </message>
+    <message>
+        <source>Dirección de la aplicación con su ruta, la misma con la que se entra desde el navegador</source>
+        <translation>Address of the application with its path, the same one used to open it in the browser</translation>
+    </message>
+    <message>
+        <source>Contraseña</source>
+        <translation>Password</translation>
+    </message>
+    <message>
+        <source>⚠ «%1» ya está vinculado al proyecto «%2»: cada sistema de GESREQ se trabaja en un único proyecto, así que no se guarda.</source>
+        <translation>⚠ “%1” is already linked to project “%2”: each GESREQ system is worked on in a single project, so it is not saved.</translation>
+    </message>
+    <message>
+        <source>Ningún sistema de GESREQ vinculado a este proyecto.</source>
+        <translation>No GESREQ system linked to this project.</translation>
+    </message>
+    <message>
+        <source>Los requerimientos de GESREQ del sistema «%1» se trabajan en este proyecto.</source>
+        <translation>GESREQ requirements of system “%1” are worked on in this project.</translation>
+    </message>
+    <message>
+        <source>Sistemas en tu bandeja: %1.</source>
+        <translation>Systems in your inbox: %1.</translation>
+    </message>
+    <message>
+        <source>No se guardó el sistema de GESREQ: «%1» ya está vinculado al proyecto «%2»</source>
+        <translation>The GESREQ system was not saved: “%1” is already linked to project “%2”</translation>
+    </message>
+    <message>
+        <source>🔒 Contraseña · se guarda en: %1</source>
+        <translation>🔒 Password · stored in: %1</translation>
+    </message>
+    <message>
+        <source>⚠ Contraseña · se guarda %1. Instala un llavero (secret-tool / libsecret en Linux) para cifrar el dato.</source>
+        <translation>⚠ Password · stored %1. Install a keyring (secret-tool / libsecret on Linux) to encrypt it.</translation>
+    </message>
+    <message>
+        <source>Conectado a GESREQ · %1</source>
+        <translation>Connected to GESREQ · %1</translation>
+    </message>
+    <message>
+        <source>No se pudo conectar con GESREQ · %1</source>
+        <translation>Could not connect to GESREQ · %1</translation>
+    </message>
+    <message>
+        <source>Buscar…</source>
+        <translation>Search…</translation>
+    </message>
+    <message>
+        <source>Elegir entre los proyectos que ves en Jira</source>
+        <translation>Choose among the projects you can see in Jira</translation>
+    </message>
+    <message>
+        <source>Elegir del catálogo de sistemas de GESREQ</source>
+        <translation>Choose from the GESREQ catalog of systems</translation>
+    </message>
+    <message>
+        <source>Proyecto de Jira</source>
+        <translation>Jira project</translation>
+    </message>
+    <message>
+        <source>Consultando los proyectos de Jira…</source>
+        <translation>Fetching the Jira projects…</translation>
+    </message>
+    <message>
+        <source>No se pudieron consultar los proyectos de Jira · %1</source>
+        <translation>Could not fetch the Jira projects · %1</translation>
+    </message>
+    <message>
+        <source>Consultando el catálogo de sistemas de GESREQ…</source>
+        <translation>Fetching the GESREQ catalog of systems…</translation>
+    </message>
+    <message>
+        <source>No se pudo consultar el catálogo de sistemas de GESREQ · %1</source>
+        <translation>Could not fetch the GESREQ catalog of systems · %1</translation>
+    </message>
+    <message>
+        <source>en tu bandeja</source>
+        <translation>in your inbox</translation>
+    </message>
+    <message>
+        <source>vinculado a «%1»</source>
+        <translation>linked to “%1”</translation>
     </message>
 </context>
 <context>
@@ -3489,6 +4490,18 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <source>%1 issues abiertos</source>
         <translation>%1 open issues</translation>
     </message>
+    <message>
+        <source>Issues</source>
+        <translation>Issues</translation>
+    </message>
+    <message>
+        <source>%1 issues · %2 con cambios en GESREQ</source>
+        <translation>%1 issues · %2 with changes in GESREQ</translation>
+    </message>
+    <message>
+        <source>%1 issues</source>
+        <translation>%1 issues</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::StatusStrip</name>
@@ -3507,14 +4520,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>ÉXITO</source>
         <translation>SUCCESS</translation>
-    </message>
-    <message>
-        <source>Abrir el plan activo</source>
-        <translation>Open the active plan</translation>
-    </message>
-    <message>
-        <source>PLAN</source>
-        <translation>PLAN</translation>
     </message>
     <message>
         <source>%1 · %2 · paso %3 de %4</source>
@@ -3539,18 +4544,6 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>un ciclo terminado</source>
         <translation>one finished cycle</translation>
-    </message>
-    <message>
-        <source>último ciclo</source>
-        <translation>last cycle</translation>
-    </message>
-    <message>
-        <source>ciclo en curso</source>
-        <translation>cycle in progress</translation>
-    </message>
-    <message>
-        <source>sin ciclos · %1 casos</source>
-        <translation>no cycles · %1 cases</translation>
     </message>
 </context>
 <context>
@@ -3712,29 +4705,6 @@ HEADS-UP: these results were already published on %1 (cycle %2). A new cycle wil
     <message>
         <source>El ciclo se creó en Zephyr, pero %1 cosas se quedaron fuera.</source>
         <translation>The cycle was created in Zephyr, but %1 things were left out.</translation>
-    </message>
-</context>
-<context>
-    <name>qaflow::ProjectStore</name>
-    <message>
-        <source>No se pudo leer el catálogo de proyectos.</source>
-        <translation>Could not read the project catalog.</translation>
-    </message>
-    <message>
-        <source>No se pudo crear el proyecto. Comprueba la carpeta de datos.</source>
-        <translation>Could not create the project. Check the data folder.</translation>
-    </message>
-    <message>
-        <source>No se pudo guardar el nombre del proyecto.</source>
-        <translation>Could not save the project name.</translation>
-    </message>
-    <message>
-        <source>No se pudo guardar el proyecto activo.</source>
-        <translation>Could not save the active project.</translation>
-    </message>
-    <message>
-        <source>No se pudo guardar el catálogo de suites.</source>
-        <translation>Could not save the suite catalog.</translation>
     </message>
 </context>
 </TS>

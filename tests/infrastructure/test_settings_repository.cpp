@@ -177,6 +177,31 @@ private slots:
         QCOMPARE(QSettings().value(QStringLiteral("app/theme")).toString(), QStringLiteral("light"));
     }
 
+    // La conexión con GESREQ es general (grupo "gesreq", la misma para cualquier proyecto) y la contraseña
+    // sólo llega al fichero cuando no hay llavero.
+    void gesreqConnectionIsSharedAndRoundTripsWithoutPassword() {
+        QSettingsRepository a(QStringLiteral("a")), b(QStringLiteral("b"));
+        QVERIFY(a.loadRequirementSource().url.isEmpty());
+        RequirementSourceSettings r;
+        r.url = QStringLiteral("http://gesreq.test:7401/greq");
+        r.user = QStringLiteral("QAUSR0101");
+        r.connected = true;
+        a.saveRequirementSource(r);
+        QVERIFY(!QSettings().contains(QStringLiteral("gesreq/password")));
+        const RequirementSourceSettings loaded = b.loadRequirementSource();
+        QCOMPARE(loaded.url, r.url);
+        QCOMPARE(loaded.user, r.user);
+        QVERIFY(loaded.connected);
+        QVERIFY(loaded.password.isEmpty());
+
+        r.password = QStringLiteral("plain");   // sin llavero: SettingsStore la manda en claro
+        a.saveRequirementSource(r);
+        QCOMPARE(b.loadRequirementSource().password, QStringLiteral("plain"));
+        r.password.clear();
+        a.saveRequirementSource(r);
+        QVERIFY(!QSettings().contains(QStringLiteral("gesreq/password")));
+    }
+
     void plainSecretStoreKeepsValuesInSettings() {
         PlainSettingsSecretStore store;
         QVERIFY(!store.isSecure());

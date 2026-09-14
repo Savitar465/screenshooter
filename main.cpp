@@ -8,6 +8,7 @@
 #include "bootstrap/ProjectSession.h"
 #include "infrastructure/hotkey/GlobalHotkey.h"
 #include "infrastructure/persistence/JsonProjectRepository.h"
+#include "infrastructure/requirements/GesreqClient.h"
 #include "infrastructure/secrets/SecretStores.h"
 #include "presentation/DevSnapshot.h"
 #include "presentation/theme/Theme.h"
@@ -88,6 +89,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     auto secrets = makeSecretStore();
+    // Una sola sesión de GESREQ para todos los proyectos: la bandeja es del usuario, no del proyecto.
+    auto requirementSource = std::make_shared<GesreqClient>();
     GlobalHotkey hotkey;
     Translators translators;
     // Las sesiones conservan sus servicios y ventanas al cambiar de proyecto. Los callbacks
@@ -137,6 +140,18 @@ int main(int argc, char* argv[]) {
             if (owner != current) return;
             QTimer::singleShot(0, &app, [&, id]() { switchProject(id); });
         });
+        // Iniciar las pruebas de un requerimiento de otro proyecto: se guarda el actual, se activa el suyo
+        // y allí se abre (o se crea) su issue. Si el cambio no llegó a hacerse, no se inicia nada.
+        QObject::connect(session.window.get(), &MainWindow::startTestingRequested, &app,
+                         [&, owner = &session](const QString& id, const ExternalRequirement& requirement,
+                                               const QString& connection, const QDateTime& fetchedAt) {
+            if (owner != current) return;
+            QTimer::singleShot(0, &app, [&, id, requirement, connection, fetchedAt]() {
+                switchProject(id);
+                if (!current || current->ctx.projectId != id) return;
+                current->window->startTesting(requirement, connection, fetchedAt);
+            });
+        });
         workspace.showProject(session.window.get());
         if (reopenSettings) session.window->openSettings();
     };
@@ -144,7 +159,7 @@ int main(int argc, char* argv[]) {
     auto getSession = [&](const QString& id) -> ProjectSession& {
         auto& stored = sessions[id];
         if (stored) return *stored;
-        stored = std::make_unique<ProjectSession>(projects, id, secrets);
+        stored = std::make_unique<ProjectSession>(projects, id, secrets, requirementSource);
         auto* session = stored.get();
         session->ctx.hotkey = &hotkey;
         QObject::connect(session->settings.get(), &SettingsStore::captureChanged, &app, [&, session]() { if (current == session) bindHotkeys(); });
@@ -168,10 +183,12 @@ int main(int argc, char* argv[]) {
     switchProject = [&](const QString& id) {
         if (!projects.find(id) || (current && current->ctx.projectId == id)) return;
         if (current) {
-            if (!current->run->state().caseId.isEmpty() || current->evidence->isRecording() || current->evidence->isCountingDown() || current->evidence->isBusy()) {
-                current->window->showToast(QObject::tr("Finaliza o detén la ejecución y las capturas antes de cambiar de proyecto"), theme::Amber);
+            QString reason;
+            if (!current->canLeave(&reason)) {
+                current->window->showToast(reason, theme::Amber);
                 return;
             }
+            // Si no se pudo guardar, el cambio se cancela: los avisos de los stores dicen qué falló.
             if (!current->save()) return;
         }
         auto& next = getSession(id);

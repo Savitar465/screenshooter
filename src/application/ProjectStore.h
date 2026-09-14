@@ -20,6 +20,13 @@ public:
     bool setActive(const QString& id);
     const QStringList& suites() const { return m_collection.suites; }
     bool registerSuites(const QStringList& names);
+    /// Vincula al proyecto el sistema de GESREQ cuyos requerimientos se trabajan en él (vacío lo
+    /// desvincula). Falla, con `failed`, si ese sistema ya es de otro proyecto: al iniciar las pruebas de un
+    /// requerimiento tiene que haber un único proyecto al que ir.
+    bool setRequirementSystem(const QString& id, const QString& system);
+    /// Proyecto vinculado a ese sistema de GESREQ (sin distinguir mayúsculas ni espacios repetidos), sin
+    /// contar `except`; vacío si ninguno.
+    QString projectForRequirementSystem(const QString& system, const QString& except = QString()) const;
 signals:
     void projectsChanged();
     void suitesChanged();

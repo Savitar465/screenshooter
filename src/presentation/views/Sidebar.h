@@ -16,15 +16,18 @@ class PlanStore;
 class RunController;
 class RunHistoryStore;
 class BugStore;
+class IssueStore;
 
 /// Rail de navegación al estilo de los IDE de JetBrains: una columna estrecha de iconos, uno por
 /// pantalla, con el nombre y el atajo en el tooltip. La información de estado (ejecución en curso,
 /// tasa de éxito y plan activo) vive en la StatusStrip del pie de la ventana; aquí sólo quedan las
-/// insignias que piden atención: el progreso de la ejecución y los bugs pendientes o abiertos.
+/// insignias que piden atención: el progreso de la ejecución, los bugs pendientes o abiertos y los issues
+/// con cambios de GESREQ sin revisar.
 class Sidebar : public QFrame {
     Q_OBJECT
 public:
-    Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunHistoryStore& history, BugStore& bugs, QWidget* parent = nullptr);
+    Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunHistoryStore& history, BugStore& bugs, IssueStore& issues,
+            QWidget* parent = nullptr);
     void setActive(Screen s);
 
 signals:
@@ -55,6 +58,7 @@ private:
     RunController& m_run;
     RunHistoryStore& m_history;
     BugStore& m_bugs;
+    IssueStore& m_issues;
     Screen m_active = Screen::Casos;
 
     QMap<Screen, NavItem> m_items;

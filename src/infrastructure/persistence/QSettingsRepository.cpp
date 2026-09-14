@@ -58,6 +58,27 @@ void QSettingsRepository::saveTracker(const TrackerSettings& t) {
         s.setValue(QStringLiteral("projects/%1/tracker/project").arg(m_projectId), t.project);
 }
 
+RequirementSourceSettings QSettingsRepository::loadRequirementSource() {
+    QSettings s;
+    s.beginGroup(QStringLiteral("gesreq"));
+    RequirementSourceSettings r;
+    r.url = s.value(QStringLiteral("url")).toString();
+    r.user = s.value(QStringLiteral("user")).toString();
+    r.connected = s.value(QStringLiteral("connected"), false).toBool();
+    r.password = s.value(QStringLiteral("password")).toString();   // sólo sin llavero: SettingsStore la migra en cuanto lo hay
+    return r;
+}
+
+void QSettingsRepository::saveRequirementSource(const RequirementSourceSettings& r) {
+    QSettings s;
+    s.beginGroup(QStringLiteral("gesreq"));
+    s.setValue(QStringLiteral("url"), r.url);
+    s.setValue(QStringLiteral("user"), r.user);
+    s.setValue(QStringLiteral("connected"), r.connected);
+    if (r.password.isEmpty()) s.remove(QStringLiteral("password"));
+    else s.setValue(QStringLiteral("password"), r.password);   // sólo llega aquí sin llavero disponible
+}
+
 CaptureSettings QSettingsRepository::loadCapture() {
     QSettings s;
     s.beginGroup(QStringLiteral("capture"));

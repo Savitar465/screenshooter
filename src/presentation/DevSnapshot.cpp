@@ -174,6 +174,44 @@ void run(MainWindow& window, AppContext& ctx) {
             ctx.plan->setActive(QStringLiteral("PL-0001"));
             window.navigate(Screen::Plan);
         }},
+        {"11-issues", [&] {
+            // Dos requerimientos importados de GESREQ; el primero ya con sus casos, su plan, notas y un
+            // cambio de estado sin revisar, para que la pantalla enseñe todos sus bloques.
+            const QString connection = QStringLiteral("http://gesreq.ejemplo:7401/greq");
+            ExternalRequirement a;
+            a.id = QStringLiteral("2025175");
+            a.system = QStringLiteral("PORTAL WEB-PORTAL INSTITUCIONAL");
+            a.systemCode = QStringLiteral("PORTAL WEB");
+            a.systemName = QStringLiteral("PORTAL INSTITUCIONAL");
+            a.summary = QStringLiteral("Checkout con cupones de descuento");
+            a.priority = QStringLiteral("ALTA");
+            a.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+            a.requestedOn = QDate::currentDate().addDays(-40);
+            a.assignedFrom = QDate::currentDate().addDays(-7);
+            a.assignedUntil = QDate::currentDate().addDays(7);
+            a.requestingUnit = QStringLiteral("GNTI");
+            a.requester = QStringLiteral("PÉREZ GÓMEZ ANA");
+            a.user = QStringLiteral("LÓPEZ RUIZ CARLOS");
+            a.detailUrl = connection + QStringLiteral("/publico.do?id=2025175&bandera=1");
+            ExternalRequirement b = a;
+            b.id = QStringLiteral("2026310");
+            b.summary = QStringLiteral("Recuperación de contraseña por correo");
+            b.priority = QStringLiteral("MEDIA");
+            b.detailUrl = connection + QStringLiteral("/publico.do?id=2026310&bandera=1");
+            const QString first = ctx.issues->importRequirements({a, b}, connection).created.value(0);
+            ctx.issues->linkCase(first, QStringLiteral("TC-104"));
+            ctx.issues->linkCase(first, QStringLiteral("TC-102"));
+            ctx.issues->linkPlan(first, QStringLiteral("PL-0001"));
+            ctx.issues->updateIssue(first, [](Issue& i) {
+                i.state = IssueState::Testing;
+                i.notes = QStringLiteral("Probar en calidad con el usuario de pruebas y el cupón QA10.");
+            });
+            ExternalRequirement observed = a;
+            observed.states = {QStringLiteral("CONTROL DE CALIDAD OBSERVADO")};
+            ctx.issues->importRequirements({observed}, connection);
+            ctx.issues->select(first);
+            window.navigate(Screen::Issues);
+        }},
         {"05-ajustes", [&] {
             ctx.settings->updateTracker([](TrackerSettings& s) { s.zephyr = false; });   // como estaba, para la captura de ajustes
             window.openSettings();

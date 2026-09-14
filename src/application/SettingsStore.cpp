@@ -12,9 +12,12 @@ QString SettingsStore::tokenKey(TrackerKind kind) {
     return QStringLiteral("tracker/%1/token").arg(toString(kind).toLower().remove(QLatin1Char(' ')));
 }
 
+QString SettingsStore::requirementPasswordKey() { return QStringLiteral("gesreq/password"); }
+
 void SettingsStore::load() {
     if (m_repo) {
         m_tracker = m_repo->loadTracker();
+        m_requirementSource = m_repo->loadRequirementSource();
         m_capture = m_repo->loadCapture();
         m_capture.clamp();
         m_app = m_repo->loadApp();
@@ -31,10 +34,21 @@ void SettingsStore::load() {
         } else if (const auto stored = m_secrets->read(tokenKey(m_tracker.kind))) {
             m_tracker.token = *stored;
         }
+        // La contraseña de GESREQ sigue el mismo camino.
+        if (!m_requirementSource.password.isEmpty()) {
+            if (m_secrets->write(requirementPasswordKey(), m_requirementSource.password) && m_repo) {
+                RequirementSourceSettings clean = m_requirementSource;
+                clean.password.clear();
+                m_repo->saveRequirementSource(clean);
+            }
+        } else if (const auto stored = m_secrets->read(requirementPasswordKey())) {
+            m_requirementSource.password = *stored;
+        }
     }
     if (m_capture.folder.isEmpty())
         m_capture.folder = QDir(QStandardPaths::writableLocation(QStandardPaths::HomeLocation)).filePath(QStringLiteral("QAflow/capturas"));
     emit trackerChanged();
+    emit requirementSourceChanged();
     emit captureChanged();
     emit appChanged();
     emit runShortcutsChanged();
@@ -61,6 +75,22 @@ void SettingsStore::updateTracker(const std::function<void(TrackerSettings&)>& m
         if (m_tracker.kind != before) m_tracker.project = m_repo->loadTracker().project;
     }
     emit trackerChanged();
+    emit saved();
+}
+
+void SettingsStore::updateRequirementSource(const std::function<void(RequirementSourceSettings&)>& mutate) {
+    const QString passwordBefore = m_requirementSource.password;
+    mutate(m_requirementSource);
+    if (m_secrets && m_requirementSource.password != passwordBefore) {
+        if (m_requirementSource.password.isEmpty()) m_secrets->remove(requirementPasswordKey());
+        else m_secrets->write(requirementPasswordKey(), m_requirementSource.password);
+    }
+    if (m_repo) {
+        RequirementSourceSettings persisted = m_requirementSource;
+        if (m_secrets) persisted.password.clear();   // la contraseña no viaja al fichero de ajustes
+        m_repo->saveRequirementSource(persisted);
+    }
+    emit requirementSourceChanged();
     emit saved();
 }
 

@@ -8,7 +8,7 @@
 /// activa: el mismo glifo se usa apagado (inactivo) y con el color de la pantalla (activo).
 namespace qaflow::icons {
 
-enum class Glyph { Cases, Plan, Run, History, Bug, Metrics };
+enum class Glyph { Cases, Plan, Run, History, Bug, Metrics, Issues };
 
 /// Glifo `g` dibujado en `color` sobre un lienzo cuadrado de `size` puntos, listo para HiDPI.
 QPixmap pixmap(Glyph g, const QString& color, int size = 22);

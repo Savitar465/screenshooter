@@ -21,6 +21,12 @@ public:
     void fetchMetadata(const TrackerSettings& s, std::function<void(const MetadataResult&)> done) override;
     bool canSearchAssignees(const TrackerSettings& s) const override;
     void searchAssignees(const TrackerSettings& s, const QString& query, std::function<void(const AssigneeSearch&)> done) override;
+    bool canListProjects(const TrackerSettings& s) const override;
+    void fetchProjects(const TrackerSettings& s, std::function<void(const TrackerProjectList&)> done) override;
+    bool canPublishIssues(const TrackerSettings& s) const override;
+    void publishIssue(const TrackerSettings& s, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) override;
+    void fetchIssue(const TrackerSettings& s, const QString& key, std::function<void(const TrackerIssueInfo&)> done) override;
+    void updateIssue(const TrackerSettings& s, const QString& key, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) override;
 
 private:
     IIssueTracker& client(TrackerKind kind);

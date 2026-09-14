@@ -361,6 +361,143 @@ private slots:
         QCOMPARE(server.requests.size(), 3);
     }
 
+    // El proyecto de Jira de cada proyecto de QAflow se elige de los que ve el usuario, ordenados por nombre.
+    void jiraListsTheProjectsTheUserCanSeeSortedByName() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/project", [](const HttpRequest&) {
+            return HttpResponse::json(200, "[{\"id\":\"10001\",\"key\":\"SHOP\",\"name\":\"Tienda online\"},"
+                                           "{\"id\":\"10000\",\"key\":\"ADM\",\"name\":\"Administraci\\u00f3n\"},"
+                                           "{\"id\":\"10002\",\"name\":\"Sin clave\"}]");
+        });
+        JiraClient client;
+        const TrackerSettings s = jiraServerSettings(server.baseUrl());
+        QVERIFY(client.canListProjects(s));
+        TrackerProjectList out;
+        bool done = false;
+        client.fetchProjects(s, [&](const TrackerProjectList& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.projects.size(), 2);   // sin el que no trae clave
+        QCOMPARE(out.projects[0].key, QStringLiteral("ADM"));
+        QCOMPARE(out.projects[0].name, QStringLiteral("Administración"));
+        QCOMPARE(out.projects[1].key, QStringLiteral("SHOP"));
+        QCOMPARE(server.requests[0].header("Authorization"), "Basic " + QByteArray("aperez:s3creta").toBase64());
+    }
+
+    void jiraProjectListExplainsRejectedCredentials() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/project", [](const HttpRequest&) { return HttpResponse::json(401, "{\"errorMessages\":[\"unauthorized\"]}"); });
+        JiraClient client;
+        TrackerProjectList out;
+        bool done = false;
+        client.fetchProjects(jiraServerSettings(server.baseUrl()), [&](const TrackerProjectList& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(out.projects.isEmpty());
+        QVERIFY2(out.error.contains(QStringLiteral("contraseña")), qPrintable(out.error));
+    }
+
+    // Sólo Jira ofrece la lista: en los demás gestores el proyecto es un ajuste general que se escribe.
+    void onlyJiraListsItsProjectsThroughTheRouter() {
+        TrackerRouter router;
+        const TrackerSettings github = githubSettings(QStringLiteral("https://api.github.com"));
+        QVERIFY(router.canListProjects(jiraSettings(QStringLiteral("https://acme.atlassian.net"))));
+        QVERIFY(!router.canListProjects(github));
+        TrackerProjectList out;
+        bool done = false;
+        router.fetchProjects(github, [&](const TrackerProjectList& r) { out = r; done = true; });
+        QVERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(!out.error.isEmpty());
+    }
+
+    // El issue de QAflow se publica en Jira con su tipo y sus etiquetas (sin espacios, que Jira no admite).
+    void jiraPublishesTheIssueWithItsTypeAndLabels() {
+        FakeHttpServer server;
+        server.route("POST", "/rest/api/2/issue", [](const HttpRequest&) { return HttpResponse::json(201, "{\"key\":\"SHOP-31\"}"); });
+        JiraClient client;
+        const TrackerSettings s = jiraServerSettings(server.baseUrl());
+        QVERIFY(client.canPublishIssues(s));
+        TrackerIssueDraft draft;
+        draft.summary = QStringLiteral("Desarrollo complementario del laboratorio");
+        draft.description = QStringLiteral("Requerimiento GESREQ 2025175");
+        draft.issueType = QStringLiteral("Tarea");
+        draft.labels = {QStringLiteral("qaflow"), QStringLiteral("IS-0001"), QStringLiteral("SUMA TRANSITO")};
+        IssueResult out;
+        bool done = false;
+        client.publishIssue(s, draft, [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.key, QStringLiteral("SHOP-31"));
+        QCOMPARE(out.url, server.baseUrl() + QStringLiteral("/browse/SHOP-31"));
+        const QJsonObject fields = bodyOf(server.requests[0])[QStringLiteral("fields")].toObject();
+        QCOMPARE(fields[QStringLiteral("project")].toObject()[QStringLiteral("key")].toString(), QStringLiteral("SHOP"));
+        QCOMPARE(fields[QStringLiteral("issuetype")].toObject()[QStringLiteral("name")].toString(), QStringLiteral("Tarea"));
+        QCOMPARE(fields[QStringLiteral("summary")].toString(), draft.summary);
+        QCOMPARE(fields[QStringLiteral("description")].toString(), draft.description);
+        QCOMPARE(fields[QStringLiteral("labels")].toArray().last().toString(), QStringLiteral("SUMA-TRANSITO"));
+    }
+
+    void jiraReadsAnExistingIssueToLinkItAndSaysWhenItIsNotThere() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/issue/QA-9", [](const HttpRequest&) {
+            return HttpResponse::json(200, "{\"key\":\"QA-9\",\"fields\":{\"summary\":\"Laboratorio\",\"issuetype\":{\"name\":\"Historia\"},"
+                                           "\"status\":{\"name\":\"In Progress\",\"statusCategory\":{\"key\":\"indeterminate\"}}}}");
+        });
+        server.route("GET", "/rest/api/2/issue/QA-404", [](const HttpRequest&) { return HttpResponse::json(404, "{\"errorMessages\":[\"Issue does not exist\"]}"); });
+        JiraClient client;
+        const TrackerSettings s = jiraServerSettings(server.baseUrl());
+        TrackerIssueInfo out;
+        bool done = false;
+        client.fetchIssue(s, QStringLiteral("QA-9"), [&](const TrackerIssueInfo& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.title, QStringLiteral("Laboratorio"));
+        QCOMPARE(out.issueType, QStringLiteral("Historia"));
+        QCOMPARE(out.status, QStringLiteral("In Progress"));
+        QVERIFY(!out.resolved);
+        QCOMPARE(out.url, server.baseUrl() + QStringLiteral("/browse/QA-9"));
+
+        done = false;
+        client.fetchIssue(s, QStringLiteral("QA-404"), [&](const TrackerIssueInfo& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY2(out.error.contains(QStringLiteral("QA-404")), qPrintable(out.error));
+    }
+
+    // Al actualizar sólo viaja el texto que salió de QAflow: el tipo y lo demás se queda como esté en Jira.
+    void jiraUpdateRewritesOnlyTitleAndDescription() {
+        FakeHttpServer server;
+        server.route("PUT", "/rest/api/2/issue/SHOP-31", [](const HttpRequest&) { return HttpResponse{204, QByteArray(), "application/json", {}}; });
+        JiraClient client;
+        TrackerIssueDraft draft;
+        draft.summary = QStringLiteral("Pruebas del laboratorio");
+        draft.description = QStringLiteral("Actualizado desde QAflow");
+        draft.issueType = QStringLiteral("Tarea");
+        IssueResult out;
+        bool done = false;
+        client.updateIssue(jiraServerSettings(server.baseUrl()), QStringLiteral("SHOP-31"), draft, [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.key, QStringLiteral("SHOP-31"));
+        const QJsonObject fields = bodyOf(server.requests[0])[QStringLiteral("fields")].toObject();
+        QCOMPARE(fields.keys(), (QStringList{QStringLiteral("description"), QStringLiteral("summary")}));
+        QCOMPARE(fields[QStringLiteral("summary")].toString(), draft.summary);
+    }
+
+    void onlyJiraPublishesTheIssuesOfQAflowThroughTheRouter() {
+        TrackerRouter router;
+        QVERIFY(router.canPublishIssues(jiraSettings(QStringLiteral("https://acme.atlassian.net"))));
+        const TrackerSettings github = githubSettings(QStringLiteral("https://api.github.com"));
+        QVERIFY(!router.canPublishIssues(github));
+        IssueResult out;
+        bool done = false;
+        router.publishIssue(github, TrackerIssueDraft{}, [&](const IssueResult& r) { out = r; done = true; });
+        QVERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(!out.error.isEmpty());
+    }
+
     // ---- GitHub -------------------------------------------------------------------------------
     void githubCreateIssueUsesLabelsAndListsAttachmentsByName() {
         QTemporaryDir dir;

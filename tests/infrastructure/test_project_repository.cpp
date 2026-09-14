@@ -60,6 +60,37 @@ private slots:
         QCOMPARE(legacy.loadCases()->size(), 1);
         QCOMPARE(legacy.loadCases()->first().title, c.title);
     }
+    // El sistema de GESREQ es del proyecto, se guarda en el catálogo y no puede repetirse entre proyectos:
+    // al iniciar las pruebas de un requerimiento tiene que haber un único proyecto al que ir.
+    void aRequirementSystemBelongsToASingleProject() {
+        QTemporaryDir dir;
+        auto repo = std::make_shared<JsonProjectRepository>(dir.path());
+        ProjectStore projects(repo);
+        QVERIFY(projects.load());
+        const QString main = projects.activeId();
+        const QString transit = projects.create(QStringLiteral("Tránsitos"));
+        QVERIFY(projects.find(transit)->requirementSystem.isEmpty());
+
+        QVERIFY(projects.setRequirementSystem(transit, QStringLiteral("  SUMA   TRANSITO ")));
+        QCOMPARE(projects.find(transit)->requirementSystem, QStringLiteral("SUMA TRANSITO"));
+        QCOMPARE(projects.projectForRequirementSystem(QStringLiteral("suma transito")), transit);
+        QVERIFY(projects.projectForRequirementSystem(QStringLiteral("SUMA TRANSITO"), transit).isEmpty());   // salvo él mismo
+        QVERIFY(projects.projectForRequirementSystem(QString()).isEmpty());
+
+        QSignalSpy failures(&projects, &ProjectStore::failed);
+        QVERIFY(!projects.setRequirementSystem(main, QStringLiteral("Suma Transito")));
+        QCOMPARE(failures.count(), 1);
+        QVERIFY2(failures.first().first().toString().contains(QStringLiteral("Tránsitos")), qPrintable(failures.first().first().toString()));
+        QVERIFY(projects.find(main)->requirementSystem.isEmpty());
+
+        ProjectStore restored(repo);
+        QVERIFY(restored.load());
+        QCOMPARE(restored.find(transit)->requirementSystem, QStringLiteral("SUMA TRANSITO"));
+        QVERIFY(restored.find(main)->requirementSystem.isEmpty());
+        QVERIFY(restored.setRequirementSystem(transit, QString()));
+        QVERIFY(restored.setRequirementSystem(main, QStringLiteral("SUMA TRANSITO")));   // liberado, ya puede usarlo otro
+    }
+
     void invalidCatalogIsNotOverwritten() {
         QTemporaryDir dir;
         QFile file(QDir(dir.path()).filePath(QStringLiteral("projects.json")));

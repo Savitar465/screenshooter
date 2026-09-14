@@ -68,6 +68,11 @@ public:
     /// ¿Las personas se buscan en el servidor del gestor o se filtran las ya cargadas?
     bool searchesAssigneesOnServer() const;
 
+    /// ¿Se puede elegir el proyecto del gestor configurado de una lista? Sólo con Jira.
+    bool canListProjects() const;
+    /// Proyectos que ve el usuario en el gestor configurado, para elegir el del proyecto de QAflow.
+    void fetchProjects(std::function<void(const TrackerProjectList&)> done);
+
 signals:
     void metadataChanged();
 

@@ -1,0 +1,202 @@
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <title>ANB    -  Registro Control Calidad</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="lib/bootstrap/css/bootstrap.css">
+       <script src="lib/jquery/jquery-2.1.3.min.js"></script>
+        <script type="text/javascript">
+            $(document).ready(function() {
+                /*
+                 */
+            });
+        </script>
+    </head>
+    <body>
+        <div id="dvLoading" style="display:none;" > <div id="loading-ajax"></div></div>
+        <div id="container">
+<header>
+    <div class="logo" id="logo"><h1>GESREQ</h1></div>
+</header>
+<nav id="sidebar">
+    <div class="navigation">
+        <div class="user-data">
+            <div class="user-icon pull-left">
+                <i class="fa fa-user"></i>
+            </div>
+            <h4 class="user-details pull-left">
+                Tester Uno, Ana<br>
+                <sub id="administracion">
+                </sub>
+            </h4>
+        </div>
+        <div class="menu-title">
+            Menú principal
+        </div>
+        <ul class="list-unstyled">
+                        <li class="has-submenu">
+                            <a href="#">
+                                <i class="fa fa-building-o"></i>
+                                <span class="nav-label">Gestión Requerimiento</span>
+                            </a>
+                            <ul class="list-unstyled">
+                            <li class="">
+                                <a href="calidadreg.do">Registro Control Calidad</a>
+                            </li>
+                            </ul>
+                        </li>
+            <li>
+                <a href="logout.do">
+                    <i class="fa fa-power-off"></i>
+                    <span class="nav-label">Cerrar sesión</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+</nav>
+            <div class="container-fluid" id="container-main" style="overflow: hidden;">
+                <div id="anb-messages" class="anb-messages"></div>
+<div class="panel panel-primary">
+    <div class="panel-heading">
+        <h3 class="panel-title">
+            <i class="fa fa-table"></i> <strong>Registro Control Calidad - Listado de Requerimientos</strong>
+        </h3>
+    </div>
+    <div class="panel-body">
+        <table class="table table-striped table-hover" id="main-table" width="100%">
+            <thead>
+                <tr>
+                    <th>Requerimiento</th>
+                    <th class="oculto">Orden</th>
+                    <th>Sistema</th>
+                    <th>Descripción Corta</th>
+                    <th>Fecha Solicitud</th>
+                    <th>Fecha Asignación Desde</th>
+                    <th>Fecha Asignación Hasta</th>
+                    <th>Unidad Solicitante</th>
+                    <th>Funcionario Solicitante</th>
+                    <th>Usuario</th>
+                    <th>Prioridad</th>
+                    <th>Estado</th>
+                    <!--GREQ2022405-->
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                    <tr>
+                        <td>
+                                    <a onclick="Anb.modal.show('publico.do?id=2025101&bandera=1','lg')"; href="#" class="btn btn-default">2025101</a>
+                        </td>
+                        <td class="oculto">1</td>
+                        <td>PORTAL WEB-PORTAL INSTITUCIONAL</td>
+                        <td>Nuevo formulario de contacto con validación de correo</td>
+                        <td>15/05/2025</td>
+                            <td>11/08/2025</td>
+                            <td>27/01/2026</td>
+                        <td>GNTI</td>
+                        <td>PÉREZ GÓMEZ ANA</td>
+                        <td>LÓPEZ RUIZ CARLOS</td>
+                        <td>ALTA</td>
+                        <td>
+                            <span class="label label-danger">
+                            CONTROL DE CALIDAD OBSERVADO
+                            </span><br/>
+                                    <span class="label label-default">
+                                     CONTROL FUNCIONAL
+                                    </span><br/>
+                        </td>
+                        <!--GREQ2022405-->
+                        <!--GREQ2022405-->
+                        <td style="text-align:center;">
+                                         <a href="calidadregGestionRequerimiento.do?id=2025101&accion=calidadreg&estado=CONTROL DE CALIDAD OBSERVADO" class="btn btn-default">
+                                             Registrar
+                                        </a>
+                                        <!--GREQ2022405-->
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                                    <a onclick="Anb.modal.show('publico.do?id=2025102&bandera=1','lg')"; href="#" class="btn btn-default">2025102</a>
+                        </td>
+                        <td class="oculto">1</td>
+                        <td>INVENTARIO- SISTEMA DE INVENTARIO - MODULO DE INGRESO</td>
+                        <td>Ajustes de impresi&oacute;n &amp; reportes</td>
+                        <td>09/10/2025</td>
+                            <td>29/10/2025</td>
+                            <td>31/10/2025</td>
+                        <td>GNRF</td>
+                        <td>MARTÍNEZ SOTO LUIS</td>
+                        <td>(QAUSR0171)</td>
+                        <td>MEDIA</td>
+                        <td>
+                            <span class="label label-info">
+                            CONTROL CALIDAD ASIGNADO
+                            </span><br/>
+                        </td>
+                        <!--GREQ2022405-->
+                        <!--GREQ2022405-->
+                        <td style="text-align:center;">
+                                         <a href="calidadregGestionRequerimiento.do?id=2025102&accion=calidadreg&estado=CONTROL CALIDAD ASIGNADO" class="btn btn-default">
+                                             Registrar
+                                        </a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                                    <a onclick="Anb.modal.show('publico.do?id=2026103&bandera=1','lg')"; href="#" class="btn btn-default">2026103</a>
+                        </td>
+                        <td class="oculto">1</td>
+                        <td>FACTURACION-FACTURACION ELECTRONICA</td>
+                        <td>Reporte mensual de facturas anuladas</td>
+                        <td>01/04/2026</td>
+                            <td>02/04/2026</td>
+                            <td>06/04/2026</td>
+                        <td>GNTI</td>
+                        <td>QUISPE MAMANI ROSA</td>
+                        <td>QUISPE ROSA</td>
+                        <td>BAJA</td>
+                        <td>
+                            <span class="label label-warning">
+                            CONTROL DE CALIDAD CORREGIDO
+                            </span><br/>
+                        </td>
+                        <!--GREQ2022405-->
+                        <!--GREQ2022405-->
+                        <td style="text-align:center;">
+                                         <a href="calidadregGestionRequerimiento.do?id=2026103&accion=calidadreg&estado=CONTROL DE CALIDAD CORREGIDO" class="btn btn-default">
+                                             Registrar
+                                        </a>
+                        </td>
+                    </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+            </div>
+        </div>
+        <footer class="footer">
+            <span class="text-muted center">&copy; 2017 - 2026. Versión 5.3.4</span>
+        </footer>
+        <div id="main-modal" class="modal fade">
+            <div class="modal-dialog">
+                <div class="modal-content"></div>
+            </div>
+        </div>
+        <script type="text/js-tmpl" id="anb-message-tmpl">
+            <div class="anb-message anb-message-{type}">
+                <span class="close" title="Cerrar">x</span>
+                <div class="anb-message-header"><i class="fa {icon}"></i> {title}</div>
+                <div class="anb-message-body">{message}</div>
+            </div>
+        </script>
+    </body>
+</html>

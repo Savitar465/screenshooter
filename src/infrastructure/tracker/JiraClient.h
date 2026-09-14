@@ -24,6 +24,14 @@ public:
     /// Jira busca personas en el servidor: el formulario no se limita a los primeros del proyecto.
     bool canSearchAssignees(const TrackerSettings& s) const override { Q_UNUSED(s); return true; }
     void searchAssignees(const TrackerSettings& s, const QString& query, std::function<void(const AssigneeSearch&)> done) override;
+    /// Jira lista los proyectos que ve el usuario: el de cada proyecto de QAflow se elige de ahí.
+    bool canListProjects(const TrackerSettings& s) const override { Q_UNUSED(s); return true; }
+    void fetchProjects(const TrackerSettings& s, std::function<void(const TrackerProjectList&)> done) override;
+    /// Jira es, por ahora, el único gestor donde se publican los issues de QAflow.
+    bool canPublishIssues(const TrackerSettings& s) const override { Q_UNUSED(s); return true; }
+    void publishIssue(const TrackerSettings& s, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) override;
+    void fetchIssue(const TrackerSettings& s, const QString& key, std::function<void(const TrackerIssueInfo&)> done) override;
+    void updateIssue(const TrackerSettings& s, const QString& key, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) override;
 
 private:
     QNetworkRequest request(const TrackerSettings& s, const QString& path) const;

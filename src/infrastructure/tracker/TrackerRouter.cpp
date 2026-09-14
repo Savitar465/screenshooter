@@ -30,5 +30,11 @@ void TrackerRouter::fetchStatus(const TrackerSettings& s, const QString& key, st
 void TrackerRouter::fetchMetadata(const TrackerSettings& s, std::function<void(const MetadataResult&)> done) { client(s.kind).fetchMetadata(s, std::move(done)); }
 void TrackerRouter::searchAssignees(const TrackerSettings& s, const QString& query, std::function<void(const AssigneeSearch&)> done) { client(s.kind).searchAssignees(s, query, std::move(done)); }
 bool TrackerRouter::canSearchAssignees(const TrackerSettings& s) const { return client(s.kind).canSearchAssignees(s); }
+bool TrackerRouter::canListProjects(const TrackerSettings& s) const { return client(s.kind).canListProjects(s); }
+void TrackerRouter::fetchProjects(const TrackerSettings& s, std::function<void(const TrackerProjectList&)> done) { client(s.kind).fetchProjects(s, std::move(done)); }
+bool TrackerRouter::canPublishIssues(const TrackerSettings& s) const { return client(s.kind).canPublishIssues(s); }
+void TrackerRouter::publishIssue(const TrackerSettings& s, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) { client(s.kind).publishIssue(s, draft, std::move(done)); }
+void TrackerRouter::fetchIssue(const TrackerSettings& s, const QString& key, std::function<void(const TrackerIssueInfo&)> done) { client(s.kind).fetchIssue(s, key, std::move(done)); }
+void TrackerRouter::updateIssue(const TrackerSettings& s, const QString& key, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) { client(s.kind).updateIssue(s, key, draft, std::move(done)); }
 
 } // namespace qaflow

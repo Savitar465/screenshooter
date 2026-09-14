@@ -73,6 +73,81 @@ public:
         if (mode == Mode::NetworkDown) done(AssigneeSearch{false, {}, QStringLiteral("Host not found")});
         else done(AssigneeSearch{true, assigneesToReturn, {}});
     }
+
+    bool listsProjects = true;              // como Jira, que lista los proyectos que ve el usuario
+    QList<TrackerProject> projectsToReturn;
+    int projectListCalls = 0;
+
+    bool publishesIssues = true;                    // como Jira
+    QList<TrackerIssueDraft> publishedIssues;       // lo que se mandó publicar, en orden
+    QList<TrackerIssueDraft> updatedIssues;
+    QStringList updatedKeys;
+    TrackerIssueInfo issueToReturn;                 // lo que responde `fetchIssue`
+    bool issueExists = true;
+
+    bool canListProjects(const TrackerSettings&) const override { return listsProjects; }
+
+    bool canPublishIssues(const TrackerSettings&) const override { return publishesIssues; }
+
+    void publishIssue(const TrackerSettings& s, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) override {
+        settingsSeen << s;
+        publishedIssues << draft;
+        IssueResult r;
+        switch (mode) {
+            case Mode::Succeed:
+                r.ok = true;
+                r.key = QStringLiteral("%1-%2").arg(s.project).arg(nextNumber++);
+                r.url = s.issueUrl(r.key);
+                break;
+            case Mode::RejectContent:
+                r.error = QStringLiteral("HTTP 400 · issuetype: valid issue type is required");
+                break;
+            case Mode::NetworkDown:
+                r.error = QStringLiteral("Host not found");
+                r.retryable = true;
+                break;
+        }
+        done(r);
+    }
+
+    void fetchIssue(const TrackerSettings& s, const QString& key, std::function<void(const TrackerIssueInfo&)> done) override {
+        if (mode == Mode::NetworkDown) {
+            TrackerIssueInfo f;
+            f.error = QStringLiteral("Host not found");
+            f.retryable = true;
+            done(f);
+            return;
+        }
+        if (!issueExists) {
+            TrackerIssueInfo f;
+            f.error = QStringLiteral("%1 no existe").arg(key);
+            done(f);
+            return;
+        }
+        TrackerIssueInfo info = issueToReturn;
+        info.ok = true;
+        if (info.key.isEmpty()) info.key = key;
+        if (info.url.isEmpty()) info.url = s.issueUrl(info.key);
+        done(info);
+    }
+
+    void updateIssue(const TrackerSettings& s, const QString& key, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) override {
+        updatedKeys << key;
+        updatedIssues << draft;
+        IssueResult r;
+        if (mode == Mode::NetworkDown) { r.error = QStringLiteral("Host not found"); r.retryable = true; done(r); return; }
+        if (mode == Mode::RejectContent) { r.error = QStringLiteral("HTTP 400 · summary is required"); done(r); return; }
+        r.ok = true;
+        r.key = key;
+        r.url = s.issueUrl(key);
+        done(r);
+    }
+
+    void fetchProjects(const TrackerSettings&, std::function<void(const TrackerProjectList&)> done) override {
+        ++projectListCalls;
+        if (mode == Mode::NetworkDown) done(TrackerProjectList{false, {}, QStringLiteral("Host not found")});
+        else done(TrackerProjectList{true, projectsToReturn, {}});
+    }
 };
 
 } // namespace qaflow::testing

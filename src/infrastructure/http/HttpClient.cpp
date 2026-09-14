@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMimeDatabase>
+#include <QNetworkCookieJar>
 #include <QNetworkReply>
 
 namespace qaflow {
@@ -152,6 +153,31 @@ QHttpMultiPart* HttpClient::multipartFile(const QString& path, const QByteArray&
     file->setParent(multi);
     multi->append(part);
     return multi;
+}
+
+QNetworkRequest HttpClient::pageRequest(const QString& url) {
+    QNetworkRequest req{QUrl(url)};
+    req.setRawHeader("Accept", "text/html,application/xhtml+xml,*/*;q=0.8");
+    req.setTransferTimeout(kTimeoutMs);
+    return req;
+}
+
+void HttpClient::postForm(const QNetworkRequest& req, const QList<QPair<QString, QString>>& fields, Handler done) {
+    // Cada nombre y valor, codificado entero: QUrlQuery deja el '+' tal cual y el servidor lo leería
+    // como un espacio (una contraseña con '+' no entraría nunca).
+    QByteArray body;
+    for (const auto& [name, value] : fields) {
+        if (!body.isEmpty()) body += '&';
+        body += QUrl::toPercentEncoding(name) + '=' + QUrl::toPercentEncoding(value);
+    }
+    QNetworkRequest form = req;
+    form.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/x-www-form-urlencoded"));
+    finish(m_nam.post(form, body), std::move(done));
+}
+
+void HttpClient::clearCookies() {
+    // El gestor borra el almacén anterior, que es suyo.
+    m_nam.setCookieJar(new QNetworkCookieJar(&m_nam));
 }
 
 QStringList HttpClient::existingFiles(const QStringList& paths) {

@@ -12,6 +12,9 @@
 #include "presentation/views/HistoryView.h"
 #include "presentation/views/MainWindow.h"
 #include "presentation/views/PlanView.h"
+#include "presentation/views/JiraPublishDialog.h"
+#include "presentation/views/RequirementImportDialog.h"
+#include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/Thumbnail.h"
@@ -25,6 +28,7 @@
 #include <QScrollBar>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QPushButton>
 #include <QProgressBar>
 #include <QUrl>
@@ -62,6 +66,9 @@ struct WindowFixture {
         ctx.settings = &app.settings; ctx.bugs = &app.bugs; ctx.bugLedger = &app.bugLedger;
         ctx.evidence = &evidence; ctx.transfer = &transfer; ctx.dataDir = captures.path();
         ctx.publish = &app.publish;
+        ctx.requirements = &app.requirements;
+        ctx.issues = &app.issues;
+        ctx.issuePublish = &app.issuePublish;
         window = std::make_unique<MainWindow>(ctx);
         window->show();
         QApplication::setActiveWindow(window.get());
@@ -713,6 +720,354 @@ private slots:
         QTest::qWait(50);
         QVERIFY(!f.app.history.findPlan(finished));
         QVERIFY(f.app.history.findPlan(running));
+    }
+
+    // La conexión con GESREQ es general y su contraseña va al llavero; el sistema de GESREQ es del proyecto,
+    // se elige en su configuración y no puede ser el de otro proyecto.
+    void gesreqConnectionIsGeneralAndItsSystemBelongsToTheProject() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        const QString segran = projects.create(QStringLiteral("Riesgos"));
+        QVERIFY(projects.setRequirementSystem(segran, QStringLiteral("SEGRAN")));
+        f.ctx.projects = &projects;
+        f.ctx.projectId = projects.activeId();
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        f.window->openSettings();
+        QWidget* dialog = f.window->settingsWindow();
+        QVERIFY(dialog);
+        auto* project = dialog->findChild<QWidget*>(QStringLiteral("projectSettingsSection"));
+        auto* gesreq = dialog->findChild<QWidget*>(QStringLiteral("gesreqSettings"));
+        auto* url = dialog->findChild<QLineEdit*>(QStringLiteral("settingsGesreqUrl"));
+        auto* user = dialog->findChild<QLineEdit*>(QStringLiteral("settingsGesreqUser"));
+        auto* password = dialog->findChild<QLineEdit*>(QStringLiteral("settingsGesreqPassword"));
+        auto* system = dialog->findChild<QLineEdit*>(QStringLiteral("settingsGesreqSystem"));
+        auto* note = dialog->findChild<QLabel*>(QStringLiteral("settingsGesreqSystemNote"));
+        auto* badge = dialog->findChild<QPushButton*>(QStringLiteral("settingsGesreqBadge"));
+        QVERIFY(project && gesreq && url && user && password && system && note && badge);
+        QVERIFY(gesreq->isAncestorOf(url) && gesreq->isAncestorOf(password));
+        QVERIFY(project->isAncestorOf(system));
+        QVERIFY(!gesreq->isAncestorOf(system));
+
+        QTest::keyClicks(url, "http://gesreq.test:7401/greq");
+        QTest::keyClicks(user, "QAUSR0101");
+        QTest::keyClicks(password, "s3creta");
+        QCOMPARE(f.app.settings.requirementSource().url, QStringLiteral("http://gesreq.test:7401/greq"));
+        QCOMPARE(f.app.settings.requirementSource().user, QStringLiteral("QAUSR0101"));
+        QCOMPARE(f.app.secrets->values.value(QStringLiteral("gesreq/password")), QStringLiteral("s3creta"));
+        QVERIFY(f.app.settingsRepo->requirementSource.password.isEmpty());
+
+        // Probar la conexión la marca y trae los sistemas de la bandeja, que el aviso enseña.
+        auto requirementOf = [](const QString& id, const QString& code) { ExternalRequirement r; r.id = id; r.systemCode = code; return r; };
+        f.app.requirementSource->inbox = {requirementOf(QStringLiteral("2026310"), QStringLiteral("SUMA2SALIDA")),
+                                          requirementOf(QStringLiteral("2025723"), QStringLiteral("SUMAOCE"))};
+        badge->click();
+        QVERIFY(f.app.settings.requirementSource().connected);
+        QCOMPARE(f.app.requirementSource->tested.last().password, QStringLiteral("s3creta"));
+        QVERIFY2(note->text().contains(QStringLiteral("SUMAOCE")), qPrintable(note->text()));
+
+        // Un sistema que ya es de otro proyecto no se guarda, y el aviso dice de cuál.
+        system->setFocus();
+        QTest::keyClicks(system, "segran");
+        QTest::keyClick(system, Qt::Key_Return);
+        QVERIFY(projects.find(projects.activeId())->requirementSystem.isEmpty());
+        QVERIFY2(note->text().contains(QStringLiteral("Riesgos")), qPrintable(note->text()));
+
+        system->clear();
+        QTest::keyClicks(system, "SUMA TRANSITO");
+        QTest::keyClick(system, Qt::Key_Return);
+        QCOMPARE(projects.find(projects.activeId())->requirementSystem, QStringLiteral("SUMA TRANSITO"));
+        QCOMPARE(projects.projectForRequirementSystem(QStringLiteral("suma transito")), projects.activeId());
+        QVERIFY(projects.find(segran)->requirementSystem == QStringLiteral("SEGRAN"));
+
+        // Con otro gestor desaparece el código Jira, pero la configuración del proyecto sigue por GESREQ.
+        // (Intro en el campo ha cerrado el diálogo, así que se mira si se verían con él abierto.)
+        f.app.settings.updateTracker([](TrackerSettings& t) { t.kind = TrackerKind::GitHub; });
+        QVERIFY(!project->isHidden());
+        QVERIFY(!dialog->findChild<QLineEdit*>(QStringLiteral("settingsJiraProject"))->isVisibleTo(dialog));
+        QVERIFY(system->isVisibleTo(dialog));
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    // El código Jira y el sistema de GESREQ del proyecto se eligen de lo que hay en cada sistema, buscando.
+    void projectCodesArePickedFromWhatEachSystemHas() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        const QString risks = projects.create(QStringLiteral("Riesgos"));
+        QVERIFY(projects.setRequirementSystem(risks, QStringLiteral("SEGRAN")));
+        f.ctx.projects = &projects;
+        f.ctx.projectId = projects.activeId();
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        f.app.tracker->projectsToReturn = {TrackerProject{QStringLiteral("ADM"), QStringLiteral("Administración")},
+                                           TrackerProject{QStringLiteral("SHOP"), QStringLiteral("Tienda online")}};
+        f.app.requirementSource->catalog = {RequirementSystem{QStringLiteral("SEGRAN"), QStringLiteral("GESTIÓN DE RIESGOS")},
+                                            RequirementSystem{QStringLiteral("SUMA TRANSITO"), QStringLiteral("TRANSITOS")},
+                                            RequirementSystem{QStringLiteral("SUMAOCE"), QStringLiteral("OPERADORES DE COMERCIO EXTERIOR")}};
+        ExternalRequirement assigned;
+        assigned.id = QStringLiteral("2025723");
+        assigned.systemCode = QStringLiteral("SUMAOCE");
+        f.app.requirementSource->inbox = {assigned};
+        f.app.requirements.testConnection([](const ConnectionResult&) {});   // deja leídos los sistemas de la bandeja
+
+        f.window->openSettings();
+        QWidget* dialog = f.window->settingsWindow();
+        QVERIFY(dialog);
+        auto* jiraPick = dialog->findChild<QPushButton*>(QStringLiteral("settingsJiraProjectPick"));
+        auto* systemPick = dialog->findChild<QPushButton*>(QStringLiteral("settingsGesreqSystemPick"));
+        QVERIFY(jiraPick && systemPick);
+        QVERIFY(jiraPick->isEnabled());
+
+        // Jira: se consulta al abrir, se busca por nombre y lo elegido pasa al proyecto.
+        jiraPick->click();
+        auto* jiraChoice = dialog->findChild<ChoiceDialog*>();
+        QVERIFY(jiraChoice);
+        QCOMPARE(f.app.tracker->projectListCalls, 1);
+        QTest::keyClicks(jiraChoice->findChild<QLineEdit*>(QStringLiteral("choiceSearch")), "tienda");
+        QCOMPARE(jiraChoice->findChild<QListWidget*>(QStringLiteral("choiceList"))->count(), 1);
+        jiraChoice->findChild<QPushButton*>(QStringLiteral("choiceAccept"))->click();
+        QCOMPARE(f.app.settings.tracker().project, QStringLiteral("SHOP"));
+        QCOMPARE(dialog->findChild<QLineEdit*>(QStringLiteral("settingsJiraProject"))->text(), QStringLiteral("SHOP"));
+        QTRY_VERIFY(!dialog->findChild<ChoiceDialog*>());   // se cierra y se libera
+
+        // GESREQ: el catálogo, con los sistemas de la bandeja primero y el que ya es de otro proyecto señalado.
+        systemPick->click();
+        auto* systemChoice = dialog->findChild<ChoiceDialog*>();
+        QVERIFY(systemChoice);
+        auto* list = systemChoice->findChild<QListWidget*>(QStringLiteral("choiceList"));
+        QCOMPARE(list->count(), 3);
+        QCOMPARE(list->item(0)->data(Qt::UserRole).toString(), QStringLiteral("SUMAOCE"));
+        QVERIFY2(list->item(0)->text().contains(QStringLiteral("en tu bandeja")), qPrintable(list->item(0)->text()));
+        QString segran;
+        for (int i = 0; i < list->count(); ++i)
+            if (list->item(i)->data(Qt::UserRole).toString() == QStringLiteral("SEGRAN")) segran = list->item(i)->text();
+        QVERIFY2(segran.contains(QStringLiteral("Riesgos")), qPrintable(segran));
+        QTest::keyClicks(systemChoice->findChild<QLineEdit*>(QStringLiteral("choiceSearch")), "transitos");
+        systemChoice->findChild<QPushButton*>(QStringLiteral("choiceAccept"))->click();
+        QCOMPARE(projects.find(projects.activeId())->requirementSystem, QStringLiteral("SUMA TRANSITO"));
+        QCOMPARE(dialog->findChild<QLineEdit*>(QStringLiteral("settingsGesreqSystem"))->text(), QStringLiteral("SUMA TRANSITO"));
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    // Issues: se importan de la bandeja los requerimientos del sistema del proyecto, se les vinculan casos y
+    // planes, enseñan los resultados de sus pruebas y avisan de lo que cambia en GESREQ sin pisar lo escrito.
+    void issuesOrganizeTheTestsOfTheRequirementsOfTheProject() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        QVERIFY(projects.setRequirementSystem(projects.activeId(), QStringLiteral("SUMA TRANSITO")));
+        f.ctx.projects = &projects;
+        f.ctx.projectId = projects.activeId();
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) { r.url = QStringLiteral("http://gesreq.test:7401/greq"); });
+        auto requirementOf = [](const QString& id, const QString& code, const QString& summary) {
+            ExternalRequirement r;
+            r.id = id;
+            r.systemCode = code;
+            r.system = code + QStringLiteral("-SISTEMA");
+            r.summary = summary;
+            r.priority = QStringLiteral("ALTA");
+            r.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+            return r;
+        };
+        ExternalRequirement mine = requirementOf(QStringLiteral("2025175"), QStringLiteral("SUMA TRANSITO"), QStringLiteral("Desarrollo complementario del laboratorio"));
+        f.app.requirementSource->inbox = {mine, requirementOf(QStringLiteral("2025719"), QStringLiteral("SEGRAN"), QStringLiteral("Módulo de riesgos"))};
+
+        QVERIFY(f.nav(Screen::Issues));
+        QVERIFY(f.nav(Screen::Issues)->toolTip().contains(QStringLiteral("Ctrl+6")));
+        QTest::mouseClick(f.nav(Screen::Issues), Qt::LeftButton);
+        QCOMPARE(f.window->currentScreen(), Screen::Issues);
+
+        // Consultar GESREQ ofrece sólo los del sistema del proyecto, y se importan los marcados.
+        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
+        auto* import = f.window->findChild<RequirementImportDialog*>();
+        QVERIFY(import);
+        auto* candidates = import->findChild<QListWidget*>(QStringLiteral("importList"));
+        QCOMPARE(candidates->count(), 1);
+        QVERIFY(candidates->item(0)->checkState() == Qt::Checked);
+        const QString summary = import->findChild<QLabel*>(QStringLiteral("importSummary"))->text();
+        QVERIFY2(summary.contains(QStringLiteral("1 de otros sistemas")), qPrintable(summary));
+        import->findChild<QPushButton*>(QStringLiteral("importAccept"))->click();
+        QTRY_VERIFY(!f.window->findChild<RequirementImportDialog*>());
+        QCOMPARE(f.app.issues.issues().size(), 1);
+        const QString id = f.app.issues.issues().first().id;
+        QCOMPARE(f.app.issues.selectedId(), id);
+        auto* title = f.window->findChild<QLineEdit*>(QStringLiteral("issueTitle"));
+        QCOMPARE(title->text(), QStringLiteral("Desarrollo complementario del laboratorio"));
+
+        // Un caso existente se vincula con el selector; el plan se crea con los casos del issue y se abre.
+        f.window->findChild<QPushButton*>(QStringLiteral("issueLinkCase"))->click();
+        auto* choice = f.window->findChild<ChoiceDialog*>();
+        QVERIFY(choice);
+        QTest::keyClicks(choice->findChild<QLineEdit*>(QStringLiteral("choiceSearch")), "TC-104");
+        choice->findChild<QPushButton*>(QStringLiteral("choiceAccept"))->click();
+        QCOMPARE(f.app.issues.find(id)->caseIds, QStringList{QStringLiteral("TC-104")});
+        QTRY_VERIFY(!f.window->findChild<ChoiceDialog*>());
+
+        f.window->findChild<QPushButton*>(QStringLiteral("issueNewPlan"))->click();
+        QCOMPARE(f.app.issues.find(id)->planIds.size(), 1);
+        const QString planId = f.app.issues.find(id)->planIds.first();
+        QCOMPARE(f.app.plans.find(planId)->caseIds, QStringList{QStringLiteral("TC-104")});
+        QCOMPARE(f.app.plans.activeId(), planId);
+        QCOMPARE(f.window->currentScreen(), Screen::Plan);
+
+        // Los resultados de sus casos se ven en el issue.
+        f.app.run.start(QStringLiteral("TC-104"));
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        f.window->navigate(Screen::Issues);
+        const qsizetype runs = IssueStore::runsOf(*f.app.issues.find(id), f.app.history).size();
+        QVERIFY(runs >= 1);
+        const QString resultsHeader = f.window->findChild<QLabel*>(QStringLiteral("issueResultsHeader"))->text();
+        QVERIFY2(resultsHeader.contains(QString::number(runs)), qPrintable(resultsHeader));
+
+        // Lo escrito en QAflow se queda aunque GESREQ cambie; el cambio se avisa hasta revisarlo.
+        title->selectAll();
+        QTest::keyClicks(title, "Mi titulo");
+        QTest::keyClick(title, Qt::Key_Return);
+        QCOMPARE(f.app.issues.find(id)->title, QStringLiteral("Mi titulo"));
+        mine.states = {QStringLiteral("CONTROL DE CALIDAD OBSERVADO")};
+        f.app.requirementSource->inbox = {mine};
+        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
+        import = f.window->findChild<RequirementImportDialog*>();
+        QVERIFY(import);
+        QVERIFY(import->findChild<QListWidget*>(QStringLiteral("importList"))->item(0)->checkState() == Qt::Checked);
+        import->findChild<QPushButton*>(QStringLiteral("importAccept"))->click();
+        QCOMPARE(f.app.issues.issues().size(), 1);
+        QCOMPARE(f.app.issues.find(id)->title, QStringLiteral("Mi titulo"));
+        auto* changes = f.window->findChild<QWidget*>(QStringLiteral("issueChanges"));
+        QVERIFY(changes && !changes->isHidden());
+        QVERIFY(f.badge(Screen::Issues)->isVisible());
+        f.window->findChild<QPushButton*>(QStringLiteral("issueAcknowledge"))->click();
+        QVERIFY(changes->isHidden());
+        QVERIFY(!f.badge(Screen::Issues)->isVisible());
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    void consultingGesreqWithoutALinkedSystemOpensTheSettings() {
+        WindowFixture f;
+        f.window->navigate(Screen::Issues);
+        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
+        QVERIFY(f.window->settingsWindow());
+        QCOMPARE(f.app.requirementSource->inboxReads, 0);
+    }
+
+    // La bandeja es del usuario: también enseña los requerimientos de otros sistemas. Iniciar sus pruebas
+    // pide activar el proyecto que los trabaja (la ventana no cambia de proyecto por su cuenta); el del
+    // sistema propio se abre aquí mismo, y el de un sistema sin proyecto no se puede empezar.
+    void startingTestsOfAnotherSystemAsksForItsProject() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        const QString mineId = projects.activeId();
+        const QString otherId = projects.create(QStringLiteral("Riesgos"));
+        QVERIFY(projects.setRequirementSystem(mineId, QStringLiteral("SUMA TRANSITO")));
+        QVERIFY(projects.setRequirementSystem(otherId, QStringLiteral("SEGRAN")));
+        f.ctx.projects = &projects;
+        f.ctx.projectId = mineId;
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) { r.url = QStringLiteral("http://gesreq.test:7401/greq"); });
+        auto requirementOf = [](const QString& id, const QString& code, const QString& summary) {
+            ExternalRequirement r;
+            r.id = id;
+            r.systemCode = code;
+            r.system = code + QStringLiteral("-SISTEMA");
+            r.summary = summary;
+            r.priority = QStringLiteral("ALTA");
+            r.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+            return r;
+        };
+        f.app.requirementSource->inbox = {requirementOf(QStringLiteral("2025175"), QStringLiteral("SUMA TRANSITO"), QStringLiteral("Cupones de descuento")),
+                                          requirementOf(QStringLiteral("2025719"), QStringLiteral("SEGRAN"), QStringLiteral("Módulo de riesgos")),
+                                          requirementOf(QStringLiteral("2026001"), QStringLiteral("SIN PROYECTO"), QStringLiteral("Algo de otro sistema"))};
+
+        QSignalSpy started(f.window.get(), &MainWindow::startTestingRequested);
+        f.window->navigate(Screen::Issues);
+        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
+        auto* import = f.window->findChild<RequirementImportDialog*>();
+        QVERIFY(import);
+        auto* others = import->findChild<QListWidget*>(QStringLiteral("importOtherList"));
+        auto* start = import->findChild<QPushButton*>(QStringLiteral("importStartTesting"));
+        QVERIFY(others && start);
+        QCOMPARE(others->count(), 2);
+        QVERIFY(!start->isEnabled());   // sin elegir requerimiento no hay pruebas que empezar
+
+        // El de un sistema que nadie trabaja no se puede empezar; dice a dónde iría el que sí.
+        others->setCurrentRow(1);
+        QVERIFY(!start->isEnabled());
+        QVERIFY2(others->item(1)->text().contains(QStringLiteral("ningún proyecto")), qPrintable(others->item(1)->text()));
+        others->setCurrentRow(0);
+        QVERIFY(start->isEnabled());
+        QVERIFY2(start->text().contains(QStringLiteral("Riesgos")), qPrintable(start->text()));
+        start->click();
+        QCOMPARE(started.count(), 1);
+        QCOMPARE(started.first().at(0).toString(), otherId);
+        QCOMPARE(started.first().at(1).value<ExternalRequirement>().id, QStringLiteral("2025719"));
+        QVERIFY(f.app.issues.issues().isEmpty());   // el issue es del otro proyecto, no de éste
+        QTRY_VERIFY(!f.window->findChild<RequirementImportDialog*>());
+
+        // El del sistema del proyecto se abre aquí, sin pedir cambio de proyecto.
+        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
+        import = f.window->findChild<RequirementImportDialog*>();
+        QVERIFY(import);
+        import->findChild<QListWidget*>(QStringLiteral("importList"))->setCurrentRow(0);
+        import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
+        QCOMPARE(started.count(), 1);
+        QCOMPARE(f.app.issues.issues().size(), 1);
+        const Issue& issue = f.app.issues.issues().first();
+        QCOMPARE(issue.requirement.data.id, QStringLiteral("2025175"));
+        QCOMPARE(f.app.issues.selectedId(), issue.id);
+        QCOMPARE(f.window->currentScreen(), Screen::Issues);
+        QTRY_VERIFY(!f.window->findChild<RequirementImportDialog*>());
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    // El issue se publica en el gestor revisando antes lo que se envía, y luego avisa de lo que cambió en
+    // QAflow y sigue sin actualizar allí.
+    void anIssueIsPublishedInTheTrackerAndSaysWhenItIsPendingToUpdate() {
+        WindowFixture f;
+        const QString id = f.app.issues.createIssue(QStringLiteral("Pruebas del laboratorio"));
+        f.window->navigate(Screen::Issues);
+        auto* publish = f.window->findChild<QPushButton*>(QStringLiteral("issuePublish"));
+        QVERIFY(publish);
+        QVERIFY(publish->isEnabled());
+        QVERIFY(f.window->findChild<QWidget*>(QStringLiteral("issueJiraPending"))->isHidden());
+
+        publish->click();
+        auto* dialog = f.window->findChild<JiraPublishDialog*>();
+        QVERIFY(dialog);
+        QCOMPARE(dialog->findChild<QLineEdit*>(QStringLiteral("jiraSummary"))->text(), QStringLiteral("Pruebas del laboratorio"));
+        QVERIFY(dialog->findChild<QComboBox*>(QStringLiteral("jiraIssueType")) != nullptr);
+        dialog->findChild<QPushButton*>(QStringLiteral("jiraPublishAccept"))->click();
+        QTRY_VERIFY(!f.window->findChild<JiraPublishDialog*>());
+
+        QVERIFY(f.app.issues.find(id)->isPublished());
+        const QString key = f.app.issues.find(id)->publication.key;
+        QCOMPARE(f.app.tracker->publishedIssues.size(), 1);
+        QCOMPARE(f.app.tracker->publishedIssues.first().summary, QStringLiteral("Pruebas del laboratorio"));
+        QVERIFY(f.app.tracker->publishedIssues.first().labels.contains(id));
+        QVERIFY(f.window->findChild<QLabel*>(QStringLiteral("issueJira"))->text().contains(key));
+        QVERIFY(f.window->findChild<QWidget*>(QStringLiteral("issueJiraPending"))->isHidden());
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("issueOpenJira"))->isHidden());
+
+        // Cambiar el título deja el issue pendiente; actualizar reescribe el del gestor.
+        auto* title = f.window->findChild<QLineEdit*>(QStringLiteral("issueTitle"));
+        title->selectAll();
+        QTest::keyClicks(title, "Laboratorio de merceologia");
+        QTest::keyClick(title, Qt::Key_Return);
+        QVERIFY(!f.window->findChild<QWidget*>(QStringLiteral("issueJiraPending"))->isHidden());
+        f.window->findChild<QPushButton*>(QStringLiteral("issueUpdateJira"))->click();
+        auto* update = f.window->findChild<JiraPublishDialog*>();
+        QVERIFY(update);
+        update->findChild<QPushButton*>(QStringLiteral("jiraPublishAccept"))->click();
+        QTRY_VERIFY(!f.window->findChild<JiraPublishDialog*>());
+        QCOMPARE(f.app.tracker->updatedKeys, QStringList{key});
+        QCOMPARE(f.app.tracker->updatedIssues.first().summary, QStringLiteral("Laboratorio de merceologia"));
+        QVERIFY(f.window->findChild<QWidget*>(QStringLiteral("issueJiraPending"))->isHidden());
     }
 
     // Zephyr se activa en Ajustes y sólo se ofrece con Jira, que es donde vive el plugin.

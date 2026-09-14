@@ -12,9 +12,12 @@ src/
 ├── core/            Modelos y contratos. Sin Qt Widgets, sin red, sin disco.
 │   ├── models/      TestCase, TestRun, TestPlan, BugReport, Settings (TrackerSettings, AppSettings), IssueLink,
 │   │                RunHistory (RunRecord, PlanRun), PlanReport (informe calculado + Markdown),
-│   │                Metrics (tasa por suite, evolución entre ciclos), CaseFilter, CaseFormats (JSON / CSV / Markdown)
+│   │                Metrics (tasa por suite, evolución entre ciclos), CaseFilter, CaseFormats (JSON / CSV / Markdown),
+│   │                Requirement (requerimientos de GESREQ: fila de la bandeja, ficha y motivos de fallo),
+│   │                Issue (issue de QA, lo importado del requerimiento, cambios entre lecturas, filtro)
 │   └── services/    ITestCaseRepository, IRunHistoryRepository, IRunSessionRepository, IBugRepository,
-│                    ISettingsRepository, ISecretStore, IScreenCapture, IScreenRecorder, IGlobalHotkey, IIssueTracker
+│                    ISettingsRepository, ISecretStore, IScreenCapture, IScreenRecorder, IGlobalHotkey, IIssueTracker,
+│                    ITestManagement, IRequirementSource, IIssueRepository
 ├── application/     Casos de uso y estado observable (QObject + señales). Sin UI.
 │   ├── TestCaseStore      fuente de verdad de los casos; toda mutación pasa por aquí;
 │   │                      deshacer de un nivel para borrados
@@ -28,18 +31,23 @@ src/
 │   │                      portapapeles y sustitución de la imagen anotada; único sitio que toca ficheros
 │   ├── BugReportService   borrador de bug, envío al gestor, cola offline, estados y metadatos
 │   ├── BugStore           libro de bugs: issues enlazados a su caso y cola de pendientes
+│   ├── IssueStore         issues de QA: asociaciones con casos y planes, importación de GESREQ sin duplicados
+│   ├── IssuePublishService publicación del issue en el gestor: crear, vincular, actualizar y estado
+│   ├── RequirementSourceService conexión con GESREQ: probarla, bandeja, fichas y catálogo de sistemas
 │   ├── SeedData           datos de ejemplo del primer arranque
 │   └── AppContext         agrupa los servicios ya construidos para la presentación
 ├── infrastructure/  Implementaciones concretas de las interfaces de core.
 │   ├── persistence/ JsonTestCaseRepository (cases.json, plans.json), JsonRunHistoryRepository
 │   │                (history.json), JsonRunSessionRepository (session.json), JsonBugRepository (bugs.json),
+│   │                JsonIssueRepository (issues.json),
 │   │                QSettingsRepository (tracker, captura y app; sin token)
 │   ├── capture/     ScreenCaptureService (QScreen::grabWindow o PortalScreenshot en Wayland), RegionSelector
 │   │                (overlay), GifRecorder + GifEncoder (grabación a GIF), RecorderOverlay (control flotante)
 │   ├── hotkey/      GlobalHotkey (RegisterHotKey / XGrabKey / Carbon), PortalShortcuts (portal de Wayland)
 │   ├── secrets/     SecretStores: secret-tool (Linux), Keychain (macOS), DPAPI (Windows), fichero en claro
-│   ├── http/        HttpClient: base REST (JSON, multipart, errores, reintentables) de tracker/ y testmgmt/
+│   ├── http/        HttpClient: base HTTP (JSON, multipart, formularios, cookies, errores, reintentables) de tracker/, testmgmt/ y requirements/
 │   ├── testmgmt/    ZephyrClient: ciclos, ejecuciones y evidencias en Zephyr for Jira
+│   ├── requirements/ GesreqClient (sesión y lectura de GESREQ) y GesreqParser (sus páginas HTML → modelos)
 │   └── tracker/     HttpTrackerClient (base) → JiraClient, GitHubClient, GitLabClient, AzureDevOpsClient;
 │                    TrackerRouter despacha por TrackerSettings::kind
 └── presentation/    Widgets Qt. Depende de application; nunca de infrastructure.
@@ -48,7 +56,7 @@ src/
     │                FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard,
     │                EvidencePreview (visor de la ejecución), ImageViewer (visor a tamaño completo),
     │                AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
-    ├── views/       Una clase por pantalla: CasesView, PlanView, RunView, HistoryView, BugView,
+    ├── views/       Una clase por pantalla: IssuesView (+ RequirementImportDialog, JiraPublishDialog), CasesView, PlanView, RunView, HistoryView, BugView,
     │                SettingsView (+ SettingsDialog, su ventana); Sidebar (rail de iconos),
     │                StatusStrip (barra de estado) y MainWindow (menú, atajos, bandeja,
     │                navegación, avisos)
@@ -163,7 +171,10 @@ muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`
 | Ejecución en curso     | `$XDG_DATA_HOME/QAflow/QAflow/session.json` (se borra al terminar; notas con retardo de 300 ms) |
 | Ajustes (gestor, captura, atajos de la ejecución) | QSettings (`~/.config/QAflow/QAflow.conf`), sin el token |
 | Token del gestor       | `ISecretStore`: llavero del sistema; si no hay, QSettings en claro con aviso en Ajustes |
+| Conexión con GESREQ    | QSettings (grupo `gesreq`: URL, usuario, conectado); la contraseña, en `ISecretStore` (`gesreq/password`) |
+| Proyectos y su sistema de GESREQ | `$XDG_DATA_HOME/QAflow/QAflow/projects.json` (`requirementSystem` de cada proyecto) |
 | Bugs y cola offline    | `$XDG_DATA_HOME/QAflow/QAflow/bugs.json`                    |
+| Issues (asociaciones, lo importado de GESREQ, sus cambios y la publicación en el gestor) | `issues.json` en el directorio de datos de cada proyecto |
 | Capturas, GIF y adjuntos | Carpeta configurable (por defecto `~/QAflow/capturas`)     |
 
 ## Gestión de casos
@@ -361,6 +372,18 @@ centraliza peticiones JSON/multipart, mensajes de error y la detección de fallo
 | GitLab (v4)   | `POST /projects/{id}/issues`            | `/uploads` antes, enlazados en Markdown | labels, assignee_ids, issue_type |
 | Azure DevOps  | `POST /{proj}/_apis/wit/workitems/$Tipo` (JSON Patch) | `/_apis/wit/attachments` + relación AttachedFile | Priority (1-4), AssignedTo, Tags, FoundIn |
 
+**Proyecto de Jira de cada proyecto.** `IIssueTracker::canListProjects()` y `fetchProjects()` son
+opcionales y sólo Jira los implementa (`GET /rest/api/2/project`: los proyectos que ve el usuario, ordenados
+por nombre); `BugReportService` los expone a la presentación y Ajustes los ofrece en «Buscar…», junto al
+código Jira de «Configuración del proyecto». En los demás gestores el proyecto es un ajuste general que se
+escribe.
+
+**Los issues de QAflow en el gestor.** `canPublishIssues()`, `publishIssue()`, `fetchIssue()` y
+`updateIssue()` son opcionales y sólo Jira los implementa: crean el issue (`POST /rest/api/2/issue` con
+tipo, etiquetas y descripción), leen uno existente para vincularlo (`GET …/issue/{clave}`, donde un 404 se
+cuenta como «esa clave no existe») y reescriben sólo título y descripción (`PUT …/issue/{clave}`), sin tocar
+el resto de campos. Son otra cosa que `createIssue()`, que crea **defectos** desde la pantalla de bugs.
+
 **Autenticación de Jira.** La API v2 la hablan tanto Jira Cloud como Jira Server / Data Center, pero
 las credenciales cambian, así que `TrackerSettings::jiraAuth` (core) lo dice explícitamente en vez de
 deducirlo del campo de usuario:
@@ -502,6 +525,166 @@ disponible comprobándolo con una escritura de prueba (`secret-tool` en Linux, `
 macOS, DPAPI en Windows) y, si no hay ninguno, cae a QSettings en claro; Ajustes muestra cuál se
 usa. Un token que quedara en claro de una versión anterior se migra al llavero en la primera carga.
 
+## Issues
+
+Un **issue** organiza el trabajo de QA de un requerimiento: se importa de la bandeja de GESREQ (o se crea a
+mano) y reúne sus casos, sus planes y los resultados de sus pruebas. Es la primera pantalla del rail
+(Ctrl+6, que conserva los atajos anteriores).
+
+`Issue` (core) separa lo que se escribe en QAflow de lo que se trae del sistema:
+
+| Parte | Qué lleva | Quién la cambia |
+|-------|-----------|-----------------|
+| Del issue | id local (`IS-0001`, independiente de Jira), título, notas, prioridad, estado de QA, `caseIds`, `planIds` | QAflow |
+| `RequirementLink` | conexión, la fila de la bandeja (`ExternalRequirement`), la ficha si se consultó, fechas de importación y lectura, `missing` y `changes` | cada consulta a GESREQ |
+| Representación en Jira | `jiraKey`, `jiraUrl` (el filtro «Jira» ya los usa; la publicación llega después) | la publicación |
+
+El **estado de QA** (Pendiente, En preparación, En pruebas, Finalizado) es de QAflow y no se deduce del
+estado de GESREQ, del de Jira ni del resultado de las pruebas. La prioridad y el título salen del
+requerimiento al importarlo y a partir de ahí son de QAflow. Un caso puede validar varios issues: la
+asociación vive en el issue, así que `cases.json` y `plans.json` no cambian y los casos y planes sin
+issue siguen como estaban; los ids que ya no existen se enseñan como tales, sin borrarlos.
+
+`IssueStore` (application) persiste en `issues.json` (`JsonIssueRepository`, un fichero por proyecto) en
+cada cambio. Un fichero que existe pero no se puede leer —dañado o de otra versión— deja el store en solo
+lectura (`isReadOnly()`, `loadFailed`): nada se escribe encima, y cambiar de proyecto no queda bloqueado por
+ello.
+
+**Importación sin duplicados.** Un requerimiento se identifica por su número dentro de la conexión (la
+dirección de GESREQ, sin distinguir la barra final ni mayúsculas); el número GREQ es único en el sistema,
+así que un cambio de sistema en GESREQ aparece como un cambio del issue en vez de como un issue nuevo.
+«Consultar GESREQ» (`IssuesView::consultRequirements`) lee la bandeja entera y:
+
+1. `markInboxRead()` marca como ausentes los issues importados de esa conexión que ya no están en ella (el
+   control de calidad terminó o se reasignó) y como presentes los que sí; nunca borra nada.
+2. `previewImport()` clasifica los requerimientos del sistema vinculado al proyecto en nuevos, con cambios
+   (y cuáles) o sin cambios; los de otros sistemas se enseñan aparte, para empezar sus pruebas donde toque.
+3. `RequirementImportDialog` los enseña marcados (nuevos y con cambios) y `importRequirements()` crea los
+   nuevos y, en los ya importados, reemplaza sólo lo extraído. Lo que cambió (`diffRequirement`: estado,
+   descripción, prioridad, sistema, fechas de asignación, solicitante…) se acumula en `changes` con
+   `mergeChanges` —de cada campo, el valor revisado por última vez y el último leído; si vuelve a como
+   estaba, desaparece— hasta «Marcar como revisado». El rail cuenta los issues con cambios sin revisar.
+
+Sin sistema vinculado al proyecto, la consulta no se lanza y abre los ajustes. La ficha del requerimiento
+se lee bajo demanda («Cargar ficha», `RequirementSourceService::fetchDetail`) y se guarda en el issue con su
+fecha; «Abrir en GESREQ» abre la ficha en el navegador, donde hace falta haber entrado.
+
+**Pantalla.** `IssuesView` sigue el esquema de Casos: lista filtrable (texto sobre `Issue::searchText()`,
+estado, prioridad, publicación en Jira) y el issue a la derecha, con su requerimiento (cambios, ausencia,
+datos y ficha), notas de QA (se guardan 600 ms después de dejar de escribir, al cambiar de issue o al salir
+de la pantalla), casos (crear uno con el título del issue y abrirlo, o vincular con `ChoiceDialog`),
+planes (crear uno con los casos del issue, que queda activo y se abre, o vincular) y resultados:
+`IssueStore::runsOf()` junta las ejecuciones de sus casos, la más reciente primero, con el plan y el ciclo
+al que pertenecen.
+
+**Iniciar pruebas (entre proyectos).** La bandeja de GESREQ es del usuario, no del proyecto: el diálogo de
+importación enseña también los requerimientos de los demás sistemas, cada uno con el proyecto que los
+trabaja (`ProjectStore::projectForRequirementSystem`). «Iniciar pruebas» resuelve ese proyecto y:
+
+| Situación | Qué pasa |
+|-----------|----------|
+| Es el proyecto activo | `IssueStore::openForRequirement()` abre su issue aquí mismo: lo crea la primera vez y luego reutiliza el que hay, con sus casos, planes y lo escrito en QAflow |
+| Es otro proyecto | La vista sólo lo pide (`IssuesView::startTestingRequested` → `MainWindow`); la raíz de composición guarda el actual, activa el destino y allí abre el issue (`MainWindow::startTesting`) |
+| Ningún proyecto tiene ese sistema vinculado | No se toca nada: se avisa y se abren los ajustes para vincularlo |
+| Ejecución o captura en curso | `ProjectSession::canLeave()` no deja salir y dice qué hay que terminar; si el guardado falla, el cambio se cancela y no se inicia nada |
+
+Ninguna vista cambia de proyecto por su cuenta, y consultar la bandeja o previsualizar la importación
+tampoco: sólo «Iniciar pruebas» lo pide. `canLeave()` es la misma regla que usa el selector de proyectos de
+la barra, así que empezar unas pruebas y cambiar de proyecto a mano se comportan igual.
+
+**Publicación en el gestor.** `IssuePublishService` (application) crea la representación del issue en Jira,
+o enlaza una que ya existe, y guarda en `Issue::publication` las tres identidades juntas: el requerimiento
+de GESREQ, el issue de QAflow y el issue del gestor (con su instancia, proyecto, tipo, estado y fechas).
+
+| Acción | Qué hace |
+|--------|----------|
+| Publicar | `draftFor()` arma título y descripción (lo importado de GESREQ, las notas de QA y de qué issue salió) y el diálogo los enseña para corregirlos antes de enviar; se crea con las etiquetas `qaflow`, el id del issue y `GREQ-<número>` |
+| Vincular | `fetchIssue()` comprueba que la clave existe y la guarda como `linked`: lo escribió otra persona, así que QAflow no ofrece sobrescribirlo |
+| Actualizar | `needsUpdate()` compara lo de ahora con `publishedTitle`/`publishedDescription` (lo último que salió de QAflow) y avisa; sólo esta acción reescribe el título y la descripción en el gestor, diciendo antes que lo editado allí se pierde |
+| Estado | `refreshStatus()` guarda el estado del gestor, que se enseña aparte del estado de QA |
+
+Nada se publica ni se sobrescribe solo. Si un envío se corta sin respuesta, el issue queda marcado como
+**sin confirmar** (`publication.uncertain`): puede haberse creado igualmente, así que la pantalla dice cómo
+buscarlo por su etiqueta y publicar otra vez pide confirmación expresa. Un rechazo del contenido (un tipo de
+incidencia que no existe, por ejemplo) no deja esa duda y no marca nada.
+
+## Requerimientos externos (GESREQ)
+
+QAflow importará el trabajo de QA desde GESREQ, el sistema de gestión de requerimientos: cada
+requerimiento importado será un issue de QAflow con sus casos y planes. De ese flujo existe por ahora el
+conector, que sólo lee.
+
+**Ajustes.** La conexión (URL, usuario y contraseña) es del usuario y común a todos los proyectos, como la
+del gestor: `SettingsStore::requirementSource()` guarda URL, usuario y si la última prueba entró en el grupo
+`gesreq` de QSettings, y la contraseña en `ISecretStore` bajo `gesreq/password` (la que quedara en claro se
+migra al cargar). main.cpp crea un único `GesreqClient` que comparten todas las `ProjectSession`, así la
+sesión de GESREQ no se repite al cambiar de proyecto. El **sistema de GESREQ** que se trabaja en cada
+proyecto (`SUMA TRANSITO`) no es un ajuste general sino un dato del proyecto: vive en el catálogo
+(`Project::requirementSystem`, en `projects.json`) y se edita en «Configuración del proyecto», junto al
+código Jira. `ProjectStore::setRequirementSystem()` rechaza con `failed` el sistema que ya es de otro
+proyecto —sin distinguir mayúsculas ni espacios repetidos—, porque al iniciar las pruebas de un
+requerimiento tiene que haber un único proyecto al que ir; `projectForRequirementSystem()` es esa búsqueda.
+`RequirementSourceService` (application) prueba la conexión con los ajustes guardados, deja `connected` y,
+si entra, lee la bandeja para ofrecer sus sistemas: Ajustes los autocompleta en el campo del proyecto y
+avisa, mientras se escribe, del proyecto con el que choca lo escrito (y con un toast si aun así se confirma,
+porque Intro cierra el diálogo).
+
+Los dos códigos de «Configuración del proyecto» se eligen además de lo que hay en cada sistema con
+«Buscar…», que abre `ChoiceDialog` (presentation/widgets): consulta la lista al abrir (los proyectos de Jira
+o el catálogo de sistemas de GESREQ), deja reintentar si falla, filtra en local por código y nombre palabra a
+palabra y sin tildes, y se maneja con flechas e Intro sin salir de la búsqueda; la respuesta que llega con la
+ventana ya cerrada, o después de reintentar, se descarta. En el catálogo de GESREQ van primero los sistemas
+con requerimientos en la bandeja, y se señala el que ya está vinculado a otro proyecto. Escribir el código a
+mano sigue valiendo.
+
+`IRequirementSource` (core) tiene tres operaciones asíncronas: probar la conexión, leer la bandeja de
+control de calidad del usuario (`fetchInbox`) y leer la ficha de un requerimiento (`fetchDetail`).
+`GesreqClient` (infrastructure/requirements/) la implementa sobre `HttpClient` y deja todo lo que depende
+del marcado en `GesreqParser` (`gesreq::`), funciones puras de HTML a modelos: un cambio en las páginas
+del sistema se corrige ahí y en sus fixtures, sin tocar la sesión ni lo que se haga con los requerimientos.
+
+GESREQ es una aplicación Struts/JSP con las páginas generadas en el servidor, así que basta HTTP con la
+cookie de sesión; no hace falta un navegador. `HttpClient` aporta para ello `postForm()` (el formulario
+codificado entero: con `QUrlQuery` una contraseña con `+` llegaría con un espacio), `pageRequest()` y
+`clearCookies()`.
+
+| Paso | Petición | Qué se lee |
+|------|----------|------------|
+| Entrada | `GET /greq/` | abre la sesión del servidor (`JSESSIONID`) |
+| Login | `POST login.do` con `usuario` y `clave` → 302 a `dashboard.do` | con `logout.do`, dentro, y el nombre del usuario en el menú; con el formulario `AuthForm`, rechazado |
+| Bandeja | `GET calidadreg.do` («Registro Control Calidad») | `table#main-table`, con las columnas buscadas por su cabecera (sin tildes ni mayúsculas) |
+| Ficha | `GET publico.do?id=N&bandera=1` | pares `th`/`td` de la tabla general, bloques `h5.titulo`, adjuntos `docDownload.do`; se descartan las `div.modalWindow` con el historial de cada control |
+| Catálogo de sistemas | `GET poai.do` («Seguimiento Requerimiento») y, si no trae el desplegable, `GET registroadicional.do` | `select[name=sistema]`: el valor es el mismo código que usa la bandeja y el texto, «CÓDIGO - NOMBRE» |
+
+El cliente nunca pide `calidadregGestionRequerimiento.do` («Registrar»), que cambia el estado del requerimiento.
+
+`ExternalRequirement` es una fila de la bandeja: el número GREQ es el identificador estable, `systemCode`
+(lo que va antes del primer guion de «Sistema») es el proyecto externo que se vinculará a un proyecto de
+QAflow, y `states` es una lista porque un requerimiento está a la vez en «CONTROL DE CALIDAD OBSERVADO» y
+«CONTROL FUNCIONAL». `RequirementDetail` lleva los datos generales con campo propio y todos en `fields`,
+las secciones, los adjuntos y el alcance en texto plano con sus párrafos y viñetas.
+
+**Una página que no se entiende nunca es una bandeja vacía.** GESREQ no usa códigos HTTP para la sesión:
+todo llega con 200, y el cliente lo distingue por el contenido.
+
+| Respuesta | Qué es | Qué hace el cliente |
+|-----------|--------|---------------------|
+| El formulario `AuthForm` en lugar de la página | sesión caducada | inicia otra y repite una vez; si la recién iniciada tampoco vale, `Credentials` («no conserva la sesión») |
+| La cáscara de la ficha sin número, con un script a `error2.jsp` | ficha pedida sin sesión | lo mismo; con la sesión recién iniciada, `NotFound` |
+| La ficha con su número y sin ninguna tabla | con sesión, el requerimiento no existe | `NotFound`, sin repetir |
+| Sin la tabla, sin una columna imprescindible (Requerimiento, Sistema, Descripción Corta, Estado), una fila sin número o una ficha sin «Estado» | la página cambió | `PageChanged`, diciendo qué falta |
+
+`RequirementSourceFailure` completa la lista con `Configuration` (faltan la dirección o las credenciales,
+o la dirección responde 404) y `Network` (red o 5xx), la única que `retryable()` marca para reintentar. La
+sesión es de una dirección y un usuario; las peticiones que llegan mientras se inicia esperan a ese mismo
+login en vez de lanzar otro, que cambiaría la cookie a las demás.
+
+`tests/fixtures/gesreq` guarda copias **anonimizadas** de las cinco páginas (bandeja, ficha, ficha vacía,
+ficha inexistente y login), con el marcado real y datos inventados: el repositorio es público. Si GESREQ
+cambia, se guarda la página nueva sin datos reales en su fixture y se ajusta el extractor.
+`test_gesreq_client` incluye `readsTheInboxOfARealGesreq`, que sólo se ejecuta contra un GESREQ de verdad
+con `QAFLOW_GESREQ_URL`, `QAFLOW_GESREQ_USER` y `QAFLOW_GESREQ_PASSWORD`.
+
 ## Tests
 
 `tests/` construye **un ejecutable por clase bajo prueba**, enlazado con la biblioteca de su capa:
@@ -530,6 +713,7 @@ tests/
     ├── test_settings_store.cpp     token en el llavero, migración, un token por gestor
     ├── test_bug_store.cpp          issues por caso, estados, cola de pendientes
     ├── test_bug_report_service.cpp borrador, envío, cola offline, reintentos, estados, metadatos
+    ├── test_requirement_source_service.cpp conexión con GESREQ: ajustes usados, `connected`, sistemas de la bandeja
     └── test_evidence_service.cpp   captura (formato, cuenta atrás y su cancelación), adjuntos, grabación,
                                     sustitución de la imagen anotada, portapapeles, borrado de ficheros liberados
 ├── infrastructure/            disco y red reales, en directorios temporales y localhost
@@ -538,14 +722,22 @@ tests/
 │   ├── test_settings_repository.cpp QSettingsRepository (grupo "tracker", migración del grupo "jira"), PlainSettingsSecretStore
 │   ├── test_tracker_clients.cpp     JiraClient y GitHubClient contra FakeHttpServer: cabeceras, cuerpo, adjuntos multipart,
 │   │                                4xx no reintentable, 5xx y conexión rechazada reintentables, estados, metadatos, TrackerRouter
+│   ├── test_gesreq_parser.cpp       extractor de GESREQ sobre fixtures anonimizados: bandeja, ficha, ficha vacía e inexistente, login
+│   ├── test_gesreq_client.cpp       sesión de GESREQ contra un servidor falso (login, caducidad, reintento único, errores);
+│   │                                opcionalmente, contra uno real
 │   └── test_gif_encoder.cpp         cuantización (exacta y median cut) y GIF animado leído de vuelta con el plugin de Qt
 └── presentation/              ventana completa con plataforma offscreen
     ├── test_main_window.cpp   navegación, ventana de ajustes, atajos del menú, Ctrl+F y filtro, teclas de veredicto, captura, cuenta atrás,
     │                          grabación, adjuntar por arrastre, abrir el visor, deshacer, métricas y el aviso «Reintentar»
-    └── test_evidence_widgets.cpp renderAnnotations (formas, texto, difuminado), AnnotationEditor, ImageViewer, Thumbnail y ShotCard
+    ├── test_evidence_widgets.cpp renderAnnotations (formas, texto, difuminado), AnnotationEditor, ImageViewer, Thumbnail y ShotCard
+    └── test_choice_dialog.cpp  selector con búsqueda: carga, filtro sin tildes, flechas, error y reintento, respuestas tardías
 ```
 
-`core/test_metrics.cpp` cubre `metrics::` (por suite, ciclos, tendencia).
+`core/test_metrics.cpp` cubre `metrics::` (por suite, ciclos, tendencia); `core/test_issue.cpp`, el modelo de issues;
+`application/test_issue_store.cpp`, el store (asociaciones, importación, ausencias, resultados, datos ilegibles) e
+`infrastructure/test_issue_repository.cpp`, `issues.json`;
+`application/test_issue_publish_service.cpp`, la publicación en el gestor (borrador, creación, vinculación,
+actualización pendiente y envíos sin confirmar).
 
 Cada fichero es una clase QtTest con los slots agrupados por tema (`// ---- …`). Los tests se
 registran como `<capa>/<nombre>` y llevan la capa como etiqueta:

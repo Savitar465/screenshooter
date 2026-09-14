@@ -70,6 +70,13 @@ void drawMetrics(QPainter& p) {
     p.drawLine(QPointF(17.5, 18), QPointF(17.5, 6));
 }
 
+/// Portapapeles con renglones: los issues, el trabajo de QA de cada requerimiento.
+void drawIssues(QPainter& p) {
+    p.drawRoundedRect(QRectF(5, 4.5, 14, 16), 2.5, 2.5);
+    p.drawRoundedRect(QRectF(9, 3, 6, 3.2), 1.2, 1.2);   // pinza
+    for (const qreal y : {10.5, 14.0, 17.2}) p.drawLine(QPointF(8.5, y), QPointF(15.5, y));
+}
+
 } // namespace
 
 QPixmap pixmap(Glyph g, const QString& color, int size) {
@@ -90,6 +97,7 @@ QPixmap pixmap(Glyph g, const QString& color, int size) {
         case Glyph::History: drawHistory(p); break;
         case Glyph::Bug: drawBug(p); break;
         case Glyph::Metrics: drawMetrics(p); break;
+        case Glyph::Issues: drawIssues(p); break;
     }
     return pm;
 }

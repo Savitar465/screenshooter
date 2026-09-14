@@ -24,7 +24,7 @@ QString ProjectStore::create(const QString& name) {
     if (clean.isEmpty()) return {};
     const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     auto next = m_collection;
-    next.projects.append({id, clean});
+    next.projects.append(Project{id, clean, {}});
     if (!m_repo->initialize(id) || !m_repo->save(next)) {
         emit failed(tr("No se pudo crear el proyecto. Comprueba la carpeta de datos."));
         return {};
@@ -62,5 +62,28 @@ bool ProjectStore::setActive(const QString& id) {
     m_collection = next;
     emit activeChanged();
     return true;
+}
+bool ProjectStore::setRequirementSystem(const QString& id, const QString& system) {
+    const Project* project = find(id);
+    if (!project) return false;
+    const QString clean = system.simplified();
+    if (project->requirementSystem == clean) return true;
+    if (const QString other = projectForRequirementSystem(clean, id); !other.isEmpty()) {
+        emit failed(tr("El sistema «%1» de GESREQ ya está vinculado al proyecto «%2».").arg(clean, find(other)->name));
+        return false;
+    }
+    auto next = m_collection;
+    for (auto& p : next.projects) if (p.id == id) p.requirementSystem = clean;
+    if (!m_repo->save(next)) { emit failed(tr("No se pudo guardar el sistema de GESREQ del proyecto.")); return false; }
+    m_collection = next;
+    emit projectsChanged();
+    return true;
+}
+QString ProjectStore::projectForRequirementSystem(const QString& system, const QString& except) const {
+    const QString wanted = system.simplified();
+    if (wanted.isEmpty()) return {};
+    for (const auto& p : projects())
+        if (p.id != except && p.requirementSystem.compare(wanted, Qt::CaseInsensitive) == 0) return p.id;
+    return {};
 }
 } // namespace qaflow

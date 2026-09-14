@@ -6,6 +6,7 @@
 #include "presentation/views/BugView.h"
 #include "presentation/views/CasesView.h"
 #include "presentation/views/HistoryView.h"
+#include "presentation/views/IssuesView.h"
 #include "presentation/views/PlanView.h"
 #include "presentation/views/RunView.h"
 #include "presentation/views/SettingsDialog.h"
@@ -56,7 +57,7 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     auto* h = ui::hbox(body, 0, 0);
     rows->addWidget(body, 1);
 
-    m_sidebar = new Sidebar(*ctx.cases, *ctx.plan, *ctx.run, *ctx.history, *ctx.bugLedger);
+    m_sidebar = new Sidebar(*ctx.cases, *ctx.plan, *ctx.run, *ctx.history, *ctx.bugLedger, *ctx.issues);
     h->addWidget(m_sidebar);
 
     m_stack = new QStackedWidget;
@@ -65,11 +66,13 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence);
     m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish, ctx.evidence, ctx.run);
     m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger, *ctx.evidence);
+    m_issuesView = new IssuesView(ctx);
     m_stack->insertWidget(static_cast<int>(Screen::Casos), m_cases);
     m_stack->insertWidget(static_cast<int>(Screen::Plan), m_plan);
     m_stack->insertWidget(static_cast<int>(Screen::Run), m_run);
     m_stack->insertWidget(static_cast<int>(Screen::Historial), m_history);
     m_stack->insertWidget(static_cast<int>(Screen::Bug), m_bug);
+    m_stack->insertWidget(static_cast<int>(Screen::Issues), m_issuesView);
     h->addWidget(m_stack, 1);
     m_status = new StatusStrip(*ctx.cases, *ctx.plan, *ctx.run, *ctx.history);
     rows->addWidget(m_status);
@@ -92,6 +95,11 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     } else {
         navigate(Screen::Casos);
     }
+}
+
+void MainWindow::startTesting(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt) {
+    navigate(Screen::Issues);
+    m_issuesView->openRequirement(requirement, connection, fetchedAt);
 }
 
 void MainWindow::setProjectActive(bool active) {
@@ -303,13 +311,14 @@ void MainWindow::buildMenus() {
 
     // Ver
     QMenu* view = bar->addMenu(tr("&Ver"));
-    const std::pair<Screen, QString> screens[] = {
-        {Screen::Casos, tr("&Casos de prueba")}, {Screen::Plan, tr("&Planes de pruebas")}, {Screen::Run, tr("&Ejecución")},
-        {Screen::Historial, tr("&Historial")}, {Screen::Bug, tr("&Reportar bug")}};
+    // Issues va primero, como en el rail, pero conserva Ctrl+6: los atajos de las demás pantallas no cambian.
+    const struct { Screen screen; QString label; Qt::Key key; } screens[] = {
+        {Screen::Issues, tr("I&ssues"), Qt::Key_6}, {Screen::Casos, tr("&Casos de prueba"), Qt::Key_1},
+        {Screen::Plan, tr("&Planes de pruebas"), Qt::Key_2}, {Screen::Run, tr("&Ejecución"), Qt::Key_3},
+        {Screen::Historial, tr("&Historial"), Qt::Key_4}, {Screen::Bug, tr("&Reportar bug"), Qt::Key_5}};
     auto* screenGroup = new QActionGroup(this);
-    int n = 1;
-    for (const auto& [screen, label] : screens) {
-        auto* a = view->addAction(label, QKeySequence(Qt::CTRL | (Qt::Key_0 + n++)), this, [this, screen]() { navigate(screen); });
+    for (const auto& [screen, label, key] : screens) {
+        auto* a = view->addAction(label, QKeySequence(Qt::CTRL | key), this, [this, screen]() { navigate(screen); });
         a->setCheckable(true);
         screenGroup->addAction(a);
         m_screenActions[screen] = a;
@@ -386,7 +395,7 @@ void MainWindow::buildMenus() {
                                     "<tr><td><b>%4</b></td><td>Falla el paso actual y avanza al siguiente (global)</td></tr>"
                                     "<tr><td><b>%5</b></td><td>Vuelve al paso anterior (global)</td></tr>"
                                     "<tr><td><b>Ctrl+B</b></td><td>Reportar bug</td></tr>"
-                                    "<tr><td><b>Ctrl+1 … Ctrl+5</b></td><td>Cambiar de pantalla</td></tr>"
+                                    "<tr><td><b>Ctrl+1 … Ctrl+6</b></td><td>Cambiar de pantalla</td></tr>"
                                     "<tr><td><b>Ctrl+,</b></td><td>Abrir los ajustes</td></tr>"
                                     "<tr><td><b>P / F / B / S</b></td><td>Veredicto del paso en ejecución</td></tr>"
                                     "<tr><td><b>Retroceso</b></td><td>Volver al paso anterior</td></tr>"
@@ -446,7 +455,7 @@ void MainWindow::updateActions() {
 
 void MainWindow::openSettings() {
     if (!m_settings) {
-        m_settings = new SettingsDialog(*m_ctx.settings, *m_ctx.bugs, m_ctx.hotkey, m_ctx.captureBackend, m_ctx.publish, this);
+        m_settings = new SettingsDialog(m_ctx, this);
         connect(m_settings, &SettingsDialog::toast, this, &MainWindow::showToast);
     }
     if (m_ctx.projects) if (const auto* project = m_ctx.projects->find(m_ctx.projectId))
@@ -492,6 +501,7 @@ void MainWindow::wireSignals() {
     connect(m_bug, &BugView::toast, this, &MainWindow::showToast);
     connect(m_plan, &PlanView::toast, this, &MainWindow::showToast);
     connect(m_history, &HistoryView::toast, this, &MainWindow::showToast);
+    connect(m_issuesView, &IssuesView::toast, this, &MainWindow::showToast);
 
     // Casos
     connect(m_cases, &CasesView::historyRequested, this, [this](const QString& id) { m_history->showCase(id); navigate(Screen::Historial); });
@@ -522,6 +532,22 @@ void MainWindow::wireSignals() {
             if (m_ctx.cases->undo()) showToast(tr("Restaurado"), theme::Green);
         });
     });
+
+    // Issues: sus casos, planes y ejecuciones se abren en sus pantallas.
+    connect(m_issuesView, &IssuesView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigate(Screen::Casos); });
+    connect(m_issuesView, &IssuesView::openPlanRequested, this, [this](const QString& id) { m_ctx.plan->setActive(id); navigate(Screen::Plan); });
+    connect(m_issuesView, &IssuesView::openRunRequested, this, [this](const QString& runId) {
+        navigate(Screen::Historial);
+        m_history->showRun(runId);
+    });
+    connect(m_issuesView, &IssuesView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_issuesView, &IssuesView::settingsRequested, this, &MainWindow::openSettings);
+    // Iniciar las pruebas de un requerimiento de otro proyecto: lo resuelve quien coordina las sesiones.
+    connect(m_issuesView, &IssuesView::startTestingRequested, this, &MainWindow::startTestingRequested);
+    connect(m_ctx.issues, &IssueStore::loadFailed, this, [this](const QString& message) { showToast(message, theme::Red); });
+    // El store avisa al cargar, antes de que exista la ventana: aquí se repite para que se vea.
+    if (m_ctx.issues->isReadOnly())
+        QTimer::singleShot(0, this, [this]() { showToast(tr("No se pudieron leer los issues del proyecto: no se guardarán cambios en ellos para no perderlos"), theme::Red); });
 
     // Plan
     connect(m_plan, &PlanView::cycleReportRequested, this, [this](const QString& planRunId) { m_history->showPlan(planRunId); navigate(Screen::Historial); });
@@ -602,6 +628,7 @@ void MainWindow::wireSignals() {
     connect(m_ctx.plan, &PlanStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.plan->save(); }); });
     connect(m_ctx.history, &RunHistoryStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.history->save(); }); });
     connect(m_ctx.bugLedger, &BugStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.bugLedger->save(); }); });
+    connect(m_ctx.issues, &IssueStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.issues->save(); }); });
     connect(m_ctx.run, &RunController::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.run->persistSessionNow(); }); });
 }
 

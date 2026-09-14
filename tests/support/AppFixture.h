@@ -10,14 +10,20 @@
 //   TC-104 Checkout · Alta · 4 pasos · Pasó (seleccionado al cargar)
 //   Plan PL-0001 "Regresión Sprint 14": TC-101, TC-102, TC-104, TC-105 (11 pasos)
 //   Gestor: Jira falso (FakeIssueTracker) en https://acme.atlassian.net, proyecto SHOP, conectado.
+//   GESREQ: falso (FakeRequirementSource), sin ajustes y con la bandeja vacía.
+//   Issues: ninguno (MemoryIssueRepository).
 
 #include "FakeIssueTracker.h"
+#include "FakeRequirementSource.h"
 #include "FakeTestManagement.h"
 #include "MemoryRepositories.h"
 
 #include "application/BugReportService.h"
 #include "application/BugStore.h"
+#include "application/IssuePublishService.h"
+#include "application/IssueStore.h"
 #include "application/PlanStore.h"
+#include "application/RequirementSourceService.h"
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
@@ -35,8 +41,10 @@ struct AppFixture {
     std::shared_ptr<MemorySettingsRepository> settingsRepo = std::make_shared<MemorySettingsRepository>();
     std::shared_ptr<MemorySecretStore> secrets = std::make_shared<MemorySecretStore>();
     std::shared_ptr<MemoryBugRepository> bugRepo = std::make_shared<MemoryBugRepository>();
+    std::shared_ptr<MemoryIssueRepository> issueRepo = std::make_shared<MemoryIssueRepository>();
     std::shared_ptr<FakeIssueTracker> tracker = std::make_shared<FakeIssueTracker>();
     std::shared_ptr<FakeTestManagement> zephyr = std::make_shared<FakeTestManagement>();
+    std::shared_ptr<FakeRequirementSource> requirementSource = std::make_shared<FakeRequirementSource>();
 
     TestCaseStore store{repo};
     RunHistoryStore history{historyRepo, store};
@@ -46,6 +54,9 @@ struct AppFixture {
     BugStore bugLedger{bugRepo};
     BugReportService bugs{tracker, store, run, settings, bugLedger};
     TestPublishService publish{zephyr, store, history, settings};
+    RequirementSourceService requirements{requirementSource, settings};
+    IssueStore issues{issueRepo};
+    IssuePublishService issuePublish{tracker, issues, settings};
 
     AppFixture() {
         store.load();
@@ -53,6 +64,7 @@ struct AppFixture {
         plans.load();
         settings.load();
         bugLedger.load();
+        issues.load();
         settings.updateTracker([](TrackerSettings& s) { s.token = QStringLiteral("test-token"); s.connected = true; });
     }
 };

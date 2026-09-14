@@ -9,8 +9,14 @@ namespace qaflow {
 /// Una sesión completa por proyecto: ni los callbacks ni las escrituras diferidas cambian de dueño.
 class ProjectSession {
 public:
-    ProjectSession(ProjectStore& projects, const QString& id, std::shared_ptr<ISecretStore> secrets);
+    /// `requirementSource` es la conexión con GESREQ, que main.cpp comparte entre proyectos (una sola
+    /// sesión del usuario); sin ella, la sesión crea la suya.
+    ProjectSession(ProjectStore& projects, const QString& id, std::shared_ptr<ISecretStore> secrets,
+                   std::shared_ptr<IRequirementSource> requirementSource = nullptr);
     bool save();
+    /// Si se puede dejar ahora este proyecto. No se puede con una ejecución o una captura en curso:
+    /// `reason` dice qué hay que terminar antes.
+    bool canLeave(QString* reason = nullptr) const;
     AppContext ctx;
     std::shared_ptr<ScreenCaptureService> capture;
     std::shared_ptr<GifRecorder> recorder;
@@ -24,6 +30,9 @@ public:
     std::unique_ptr<TestPublishService> publish;
     std::unique_ptr<EvidenceService> evidence;
     std::unique_ptr<CaseTransferService> transfer;
+    std::unique_ptr<IssueStore> issues;
+    std::unique_ptr<IssuePublishService> issuePublish;
+    std::unique_ptr<RequirementSourceService> requirements;
     std::unique_ptr<MainWindow> window;
 };
 } // namespace qaflow

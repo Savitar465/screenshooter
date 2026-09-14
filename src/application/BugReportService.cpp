@@ -173,4 +173,11 @@ void BugReportService::searchAssignees(const QString& query, std::function<void(
     });
 }
 
+bool BugReportService::canListProjects() const { return m_tracker && m_tracker->canListProjects(m_settings.tracker()); }
+
+void BugReportService::fetchProjects(std::function<void(const TrackerProjectList&)> done) {
+    if (!m_tracker) { done(TrackerProjectList{false, {}, tr("Integración no disponible")}); return; }
+    m_tracker->fetchProjects(m_settings.tracker(), std::move(done));
+}
+
 } // namespace qaflow

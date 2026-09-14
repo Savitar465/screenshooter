@@ -7,6 +7,8 @@
 #include <QJsonObject>
 #include <QUrl>
 
+#include <algorithm>
+
 namespace qaflow {
 
 QNetworkRequest JiraClient::request(const TrackerSettings& s, const QString& path) const {
@@ -186,6 +188,101 @@ void JiraClient::fetchMetadata(const TrackerSettings& s, std::function<void(cons
                 done(MetadataResult{true, meta, {}});
             });
         });
+    });
+}
+
+namespace {
+/// Campos del issue de QAflow en Jira. Las etiquetas no admiten espacios.
+QJsonObject issueFields(const TrackerSettings& s, const TrackerIssueDraft& draft) {
+    QJsonArray labels;
+    for (const auto& l : draft.labels)
+        if (!l.trimmed().isEmpty()) labels.append(QString(l.trimmed()).replace(QLatin1Char(' '), QLatin1Char('-')));
+    QJsonObject fields{
+        {"project", QJsonObject{{"key", s.project.trimmed()}}},
+        {"issuetype", QJsonObject{{"name", draft.issueType.trimmed().isEmpty() ? QStringLiteral("Tarea") : draft.issueType.trimmed()}}},
+        {"summary", draft.summary.trimmed()},
+        {"description", draft.description},
+    };
+    if (!labels.isEmpty()) fields["labels"] = labels;
+    return fields;
+}
+} // namespace
+
+void JiraClient::publishIssue(const TrackerSettings& s, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) {
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) { IssueResult f; f.error = missing; done(f); return; }
+    if (s.project.trimmed().isEmpty()) {
+        IssueResult f;
+        f.error = QCoreApplication::translate("infrastructure", "Indica la clave del proyecto");
+        done(f);
+        return;
+    }
+    postJson(request(s, QStringLiteral("/rest/api/2/issue")), QJsonDocument(QJsonObject{{"fields", issueFields(s, draft)}}), [s, done](const Response& r) {
+        if (!r.ok) { IssueResult f; f.error = errorFor(s, r); f.retryable = r.retryable; done(f); return; }
+        IssueResult res;
+        res.ok = true;
+        res.key = r.json.object()[QStringLiteral("key")].toString();
+        res.url = s.issueUrl(res.key);
+        done(res);
+    });
+}
+
+void JiraClient::fetchIssue(const TrackerSettings& s, const QString& key, std::function<void(const TrackerIssueInfo&)> done) {
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) { TrackerIssueInfo f; f.error = missing; done(f); return; }
+    get(request(s, QStringLiteral("/rest/api/2/issue/%1?fields=summary,status,issuetype").arg(key.trimmed())), [s, key, done](const Response& r) {
+        if (!r.ok) {
+            TrackerIssueInfo f;
+            // Un 404 aquí es «esa clave no existe», que es lo que hay que decir al vincular.
+            f.error = r.status == 404 ? QCoreApplication::translate("infrastructure", "%1 no existe en %2").arg(key.trimmed(), s.baseUrl()) : errorFor(s, r);
+            f.retryable = r.retryable;
+            done(f);
+            return;
+        }
+        const QJsonObject fields = r.json.object()[QStringLiteral("fields")].toObject();
+        const QJsonObject status = fields[QStringLiteral("status")].toObject();
+        TrackerIssueInfo info;
+        info.ok = true;
+        info.key = r.json.object()[QStringLiteral("key")].toString();
+        if (info.key.isEmpty()) info.key = key.trimmed();
+        info.url = s.issueUrl(info.key);
+        info.title = fields[QStringLiteral("summary")].toString();
+        info.issueType = fields[QStringLiteral("issuetype")].toObject()[QStringLiteral("name")].toString();
+        info.status = status[QStringLiteral("name")].toString();
+        info.resolved = status[QStringLiteral("statusCategory")].toObject()[QStringLiteral("key")].toString() == QStringLiteral("done");
+        done(info);
+    });
+}
+
+void JiraClient::updateIssue(const TrackerSettings& s, const QString& key, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) {
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) { IssueResult f; f.error = missing; done(f); return; }
+    // Sólo el texto que salió de QAflow: el tipo, las etiquetas y todo lo demás se quedan como estén en Jira.
+    const QJsonObject body{{"fields", QJsonObject{{"summary", draft.summary.trimmed()}, {"description", draft.description}}}};
+    sendCustom("PUT", request(s, QStringLiteral("/rest/api/2/issue/%1").arg(key.trimmed())), QJsonDocument(body).toJson(QJsonDocument::Compact),
+               [s, key, done](const Response& r) {
+                   if (!r.ok) { IssueResult f; f.error = errorFor(s, r); f.retryable = r.retryable; done(f); return; }
+                   IssueResult res;
+                   res.ok = true;
+                   res.key = key.trimmed();
+                   res.url = s.issueUrl(res.key);
+                   done(res);
+               });
+}
+
+void JiraClient::fetchProjects(const TrackerSettings& s, std::function<void(const TrackerProjectList&)> done) {
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) { done(TrackerProjectList{false, {}, missing}); return; }
+    // `/project` devuelve de una vez los proyectos que puede ver el usuario, en Jira Server 7 y 8 y en
+    // Cloud (donde convive con la versión paginada `/project/search`).
+    get(request(s, QStringLiteral("/rest/api/2/project")), [s, done](const Response& r) {
+        if (!r.ok) { done(TrackerProjectList{false, {}, errorFor(s, r)}); return; }
+        TrackerProjectList list;
+        list.ok = true;
+        for (const auto& v : r.json.array()) {
+            const QJsonObject p = v.toObject();
+            TrackerProject project{p[QStringLiteral("key")].toString(), p[QStringLiteral("name")].toString()};
+            if (!project.key.isEmpty()) list.projects << project;
+        }
+        std::sort(list.projects.begin(), list.projects.end(),
+                  [](const TrackerProject& a, const TrackerProject& b) { return a.name.localeAwareCompare(b.name) < 0; });
+        done(list);
     });
 }
 

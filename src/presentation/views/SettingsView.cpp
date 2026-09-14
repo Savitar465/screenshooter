@@ -1,22 +1,27 @@
 #include "SettingsView.h"
 
+#include "application/AppContext.h"
 #include "application/BugReportService.h"
 #include "application/SettingsStore.h"
 #include "application/TestPublishService.h"
 #include "core/services/IGlobalHotkey.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QCoreApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCompleter>
 #include <QFileDialog>
 #include <QGridLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSpinBox>
+#include <QStringListModel>
 #include <QTimer>
 
 namespace qaflow {
@@ -30,6 +35,14 @@ QWidget* field(const QString& title, QWidget* w, QLabel** titleOut = nullptr) {
     v->addWidget(w);
     if (titleOut) *titleOut = l;
     return box;
+}
+/// Campo con un botón a su derecha (elegir de una lista, examinar…).
+QWidget* withButton(QWidget* edit, QPushButton* button) {
+    auto* row = new QWidget;
+    auto* h = ui::hbox(row, 0, 8);
+    h->addWidget(edit, 1);
+    h->addWidget(button);
+    return row;
 }
 QFrame* section(const QString& accent, const QString& title, const QString& subtitle, QWidget* headerRight, QVBoxLayout** body, QLabel** subtitleOut = nullptr) {
     auto* card = ui::card("card-lg");
@@ -79,9 +92,9 @@ QString hintFor(const TrackerSettings& t) {
 }
 } // namespace
 
-SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlobalHotkey* hotkey, const QString& captureBackend,
-                           TestPublishService* publish, QWidget* parent)
-    : QWidget(parent), m_settings(settings), m_bugs(bugs), m_publish(publish), m_hotkey(hotkey), m_captureBackend(captureBackend) {
+SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
+    : QWidget(parent), m_settings(*ctx.settings), m_bugs(*ctx.bugs), m_publish(ctx.publish), m_requirements(ctx.requirements),
+      m_projects(ctx.projects), m_projectId(ctx.projectId), m_hotkey(ctx.hotkey), m_captureBackend(ctx.captureBackend) {
     auto* root = ui::hbox(this, 0, 0);
     QWidget* content;
     QVBoxLayout* outer;
@@ -99,16 +112,49 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     hv->addWidget(ui::label(tr("Ajustes e integraciones"), "h1"));
     v->addWidget(head);
 
-    // Configuración exclusiva del proyecto, separada de la conexión general.
+    // Configuración exclusiva del proyecto, separada de las conexiones generales.
     QVBoxLayout* projectBody;
     m_projectSection = section(theme::Blue, tr("Configuración del proyecto"),
-                               tr("El código Jira se aplica únicamente al proyecto abierto."), nullptr, &projectBody);
+                               tr("Se aplica únicamente al proyecto abierto; las conexiones con el gestor y con GESREQ son comunes a todos."),
+                               nullptr, &projectBody);
     m_projectSection->setObjectName(QStringLiteral("projectSettingsSection"));
+    auto* projectRow = new QWidget;
+    m_projectCodes = new QGridLayout(projectRow);
+    m_projectCodes->setContentsMargins(0, 0, 0, 0);
+    m_projectCodes->setHorizontalSpacing(12);
     m_jiraProject = new QLineEdit;
     m_jiraProject->setObjectName(QStringLiteral("settingsJiraProject"));
     m_jiraProject->setProperty("role", QStringLiteral("mono"));
     m_jiraProject->setPlaceholderText(QStringLiteral("SHOP"));
-    projectBody->addWidget(field(tr("Código del proyecto Jira"), m_jiraProject));
+    m_jiraProjectPick = ui::button(tr("Buscar…"), "outline");
+    m_jiraProjectPick->setObjectName(QStringLiteral("settingsJiraProjectPick"));
+    m_jiraProjectPick->setToolTip(tr("Elegir entre los proyectos que ves en Jira"));
+    connect(m_jiraProjectPick, &QPushButton::clicked, this, &SettingsView::pickJiraProject);
+    m_jiraProjectField = field(tr("Código del proyecto Jira"), withButton(m_jiraProject, m_jiraProjectPick));
+    m_requirementSystem = new QLineEdit;
+    m_requirementSystem->setObjectName(QStringLiteral("settingsGesreqSystem"));
+    m_requirementSystem->setProperty("role", QStringLiteral("mono"));
+    m_requirementSystem->setPlaceholderText(QStringLiteral("SUMA TRANSITO"));
+    m_requirementSystem->setToolTip(tr("Código del sistema en GESREQ: lo que va antes del guion en la columna «Sistema» de la bandeja"));
+    // Los sistemas de la bandeja se ofrecen al escribir en cuanto la conexión con GESREQ se ha probado.
+    m_systemCompleter = new QCompleter(this);
+    m_systemCompleter->setCaseSensitivity(Qt::CaseInsensitive);
+    m_systemCompleter->setModel(new QStringListModel(m_systemCompleter));
+    m_requirementSystem->setCompleter(m_systemCompleter);
+    m_requirementSystemPick = ui::button(tr("Buscar…"), "outline");
+    m_requirementSystemPick->setObjectName(QStringLiteral("settingsGesreqSystemPick"));
+    m_requirementSystemPick->setToolTip(tr("Elegir del catálogo de sistemas de GESREQ"));
+    connect(m_requirementSystemPick, &QPushButton::clicked, this, &SettingsView::pickRequirementSystem);
+    m_requirementSystemField = field(tr("Sistema de GESREQ"), withButton(m_requirementSystem, m_requirementSystemPick));
+    m_projectCodes->addWidget(m_jiraProjectField, 0, 0);
+    m_projectCodes->addWidget(m_requirementSystemField, 0, 1);
+    projectBody->addWidget(projectRow);
+    m_requirementSystemNote = ui::label(QString(), "muted-sm");
+    m_requirementSystemNote->setObjectName(QStringLiteral("settingsGesreqSystemNote"));
+    m_requirementSystemNote->setWordWrap(true);
+    projectBody->addWidget(m_requirementSystemNote);
+    connect(m_requirementSystem, &QLineEdit::textEdited, this, &SettingsView::refreshRequirementSystemNote);
+    connect(m_requirementSystem, &QLineEdit::editingFinished, this, &SettingsView::commitRequirementSystem);
     v->addWidget(m_projectSection);
 
     // General: idioma, tema y bandeja
@@ -306,6 +352,52 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     bind(m_user, [](TrackerSettings& s, const QString& t) { s.user = t; });
     bind(m_token, [](TrackerSettings& s, const QString& t) { s.token = t; });
 
+    // GESREQ: la conexión es común a todos los proyectos; el sistema de cada uno va en su configuración.
+    m_gesreqBadge = ui::button(QString(), "badge");
+    m_gesreqBadge->setObjectName(QStringLiteral("settingsGesreqBadge"));
+    m_gesreqBadge->setToolTip(tr("Probar la conexión con GESREQ"));
+    m_gesreqBadge->setVisible(m_requirements != nullptr);
+    connect(m_gesreqBadge, &QPushButton::clicked, this, &SettingsView::testRequirementSource);
+    QVBoxLayout* gesreqBody;
+    auto* gesreq = section(theme::Amber, tr("Conexión general con GESREQ"),
+                           tr("Sistema de gestión de requerimientos del que se importan los asignados a tu usuario para control de calidad. "
+                              "La conexión es común a todos los proyectos; el sistema de cada proyecto se elige en «Configuración del proyecto»."),
+                           m_gesreqBadge, &gesreqBody);
+    gesreq->setObjectName(QStringLiteral("gesreqSettings"));
+    m_gesreqUrl = new QLineEdit;
+    m_gesreqUrl->setObjectName(QStringLiteral("settingsGesreqUrl"));
+    m_gesreqUrl->setPlaceholderText(QStringLiteral("http://servidor:7401/greq"));
+    m_gesreqUrl->setToolTip(tr("Dirección de la aplicación con su ruta, la misma con la que se entra desde el navegador"));
+    gesreqBody->addWidget(field(tr("URL"), m_gesreqUrl));
+    auto* gesreqCredentials = new QWidget;
+    auto* gc = new QGridLayout(gesreqCredentials);
+    gc->setContentsMargins(0, 0, 0, 0);
+    gc->setHorizontalSpacing(12);
+    m_gesreqUser = new QLineEdit;
+    m_gesreqUser->setObjectName(QStringLiteral("settingsGesreqUser"));
+    m_gesreqPassword = new QLineEdit;
+    m_gesreqPassword->setObjectName(QStringLiteral("settingsGesreqPassword"));
+    m_gesreqPassword->setEchoMode(QLineEdit::Password);
+    gc->addWidget(field(tr("Usuario"), m_gesreqUser), 0, 0);
+    gc->addWidget(field(tr("Contraseña"), m_gesreqPassword), 0, 1);
+    gc->setColumnStretch(0, 1);
+    gc->setColumnStretch(1, 1);
+    gesreqBody->addWidget(gesreqCredentials);
+    m_gesreqSecretNote = ui::label(QString(), "muted-sm");
+    m_gesreqSecretNote->setWordWrap(true);
+    gesreqBody->addWidget(m_gesreqSecretNote);
+    v->addWidget(gesreq);
+    auto bindGesreq = [this](QLineEdit* e, void (*apply)(RequirementSourceSettings&, const QString&)) {
+        connect(e, &QLineEdit::textEdited, this, [this, apply](const QString& t) {
+            m_selfEdit = true;
+            m_settings.updateRequirementSource([&](RequirementSourceSettings& r) { apply(r, t); r.connected = false; });
+            m_selfEdit = false;
+        });
+    };
+    bindGesreq(m_gesreqUrl, [](RequirementSourceSettings& r, const QString& t) { r.url = t; });
+    bindGesreq(m_gesreqUser, [](RequirementSourceSettings& r, const QString& t) { r.user = t; });
+    bindGesreq(m_gesreqPassword, [](RequirementSourceSettings& r, const QString& t) { r.password = t; });
+
     // Capturas
     QVBoxLayout* cb;
     auto* cap = section(theme::Cyan, tr("Capturas de pantalla y grabaciones"),
@@ -459,10 +551,14 @@ SettingsView::SettingsView(SettingsStore& settings, BugReportService& bugs, IGlo
     connect(&m_settings, &SettingsStore::captureChanged, this, &SettingsView::refreshCapture);
     connect(&m_settings, &SettingsStore::appChanged, this, &SettingsView::refreshGeneral);
     connect(&m_settings, &SettingsStore::runShortcutsChanged, this, &SettingsView::refreshRunShortcuts);
+    connect(&m_settings, &SettingsStore::requirementSourceChanged, this, &SettingsView::refreshRequirementSource);
+    if (m_projects) connect(m_projects, &ProjectStore::projectsChanged, this, &SettingsView::refreshProject);
+    if (m_requirements) connect(m_requirements, &RequirementSourceService::systemsChanged, this, &SettingsView::refreshProject);
     refreshGeneral();
     refreshTracker();
     refreshCapture();
     refreshRunShortcuts();
+    refreshRequirementSource();
     refreshCaptureStatus();
 }
 
@@ -500,7 +596,7 @@ void SettingsView::refreshTracker() {
     // La autenticación sólo se elige en Jira; el usuario, sólo cuando ese modo lo pide. Las columnas
     // que quedan sin campo pierden su peso para que el de al lado ocupe la fila entera.
     const bool jira = t.kind == TrackerKind::Jira;
-    m_projectSection->setVisible(jira);
+    refreshProject();
     m_projectField->setVisible(!jira);
     m_authField->setVisible(jira);
     m_projectGrid->setColumnStretch(0, jira ? 0 : 1);
@@ -598,6 +694,141 @@ void SettingsView::testConnection() {
         if (r.ok) emit toast(tr("Conectado a %1 como %2").arg(name, r.displayName), theme::Green);
         else emit toast(tr("No se pudo conectar · %1").arg(r.error), theme::Red);
     });
+}
+
+void SettingsView::refreshProject() {
+    const bool jira = m_settings.tracker().kind == TrackerKind::Jira;
+    const Project* project = m_projects ? m_projects->find(m_projectId) : nullptr;
+    m_jiraProjectField->setVisible(jira);
+    m_requirementSystemField->setVisible(project != nullptr);
+    m_jiraProjectPick->setEnabled(m_bugs.canListProjects());
+    m_requirementSystemPick->setVisible(m_requirements != nullptr);
+    // Con un solo campo, que ocupe la fila entera.
+    m_projectCodes->setColumnStretch(0, jira ? 1 : 0);
+    m_projectCodes->setColumnStretch(1, project ? 1 : 0);
+    m_projectSection->setVisible(jira || project);
+    if (m_requirements)
+        if (auto* model = qobject_cast<QStringListModel*>(m_systemCompleter->model())) model->setStringList(m_requirements->systems());
+    // Lo que se está escribiendo no se pisa: se guarda al terminar de editar.
+    if (project && !m_requirementSystem->hasFocus()) m_requirementSystem->setText(project->requirementSystem);
+    refreshRequirementSystemNote();
+}
+
+void SettingsView::refreshRequirementSystemNote() {
+    const Project* project = m_projects ? m_projects->find(m_projectId) : nullptr;
+    m_requirementSystemNote->setVisible(project != nullptr);
+    if (!project) return;
+    const QString typed = m_requirementSystem->text().simplified();
+    const QString other = m_projects->projectForRequirementSystem(typed, m_projectId);
+    QString text;
+    if (!other.isEmpty())
+        text = tr("⚠ «%1» ya está vinculado al proyecto «%2»: cada sistema de GESREQ se trabaja en un único proyecto, así que no se guarda.")
+                       .arg(typed, m_projects->find(other)->name);
+    else if (typed.isEmpty())
+        text = tr("Ningún sistema de GESREQ vinculado a este proyecto.");
+    else
+        text = tr("Los requerimientos de GESREQ del sistema «%1» se trabajan en este proyecto.").arg(typed);
+    const QStringList systems = m_requirements ? m_requirements->systems() : QStringList();
+    if (other.isEmpty() && !systems.isEmpty()) text += QLatin1Char(' ') + tr("Sistemas en tu bandeja: %1.").arg(systems.join(QStringLiteral(", ")));
+    m_requirementSystemNote->setText(text);
+    m_requirementSystemNote->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;").arg(other.isEmpty() ? theme::Muted : theme::AmberSoft));
+}
+
+void SettingsView::commitRequirementSystem() {
+    const Project* project = m_projects ? m_projects->find(m_projectId) : nullptr;
+    if (!project) return;
+    const QString system = m_requirementSystem->text().simplified();
+    if (system == project->requirementSystem) return;
+    // Si choca con otro proyecto no se intenta, y se avisa también en la ventana principal: Intro en un
+    // campo de ajustes cierra el diálogo, y con él se iría el aviso de debajo del campo.
+    if (const QString other = m_projects->projectForRequirementSystem(system, m_projectId); !other.isEmpty()) {
+        emit toast(tr("No se guardó el sistema de GESREQ: «%1» ya está vinculado al proyecto «%2»").arg(system, m_projects->find(other)->name), theme::Amber);
+        return;
+    }
+    m_projects->setRequirementSystem(m_projectId, system);
+}
+
+void SettingsView::refreshRequirementSource() {
+    const RequirementSourceSettings& r = m_settings.requirementSource();
+    ui::setFlag(m_gesreqBadge, "active", r.connected);
+    if (m_gesreqBadge->isEnabled()) m_gesreqBadge->setText(r.connected ? tr("●  Conectado") : tr("●  Desconectado"));
+    const bool secure = m_settings.secretsAreSecure();
+    m_gesreqSecretNote->setText(secure ? tr("🔒 Contraseña · se guarda en: %1").arg(m_settings.secretBackend())
+                                       : tr("⚠ Contraseña · se guarda %1. Instala un llavero (secret-tool / libsecret en Linux) para cifrar el dato.").arg(m_settings.secretBackend()));
+    m_gesreqSecretNote->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;").arg(secure ? theme::Muted : theme::AmberSoft));
+    if (m_selfEdit) return;
+    m_selfEdit = true;
+    m_gesreqUrl->setText(r.url);
+    m_gesreqUser->setText(r.user);
+    m_gesreqPassword->setText(r.password);
+    m_selfEdit = false;
+}
+
+void SettingsView::testRequirementSource() {
+    if (!m_requirements) return;
+    m_gesreqBadge->setEnabled(false);
+    m_gesreqBadge->setText(tr("●  Probando…"));
+    m_requirements->testConnection([this](const ConnectionResult& r) {
+        m_gesreqBadge->setEnabled(true);
+        refreshRequirementSource();
+        if (r.ok) emit toast(tr("Conectado a GESREQ · %1").arg(r.displayName), theme::Green);
+        else emit toast(tr("No se pudo conectar con GESREQ · %1").arg(r.error), theme::Red);
+    });
+}
+
+void SettingsView::pickJiraProject() {
+    auto* dialog = new ChoiceDialog(tr("Proyecto de Jira"), tr("Consultando los proyectos de Jira…"),
+                                    [this](const ChoiceDialog::Loaded& done) {
+                                        m_bugs.fetchProjects([done](const TrackerProjectList& r) {
+                                            if (!r.ok) { done({}, tr("No se pudieron consultar los proyectos de Jira · %1").arg(r.error)); return; }
+                                            QList<Choice> choices;
+                                            for (const auto& p : r.projects) choices << Choice{p.key, p.name, {}};
+                                            done(choices, {});
+                                        });
+                                    },
+                                    m_jiraProject->text(), this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &ChoiceDialog::chosen, this, [this](const QString& key) {
+        m_jiraProject->setText(key);
+        m_selfEdit = true;
+        m_settings.updateTracker([&key](TrackerSettings& s) { if (s.kind == TrackerKind::Jira) s.project = key; });
+        m_selfEdit = false;
+    });
+    dialog->open();
+}
+
+void SettingsView::pickRequirementSystem() {
+    if (!m_requirements) return;
+    QPointer<SettingsView> self(this);
+    auto* dialog = new ChoiceDialog(tr("Sistema de GESREQ"), tr("Consultando el catálogo de sistemas de GESREQ…"),
+                                    [self](const ChoiceDialog::Loaded& done) {
+                                        self->m_requirements->fetchSystems([self, done](const RequirementSystemsResult& r) {
+                                            if (!self) return;
+                                            if (!r.ok) { done({}, tr("No se pudo consultar el catálogo de sistemas de GESREQ · %1").arg(r.error)); return; }
+                                            const QStringList inInbox = self->m_requirements->systems();
+                                            QList<Choice> assigned, rest;
+                                            for (const auto& system : r.systems) {
+                                                QStringList hints;
+                                                const bool mine = inInbox.contains(system.code, Qt::CaseInsensitive);
+                                                if (mine) hints << tr("en tu bandeja");
+                                                if (self->m_projects) {
+                                                    const QString owner = self->m_projects->projectForRequirementSystem(system.code, self->m_projectId);
+                                                    if (!owner.isEmpty()) hints << tr("vinculado a «%1»").arg(self->m_projects->find(owner)->name);
+                                                }
+                                                (mine ? assigned : rest) << Choice{system.code, system.name, hints.join(QStringLiteral(" · "))};
+                                            }
+                                            // Los sistemas con requerimientos en tu bandeja van primero: son los que se buscan.
+                                            done(assigned + rest, {});
+                                        });
+                                    },
+                                    m_requirementSystem->text(), this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &ChoiceDialog::chosen, this, [this](const QString& code) {
+        m_requirementSystem->setText(code);
+        commitRequirementSystem();
+        refreshRequirementSystemNote();
+    });
+    dialog->open();
 }
 
 } // namespace qaflow

@@ -73,6 +73,47 @@ private slots:
         QVERIFY(!store.secretsAreSecure());
     }
 
+    // La contraseña de GESREQ va al llavero como el token del gestor; dirección y usuario, al fichero.
+    void gesreqPasswordGoesToSecretStoreNotToRepository() {
+        auto repo = std::make_shared<MemorySettingsRepository>();
+        auto secrets = std::make_shared<MemorySecretStore>();
+        SettingsStore store(repo, secrets);
+        store.load();
+        QSignalSpy changed(&store, &SettingsStore::requirementSourceChanged);
+        store.updateRequirementSource([](RequirementSourceSettings& r) {
+            r.url = QStringLiteral("http://gesreq.test:7401/greq");
+            r.user = QStringLiteral("QAUSR0101");
+            r.password = QStringLiteral("s3creta");
+        });
+        QCOMPARE(changed.count(), 1);
+        QCOMPARE(store.requirementSource().password, QStringLiteral("s3creta"));
+        QVERIFY(repo->requirementSource.password.isEmpty());                                  // nunca en el fichero
+        QCOMPARE(repo->requirementSource.url, QStringLiteral("http://gesreq.test:7401/greq"));
+        QCOMPARE(secrets->values.value(QStringLiteral("gesreq/password")), QStringLiteral("s3creta"));
+        QVERIFY(!secrets->values.contains(QStringLiteral("tracker/jira/token")));            // no se mezcla con el del gestor
+
+        SettingsStore reloaded(repo, secrets);
+        reloaded.load();
+        QCOMPARE(reloaded.requirementSource().user, QStringLiteral("QAUSR0101"));
+        QCOMPARE(reloaded.requirementSource().password, QStringLiteral("s3creta"));
+
+        store.updateRequirementSource([](RequirementSourceSettings& r) { r.password.clear(); });
+        QVERIFY(!secrets->values.contains(QStringLiteral("gesreq/password")));               // borrada al vaciar
+    }
+
+    void plainGesreqPasswordIsMigratedToSecretStore() {
+        auto repo = std::make_shared<MemorySettingsRepository>();
+        repo->requirementSource.url = QStringLiteral("http://gesreq.test:7401/greq");
+        repo->requirementSource.password = QStringLiteral("en-claro");
+        auto secrets = std::make_shared<MemorySecretStore>();
+        SettingsStore store(repo, secrets);
+        store.load();
+        QCOMPARE(store.requirementSource().password, QStringLiteral("en-claro"));
+        QCOMPARE(secrets->values.value(QStringLiteral("gesreq/password")), QStringLiteral("en-claro"));
+        QVERIFY(repo->requirementSource.password.isEmpty());   // el repositorio se reescribe sin ella
+        QCOMPARE(repo->requirementSource.url, QStringLiteral("http://gesreq.test:7401/greq"));
+    }
+
     void captureFolderDefaultsToHome() {
         SettingsStore store(std::make_shared<MemorySettingsRepository>());
         store.load();

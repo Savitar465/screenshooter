@@ -25,7 +25,7 @@ QString JsonProjectRepository::dataDir(const QString& id) const {
 std::optional<ProjectCollection> JsonProjectRepository::load() {
     QFile file(QDir(m_root).filePath(QStringLiteral("projects.json")));
     if (!file.exists()) {
-        ProjectCollection initial{QStringLiteral("default"), {{QStringLiteral("default"), QStringLiteral("Proyecto principal")}}, {}};
+        ProjectCollection initial{QStringLiteral("default"), {Project{QStringLiteral("default"), QStringLiteral("Proyecto principal"), {}}}, {}};
         JsonTestCaseRepository cases(m_root);
         if (const auto existing = cases.loadCases())
             for (const auto& c : *existing)
@@ -44,8 +44,10 @@ std::optional<ProjectCollection> JsonProjectRepository::load() {
         const auto p = value.toObject();
         const QString id = p["id"].toString(), name = p["name"].toString().trimmed();
         if (!validId(id) || name.isEmpty() || ids.contains(id)) return std::nullopt;
+        // El sistema de GESREQ es opcional: los catálogos anteriores no lo tienen.
+        if (p.contains("requirementSystem") && !p["requirementSystem"].isString()) return std::nullopt;
         ids.insert(id);
-        collection.projects.append({id, name});
+        collection.projects.append(Project{id, name, p["requirementSystem"].toString().simplified()});
     }
     collection.activeId = object["activeId"].toString();
     if (collection.projects.isEmpty() || !ids.contains(collection.activeId)) return std::nullopt;
@@ -70,7 +72,11 @@ std::optional<ProjectCollection> JsonProjectRepository::load() {
 bool JsonProjectRepository::save(const ProjectCollection& collection) {
     if (!QDir().mkpath(m_root)) return false;
     QJsonArray projects;
-    for (const auto& p : collection.projects) projects.append(QJsonObject{{"id", p.id}, {"name", p.name}});
+    for (const auto& p : collection.projects) {
+        QJsonObject item{{"id", p.id}, {"name", p.name}};
+        if (!p.requirementSystem.isEmpty()) item.insert(QStringLiteral("requirementSystem"), p.requirementSystem);
+        projects.append(item);
+    }
     const QByteArray bytes = QJsonDocument(QJsonObject{{"version", 1}, {"activeId", collection.activeId}, {"projects", projects}, {"suites", QJsonArray::fromStringList(collection.suites)}}).toJson();
     QSaveFile file(QDir(m_root).filePath(QStringLiteral("projects.json")));
     return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit();

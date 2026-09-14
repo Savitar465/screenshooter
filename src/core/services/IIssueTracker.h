@@ -3,6 +3,7 @@
 #include "core/models/BugReport.h"
 #include "core/models/Settings.h"
 
+#include <QCoreApplication>
 #include <QList>
 #include <QString>
 #include <QtGlobal>
@@ -63,6 +64,41 @@ struct AssigneeSearch {
     QString error;
 };
 
+/// Un proyecto del gestor: la clave con la que se configura y su nombre.
+struct TrackerProject {
+    QString key;        // SHOP
+    QString name;       // Tienda online
+};
+
+/// Proyectos que ve el usuario en el gestor, para elegir el de un proyecto de QAflow.
+struct TrackerProjectList {
+    bool ok = false;
+    QList<TrackerProject> projects;
+    QString error;
+};
+
+/// Lo que QAflow manda al gestor al publicar un issue de trabajo (no un defecto): el issue de QAflow
+/// decide el texto, y el gestor sólo lo traduce a sus campos.
+struct TrackerIssueDraft {
+    QString summary;
+    QString description;
+    QString issueType;     // tipo de incidencia del gestor ("Tarea", "Task", "Historia"…)
+    QStringList labels;
+};
+
+/// Un issue tal y como está ahora en el gestor.
+struct TrackerIssueInfo {
+    bool ok = false;
+    QString key;
+    QString url;
+    QString title;
+    QString issueType;
+    QString status;
+    bool resolved = false;
+    QString error;
+    bool retryable = false;
+};
+
 /// Gestor de incidencias. Asíncrono: las llamadas devuelven por callback en el hilo principal.
 class IIssueTracker {
 public:
@@ -80,6 +116,36 @@ public:
     virtual void searchAssignees(const TrackerSettings& s, const QString& query, std::function<void(const AssigneeSearch&)> done) {
         Q_UNUSED(s); Q_UNUSED(query);
         done(AssigneeSearch{});
+    }
+
+    /// ¿Sabe este gestor listar sus proyectos? Sólo Jira, que es el gestor cuyo proyecto se elige en la
+    /// configuración de cada proyecto de QAflow.
+    virtual bool canListProjects(const TrackerSettings& s) const { Q_UNUSED(s); return false; }
+    /// Proyectos que ve el usuario de los ajustes, ordenados por nombre.
+    virtual void fetchProjects(const TrackerSettings& s, std::function<void(const TrackerProjectList&)> done) {
+        Q_UNUSED(s);
+        done(TrackerProjectList{false, {}, QCoreApplication::translate("core", "Este gestor no permite elegir el proyecto de una lista")});
+    }
+
+    /// ¿Sabe este gestor publicar y mantener los issues de QAflow (no los defectos)? Sólo Jira, por ahora.
+    virtual bool canPublishIssues(const TrackerSettings& s) const { Q_UNUSED(s); return false; }
+    /// Crea en el gestor la representación del issue de QAflow.
+    virtual void publishIssue(const TrackerSettings& s, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) {
+        Q_UNUSED(s); Q_UNUSED(draft);
+        done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no publica los issues de QAflow"), false, 0});
+    }
+    /// Issue que ya existe en el gestor, para vincularlo en vez de crear otro.
+    virtual void fetchIssue(const TrackerSettings& s, const QString& key, std::function<void(const TrackerIssueInfo&)> done) {
+        Q_UNUSED(s); Q_UNUSED(key);
+        TrackerIssueInfo info;
+        info.error = QCoreApplication::translate("core", "Este gestor no publica los issues de QAflow");
+        done(info);
+    }
+    /// Reescribe en el gestor el título y la descripción del issue publicado.
+    virtual void updateIssue(const TrackerSettings& s, const QString& key, const TrackerIssueDraft& draft,
+                             std::function<void(const IssueResult&)> done) {
+        Q_UNUSED(s); Q_UNUSED(key); Q_UNUSED(draft);
+        done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no publica los issues de QAflow"), false, 0});
     }
 };
 

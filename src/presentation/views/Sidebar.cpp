@@ -1,6 +1,7 @@
 #include "Sidebar.h"
 
 #include "application/BugStore.h"
+#include "application/IssueStore.h"
 #include "application/PlanStore.h"
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
@@ -20,8 +21,9 @@ constexpr int kButtonSize = 42;
 constexpr int kIconSize = 22;
 } // namespace
 
-Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunHistoryStore& history, BugStore& bugs, QWidget* parent)
-    : QFrame(parent), m_cases(cases), m_plan(plan), m_run(run), m_history(history), m_bugs(bugs) {
+Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunHistoryStore& history, BugStore& bugs, IssueStore& issues,
+                 QWidget* parent)
+    : QFrame(parent), m_cases(cases), m_plan(plan), m_run(run), m_history(history), m_bugs(bugs), m_issues(issues) {
     ui::setRole(this, "rail");
     setFixedWidth(kRailWidth);
     auto* v = ui::vbox(this, 0, 4);
@@ -37,6 +39,8 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunH
     v->addWidget(logo);
     v->addSpacing(10);
 
+    // Los issues, primero: son el punto de entrada para organizar las pruebas de cada requerimiento.
+    v->addWidget(navButton(Screen::Issues, icons::Glyph::Issues, theme::Cyan, tr("Issues"), QStringLiteral("Ctrl+6")));
     v->addWidget(navButton(Screen::Casos, icons::Glyph::Cases, theme::Violet, tr("Casos de prueba"), QStringLiteral("Ctrl+1")));
     v->addWidget(navButton(Screen::Plan, icons::Glyph::Plan, theme::Amber, tr("Plan de pruebas"), QStringLiteral("Ctrl+2")));
     v->addWidget(navButton(Screen::Run, icons::Glyph::Run, theme::Green, tr("Ejecución"), QStringLiteral("Ctrl+3")));
@@ -62,6 +66,7 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunH
     connect(&m_run, &RunController::runChanged, this, &Sidebar::refresh);
     connect(&m_history, &RunHistoryStore::historyChanged, this, &Sidebar::refresh);
     connect(&m_bugs, &BugStore::bugsChanged, this, &Sidebar::refresh);
+    connect(&m_issues, &IssueStore::issuesChanged, this, &Sidebar::refresh);
     refresh();
 }
 
@@ -139,6 +144,11 @@ void Sidebar::refresh() {
              pending ? theme::Amber : theme::Red, pending ? theme::OnAccent : QStringLiteral("#ffffff"));
     setTooltip(Screen::Bug, pending ? tr("%1 pendientes de enviar").arg(pending)
                                     : open ? tr("%1 issues abiertos").arg(open) : QString());
+    // Issues: los que traen cambios de GESREQ sin revisar.
+    const int changed = m_issues.changedCount();
+    const int issues = int(m_issues.issues().size());
+    setBadge(Screen::Issues, changed ? QString::number(changed) : QString(), theme::Amber, theme::OnAccent);
+    setTooltip(Screen::Issues, changed ? tr("%1 issues · %2 con cambios en GESREQ").arg(issues).arg(changed) : tr("%1 issues").arg(issues));
     setActive(m_active);
 }
 

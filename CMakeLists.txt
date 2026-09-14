@@ -44,6 +44,12 @@ add_library(qaflow_core STATIC
         src/core/models/CaseFilter.h
         src/core/models/CaseFormats.h
         src/core/models/CaseFormats.cpp
+        src/core/models/Requirement.h
+        src/core/models/Requirement.cpp
+        src/core/models/Issue.h
+        src/core/models/Issue.cpp
+        src/core/services/IRequirementSource.h
+        src/core/services/IIssueRepository.h
         src/core/services/ITestCaseRepository.h
         src/core/services/IRunHistoryRepository.h
         src/core/services/IRunSessionRepository.h
@@ -86,6 +92,12 @@ add_library(qaflow_application STATIC
         src/application/CaseTransferService.cpp
         src/application/TestPublishService.h
         src/application/TestPublishService.cpp
+        src/application/RequirementSourceService.h
+        src/application/RequirementSourceService.cpp
+        src/application/IssueStore.h
+        src/application/IssueStore.cpp
+        src/application/IssuePublishService.h
+        src/application/IssuePublishService.cpp
 )
 target_link_libraries(qaflow_application PUBLIC qaflow_core Qt6::Gui PRIVATE qaflow_warnings)
 
@@ -101,6 +113,8 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/persistence/JsonRunSessionRepository.cpp
         src/infrastructure/persistence/JsonBugRepository.h
         src/infrastructure/persistence/JsonBugRepository.cpp
+        src/infrastructure/persistence/JsonIssueRepository.h
+        src/infrastructure/persistence/JsonIssueRepository.cpp
         src/infrastructure/persistence/QSettingsRepository.h
         src/infrastructure/persistence/QSettingsRepository.cpp
         src/infrastructure/capture/ScreenCaptureService.h
@@ -138,6 +152,10 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/tracker/TrackerRouter.cpp
         src/infrastructure/testmgmt/ZephyrClient.h
         src/infrastructure/testmgmt/ZephyrClient.cpp
+        src/infrastructure/requirements/GesreqParser.h
+        src/infrastructure/requirements/GesreqParser.cpp
+        src/infrastructure/requirements/GesreqClient.h
+        src/infrastructure/requirements/GesreqClient.cpp
 )
 target_link_libraries(qaflow_infrastructure PUBLIC qaflow_core Qt6::Gui Qt6::Widgets Qt6::Network PRIVATE qaflow_warnings)
 if (WIN32)
@@ -199,6 +217,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/AnnotationEditor.cpp
         src/presentation/widgets/EvidenceActions.h
         src/presentation/widgets/EvidenceActions.cpp
+        src/presentation/widgets/ChoiceDialog.h
+        src/presentation/widgets/ChoiceDialog.cpp
         src/presentation/views/Sidebar.h
         src/presentation/views/Sidebar.cpp
         src/presentation/views/StatusStrip.h
@@ -211,6 +231,12 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/HistoryView.cpp
         src/presentation/views/BugView.h
         src/presentation/views/BugView.cpp
+        src/presentation/views/IssuesView.h
+        src/presentation/views/IssuesView.cpp
+        src/presentation/views/JiraPublishDialog.h
+        src/presentation/views/JiraPublishDialog.cpp
+        src/presentation/views/RequirementImportDialog.h
+        src/presentation/views/RequirementImportDialog.cpp
         src/presentation/views/PlanView.h
         src/presentation/views/PlanView.cpp
         src/presentation/views/SettingsView.h

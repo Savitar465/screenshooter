@@ -1,0 +1,90 @@
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <title>ANB    </title>
+
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" type="text/css" href="lib/bootstrap/css/bootstrap.css">
+        <link rel="stylesheet" type="text/css" href="css/main.css" />
+
+       <script src="lib/jquery/jquery-2.1.3.min.js"></script>
+
+        <script type="text/javascript">
+            $(document).ready(function() {
+
+
+                /*
+                 */
+            });
+        </script>
+    </head>
+
+    <body class="login">
+        <header>
+            <div class="logo"><h1>Courier</h1></div>
+        </header>
+        <div class="container-login">
+            <div class="container-fluid">
+
+
+
+
+<div class="form-login">
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h3 class="panel-title">Debe iniciar su sesión</h3>
+        </div>
+        <form name="AuthForm" method="post" action="/greq/login.do;jsessionid=FAKESESSION!-1" class="panel-body" style="padding: 15px;">
+
+
+            <div class="input-group">
+                <input type="text" name="usuario" class="form-control" value="" placeholder="Usuario" />
+                <span class="input-group-addon"><i class="fa fa-user"></i></span>
+            </div>
+
+            <div class="input-group bottom">
+                <input type="password" name="clave" class="form-control" value="" placeholder="Contraseña" />
+                <span class="input-group-addon"><i class="fa fa-lock"></i></span>
+            </div>
+
+
+            <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
+        </form>
+    </div>
+</div>
+
+
+
+
+            </div>
+        </div>
+        <div class="text-center">
+        <footer class="footer">
+            <span class="text-muted center">&copy; 2017 - 2026. Versión 5.3.4</span>
+        </footer>
+        <div id="main-modal" class="modal fade">
+            <div class="modal-dialog">
+                <div class="modal-content"></div>
+            </div>
+        </div>
+        <script type="text/js-tmpl" id="anb-message-tmpl">
+            <div class="anb-message anb-message-{type}">
+                <span class="close" title="Cerrar">x</span>
+                <div class="anb-message-header"><i class="fa {icon}"></i> {title}</div>
+                <div class="anb-message-body">{message}</div>
+            </div>
+        </script>
+        </div>
+    </body>
+</html>

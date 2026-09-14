@@ -4,8 +4,11 @@
 #include "application/BugStore.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
+#include "application/IssuePublishService.h"
+#include "application/IssueStore.h"
 #include "application/PlanStore.h"
 #include "application/ProjectStore.h"
+#include "application/RequirementSourceService.h"
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
@@ -31,8 +34,14 @@ struct AppContext {
     BugReportService* bugs = nullptr;
     BugStore* bugLedger = nullptr;
     CaseTransferService* transfer = nullptr;
+    /// Issues del proyecto: el trabajo de QA de cada requerimiento, con sus casos y planes.
+    IssueStore* issues = nullptr;
+    /// Publicación del issue en el gestor (puede ser nullptr en tests).
+    IssuePublishService* issuePublish = nullptr;
     /// Publicación de ciclos en Zephyr (puede ser nullptr en tests).
     TestPublishService* publish = nullptr;
+    /// Conexión con GESREQ, del que se importan los requerimientos (puede ser nullptr en tests).
+    RequirementSourceService* requirements = nullptr;
     /// Atajo global del sistema (puede ser nullptr en tests). Ajustes muestra su `status()`.
     IGlobalHotkey* hotkey = nullptr;
     /// Directorio de datos (cases.json, history.json…), para mostrarlo o abrirlo desde la UI.

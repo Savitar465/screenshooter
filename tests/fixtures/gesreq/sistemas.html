@@ -1,0 +1,103 @@
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <title>ANB    -  Seguimiento Requerimiento</title>
+        <meta charset="utf-8">
+       <script src="lib/jquery/jquery-2.1.3.min.js"></script>
+    </head>
+    <body>
+        <div id="container">
+<nav id="sidebar">
+    <div class="navigation">
+        <div class="user-data">
+            <h4 class="user-details pull-left">
+                Tester Uno, Ana<br>
+            </h4>
+        </div>
+        <ul class="list-unstyled">
+            <li>
+                <a href="logout.do">
+                    <span class="nav-label">Cerrar sesión</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+</nav>
+            <div class="container-fluid" id="container-main" style="overflow: hidden;">
+                <div id="anb-messages" class="anb-messages"></div>
+<script src="lib/datatables/js/jquery.dataTables.min.js"></script>
+<div class="panel panel-primary">
+    <div class="panel-heading" role="tab" id="headingOne">
+        <h4 class="panel-title">
+            <strong>Reporte POAI - Criterios de B&uacute;squeda</strong>
+        </h4>
+    </div>
+    <div class="panel-body">
+        <form name="ReporteForm" id="form" method="post" action="/greq/poaiConsulta.do" class="form-horizontal" onsubmit="return validar(this)">
+            <input type="hidden" name="accion" value="poai" id="accion">
+            <div class="panel panel-default">
+                <div class="panel-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="col-md-4 control-label" for="cmbTipoSolicitud">Tipo Solicitud:</label>
+                                <div class="col-md-8">
+                                    <select class="form-control" id="cmbTipoSolicitud" name="tipoSolicitud">
+                                        <option value=""></option>
+                                        <option value="1" >NUEVO SISTEMA</option>
+                                        <option value="2" >NUEVA FUNCIONALIDAD</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="col-md-4 control-label" for="cmbSistema">Sistema:</label>
+                                <div class="col-md-8">
+                                    <select class="form-control select2" id="cmbSistema" name="sistema">
+                                        <option value=""></option>
+                                        <!-- <option value="ANTIGUO">ANTIGUO - SISTEMA DADO DE BAJA</option> -->
+                                        <option value="FACTURACION" >FACTURACION - FACTURACION ELECTRONICA</option>
+                                        <option value="INVENTARIO" >INVENTARIO - SISTEMA DE INVENTARIO - MODULO DE INGRESO</option>
+                                        <option value="PORTAL WEB" >PORTAL WEB - PORTAL INSTITUCIONAL</option>
+                                        <option value="GESTION DOC" >GESTION DOC - SISTEMA DE GESTI&Oacute;N DOCUMENTAL</option>
+                                        <option value="ws_ventas" >ws_ventas - SERVICIO WEB DE VENTAS</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="col-md-4 control-label" for="cmbRecursoAsignado">Recurso Asignado:</label>
+                                <div class="col-md-8">
+                                    <select class="form-control" id="cmbRecursoAsignado" name="recursoAsignado">
+                                        <option value=""></option>
+                                        <option value="QAUSR0101" >TESTER UNO ANA (QAUSR0101)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+            </div>
+        </div>
+        <script type="text/js-tmpl" id="anb-message-tmpl">
+            <div class="anb-message anb-message-{type}">
+                <div class="anb-message-body">{message}</div>
+            </div>
+        </script>
+    </body>
+</html>

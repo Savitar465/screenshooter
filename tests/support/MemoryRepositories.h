@@ -4,6 +4,8 @@
 // Guardan lo último escrito para poder comprobarlo y cuentan las escrituras.
 
 #include "core/services/IBugRepository.h"
+#include "core/services/IIssueRepository.h"
+#include "core/services/IProjectRepository.h"
 #include "core/services/IRunHistoryRepository.h"
 #include "core/services/IRunSessionRepository.h"
 #include "core/services/ISecretStore.h"
@@ -60,15 +62,41 @@ public:
     bool saveLedger(const BugLedger& l) override { if (failWrites) return false; ledger = l; ++saves; return true; }
 };
 
+/// Issues en memoria. `issues` a nullopt simula unos datos que no se pueden leer.
+class MemoryIssueRepository : public IIssueRepository {
+public:
+    std::optional<QList<Issue>> issues = QList<Issue>{};
+    int saves = 0;
+    bool failWrites = false;
+
+    std::optional<QList<Issue>> loadIssues() override { return issues; }
+    bool saveIssues(const QList<Issue>& i) override { if (failWrites) return false; issues = i; ++saves; return true; }
+};
+
+/// Catálogo de proyectos en memoria: empieza con el proyecto principal, como un catálogo recién creado.
+class MemoryProjectRepository : public IProjectRepository {
+public:
+    ProjectCollection collection{QStringLiteral("default"), {Project{QStringLiteral("default"), QStringLiteral("Proyecto principal"), {}}}, {}};
+    bool failWrites = false;
+
+    std::optional<ProjectCollection> load() override { return collection; }
+    bool save(const ProjectCollection& c) override { if (failWrites) return false; collection = c; return true; }
+    bool initialize(const QString&) override { return !failWrites; }
+    QString dataDir(const QString& id) const override { return id; }
+};
+
 class MemorySettingsRepository : public ISettingsRepository {
 public:
     TrackerSettings tracker;
+    RequirementSourceSettings requirementSource;
     CaptureSettings capture;
     AppSettings app;
     RunShortcuts runShortcuts;
 
     TrackerSettings loadTracker() override { return tracker; }
     void saveTracker(const TrackerSettings& s) override { tracker = s; }
+    RequirementSourceSettings loadRequirementSource() override { return requirementSource; }
+    void saveRequirementSource(const RequirementSourceSettings& s) override { requirementSource = s; }
     CaptureSettings loadCapture() override { return capture; }
     void saveCapture(const CaptureSettings& c) override { capture = c; }
     AppSettings loadApp() override { return app; }

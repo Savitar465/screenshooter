@@ -10,6 +10,9 @@ namespace qaflow {
 struct BugReport {
     QString title;
     QString severity = QStringLiteral("Mayor");      // Bloqueante, Crítica, Mayor, Menor, Trivial
+    /// Clasificación del formulario de control de calidad (R-213): A Funcionamiento/Lógica, B Datos,
+    /// C Estético/Forma, D Recomendaciones, E Vulnerabilidades. Es lo que cuenta el acta por tipo.
+    QString classification = QStringLiteral("A");
     QString environment = QStringLiteral("Staging"); // Staging, QA, Producción
     QString linkedCaseId;
     QString linkedStoryKey;   // historia enlazada al caso (opcional)
@@ -32,9 +35,16 @@ struct BugReport {
     /// Severidades y entornos admitidos (valores canónicos, en el orden del formulario).
     static QStringList severities();
     static QStringList environments();
+    /// Tipos de observación del acta, en el orden del formulario: "A"… "E".
+    static QStringList classifications();
+    /// Nombre del tipo tal y como está impreso en el formulario ("Funcionamiento/Lógica"). No se
+    /// traduce: es el texto del acta, que siempre sale en español.
+    static QString classificationName(const QString& classification);
     /// Texto para mostrar de una severidad o entorno canónicos, en el idioma de la interfaz.
     static QString severityLabel(const QString& severity);
     static QString environmentLabel(const QString& environment);
+    /// "A · Funcionamiento/Lógica", para los combos de la interfaz.
+    static QString classificationLabel(const QString& classification);
     /// Prioridad de Jira sugerida a partir de la severidad ("Bloqueante" → "Highest"…).
     static QString jiraPriorityFor(const QString& severity);
 

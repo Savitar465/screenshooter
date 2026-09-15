@@ -22,6 +22,7 @@ class PlanStore;
 class RunHistoryStore;
 class IssuePublishService;
 class RequirementSourceService;
+class QualityRecordService;
 class BugReportService;
 class ProjectStore;
 class TextArea;
@@ -88,6 +89,19 @@ private:
     /// Nombre del proyecto que trabaja ese sistema de GESREQ; vacío si ninguno lo tiene vinculado.
     QString projectNameForSystem(const QString& systemCode) const;
     void refreshJira(const Issue& issue);
+    /// La tarjeta «Revisión»: en qué paso del flujo está, qué se lleva ejecutado, qué resultado se
+    /// propone y las revisiones ya cerradas con su acta.
+    void refreshRevision(const Issue& issue);
+    /// Abre el acta de la revisión, la genera y la guarda donde diga el usuario.
+    void generateRecord();
+    /// Deja en el issue del gestor un comentario con el resultado de la revisión y su acta.
+    void sendResultToTracker();
+    /// Registra en GESREQ el resultado de la revisión (con su acta) y la cierra con él.
+    void registerInGesreq();
+    /// Cierra la revisión en curso con el resultado que se confirme.
+    void closeRevision();
+    /// Abre la ronda siguiente de pruebas del requerimiento.
+    void openRevision();
     /// Crear la representación en el gestor, revisándola antes; con `update`, reescribir la ya publicada.
     void openPublishDialog(bool update);
     void publishToJira();
@@ -106,6 +120,7 @@ private:
     RequirementSourceService* m_requirements;
     IssuePublishService* m_publish;
     BugReportService* m_bugs;   // sólo para ofrecer el código Jira al crear un proyecto desde la bandeja
+    QualityRecordService* m_records;
     ProjectStore* m_projects;
     QString m_projectId;
     IssueFilter m_filter;
@@ -161,6 +176,17 @@ private:
     QVBoxLayout* m_casesList;
     QLabel* m_plansHeader;
     QVBoxLayout* m_plansList;
+    QWidget* m_revisionCard;
+    QHBoxLayout* m_revisionFlow;
+    QLabel* m_revisionProgress;
+    QLabel* m_revisionOutcome;
+    QLabel* m_revisionDocument;
+    QVBoxLayout* m_revisionsList;
+    QPushButton* m_recordButton;
+    QPushButton* m_sendResultButton;
+    QPushButton* m_registerButton;
+    QPushButton* m_closeRevisionButton;
+    QPushButton* m_newRevisionButton;
     QLabel* m_resultsHeader;
     QVBoxLayout* m_resultsList;
 };

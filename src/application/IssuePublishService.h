@@ -57,6 +57,14 @@ public:
     void unlink(const QString& issueId);
     void refreshStatus(const QString& issueId, std::function<void(const Result&)> done);
 
+    /// ¿Se puede dejar el resultado de la revisión en el gestor? Hace falta que el issue esté publicado
+    /// (o vinculado) y que el gestor sepa comentar.
+    bool canPublishResult(const Issue& issue) const;
+    /// Comenta en el issue del gestor el resultado de la revisión y le adjunta el acta, si se pasa.
+    /// Lo guarda en la revisión; un envío cortado la deja «sin confirmar», como la publicación.
+    void publishResult(const QString& issueId, const QString& comment, const QString& documentPath,
+                       std::function<void(const Result&)> done);
+
     /// Tipos de incidencia del proyecto de destino, para elegir con cuál se crea. Se piden una vez por
     /// gestor y proyecto; si no se pueden leer, la lista llega vacía y el tipo se escribe a mano.
     void fetchIssueTypes(std::function<void(const QStringList&)> done);

@@ -1,7 +1,9 @@
-// Issue (core/models/Issue.h): estados, prioridad a partir del requerimiento, qué cambió entre dos
-// lecturas del mismo requerimiento y filtro de la lista.
+// Issue (core/models/Issue.h): estados, revisiones y su resultado, prioridad a partir del
+// requerimiento, qué cambió entre dos lecturas del mismo requerimiento y filtro de la lista.
+// También IssueProgress (core/models/IssueProgress.h): cómo va el control de calidad de un issue.
 
 #include "core/models/Issue.h"
+#include "core/models/IssueProgress.h"
 
 #include <QtTest>
 
@@ -35,6 +37,124 @@ private slots:
         QVERIFY(issueStateFromString(QStringLiteral("en pruebas")) == IssueState::Testing);
         QVERIFY(issueStateFromString(QStringLiteral("desconocido")) == IssueState::Pending);
         QCOMPARE(label(IssueState::Done), QStringLiteral("Finalizado"));
+    }
+
+    void outcomesHaveCanonicalValuesAndLabels() {
+        for (const auto o : {QaOutcome::Pendiente, QaOutcome::Conforme, QaOutcome::Observado})
+            QVERIFY(qaOutcomeFromString(toString(o)) == o);
+        QCOMPARE(toString(QaOutcome::Observado), QStringLiteral("Observado"));
+        QVERIFY(qaOutcomeFromString(QStringLiteral("conforme")) == QaOutcome::Conforme);
+        QVERIFY(qaOutcomeFromString(QStringLiteral("lo que sea")) == QaOutcome::Pendiente);
+    }
+
+    void revisionsGoFromTheOpenOneToTheLastResult() {
+        Issue issue;
+        QVERIFY(!issue.currentRevision());
+        QVERIFY(!issue.lastClosedRevision());
+        QVERIFY(issue.lastOutcome() == QaOutcome::Pendiente);
+
+        IssueRevision first;
+        first.number = 1;
+        first.startedAt = QDateTime::currentDateTime();
+        issue.revisions << first;
+        QVERIFY(issue.currentRevision());
+        QCOMPARE(issue.currentRevision()->number, 1);
+        QVERIFY(!issue.lastClosedRevision());
+
+        issue.revisions.last().closedAt = QDateTime::currentDateTime();
+        issue.revisions.last().outcome = QaOutcome::Observado;
+        QVERIFY(!issue.currentRevision());                          // cerrada: ya no hay ninguna en curso
+        QVERIFY(issue.lastOutcome() == QaOutcome::Observado);
+
+        IssueRevision second;
+        second.number = 2;
+        second.startedAt = QDateTime::currentDateTime();
+        issue.revisions << second;
+        QVERIFY(issue.currentRevision() && issue.currentRevision()->number == 2);
+        QVERIFY(issue.lastClosedRevision()->number == 1);           // la anterior sigue siendo la última cerrada
+        QVERIFY(issue.lastOutcome() == QaOutcome::Observado);
+    }
+
+    void progressCountsTheLastRunOfEachCaseAndProposesTheOutcome() {
+        Issue issue;
+        issue.caseIds = {QStringLiteral("TC-1"), QStringLiteral("TC-2"), QStringLiteral("TC-3"), QStringLiteral("TC-9")};
+        QList<TestCase> cases;
+        for (const auto& id : {QStringLiteral("TC-1"), QStringLiteral("TC-2"), QStringLiteral("TC-3")}) {
+            TestCase c;
+            c.id = id;
+            cases << c;
+        }
+        const QDateTime now = QDateTime::currentDateTime();
+        auto run = [&now](const QString& id, const QString& caseId, Verdict v, int minutesAgo) {
+            RunRecord r;
+            r.id = id;
+            r.caseId = caseId;
+            r.verdict = v;
+            r.startedAt = now.addSecs(-60 * minutesAgo);
+            r.finishedAt = r.startedAt.addSecs(120);
+            return r;
+        };
+
+        QList<RunRecord> runs{run(QStringLiteral("R-1"), QStringLiteral("TC-1"), Verdict::Fallido, 30),
+                              run(QStringLiteral("R-2"), QStringLiteral("TC-1"), Verdict::Superado, 5),   // repetido: manda el último
+                              run(QStringLiteral("R-3"), QStringLiteral("TC-2"), Verdict::Superado, 20)};
+        IssueProgress p = issueProgress(issue, cases, runs, {});
+        QCOMPARE(p.cases, 3);
+        QCOMPARE(p.missingCases, 1);          // TC-9 ya no existe
+        QCOMPARE(p.executed, 2);
+        QCOMPARE(p.passed, 2);
+        QCOMPARE(p.notRun(), 1);
+        QVERIFY(p.suggested == QaOutcome::Pendiente);   // falta ejecutar TC-3
+        QVERIFY(p.blockers.contains(QStringLiteral("1 caso sin ejecutar")));
+
+        runs << run(QStringLiteral("R-4"), QStringLiteral("TC-3"), Verdict::Superado, 2);
+        p = issueProgress(issue, cases, runs, {});
+        QCOMPARE(p.executed, 3);
+        QVERIFY(p.suggested == QaOutcome::Conforme);
+        QVERIFY(p.blockers.isEmpty());
+        QVERIFY(p.canClose());
+
+        // Un bug sin resolver de uno de sus casos deja el requerimiento observado.
+        IssueLink bug;
+        bug.key = QStringLiteral("SHOP-99");
+        bug.caseId = QStringLiteral("TC-2");
+        p = issueProgress(issue, cases, runs, {bug});
+        QCOMPARE(p.bugs, 1);
+        QCOMPARE(p.openBugs, 1);
+        QVERIFY(p.suggested == QaOutcome::Observado);
+        QVERIFY(p.blockers.contains(QStringLiteral("1 bug abierto")));
+
+        bug.resolved = true;
+        QVERIFY(issueProgress(issue, cases, runs, {bug}).suggested == QaOutcome::Conforme);
+    }
+
+    void progressOnlyCountsTheRunsOfTheOpenRevision() {
+        Issue issue;
+        issue.caseIds = {QStringLiteral("TC-1")};
+        TestCase c;
+        c.id = QStringLiteral("TC-1");
+        const QDateTime revisionStart = QDateTime::currentDateTime().addSecs(-3600);
+        RunRecord old;
+        old.id = QStringLiteral("R-1");
+        old.caseId = QStringLiteral("TC-1");
+        old.verdict = Verdict::Fallido;
+        old.startedAt = revisionStart.addSecs(-7200);
+        old.finishedAt = old.startedAt.addSecs(60);
+
+        // La ejecución de la ronda anterior no cuenta: esta revisión todavía no ha probado nada.
+        IssueProgress p = issueProgress(issue, {c}, {old}, {}, revisionStart);
+        QCOMPARE(p.executed, 0);
+        QVERIFY(!p.canClose());
+
+        RunRecord fresh = old;
+        fresh.id = QStringLiteral("R-2");
+        fresh.verdict = Verdict::Superado;
+        fresh.startedAt = revisionStart.addSecs(600);
+        fresh.finishedAt = fresh.startedAt.addSecs(60);
+        p = issueProgress(issue, {c}, {old, fresh}, {}, revisionStart);
+        QCOMPARE(p.executed, 1);
+        QCOMPARE(p.passed, 1);
+        QVERIFY(p.suggested == QaOutcome::Conforme);
     }
 
     void priorityComesFromWhatTheSystemWrites() {

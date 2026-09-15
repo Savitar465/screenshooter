@@ -14,6 +14,7 @@
 //   Issues: ninguno (MemoryIssueRepository).
 
 #include "FakeIssueTracker.h"
+#include "FakeQualityRecordWriter.h"
 #include "FakeRequirementSource.h"
 #include "FakeTestManagement.h"
 #include "MemoryRepositories.h"
@@ -23,6 +24,7 @@
 #include "application/IssuePublishService.h"
 #include "application/IssueStore.h"
 #include "application/PlanStore.h"
+#include "application/QualityRecordService.h"
 #include "application/RequirementSourceService.h"
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
@@ -45,6 +47,7 @@ struct AppFixture {
     std::shared_ptr<FakeIssueTracker> tracker = std::make_shared<FakeIssueTracker>();
     std::shared_ptr<FakeTestManagement> zephyr = std::make_shared<FakeTestManagement>();
     std::shared_ptr<FakeRequirementSource> requirementSource = std::make_shared<FakeRequirementSource>();
+    std::shared_ptr<FakeQualityRecordWriter> recordWriter = std::make_shared<FakeQualityRecordWriter>();
 
     TestCaseStore store{repo};
     RunHistoryStore history{historyRepo, store};
@@ -57,6 +60,7 @@ struct AppFixture {
     RequirementSourceService requirements{requirementSource, settings};
     IssueStore issues{issueRepo};
     IssuePublishService issuePublish{tracker, issues, settings};
+    QualityRecordService records{issues, store, history, bugLedger, settings, recordWriter};
 
     AppFixture() {
         store.load();

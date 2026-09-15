@@ -164,6 +164,113 @@ IssuePublication publicationFromJson(const QJsonObject& o) {
     return p;
 }
 
+QJsonObject recordToJson(const QualityRecord& r) {
+    QJsonArray observations, characteristics;
+    for (const auto& o : r.observations)
+        observations.append(QJsonObject{{"type", o.type}, {"observations", o.observations}, {"corrections", o.corrections}});
+    for (const auto& c : r.characteristics)
+        characteristics.append(QJsonObject{{"text", c.text}, {"satisfied", c.satisfied}, {"note", c.note}});
+    return QJsonObject{
+        {"greq", r.greq}, {"process", r.process}, {"system", r.system}, {"moduleLink", r.moduleLink}, {"server", r.server},
+        {"dbAccess", r.dbAccess}, {"dbSchema", r.dbSchema}, {"dbUser", r.dbUser}, {"appUser", r.appUser},
+        {"tables", r.tables}, {"functions", r.functions}, {"description", r.description}, {"developedBy", r.developedBy},
+        {"qaResource", r.qaResource}, {"department", r.department}, {"revisionNumber", r.revisionNumber},
+        {"from", isoDate(r.from)}, {"to", isoDate(r.to)}, {"observations", observations},
+        {"caseDesign", r.caseDesign}, {"execution", r.execution}, {"bugs", r.bugs},
+        {"executionImages", QJsonArray::fromStringList(r.executionImages)},
+        {"characteristics", characteristics}, {"generalNotes", r.generalNotes}, {"logoPath", r.logoPath},
+    };
+}
+
+QualityRecord recordFromJson(const QJsonObject& o) {
+    QualityRecord r;
+    r.greq = o["greq"].toString();
+    r.process = o["process"].toString(r.process);
+    r.system = o["system"].toString();
+    r.moduleLink = o["moduleLink"].toString();
+    r.server = o["server"].toString(r.server);
+    r.dbAccess = o["dbAccess"].toString(r.dbAccess);
+    r.dbSchema = o["dbSchema"].toString(r.dbSchema);
+    r.dbUser = o["dbUser"].toString(r.dbUser);
+    r.appUser = o["appUser"].toString(r.appUser);
+    r.tables = o["tables"].toString(r.tables);
+    r.functions = o["functions"].toString(r.functions);
+    r.description = o["description"].toString();
+    r.developedBy = o["developedBy"].toString();
+    r.qaResource = o["qaResource"].toString();
+    r.department = o["department"].toString(r.department);
+    r.revisionNumber = o["revisionNumber"].toInt(r.revisionNumber);
+    r.from = date(o["from"]);
+    r.to = date(o["to"]);
+    if (o["observations"].isArray()) {
+        QList<ObservationCount> observations;
+        for (const auto& v : o["observations"].toArray()) {
+            const QJsonObject c = v.toObject();
+            observations << ObservationCount{c["type"].toString(), c["observations"].toInt(), c["corrections"].toInt()};
+        }
+        if (!observations.isEmpty()) r.observations = observations;
+    }
+    r.caseDesign = o["caseDesign"].toString();
+    r.execution = o["execution"].toString();
+    r.bugs = o["bugs"].toString();
+    r.executionImages = strings(o["executionImages"]);
+    if (o["characteristics"].isArray()) {
+        QList<QualityCharacteristic> characteristics;
+        for (const auto& v : o["characteristics"].toArray()) {
+            const QJsonObject c = v.toObject();
+            characteristics << QualityCharacteristic{c["text"].toString(), c["satisfied"].toBool(true), c["note"].toString()};
+        }
+        if (!characteristics.isEmpty()) r.characteristics = characteristics;
+    }
+    r.generalNotes = o["generalNotes"].toString();
+    r.logoPath = o["logoPath"].toString();
+    return r;
+}
+
+QJsonObject revisionToJson(const IssueRevision& r) {
+    QJsonObject o{
+        {"number", r.number}, {"startedAt", iso(r.startedAt)}, {"closedAt", iso(r.closedAt)},
+        {"outcome", toString(r.outcome)}, {"record", recordToJson(r.record)},
+        {"documentPath", r.documentPath}, {"documentAt", iso(r.documentAt)},
+    };
+    if (!r.jira.isEmpty())
+        o.insert(QStringLiteral("jira"), QJsonObject{
+            {"key", r.jira.key}, {"publishedAt", iso(r.jira.publishedAt)}, {"attachedDocument", r.jira.attachedDocument},
+            {"uncertain", r.jira.uncertain}, {"lastError", r.jira.lastError},
+        });
+    if (!r.gesreq.isEmpty())
+        o.insert(QStringLiteral("gesreq"), QJsonObject{
+            {"registeredAt", iso(r.gesreq.registeredAt)}, {"result", toString(r.gesreq.result)}, {"comment", r.gesreq.comment},
+            {"attachedDocument", r.gesreq.attachedDocument}, {"uncertain", r.gesreq.uncertain}, {"lastError", r.gesreq.lastError},
+        });
+    return o;
+}
+
+IssueRevision revisionFromJson(const QJsonObject& o) {
+    IssueRevision r;
+    r.number = o["number"].toInt(1);
+    r.startedAt = dateTime(o["startedAt"]);
+    r.closedAt = dateTime(o["closedAt"]);
+    r.outcome = qaOutcomeFromString(o["outcome"].toString());
+    r.record = recordFromJson(o["record"].toObject());
+    r.documentPath = o["documentPath"].toString();
+    r.documentAt = dateTime(o["documentAt"]);
+    const QJsonObject jira = o["jira"].toObject();
+    r.jira.key = jira["key"].toString();
+    r.jira.publishedAt = dateTime(jira["publishedAt"]);
+    r.jira.attachedDocument = jira["attachedDocument"].toBool();
+    r.jira.uncertain = jira["uncertain"].toBool();
+    r.jira.lastError = jira["lastError"].toString();
+    const QJsonObject gesreq = o["gesreq"].toObject();
+    r.gesreq.registeredAt = dateTime(gesreq["registeredAt"]);
+    r.gesreq.result = qaOutcomeFromString(gesreq["result"].toString());
+    r.gesreq.comment = gesreq["comment"].toString();
+    r.gesreq.attachedDocument = gesreq["attachedDocument"].toBool();
+    r.gesreq.uncertain = gesreq["uncertain"].toBool();
+    r.gesreq.lastError = gesreq["lastError"].toString();
+    return r;
+}
+
 QJsonObject issueToJson(const Issue& i) {
     QJsonObject o{
         {"id", i.id}, {"title", i.title}, {"notes", i.notes}, {"priority", toString(i.priority)}, {"state", toString(i.state)},
@@ -172,6 +279,11 @@ QJsonObject issueToJson(const Issue& i) {
     };
     if (i.isImported()) o.insert(QStringLiteral("requirement"), requirementToJson(i.requirement));
     if (i.isPublished()) o.insert(QStringLiteral("publication"), publicationToJson(i.publication));
+    if (!i.revisions.isEmpty()) {
+        QJsonArray revisions;
+        for (const auto& r : i.revisions) revisions.append(revisionToJson(r));
+        o.insert(QStringLiteral("revisions"), revisions);
+    }
     return o;
 }
 
@@ -194,6 +306,7 @@ Issue issueFromJson(const QJsonObject& o) {
     i.createdAt = dateTime(o["createdAt"]);
     i.updatedAt = dateTime(o["updatedAt"]);
     if (o.contains(QStringLiteral("requirement"))) i.requirement = requirementFromJson(o["requirement"].toObject());
+    for (const auto& v : o["revisions"].toArray()) i.revisions << revisionFromJson(v.toObject());
     return i;
 }
 

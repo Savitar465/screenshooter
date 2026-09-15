@@ -76,6 +76,46 @@ bool IssuePublishService::needsUpdate(const Issue& issue) const {
     return draft.summary != issue.publication.publishedTitle || draft.description != issue.publication.publishedDescription;
 }
 
+bool IssuePublishService::canPublishResult(const Issue& issue) const {
+    return issue.isPublished() && m_tracker && m_tracker->canCommentIssues(m_settings.tracker());
+}
+
+void IssuePublishService::publishResult(const QString& issueId, const QString& comment, const QString& documentPath,
+                                        std::function<void(const Result&)> done) {
+    const Issue* issue = m_issues.find(issueId);
+    if (!issue) { done(Result{false, {}, {}, tr("El issue ya no existe"), false, false}); return; }
+    if (!canPublishResult(*issue)) {
+        done(Result{false, {}, {}, tr("Publica antes el issue en el gestor para dejar allí el resultado"), false, false});
+        return;
+    }
+    const QString key = issue->publication.key;
+    QStringList attachments;
+    if (!documentPath.trimmed().isEmpty()) attachments << documentPath;
+    m_tracker->commentIssue(m_settings.tracker(), key, comment, attachments, [this, issueId, key, done](const IssueResult& r) {
+        Result out;
+        out.error = r.error;
+        out.retryable = r.retryable;
+        out.key = key;
+        RevisionPublication publication;
+        publication.key = key;
+        if (!r.ok) {
+            // Igual que al publicar: un corte de red puede haber dejado el comentario puesto.
+            out.uncertain = r.retryable;
+            publication.uncertain = out.uncertain;
+            publication.lastError = r.error;
+            m_issues.setRevisionPublication(issueId, publication);
+            done(out);
+            return;
+        }
+        out.ok = true;
+        out.url = r.url;
+        publication.publishedAt = QDateTime::currentDateTime();
+        publication.attachedDocument = r.attachmentsUploaded > 0;
+        m_issues.setRevisionPublication(issueId, publication);
+        done(out);
+    });
+}
+
 void IssuePublishService::publish(const QString& issueId, const IssueDraft& draft, std::function<void(const Result&)> done) {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) { done(Result{false, {}, {}, tr("El issue ya no existe"), false, false}); return; }

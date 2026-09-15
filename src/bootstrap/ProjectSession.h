@@ -32,6 +32,7 @@ public:
     std::unique_ptr<CaseTransferService> transfer;
     std::unique_ptr<IssueStore> issues;
     std::unique_ptr<IssuePublishService> issuePublish;
+    std::unique_ptr<QualityRecordService> records;
     std::unique_ptr<RequirementSourceService> requirements;
     std::unique_ptr<MainWindow> window;
 };

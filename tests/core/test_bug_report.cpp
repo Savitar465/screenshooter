@@ -41,6 +41,25 @@ private slots:
         QVERIFY(BugReport::jiraPriorityFor(QStringLiteral("???")).isEmpty());
     }
 
+    void classificationsAreTheOnesPrintedInTheQualityForm() {
+        QCOMPARE(BugReport::classifications(), QStringList({QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("C"),
+                                                            QStringLiteral("D"), QStringLiteral("E")}));
+        QCOMPARE(BugReport::classificationName(QStringLiteral("A")), QStringLiteral("Funcionamiento/Lógica"));
+        QCOMPARE(BugReport::classificationName(QStringLiteral("E")), QStringLiteral("Vulnerabilidades"));
+        QVERIFY(BugReport::classificationName(QStringLiteral("Z")).isEmpty());
+        QCOMPARE(BugReport::classificationLabel(QStringLiteral("B")), QStringLiteral("B · Datos"));
+        QCOMPARE(BugReport::classificationLabel(QStringLiteral("Z")), QStringLiteral("Z"));
+        QCOMPARE(BugReport().classification, QStringLiteral("A"));   // lo más común: funcionamiento
+    }
+
+    void theClassificationTravelsInTheDescription() {
+        BugReport b = sample();
+        b.classification = QStringLiteral("C");
+        QVERIFY(b.jiraDescription().contains(QStringLiteral("h3. Clasificación\nC · Estético/Forma")));
+        QVERIFY(b.markdownDescription().contains(QStringLiteral("**Clasificación:** C · Estético/Forma")));
+        QVERIFY(b.htmlDescription().contains(QStringLiteral("<b>Clasificación:</b> C · Estético/Forma")));
+    }
+
     void jiraDescriptionHasSectionsAndLinkedStory() {
         BugReport b = sample();
         const QString plain = b.jiraDescription();

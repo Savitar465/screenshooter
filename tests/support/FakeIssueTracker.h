@@ -143,6 +143,28 @@ public:
         done(r);
     }
 
+    bool commentsIssues = true;                     // como Jira
+    QStringList commentedKeys;
+    QStringList comments;
+    QList<QStringList> commentAttachments;
+
+    bool canCommentIssues(const TrackerSettings&) const override { return commentsIssues; }
+
+    void commentIssue(const TrackerSettings& s, const QString& key, const QString& body, const QStringList& attachments,
+                      std::function<void(const IssueResult&)> done) override {
+        commentedKeys << key;
+        comments << body;
+        commentAttachments << attachments;
+        IssueResult r;
+        if (mode == Mode::NetworkDown) { r.error = QStringLiteral("Host not found"); r.retryable = true; done(r); return; }
+        if (mode == Mode::RejectContent) { r.error = QStringLiteral("HTTP 400 · body is required"); done(r); return; }
+        r.ok = true;
+        r.key = key;
+        r.url = s.issueUrl(key);
+        r.attachmentsUploaded = attachments.size();
+        done(r);
+    }
+
     void fetchProjects(const TrackerSettings&, std::function<void(const TrackerProjectList&)> done) override {
         ++projectListCalls;
         if (mode == Mode::NetworkDown) done(TrackerProjectList{false, {}, QStringLiteral("Host not found")});

@@ -116,14 +116,18 @@ void BugView::buildForm(QVBoxLayout* v) {
         const QString sev = m_severity->currentData().toString();
         if (m_settings.tracker().kind == TrackerKind::Jira && m_priority->currentText().isEmpty()) m_priority->setCurrentText(BugReport::jiraPriorityFor(sev));
     });
+    m_classification = new QComboBox;
+    for (const auto& c : BugReport::classifications()) m_classification->addItem(BugReport::classificationLabel(c), c);
+    m_classification->setToolTip(tr("Tipo de observación del acta de control de calidad (R-213)"));
     m_env = new QComboBox;
     for (const auto& e : BugReport::environments()) m_env->addItem(BugReport::environmentLabel(e), e);
     m_linkedCase = new QLabel;
     m_linkedCase->setStyleSheet(QStringLiteral("background:%1;border:1px solid %2;border-radius:9px;padding:8px 10px;font-family:'Consolas','DejaVu Sans Mono',monospace;color:%3;").arg(theme::Elevated, theme::Border, theme::Muted));
     mg->addWidget(field(tr("Severidad"), m_severity), 0, 0);
-    mg->addWidget(field(tr("Entorno"), m_env), 0, 1);
-    mg->addWidget(field(tr("Caso vinculado"), m_linkedCase), 0, 2);
-    for (int i = 0; i < 3; ++i) mg->setColumnStretch(i, 1);
+    mg->addWidget(field(tr("Clasificación"), m_classification), 0, 1);
+    mg->addWidget(field(tr("Entorno"), m_env), 0, 2);
+    mg->addWidget(field(tr("Caso vinculado"), m_linkedCase), 0, 3);
+    for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
     bv->addWidget(meta);
 
     // Campos del gestor
@@ -302,6 +306,7 @@ void BugView::loadDraft() {
     ui::setFlag(m_actual, "invalid", false);
     m_title->setText(d.title);
     m_severity->setCurrentIndex(std::max(0, m_severity->findData(d.severity)));
+    m_classification->setCurrentIndex(std::max(0, m_classification->findData(d.classification)));
     m_env->setCurrentIndex(std::max(0, m_env->findData(d.environment)));
     m_linkedCase->setText(d.linkedCaseId.isEmpty() ? QStringLiteral("—") : d.linkedCaseId);
     m_priority->setCurrentText(m_settings.tracker().kind == TrackerKind::Jira ? d.priority : QString());
@@ -435,6 +440,7 @@ BugReport BugView::collect() const {
     BugReport b;
     b.title = m_title->text();
     b.severity = m_severity->currentData().toString();
+    b.classification = m_classification->currentData().toString();
     b.environment = m_env->currentData().toString();
     b.linkedCaseId = m_linkedCase->text() == QStringLiteral("—") ? QString() : m_linkedCase->text();
     if (const TestCase* c = m_cases.selected(); c && c->id == b.linkedCaseId) b.linkedStoryKey = c->jiraKey;

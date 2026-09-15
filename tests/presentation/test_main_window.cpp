@@ -883,16 +883,23 @@ private slots:
         QTest::mouseClick(f.nav(Screen::Issues), Qt::LeftButton);
         QCOMPARE(f.window->currentScreen(), Screen::Issues);
 
-        // Consultar GESREQ ofrece sólo los del sistema del proyecto, y se importan los marcados.
+        // Consultar GESREQ muestra toda la bandeja; la acción unificada importa y abre el elegido.
         f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
         auto* import = f.window->findChild<RequirementImportDialog*>();
         QVERIFY(import);
         auto* candidates = import->findChild<QListWidget*>(QStringLiteral("importList"));
-        QCOMPARE(candidates->count(), 1);
-        QVERIFY(candidates->item(0)->checkState() == Qt::Checked);
+        QCOMPARE(candidates->count(), 2);
+        QVERIFY(!(candidates->item(0)->flags() & Qt::ItemIsUserCheckable));
+        QVERIFY(!import->findChild<QPushButton*>(QStringLiteral("importAccept")));
+        auto* start = import->findChild<QPushButton*>(QStringLiteral("importStartTesting"));
+        QVERIFY(start && !start->isEnabled());
+        import->accept();
+        QVERIFY(f.app.issues.issues().isEmpty());
+        candidates->setCurrentRow(0);
+        QVERIFY(start->isEnabled());
         const QString summary = import->findChild<QLabel*>(QStringLiteral("importSummary"))->text();
         QVERIFY2(summary.contains(QStringLiteral("1 de otros sistemas")), qPrintable(summary));
-        import->findChild<QPushButton*>(QStringLiteral("importAccept"))->click();
+        import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
         QTRY_VERIFY(!f.window->findChild<RequirementImportDialog*>());
         QCOMPARE(f.app.issues.issues().size(), 1);
         const QString id = f.app.issues.issues().first().id;
@@ -936,8 +943,8 @@ private slots:
         f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
         import = f.window->findChild<RequirementImportDialog*>();
         QVERIFY(import);
-        QVERIFY(import->findChild<QListWidget*>(QStringLiteral("importList"))->item(0)->checkState() == Qt::Checked);
-        import->findChild<QPushButton*>(QStringLiteral("importAccept"))->click();
+        import->findChild<QListWidget*>(QStringLiteral("importList"))->setCurrentRow(0);
+        import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
         QCOMPARE(f.app.issues.issues().size(), 1);
         QCOMPARE(f.app.issues.find(id)->title, QStringLiteral("Mi titulo"));
         auto* changes = f.window->findChild<QWidget*>(QStringLiteral("issueChanges"));
@@ -983,8 +990,8 @@ private slots:
             r.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
             return r;
         };
-        f.app.requirementSource->inbox = {requirementOf(QStringLiteral("2025175"), QStringLiteral("SUMA TRANSITO"), QStringLiteral("Cupones de descuento")),
-                                          requirementOf(QStringLiteral("2025719"), QStringLiteral("SEGRAN"), QStringLiteral("Módulo de riesgos")),
+        f.app.requirementSource->inbox = {requirementOf(QStringLiteral("2025719"), QStringLiteral("SEGRAN"), QStringLiteral("Módulo de riesgos")),
+                                          requirementOf(QStringLiteral("2025175"), QStringLiteral("SUMA TRANSITO"), QStringLiteral("Cupones de descuento")),
                                           requirementOf(QStringLiteral("2026001"), QStringLiteral("SIN PROYECTO"), QStringLiteral("Algo de otro sistema"))};
 
         QSignalSpy started(f.window.get(), &MainWindow::startTestingRequested);
@@ -992,18 +999,23 @@ private slots:
         f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
         auto* import = f.window->findChild<RequirementImportDialog*>();
         QVERIFY(import);
-        auto* others = import->findChild<QListWidget*>(QStringLiteral("importOtherList"));
+        auto* others = import->findChild<QListWidget*>(QStringLiteral("importList"));
         auto* start = import->findChild<QPushButton*>(QStringLiteral("importStartTesting"));
         QVERIFY(others && start);
-        QCOMPARE(others->count(), 2);
+        QCOMPARE(others->count(), 3);
+        QVERIFY(others->item(0)->text().contains(QStringLiteral("Proyecto actual")));
+        QVERIFY(others->item(0)->text().contains(QStringLiteral("2025175")));
+        QVERIFY(others->item(1)->text().contains(QStringLiteral("CONTROL CALIDAD ASIGNADO")));
+        QVERIFY(!(others->item(1)->flags() & Qt::ItemIsUserCheckable));
+        QVERIFY(!(others->item(0)->flags() & Qt::ItemIsUserCheckable));
         QVERIFY(!start->isEnabled());   // sin elegir requerimiento no hay pruebas que empezar
 
         // El de un sistema que nadie trabaja dice que no tiene proyecto, pero se puede empezar igual:
         // primero se elige o se crea (ver startingTestsOfASystemNobodyWorksAsksForItsProject).
-        others->setCurrentRow(1);
+        others->setCurrentRow(2);
         QVERIFY(start->isEnabled());
-        QVERIFY2(others->item(1)->text().contains(QStringLiteral("ningún proyecto")), qPrintable(others->item(1)->text()));
-        others->setCurrentRow(0);
+        QVERIFY2(others->item(2)->text().contains(QStringLiteral("ningún proyecto")), qPrintable(others->item(2)->text()));
+        others->setCurrentRow(1);
         QVERIFY(start->isEnabled());
         QVERIFY2(start->text().contains(QStringLiteral("Riesgos")), qPrintable(start->text()));
         start->click();
@@ -1056,7 +1068,7 @@ private slots:
         f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
         auto* import = f.window->findChild<RequirementImportDialog*>();
         QVERIFY(import);
-        import->findChild<QListWidget*>(QStringLiteral("importOtherList"))->setCurrentRow(0);
+        import->findChild<QListWidget*>(QStringLiteral("importList"))->setCurrentRow(0);
         auto* start = import->findChild<QPushButton*>(QStringLiteral("importStartTesting"));
         QVERIFY(start->isEnabled());
         QVERIFY2(start->text().contains(QStringLiteral("Crear proyecto")), qPrintable(start->text()));
@@ -1112,7 +1124,7 @@ private slots:
         f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
         auto* import = f.window->findChild<RequirementImportDialog*>();
         QVERIFY(import);
-        import->findChild<QListWidget*>(QStringLiteral("importOtherList"))->setCurrentRow(0);
+        import->findChild<QListWidget*>(QStringLiteral("importList"))->setCurrentRow(0);
         import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
 
         auto* setup = f.window->findChild<ProjectSetupDialog*>();

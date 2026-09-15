@@ -190,10 +190,6 @@
 </translation>
     </message>
     <message>
-        <source>**Entorno:** %1 · **Severidad:** %2</source>
-        <translation>**Environment:** %1 · **Severity:** %2</translation>
-    </message>
-    <message>
         <source>**Caso vinculado:** %1</source>
         <translation>**Linked test case:** %1</translation>
     </message>
@@ -216,10 +212,6 @@
     <message>
         <source>### Capturas</source>
         <translation>### Screenshots</translation>
-    </message>
-    <message>
-        <source>&lt;p&gt;&lt;b&gt;Entorno:&lt;/b&gt; %1 · &lt;b&gt;Severidad:&lt;/b&gt; %2&lt;/p&gt;</source>
-        <translation>&lt;p&gt;&lt;b&gt;Environment:&lt;/b&gt; %1 · &lt;b&gt;Severity:&lt;/b&gt; %2&lt;/p&gt;</translation>
     </message>
     <message>
         <source>&lt;p&gt;&lt;b&gt;Caso vinculado:&lt;/b&gt; %1&lt;/p&gt;</source>
@@ -516,6 +508,136 @@
     <message>
         <source>Este gestor no publica los issues de QAflow</source>
         <translation>This tracker does not publish the QAflow issues</translation>
+    </message>
+    <message>
+        <source>Funcionamiento/Lógica</source>
+        <translation>Behaviour/Logic</translation>
+    </message>
+    <message>
+        <source>Datos</source>
+        <translation>Data</translation>
+    </message>
+    <message>
+        <source>Estético/Forma</source>
+        <translation>Look and feel</translation>
+    </message>
+    <message>
+        <source>Recomendaciones</source>
+        <translation>Recommendations</translation>
+    </message>
+    <message>
+        <source>Vulnerabilidades</source>
+        <translation>Vulnerabilities</translation>
+    </message>
+    <message>
+        <source>h3. Clasificación
+%1
+
+</source>
+        <translation>h3. Classification
+%1
+
+</translation>
+    </message>
+    <message>
+        <source>**Entorno:** %1 · **Severidad:** %2 · **Clasificación:** %3</source>
+        <translation>**Environment:** %1 · **Severity:** %2 · **Classification:** %3</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;&lt;b&gt;Entorno:&lt;/b&gt; %1 · &lt;b&gt;Severidad:&lt;/b&gt; %2 · &lt;b&gt;Clasificación:&lt;/b&gt; %3&lt;/p&gt;</source>
+        <translation>&lt;p&gt;&lt;b&gt;Environment:&lt;/b&gt; %1 · &lt;b&gt;Severity:&lt;/b&gt; %2 · &lt;b&gt;Classification:&lt;/b&gt; %3&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Conforme</source>
+        <translation>Passed</translation>
+    </message>
+    <message>
+        <source>Observado</source>
+        <translation>With findings</translation>
+    </message>
+    <message>
+        <source>sin casos vinculados</source>
+        <translation>no linked cases</translation>
+    </message>
+    <message>
+        <source>Este gestor no admite comentarios desde QAflow</source>
+        <translation>This tracker does not accept comments from QAflow</translation>
+    </message>
+    <message>
+        <source>Este conector no registra resultados en el sistema de requerimientos</source>
+        <translation>This connector does not register results in the requirement system</translation>
+    </message>
+    <message>
+        <source>%1 caso sin ejecutar</source>
+        <translation>%1 case not run</translation>
+    </message>
+    <message>
+        <source>%1 casos sin ejecutar</source>
+        <translation>%1 cases not run</translation>
+    </message>
+    <message>
+        <source>%1 caso fallido</source>
+        <translation>%1 failed case</translation>
+    </message>
+    <message>
+        <source>%1 casos fallidos</source>
+        <translation>%1 failed cases</translation>
+    </message>
+    <message>
+        <source>%1 caso bloqueado</source>
+        <translation>%1 blocked case</translation>
+    </message>
+    <message>
+        <source>%1 casos bloqueados</source>
+        <translation>%1 blocked cases</translation>
+    </message>
+    <message>
+        <source>%1 bug abierto</source>
+        <translation>%1 open bug</translation>
+    </message>
+    <message>
+        <source>%1 bugs abiertos</source>
+        <translation>%1 open bugs</translation>
+    </message>
+    <message>
+        <source>Jira: %1</source>
+        <translation>Jira: %1</translation>
+    </message>
+    <message>
+        <source>Enlace: %1</source>
+        <translation>Link: %1</translation>
+    </message>
+    <message>
+        <source>%1 — %2 — %3 paso(s)</source>
+        <translation>%1 — %2 — %3 step(s)</translation>
+    </message>
+    <message>
+        <source>%1 caso(s) ejecutado(s): %2 superado(s), %3 fallido(s), %4 bloqueado(s)</source>
+        <translation>%1 case(s) executed: %2 passed, %3 failed, %4 blocked</translation>
+    </message>
+    <message>
+        <source>Control de calidad GREQ %1 — revisión %2: %3</source>
+        <translation>Quality control GREQ %1 — review %2: %3</translation>
+    </message>
+    <message>
+        <source>Fecha de revisión: %1</source>
+        <translation>Review date: %1</translation>
+    </message>
+    <message>
+        <source>Casos ejecutados: %1 (%2 superados, %3 fallidos, %4 bloqueados)</source>
+        <translation>Cases executed: %1 (%2 passed, %3 failed, %4 blocked)</translation>
+    </message>
+    <message>
+        <source>Observaciones: %1</source>
+        <translation>Findings: %1</translation>
+    </message>
+    <message>
+        <source>Sin observaciones</source>
+        <translation>No findings</translation>
+    </message>
+    <message>
+        <source>Observaciones generales: %1</source>
+        <translation>General findings: %1</translation>
     </message>
 </context>
 <context>
@@ -908,6 +1030,26 @@
         <source>%1 no existe en %2</source>
         <translation>%1 does not exist in %2</translation>
     </message>
+    <message>
+        <source>No se pudo crear el documento: %1</source>
+        <translation>Could not create the document: %1</translation>
+    </message>
+    <message>
+        <source>No se pudo escribir el documento: %1</source>
+        <translation>Could not write the document: %1</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar el documento: %1</source>
+        <translation>Could not save the document: %1</translation>
+    </message>
+    <message>
+        <source>el fichero ya está cerrado</source>
+        <translation>the file is already closed</translation>
+    </message>
+    <message>
+        <source>Indica el issue del gestor que se comenta</source>
+        <translation>Say which tracker issue is being commented</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::AnnotationEditor</name>
@@ -1291,6 +1433,14 @@
     <message>
         <source>No se pudieron buscar personas · %1</source>
         <translation>Could not search for people · %1</translation>
+    </message>
+    <message>
+        <source>Tipo de observación del acta de control de calidad (R-213)</source>
+        <translation>Finding type of the quality control record (R-213)</translation>
+    </message>
+    <message>
+        <source>Clasificación</source>
+        <translation>Classification</translation>
     </message>
 </context>
 <context>
@@ -2208,6 +2358,10 @@
         <source>Indica la clave del issue del gestor</source>
         <translation>Enter the key of the tracker issue</translation>
     </message>
+    <message>
+        <source>Publica antes el issue en el gestor para dejar allí el resultado</source>
+        <translation>Publish the issue in the tracker first to leave the result there</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::IssueStore</name>
@@ -2559,10 +2713,6 @@
         <translation>Could not check GESREQ · %1</translation>
     </message>
     <message>
-        <source>%1 issues creados · %2 actualizados</source>
-        <translation>%1 issues created · %2 updated</translation>
-    </message>
-    <message>
         <source>%1 creado y vinculado a %2</source>
         <translation>%1 created and linked to %2</translation>
     </message>
@@ -2745,6 +2895,214 @@ Create another one anyway?</translation>
     <message>
         <source>%1 · pruebas del requerimiento %2</source>
         <translation>%1 · tests of requirement %2</translation>
+    </message>
+    <message>
+        <source>REVISIÓN</source>
+        <translation>REVIEW</translation>
+    </message>
+    <message>
+        <source>Generar acta…</source>
+        <translation>Generate record…</translation>
+    </message>
+    <message>
+        <source>Arma el acta de control de calidad (R-213) con lo que hay en el issue y la guarda como .docx</source>
+        <translation>Builds the quality control record (R-213) from the issue and saves it as .docx</translation>
+    </message>
+    <message>
+        <source>Enviar resultado a Jira…</source>
+        <translation>Send result to Jira…</translation>
+    </message>
+    <message>
+        <source>Comenta en el issue del gestor cómo quedó la revisión y le adjunta el acta</source>
+        <translation>Comments on the tracker issue how the review went and attaches the record</translation>
+    </message>
+    <message>
+        <source>Registrar en GESREQ…</source>
+        <translation>Register in GESREQ…</translation>
+    </message>
+    <message>
+        <source>Registra el resultado del control de calidad en el requerimiento, con su acta</source>
+        <translation>Registers the quality control result in the requirement, with its record</translation>
+    </message>
+    <message>
+        <source>Cerrar revisión…</source>
+        <translation>Close review…</translation>
+    </message>
+    <message>
+        <source>Deja la revisión cerrada con su resultado: conforme u observado</source>
+        <translation>Closes the review with its result: passed or with findings</translation>
+    </message>
+    <message>
+        <source>Nueva revisión</source>
+        <translation>New review</translation>
+    </message>
+    <message>
+        <source>El requerimiento vuelve a pruebas: abre la ronda siguiente del acta</source>
+        <translation>The requirement goes back to testing: opens the next round of the record</translation>
+    </message>
+    <message>
+        <source>%1 de %2 casos ejecutados · %3 superados · %4 fallidos · %5 bloqueados · %6 bugs (%7 abiertos)</source>
+        <translation>%1 of %2 cases executed · %3 passed · %4 failed · %5 blocked · %6 bugs (%7 open)</translation>
+    </message>
+    <message>
+        <source>Sin revisión abierta · %1</source>
+        <translation>No open review · %1</translation>
+    </message>
+    <message>
+        <source>Revisión %1 · %2</source>
+        <translation>Review %1 · %2</translation>
+    </message>
+    <message>
+        <source>nada pendiente</source>
+        <translation>nothing pending</translation>
+    </message>
+    <message>
+        <source>Resultado: %1</source>
+        <translation>Result: %1</translation>
+    </message>
+    <message>
+        <source>Resultado propuesto: %1 · %2</source>
+        <translation>Proposed result: %1 · %2</translation>
+    </message>
+    <message>
+        <source>Acta: &lt;a href=&quot;%1&quot;&gt;%2&lt;/a&gt;</source>
+        <translation>Record: &lt;a href=&quot;%1&quot;&gt;%2&lt;/a&gt;</translation>
+    </message>
+    <message>
+        <source>Sin acta generada todavía.</source>
+        <translation>No record generated yet.</translation>
+    </message>
+    <message>
+        <source>Comenta en %1 cómo quedó la revisión y le adjunta el acta</source>
+        <translation>Comments on %1 how the review went and attaches the record</translation>
+    </message>
+    <message>
+        <source>Publica antes el issue en el gestor para dejar allí el resultado</source>
+        <translation>Publish the issue in the tracker first to leave the result there</translation>
+    </message>
+    <message>
+        <source>Registra el resultado del control de calidad en GESREQ, con su acta</source>
+        <translation>Registers the quality control result in GESREQ, with its record</translation>
+    </message>
+    <message>
+        <source>Esta versión todavía no registra resultados en GESREQ: hazlo en el sistema</source>
+        <translation>This version does not register results in GESREQ yet: do it in the system</translation>
+    </message>
+    <message>
+        <source>Abrir revisión</source>
+        <translation>Open review</translation>
+    </message>
+    <message>
+        <source>REV %1</source>
+        <translation>REV %1</translation>
+    </message>
+    <message>
+        <source>Abrir acta</source>
+        <translation>Open record</translation>
+    </message>
+    <message>
+        <source>GESREQ sin confirmar</source>
+        <translation>GESREQ unconfirmed</translation>
+    </message>
+    <message>
+        <source>Registrado en GESREQ</source>
+        <translation>Registered in GESREQ</translation>
+    </message>
+    <message>
+        <source>Jira sin confirmar</source>
+        <translation>Jira unconfirmed</translation>
+    </message>
+    <message>
+        <source>Enviado a Jira</source>
+        <translation>Sent to Jira</translation>
+    </message>
+    <message>
+        <source>Guardar el acta</source>
+        <translation>Save the record</translation>
+    </message>
+    <message>
+        <source>Documentos de Word (*.docx)</source>
+        <translation>Word documents (*.docx)</translation>
+    </message>
+    <message>
+        <source>No se pudo generar el acta · %1</source>
+        <translation>Could not generate the record · %1</translation>
+    </message>
+    <message>
+        <source>Acta generada en %1</source>
+        <translation>Record generated in %1</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>el gestor</source>
+        <translation>the tracker</translation>
+    </message>
+    <message>
+        <source>Resultado enviado a %1</source>
+        <translation>Result sent to %1</translation>
+    </message>
+    <message>
+        <source>El envío se cortó sin respuesta: comprueba el comentario en el gestor antes de repetirlo · %1</source>
+        <translation>The send was cut off with no answer: check the comment in the tracker before repeating it · %1</translation>
+    </message>
+    <message>
+        <source>No se pudo enviar el resultado · %1</source>
+        <translation>Could not send the result · %1</translation>
+    </message>
+    <message>
+        <source>GESREQ · GREQ %1</source>
+        <translation>GESREQ · GREQ %1</translation>
+    </message>
+    <message>
+        <source>Resultado registrado en GESREQ como %1</source>
+        <translation>Result registered in GESREQ as %1</translation>
+    </message>
+    <message>
+        <source>El registro se cortó sin respuesta: comprueba en GESREQ si quedó antes de repetirlo · %1</source>
+        <translation>The registration was cut off with no answer: check in GESREQ whether it went through before repeating it · %1</translation>
+    </message>
+    <message>
+        <source>No se pudo registrar en GESREQ · %1</source>
+        <translation>Could not register in GESREQ · %1</translation>
+    </message>
+    <message>
+        <source>Cerrar la revisión</source>
+        <translation>Close the review</translation>
+    </message>
+    <message>
+        <source>¿Con qué resultado se cierra la revisión del requerimiento?</source>
+        <translation>With which result is the requirement review closed?</translation>
+    </message>
+    <message>
+        <source>Se propone «%1»: no queda nada pendiente.</source>
+        <translation>“%1” is proposed: nothing is pending.</translation>
+    </message>
+    <message>
+        <source>Se propone «%1»: %2.</source>
+        <translation>“%1” is proposed: %2.</translation>
+    </message>
+    <message>
+        <source>Conforme</source>
+        <translation>Passed</translation>
+    </message>
+    <message>
+        <source>Observado</source>
+        <translation>With findings</translation>
+    </message>
+    <message>
+        <source>Revisión cerrada como conforme</source>
+        <translation>Review closed as passed</translation>
+    </message>
+    <message>
+        <source>Revisión cerrada con observaciones: al volver a probar se abre la siguiente</source>
+        <translation>Review closed with findings: testing again opens the next one</translation>
+    </message>
+    <message>
+        <source>Revisión %1 abierta: el issue vuelve a pruebas</source>
+        <translation>Review %1 opened: the issue goes back to testing</translation>
     </message>
 </context>
 <context>
@@ -3079,10 +3437,6 @@ Create another one anyway?</translation>
     <message>
         <source>Nuevo proyecto…</source>
         <translation>New project…</translation>
-    </message>
-    <message>
-        <source>Nuevo proyecto</source>
-        <translation>New project</translation>
     </message>
     <message>
         <source>Nombre del proyecto:</source>
@@ -3552,6 +3906,137 @@ Create another one anyway?</translation>
     </message>
 </context>
 <context>
+    <name>qaflow::ProjectSetupDialog</name>
+    <message>
+        <source>Nuevo proyecto</source>
+        <translation>New project</translation>
+    </message>
+    <message>
+        <source>Proyecto para %1</source>
+        <translation>Project for %1</translation>
+    </message>
+    <message>
+        <source>Ningún proyecto trabaja los requerimientos de %1</source>
+        <translation>No project works the requirements of %1</translation>
+    </message>
+    <message>
+        <source>El código de Jira y el sistema de GESREQ son opcionales: se pueden dejar para luego en Ajustes → Configuración del proyecto.</source>
+        <translation>The Jira key and the GESREQ system are optional: they can be set later in Settings → Project settings.</translation>
+    </message>
+    <message>
+        <source>Crea el proyecto en el que se probarán, o elige uno que ya exista para vincularle ese sistema. Después se abre allí el requerimiento.</source>
+        <translation>Create the project where they will be tested, or pick an existing one to link that system to. The requirement then opens there.</translation>
+    </message>
+    <message>
+        <source>Proyecto nuevo…</source>
+        <translation>New project…</translation>
+    </message>
+    <message>
+        <source>Proyecto</source>
+        <translation>Project</translation>
+    </message>
+    <message>
+        <source>Tránsitos</source>
+        <translation>Transits</translation>
+    </message>
+    <message>
+        <source>Nombre del proyecto</source>
+        <translation>Project name</translation>
+    </message>
+    <message>
+        <source>Buscar…</source>
+        <translation>Search…</translation>
+    </message>
+    <message>
+        <source>Elegir entre los proyectos que ves en Jira</source>
+        <translation>Choose among the projects you can see in Jira</translation>
+    </message>
+    <message>
+        <source>Código del proyecto Jira (opcional)</source>
+        <translation>Jira project key (optional)</translation>
+    </message>
+    <message>
+        <source>Código del sistema en GESREQ: lo que va antes del guion en la columna «Sistema» de la bandeja</source>
+        <translation>System code in GESREQ: what comes before the dash in the “Sistema” column of the inbox</translation>
+    </message>
+    <message>
+        <source>Elegir del catálogo de sistemas de GESREQ</source>
+        <translation>Choose from the GESREQ catalog of systems</translation>
+    </message>
+    <message>
+        <source>Sistema de GESREQ (opcional)</source>
+        <translation>GESREQ system (optional)</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Crear proyecto</source>
+        <translation>Create project</translation>
+    </message>
+    <message>
+        <source>Crear y empezar</source>
+        <translation>Create and start</translation>
+    </message>
+    <message>
+        <source>Sin sistema de GESREQ el proyecto no importa requerimientos; se le puede vincular uno después.</source>
+        <translation>Without a GESREQ system the project imports no requirements; one can be linked later.</translation>
+    </message>
+    <message>
+        <source>⚠ «%1» ya está vinculado al proyecto «%2»: cada sistema de GESREQ se trabaja en un único proyecto.</source>
+        <translation>⚠ “%1” is already linked to project “%2”: each GESREQ system is worked in a single project.</translation>
+    </message>
+    <message>
+        <source>⚠ «%1» deja de trabajar «%2» y pasa a trabajar «%3».</source>
+        <translation>⚠ “%1” stops working “%2” and starts working “%3”.</translation>
+    </message>
+    <message>
+        <source>Los requerimientos de GESREQ del sistema «%1» se trabajarán en este proyecto.</source>
+        <translation>The GESREQ requirements of system “%1” will be worked in this project.</translation>
+    </message>
+    <message>
+        <source>Proyecto de Jira</source>
+        <translation>Jira project</translation>
+    </message>
+    <message>
+        <source>Consultando los proyectos de Jira…</source>
+        <translation>Fetching the Jira projects…</translation>
+    </message>
+    <message>
+        <source>No se pudieron consultar los proyectos de Jira · %1</source>
+        <translation>Could not fetch the Jira projects · %1</translation>
+    </message>
+    <message>
+        <source>Sistema de GESREQ</source>
+        <translation>GESREQ system</translation>
+    </message>
+    <message>
+        <source>Consultando el catálogo de sistemas de GESREQ…</source>
+        <translation>Fetching the GESREQ catalog of systems…</translation>
+    </message>
+    <message>
+        <source>No se pudo consultar el catálogo de sistemas de GESREQ · %1</source>
+        <translation>Could not fetch the GESREQ catalog of systems · %1</translation>
+    </message>
+    <message>
+        <source>en tu bandeja</source>
+        <translation>in your inbox</translation>
+    </message>
+    <message>
+        <source>vinculado a «%1»</source>
+        <translation>linked to “%1”</translation>
+    </message>
+    <message>
+        <source>Escribe el nombre del proyecto.</source>
+        <translation>Type the project name.</translation>
+    </message>
+    <message>
+        <source>El proyecto está creado, pero no se pudo guardar su sistema de GESREQ. Inténtalo otra vez.</source>
+        <translation>The project was created, but its GESREQ system could not be saved. Try again.</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::ProjectStore</name>
     <message>
         <source>No se pudo leer el catálogo de proyectos.</source>
@@ -3583,14 +4068,212 @@ Create another one anyway?</translation>
     </message>
 </context>
 <context>
+    <name>qaflow::QualityRecordDialog</name>
+    <message>
+        <source>Acta de control de calidad</source>
+        <translation>Quality control record</translation>
+    </message>
+    <message>
+        <source>Revisión %1 del GREQ %2</source>
+        <translation>Review %1 of GREQ %2</translation>
+    </message>
+    <message>
+        <source>Resultado propuesto: %1</source>
+        <translation>Proposed result: %1</translation>
+    </message>
+    <message>
+        <source>Resultado propuesto: %1 · %2</source>
+        <translation>Proposed result: %1 · %2</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Generar acta…</source>
+        <translation>Generate record…</translation>
+    </message>
+    <message>
+        <source>GENERALES</source>
+        <translation>GENERAL</translation>
+    </message>
+    <message>
+        <source>Repositorio o módulo revisado</source>
+        <translation>Repository or module reviewed</translation>
+    </message>
+    <message>
+        <source>Sistema</source>
+        <translation>System</translation>
+    </message>
+    <message>
+        <source>Enlace/módulo</source>
+        <translation>Link/module</translation>
+    </message>
+    <message>
+        <source>Servidor</source>
+        <translation>Server</translation>
+    </message>
+    <message>
+        <source>Acceso a la BD</source>
+        <translation>Database access</translation>
+    </message>
+    <message>
+        <source>Esquema BD</source>
+        <translation>Database schema</translation>
+    </message>
+    <message>
+        <source>Usuario de BD</source>
+        <translation>Database user</translation>
+    </message>
+    <message>
+        <source>Usuario aplicación</source>
+        <translation>Application user</translation>
+    </message>
+    <message>
+        <source>Tablas afectadas</source>
+        <translation>Affected tables</translation>
+    </message>
+    <message>
+        <source>Funciones afectadas</source>
+        <translation>Affected functions</translation>
+    </message>
+    <message>
+        <source>Descripción con detalle</source>
+        <translation>Detailed description</translation>
+    </message>
+    <message>
+        <source>Desarrollado por</source>
+        <translation>Developed by</translation>
+    </message>
+    <message>
+        <source>Recurso(s) QA</source>
+        <translation>QA resource(s)</translation>
+    </message>
+    <message>
+        <source>Departamento o institución</source>
+        <translation>Department or institution</translation>
+    </message>
+    <message>
+        <source>Número de revisión</source>
+        <translation>Review number</translation>
+    </message>
+    <message>
+        <source>Revisión desde</source>
+        <translation>Review from</translation>
+    </message>
+    <message>
+        <source>Revisión hasta</source>
+        <translation>Review to</translation>
+    </message>
+    <message>
+        <source>Imagen del membrete (opcional)</source>
+        <translation>Letterhead image (optional)</translation>
+    </message>
+    <message>
+        <source>Elegir…</source>
+        <translation>Choose…</translation>
+    </message>
+    <message>
+        <source>Membrete</source>
+        <translation>Letterhead</translation>
+    </message>
+    <message>
+        <source>RESUMEN DE OBSERVACIONES</source>
+        <translation>FINDINGS SUMMARY</translation>
+    </message>
+    <message>
+        <source>Se cuentan los bugs de esta revisión por su clasificación; las correcciones son las observaciones de revisiones anteriores ya cerradas. Se puede corregir a mano.</source>
+        <translation>The bugs of this review are counted by classification; corrections are the findings of earlier reviews already closed. They can be edited by hand.</translation>
+    </message>
+    <message>
+        <source>TIPO</source>
+        <translation>TYPE</translation>
+    </message>
+    <message>
+        <source>OBSERVACIONES</source>
+        <translation>FINDINGS</translation>
+    </message>
+    <message>
+        <source>CORRECCIONES</source>
+        <translation>CORRECTIONS</translation>
+    </message>
+    <message>
+        <source>DETALLES DE LA REVISIÓN</source>
+        <translation>REVIEW DETAILS</translation>
+    </message>
+    <message>
+        <source>Elaboración de casos de prueba</source>
+        <translation>Test case design</translation>
+    </message>
+    <message>
+        <source>Ejecución de casos de pruebas</source>
+        <translation>Test case execution</translation>
+    </message>
+    <message>
+        <source>Bugs reportados</source>
+        <translation>Reported bugs</translation>
+    </message>
+    <message>
+        <source>Añadir imagen…</source>
+        <translation>Add image…</translation>
+    </message>
+    <message>
+        <source>Capturas junto a la ejecución</source>
+        <translation>Screenshots next to the execution</translation>
+    </message>
+    <message>
+        <source>Quitar</source>
+        <translation>Remove</translation>
+    </message>
+    <message>
+        <source>RESULTADOS</source>
+        <translation>RESULTS</translation>
+    </message>
+    <message>
+        <source>Satisface</source>
+        <translation>Satisfies</translation>
+    </message>
+    <message>
+        <source>Observación</source>
+        <translation>Finding</translation>
+    </message>
+    <message>
+        <source>Observaciones generales</source>
+        <translation>General findings</translation>
+    </message>
+    <message>
+        <source>Total: %1 observación(es) · %2 corrección(es)</source>
+        <translation>Total: %1 finding(s) · %2 correction(s)</translation>
+    </message>
+    <message>
+        <source>Membrete del acta</source>
+        <translation>Record letterhead</translation>
+    </message>
+    <message>
+        <source>Imágenes (*.png *.jpg *.jpeg)</source>
+        <translation>Images (*.png *.jpg *.jpeg)</translation>
+    </message>
+    <message>
+        <source>Capturas del acta</source>
+        <translation>Record screenshots</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::QualityRecordService</name>
+    <message>
+        <source>El issue ya no existe</source>
+        <translation>The issue no longer exists</translation>
+    </message>
+    <message>
+        <source>No se puede generar el acta en esta versión</source>
+        <translation>The record cannot be generated in this version</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::RequirementImportDialog</name>
     <message>
         <source>Importar requerimientos de GESREQ</source>
         <translation>Import GESREQ requirements</translation>
-    </message>
-    <message>
-        <source>Requerimientos de %1 en tu bandeja</source>
-        <translation>Requirements of %1 in your inbox</translation>
     </message>
     <message>
         <source>%1 nuevos</source>
@@ -3625,28 +4308,12 @@ Create another one anyway?</translation>
         <translation> · assigned %1 – %2</translation>
     </message>
     <message>
-        <source>Importar un requerimiento que ya tiene issue sólo actualiza lo que viene de GESREQ: el título, las notas, el estado, la prioridad y los casos y planes del issue no cambian.</source>
-        <translation>Importing a requirement that already has an issue only updates what comes from GESREQ: the title, notes, status, priority and the cases and plans of the issue do not change.</translation>
-    </message>
-    <message>
         <source>Cancelar</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <source>Importar</source>
-        <translation>Import</translation>
-    </message>
-    <message>
-        <source>Importar %1</source>
-        <translation>Import %1</translation>
-    </message>
-    <message>
         <source>%1 de otros sistemas, que no se importan aquí</source>
         <translation>%1 from other systems, which are not imported here</translation>
-    </message>
-    <message>
-        <source>EN OTROS SISTEMAS DE TU BANDEJA</source>
-        <translation>IN OTHER SYSTEMS OF YOUR INBOX</translation>
     </message>
     <message>
         <source>ningún proyecto trabaja %1</source>
@@ -3657,16 +4324,128 @@ Create another one anyway?</translation>
         <translation>tested in %1</translation>
     </message>
     <message>
-        <source>Iniciar pruebas</source>
-        <translation>Start testing</translation>
+        <source>Requerimientos asignados a ti</source>
+        <translation>Requirements assigned to you</translation>
     </message>
     <message>
-        <source>Abre el issue del requerimiento elegido en el proyecto que trabaja su sistema</source>
-        <translation>Opens the issue of the chosen requirement in the project that works its system</translation>
+        <source>%1 requerimientos · %2 del proyecto actual (%3)</source>
+        <translation>%1 requirements · %2 of the current project (%3)</translation>
     </message>
     <message>
-        <source>Iniciar pruebas en %1</source>
-        <translation>Start testing in %1</translation>
+        <source>Sin estado</source>
+        <translation>No status</translation>
+    </message>
+    <message>
+        <source>Proyecto actual</source>
+        <translation>Current project</translation>
+    </message>
+    <message>
+        <source>Otro proyecto / sistema</source>
+        <translation>Another project / system</translation>
+    </message>
+    <message>
+        <source>N.º %1 · %2
+%3
+Estado: %4
+%5 · %6</source>
+        <translation>No. %1 · %2
+%3
+Status: %4
+%5 · %6</translation>
+    </message>
+    <message>
+        <source>N.º %1</source>
+        <translation>No. %1</translation>
+    </message>
+    <message>
+        <source>Estado: %1</source>
+        <translation>Status: %1</translation>
+    </message>
+    <message>
+        <source>Selecciona un requerimiento para importarlo e iniciar sus pruebas en el proyecto correspondiente. Importar un requerimiento que ya tiene issue sólo actualiza lo que viene de GESREQ: el título, las notas, el estado, la prioridad y los casos y planes del issue no cambian.</source>
+        <translation>Pick a requirement to import it and start its tests in the matching project. Importing a requirement that already has an issue only refreshes what comes from GESREQ: the title, notes, status, priority and the issue cases and plans do not change.</translation>
+    </message>
+    <message>
+        <source>Importar e iniciar pruebas</source>
+        <translation>Import and start testing</translation>
+    </message>
+    <message>
+        <source>Crear proyecto, importar e iniciar</source>
+        <translation>Create project, import and start</translation>
+    </message>
+    <message>
+        <source>Importar e iniciar pruebas en %1</source>
+        <translation>Import and start testing in %1</translation>
+    </message>
+    <message>
+        <source>Ningún proyecto trabaja ese sistema: antes de empezar se elige uno o se crea</source>
+        <translation>No project works that system: pick or create one before starting</translation>
+    </message>
+    <message>
+        <source>Importa o actualiza el requerimiento elegido y abre su issue en el proyecto que trabaja su sistema</source>
+        <translation>Imports or refreshes the chosen requirement and opens its issue in the project that works its system</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::RequirementSourceService</name>
+    <message>
+        <source>Configura la conexión con GESREQ en Ajustes para registrar el resultado</source>
+        <translation>Set up the GESREQ connection in Settings to register the result</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::RevisionResultDialog</name>
+    <message>
+        <source>Registrar el resultado en GESREQ</source>
+        <translation>Register the result in GESREQ</translation>
+    </message>
+    <message>
+        <source>Enviar el resultado al gestor</source>
+        <translation>Send the result to the tracker</translation>
+    </message>
+    <message>
+        <source>Registrar en %1</source>
+        <translation>Register in %1</translation>
+    </message>
+    <message>
+        <source>Comentar en %1</source>
+        <translation>Comment on %1</translation>
+    </message>
+    <message>
+        <source>Resultado</source>
+        <translation>Result</translation>
+    </message>
+    <message>
+        <source>Texto que se envía</source>
+        <translation>Text that is sent</translation>
+    </message>
+    <message>
+        <source>Adjuntar el acta %1</source>
+        <translation>Attach the record %1</translation>
+    </message>
+    <message>
+        <source>Todavía no hay acta generada: se envía sólo el texto.</source>
+        <translation>No record generated yet: only the text is sent.</translation>
+    </message>
+    <message>
+        <source>Registrar el resultado cambia el estado del requerimiento en GESREQ y queda a nombre del usuario de la conexión. Sólo se hace cuando lo pides aquí.</source>
+        <translation>Registering the result changes the requirement status in GESREQ and is recorded under the connection user. It only happens when you ask for it here.</translation>
+    </message>
+    <message>
+        <source>Se añade un comentario al issue del gestor; no se toca ningún otro campo.</source>
+        <translation>A comment is added to the tracker issue; no other field is touched.</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Registrar en GESREQ</source>
+        <translation>Register in GESREQ</translation>
+    </message>
+    <message>
+        <source>Enviar al gestor</source>
+        <translation>Send to the tracker</translation>
     </message>
 </context>
 <context>

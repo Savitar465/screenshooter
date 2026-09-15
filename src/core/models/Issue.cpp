@@ -32,6 +32,47 @@ QString label(IssueState s) {
     return {};
 }
 
+QString toString(QaOutcome o) {
+    switch (o) {
+        case QaOutcome::Pendiente: return QStringLiteral("Pendiente");
+        case QaOutcome::Conforme: return QStringLiteral("Conforme");
+        case QaOutcome::Observado: return QStringLiteral("Observado");
+    }
+    return QStringLiteral("Pendiente");
+}
+
+QaOutcome qaOutcomeFromString(const QString& s) {
+    for (const auto outcome : {QaOutcome::Pendiente, QaOutcome::Conforme, QaOutcome::Observado})
+        if (s.trimmed().compare(toString(outcome), Qt::CaseInsensitive) == 0) return outcome;
+    return QaOutcome::Pendiente;
+}
+
+QString label(QaOutcome o) {
+    switch (o) {
+        case QaOutcome::Pendiente: return QCoreApplication::translate("core", "Pendiente");
+        case QaOutcome::Conforme: return QCoreApplication::translate("core", "Conforme");
+        case QaOutcome::Observado: return QCoreApplication::translate("core", "Observado");
+    }
+    return {};
+}
+
+const IssueRevision* Issue::currentRevision() const {
+    if (revisions.isEmpty()) return nullptr;
+    const IssueRevision& last = revisions.last();
+    return last.isOpen() ? &last : nullptr;
+}
+
+const IssueRevision* Issue::lastClosedRevision() const {
+    for (auto it = revisions.crbegin(); it != revisions.crend(); ++it)
+        if (!it->isOpen()) return &*it;
+    return nullptr;
+}
+
+QaOutcome Issue::lastOutcome() const {
+    const IssueRevision* closed = lastClosedRevision();
+    return closed ? closed->outcome : QaOutcome::Pendiente;
+}
+
 QString Issue::searchText() const {
     const ExternalRequirement& r = requirement.data;
     QStringList parts{id, title, notes, publication.key, r.id, r.system, r.summary, r.requester, r.requestingUnit, r.user};

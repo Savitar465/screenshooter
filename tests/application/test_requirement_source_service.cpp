@@ -95,6 +95,46 @@ private slots:
         QVERIFY(!f.settings.requirementSource().connected);
         QVERIFY(f.service.systems().isEmpty());
     }
+
+    // ---- Registro del resultado ------------------------------------------------------------------
+    void theResultIsRegisteredWithTheStoredSettings() {
+        Fixture f;
+        QVERIFY(f.service.canRegisterResult());
+        RequirementRegistration registration;
+        registration.requirementId = QStringLiteral("2026997");
+        registration.result = QStringLiteral("Observado");
+        registration.comment = QStringLiteral("3 observaciones de funcionamiento");
+        registration.attachmentPath = QStringLiteral("/tmp/acta.docx");
+
+        RequirementRegistrationResult out;
+        f.service.registerResult(registration, [&out](const RequirementRegistrationResult& r) { out = r; });
+        QVERIFY(out.ok);
+        QCOMPARE(f.source->registrations.size(), 1);
+        QCOMPARE(f.source->registrations.first().requirementId, QStringLiteral("2026997"));
+        QCOMPARE(f.source->registrations.first().result, QStringLiteral("Observado"));
+        QCOMPARE(f.source->registrations.first().attachmentPath, QStringLiteral("/tmp/acta.docx"));
+        QCOMPARE(f.source->tested.last().user, QStringLiteral("QAUSR0101"));
+    }
+
+    void aRegistrationThatIsCutOffIsUnconfirmedAndOneWithoutConnectorIsNotEvenSent() {
+        Fixture f;
+        f.source->registrationCutOff = true;
+        RequirementRegistrationResult out;
+        f.service.registerResult(RequirementRegistration{QStringLiteral("2026997"), QStringLiteral("Conforme"), {}, {}},
+                                 [&out](const RequirementRegistrationResult& r) { out = r; });
+        QVERIFY(!out.ok);
+        QVERIFY(out.uncertain);
+        QVERIFY(out.retryable());
+
+        // Un conector que no sabe registrar (o sin conexión configurada) ni lo intenta.
+        f.source->registersResults = false;
+        QVERIFY(!f.service.canRegisterResult());
+        f.service.registerResult(RequirementRegistration{QStringLiteral("2026997"), QStringLiteral("Conforme"), {}, {}},
+                                 [&out](const RequirementRegistrationResult& r) { out = r; });
+        QVERIFY(!out.ok);
+        QVERIFY(!out.uncertain);
+        QCOMPARE(f.source->registrations.size(), 1);   // sólo el primero llegó al conector
+    }
 };
 
 QTEST_APPLESS_MAIN(RequirementSourceServiceTest)

@@ -53,6 +53,30 @@ public:
         done(r);
     }
 
+    bool registersResults = true;                       // como GesreqClient contra el formulario «Registrar»
+    QList<RequirementRegistration> registrations;       // lo que se mandó registrar, en orden
+    bool registrationCutOff = false;                    // el envío se corta sin respuesta
+
+    bool canRegisterResult() const override { return registersResults; }
+
+    void registerResult(const RequirementSourceSettings& s, const RequirementRegistration& registration,
+                        std::function<void(const RequirementRegistrationResult&)> done) override {
+        tested << s;
+        registrations << registration;
+        RequirementRegistrationResult r;
+        if (registrationCutOff) {
+            r.failure = RequirementSourceFailure::Network;
+            r.error = QStringLiteral("La conexión se cortó");
+            r.uncertain = true;
+        } else if (!reachable) {
+            r.failure = RequirementSourceFailure::Credentials;
+            r.error = QStringLiteral("GESREQ rechazó el usuario o la contraseña");
+        } else {
+            r.ok = true;
+        }
+        done(r);
+    }
+
     void fetchDetail(const RequirementSourceSettings&, const QString& id, std::function<void(const RequirementDetailResult&)> done) override {
         RequirementDetailResult r;
         r.fetchedAt = QDateTime::currentDateTime();

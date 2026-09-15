@@ -5,6 +5,7 @@
 #include "infrastructure/persistence/JsonBugRepository.h"
 #include "infrastructure/persistence/JsonIssueRepository.h"
 #include "infrastructure/persistence/QSettingsRepository.h"
+#include "infrastructure/report/QualityRecordDocx.h"
 #include "infrastructure/requirements/GesreqClient.h"
 #include "infrastructure/testmgmt/ZephyrClient.h"
 #include "infrastructure/tracker/TrackerRouter.h"
@@ -31,7 +32,14 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     transfer = std::make_unique<CaseTransferService>(*cases);
     issues = std::make_unique<IssueStore>(std::make_shared<JsonIssueRepository>(dir));
     issuePublish = std::make_unique<IssuePublishService>(std::make_shared<TrackerRouter>(), *issues, *settings);
+    records = std::make_unique<QualityRecordService>(*issues, *cases, *history, *bugLedger, *settings,
+                                                     std::make_shared<QualityRecordDocx>());
     requirements = std::make_unique<RequirementSourceService>(requirementSource ? requirementSource : std::make_shared<GesreqClient>(), *settings);
+    // El issue sigue a sus pruebas: arrancar un ciclo de uno de sus planes lo pasa a «En pruebas» y
+    // abre su revisión (la primera, o la siguiente si la anterior ya se cerró).
+    QObject::connect(run.get(), &RunController::planStarted, issues.get(), [store = issues.get()](const QString&, const QString& planId) {
+        store->notePlanStarted(planId);
+    });
     QObject::connect(settings.get(), &SettingsStore::saved, &projects, [&projects, source = settings.get()]() {
         emit projects.settingsChanged(source);
     });
@@ -51,6 +59,7 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     ctx.run = run.get(); ctx.plan = plan.get(); ctx.bugLedger = bugLedger.get();
     ctx.bugs = bugs.get(); ctx.publish = publish.get(); ctx.evidence = evidence.get(); ctx.transfer = transfer.get();
     ctx.issues = issues.get(); ctx.issuePublish = issuePublish.get(); ctx.requirements = requirements.get();
+    ctx.records = records.get();
     ctx.captureBackend = capture->backendName();
 }
 bool ProjectSession::canLeave(QString* reason) const {

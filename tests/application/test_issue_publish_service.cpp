@@ -1,6 +1,6 @@
 // IssuePublishService (application/IssuePublishService.h): borrador del issue para el gestor, creación
-// explícita, vinculación de uno que ya existe, actualización de lo que cambió en QAflow, estado y envíos
-// que se cortan sin respuesta.
+// explícita, vinculación de uno que ya existe, actualización de lo que cambió en QAflow, estado, el
+// resultado de la revisión con su acta y envíos que se cortan sin respuesta.
 
 #include "support/FakeIssueTracker.h"
 #include "support/MemoryRepositories.h"
@@ -219,6 +219,56 @@ private slots:
         QCOMPARE(IssuePublishService::defaultIssueType(types), QStringLiteral("Tarea"));
         QCOMPARE(IssuePublishService::defaultIssueType({QStringLiteral("Bug"), QStringLiteral("Story")}), QStringLiteral("Story"));
         QCOMPARE(IssuePublishService::defaultIssueType({}), QStringLiteral("Tarea"));
+    }
+
+    // ---- El resultado de la revisión --------------------------------------------------------------
+    void theRevisionResultIsCommentedInTheTrackerWithItsRecord() {
+        Fixture f;
+        QVERIFY(!f.service.canPublishResult(f.issue()));   // sin publicar no hay dónde comentar
+        f.service.publish(f.id, f.service.draftFor(f.issue()), [](const IssuePublishService::Result&) {});
+        QVERIFY(f.service.canPublishResult(f.issue()));
+        f.issues.openRevision(f.id);
+
+        IssuePublishService::Result result;
+        f.service.publishResult(f.id, QStringLiteral("GREQ 2025175 — revisión 1: Observado"), QStringLiteral("/tmp/acta.docx"),
+                                [&result](const IssuePublishService::Result& r) { result = r; });
+        QVERIFY(result.ok);
+        QCOMPARE(f.tracker->commentedKeys.size(), 1);
+        QCOMPARE(f.tracker->commentedKeys.first(), f.issue().publication.key);
+        QVERIFY(f.tracker->comments.first().contains(QStringLiteral("revisión 1: Observado")));
+        QCOMPARE(f.tracker->commentAttachments.first(), QStringList{QStringLiteral("/tmp/acta.docx")});
+
+        const IssueRevision* revision = f.issue().currentRevision();
+        QVERIFY(revision);
+        QCOMPARE(revision->jira.key, f.issue().publication.key);
+        QVERIFY(revision->jira.publishedAt.isValid());
+        QVERIFY(revision->jira.attachedDocument);
+        QVERIFY(!revision->jira.uncertain);
+    }
+
+    void aResultThatIsCutOffIsLeftUnconfirmed() {
+        Fixture f;
+        f.service.publish(f.id, f.service.draftFor(f.issue()), [](const IssuePublishService::Result&) {});
+        f.issues.openRevision(f.id);
+        f.tracker->mode = FakeIssueTracker::Mode::NetworkDown;
+
+        IssuePublishService::Result result;
+        f.service.publishResult(f.id, QStringLiteral("resumen"), QString(),
+                                [&result](const IssuePublishService::Result& r) { result = r; });
+        QVERIFY(!result.ok);
+        QVERIFY(result.uncertain);
+        const IssueRevision* revision = f.issue().currentRevision();
+        QVERIFY(revision->jira.uncertain);
+        QCOMPARE(revision->jira.lastError, QStringLiteral("Host not found"));
+        QVERIFY(!revision->jira.publishedAt.isValid());
+
+        // Un rechazo del contenido no deja esa duda.
+        f.tracker->mode = FakeIssueTracker::Mode::RejectContent;
+        f.service.publishResult(f.id, QStringLiteral("resumen"), QString(),
+                                [&result](const IssuePublishService::Result& r) { result = r; });
+        QVERIFY(!result.ok);
+        QVERIFY(!result.uncertain);
+        QVERIFY(!f.issue().currentRevision()->jira.uncertain);
     }
 
     void withoutProjectOrTrackerItDoesNotPublish() {

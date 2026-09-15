@@ -125,7 +125,11 @@ void IssueStore::removeIssue(const QString& id) {
 void IssueStore::linkCase(const QString& issueId, const QString& caseId) {
     const Issue* issue = find(issueId);
     if (!issue || caseId.isEmpty() || issue->caseIds.contains(caseId)) return;
-    updateIssue(issueId, [&caseId](Issue& i) { i.caseIds << caseId; });
+    updateIssue(issueId, [&caseId](Issue& i) {
+        i.caseIds << caseId;
+        // Ya hay con qué probar: el issue deja de estar pendiente. Un estado más avanzado no se toca.
+        if (i.state == IssueState::Pending) i.state = IssueState::Preparing;
+    });
 }
 
 void IssueStore::unlinkCase(const QString& issueId, const QString& caseId) {
@@ -144,6 +148,93 @@ void IssueStore::unlinkPlan(const QString& issueId, const QString& planId) {
     const Issue* issue = find(issueId);
     if (!issue || !issue->planIds.contains(planId)) return;
     updateIssue(issueId, [&planId](Issue& i) { i.planIds.removeAll(planId); });
+}
+
+// ---- Flujo de la revisión ----------------------------------------------------------------------
+
+IssueRevision& IssueStore::revisionFor(Issue& issue) {
+    if (issue.revisions.isEmpty()) {
+        IssueRevision first;
+        first.startedAt = QDateTime::currentDateTime();
+        issue.revisions << first;
+    }
+    return issue.revisions.last();
+}
+
+void IssueStore::notePlanStarted(const QString& planId) {
+    if (planId.isEmpty()) return;
+    QStringList changed;
+    for (auto& issue : m_issues) {
+        if (!issue.planIds.contains(planId)) continue;
+        const bool wasTesting = issue.state == IssueState::Testing;
+        const bool hadOpenRevision = issue.currentRevision() != nullptr;
+        if (!hadOpenRevision) {
+            IssueRevision next;
+            next.number = issue.revisions.isEmpty() ? 1 : issue.revisions.last().number + 1;
+            next.startedAt = QDateTime::currentDateTime();
+            issue.revisions << next;
+        }
+        issue.state = IssueState::Testing;
+        if (wasTesting && hadOpenRevision) continue;   // ya estaba probando esta misma ronda
+        issue.updatedAt = QDateTime::currentDateTime();
+        changed << issue.id;
+    }
+    if (changed.isEmpty()) return;
+    persist();
+    for (const auto& id : changed) emit issueChanged(id);
+}
+
+int IssueStore::openRevision(const QString& issueId) {
+    const Issue* found = find(issueId);
+    if (!found) return 0;
+    int number = 0;
+    updateIssue(issueId, [&number](Issue& i) {
+        if (const IssueRevision* open = i.currentRevision()) {
+            number = open->number;
+        } else {
+            IssueRevision next;
+            next.number = i.revisions.isEmpty() ? 1 : i.revisions.last().number + 1;
+            next.startedAt = QDateTime::currentDateTime();
+            i.revisions << next;
+            number = next.number;
+        }
+        i.state = IssueState::Testing;
+    });
+    return number;
+}
+
+void IssueStore::setRevisionRecord(const QString& issueId, const QualityRecord& record, const QString& documentPath) {
+    if (!find(issueId)) return;
+    updateIssue(issueId, [&](Issue& i) {
+        IssueRevision& revision = revisionFor(i);
+        revision.record = record;
+        if (documentPath.trimmed().isEmpty()) return;
+        revision.documentPath = documentPath;
+        revision.documentAt = QDateTime::currentDateTime();
+    });
+}
+
+void IssueStore::setRevisionPublication(const QString& issueId, const RevisionPublication& publication) {
+    if (!find(issueId)) return;
+    updateIssue(issueId, [&](Issue& i) { revisionFor(i).jira = publication; });
+}
+
+void IssueStore::setRevisionRegistration(const QString& issueId, const RevisionRegistration& registration) {
+    if (!find(issueId)) return;
+    updateIssue(issueId, [&](Issue& i) { revisionFor(i).gesreq = registration; });
+}
+
+void IssueStore::closeRevision(const QString& issueId, QaOutcome outcome) {
+    const Issue* issue = find(issueId);
+    if (!issue || !issue->currentRevision()) return;
+    updateIssue(issueId, [outcome](Issue& i) {
+        IssueRevision& revision = i.revisions.last();
+        revision.outcome = outcome;
+        revision.closedAt = QDateTime::currentDateTime();
+        // El trabajo de esta ronda está hecho: si el requerimiento queda observado, volver a probarlo
+        // abre la revisión siguiente (notePlanStarted / openRevision), no reabre ésta.
+        i.state = IssueState::Done;
+    });
 }
 
 // ---- Importación -------------------------------------------------------------------------------

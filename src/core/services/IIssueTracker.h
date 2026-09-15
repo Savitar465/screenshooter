@@ -147,6 +147,17 @@ public:
         Q_UNUSED(s); Q_UNUSED(key); Q_UNUSED(draft);
         done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no publica los issues de QAflow"), false, 0});
     }
+
+    /// ¿Sabe este gestor comentar un issue y adjuntarle ficheros? Es lo que hace falta para dejar allí
+    /// el resultado de una revisión con su acta. Sólo Jira, por ahora.
+    virtual bool canCommentIssues(const TrackerSettings& s) const { Q_UNUSED(s); return false; }
+    /// Añade un comentario al issue y, si se pasan, le adjunta esos ficheros. `IssueResult::key` es el
+    /// issue comentado y `attachmentsUploaded`, cuántos adjuntos entraron.
+    virtual void commentIssue(const TrackerSettings& s, const QString& key, const QString& body, const QStringList& attachments,
+                              std::function<void(const IssueResult&)> done) {
+        Q_UNUSED(s); Q_UNUSED(key); Q_UNUSED(body); Q_UNUSED(attachments);
+        done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no admite comentarios desde QAflow"), false, 0});
+    }
 };
 
 } // namespace qaflow

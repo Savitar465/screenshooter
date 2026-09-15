@@ -69,6 +69,7 @@ private:
     QLabel* m_eyebrow;
     QLineEdit* m_title;
     QComboBox* m_severity;
+    QComboBox* m_classification;
     QComboBox* m_env;
     QLabel* m_linkedCase;
     QComboBox* m_issueType;

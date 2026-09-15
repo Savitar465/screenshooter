@@ -55,6 +55,7 @@ IssueLink BugReportService::linkFor(const BugReport& bug, const IssueResult& r) 
     l.caseId = bug.linkedCaseId;
     l.tracker = toString(m_settings.tracker().kind);
     l.severity = bug.severity;
+    l.classification = bug.classification;
     l.createdAt = QDateTime::currentDateTime();
     return l;
 }

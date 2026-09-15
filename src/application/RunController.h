@@ -53,6 +53,8 @@ public:
 
 signals:
     void runChanged();
+    /// Arrancó un ciclo de un plan: `planId` es el plan del catálogo (vacío en un ciclo suelto).
+    void planStarted(const QString& planRunId, const QString& planId);
     /// Se terminó (o se abandonó) la ejecución de un plan; el informe ya está en el historial.
     void planCompleted(const QString& planRunId);
     void saveFailed(const QString& what);

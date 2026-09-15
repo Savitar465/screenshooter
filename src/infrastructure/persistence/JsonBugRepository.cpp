@@ -17,7 +17,7 @@ QStringList strings(const QJsonValue& v) { QStringList out; for (const auto& x :
 
 QJsonObject reportToJson(const BugReport& b) {
     return QJsonObject{
-        {"title", b.title}, {"severity", b.severity}, {"environment", b.environment},
+        {"title", b.title}, {"severity", b.severity}, {"classification", b.classification}, {"environment", b.environment},
         {"linkedCaseId", b.linkedCaseId}, {"linkedStoryKey", b.linkedStoryKey},
         {"stepsToReproduce", b.stepsToReproduce}, {"expected", b.expected}, {"actual", b.actual},
         {"attachmentPaths", QJsonArray::fromStringList(b.attachmentPaths)},
@@ -31,6 +31,7 @@ BugReport reportFromJson(const QJsonObject& o) {
     BugReport b;
     b.title = o["title"].toString();
     b.severity = o["severity"].toString(b.severity);
+    b.classification = o["classification"].toString(b.classification);
     b.environment = o["environment"].toString(b.environment);
     b.linkedCaseId = o["linkedCaseId"].toString();
     b.linkedStoryKey = o["linkedStoryKey"].toString();
@@ -50,7 +51,7 @@ BugReport reportFromJson(const QJsonObject& o) {
 
 QJsonObject issueToJson(const IssueLink& i) {
     return QJsonObject{
-        {"key", i.key}, {"url", i.url}, {"title", i.title}, {"caseId", i.caseId}, {"tracker", i.tracker}, {"severity", i.severity},
+        {"key", i.key}, {"url", i.url}, {"title", i.title}, {"caseId", i.caseId}, {"tracker", i.tracker}, {"severity", i.severity}, {"classification", i.classification},
         {"status", i.status}, {"resolved", i.resolved}, {"createdAt", iso(i.createdAt)}, {"statusCheckedAt", iso(i.statusCheckedAt)},
     };
 }
@@ -63,6 +64,7 @@ IssueLink issueFromJson(const QJsonObject& o) {
     i.caseId = o["caseId"].toString();
     i.tracker = o["tracker"].toString();
     i.severity = o["severity"].toString();
+    i.classification = o["classification"].toString(i.classification);
     i.status = o["status"].toString();
     i.resolved = o["resolved"].toBool();
     i.createdAt = QDateTime::fromString(o["createdAt"].toString(), Qt::ISODate);

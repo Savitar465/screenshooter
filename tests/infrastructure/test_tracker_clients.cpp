@@ -286,6 +286,48 @@ private slots:
         QVERIFY(upload.body.contains("PNGDATA"));
     }
 
+    void jiraCommentsTheIssueAndAttachsTheRecord() {
+        QTemporaryDir dir;
+        const QString record = dir.filePath(QStringLiteral("ControlCalidad_2026997.docx"));
+        { QFile f(record); QVERIFY(f.open(QIODevice::WriteOnly)); f.write("DOCXDATA"); }
+
+        FakeHttpServer server;
+        server.route("POST", "/rest/api/2/issue/SHOP-143/comment", [](const HttpRequest&) { return HttpResponse::json(201, "{\"id\":\"10\"}"); });
+        server.route("POST", "/rest/api/2/issue/SHOP-143/attachments", [](const HttpRequest&) { return HttpResponse::json(200, "[]"); });
+
+        JiraClient client;
+        IssueResult out;
+        bool done = false;
+        client.commentIssue(jiraSettings(server.baseUrl()), QStringLiteral("SHOP-143"),
+                            QStringLiteral("GREQ 2026997 — revisión 1: Observado"),
+                            {record, dir.filePath(QStringLiteral("no_esta.docx"))},
+                            [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(out.key, QStringLiteral("SHOP-143"));
+        QCOMPARE(out.url, server.baseUrl() + QStringLiteral("/browse/SHOP-143"));
+        QCOMPARE(out.attachmentsUploaded, 1);   // el fichero que no está se omite
+
+        QCOMPARE(server.requests.size(), 2);
+        QCOMPARE(bodyOf(server.requests[0])[QStringLiteral("body")].toString(), QStringLiteral("GREQ 2026997 — revisión 1: Observado"));
+        QVERIFY(server.requests[1].body.contains("filename=\"ControlCalidad_2026997.docx\""));
+    }
+
+    void jiraCommentFailureIsReportedAndRetryableOnServerError() {
+        FakeHttpServer server;
+        server.route("POST", "/rest/api/2/issue/SHOP-143/comment", [](const HttpRequest&) { return HttpResponse::json(500, "{}"); });
+
+        JiraClient client;
+        IssueResult out;
+        bool done = false;
+        client.commentIssue(jiraSettings(server.baseUrl()), QStringLiteral("SHOP-143"), QStringLiteral("resumen"), {},
+                            [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(out.retryable);
+        QCOMPARE(server.requests.size(), 1);   // sin comentario no se suben adjuntos
+    }
+
     void jiraContentRejectionIsNotRetryable() {
         FakeHttpServer server;
         server.route("POST", "/rest/api/2/issue", [](const HttpRequest&) {

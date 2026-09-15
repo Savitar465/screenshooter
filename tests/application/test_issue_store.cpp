@@ -1,6 +1,7 @@
-// IssueStore (application/IssueStore.h): alta y edición, asociaciones con casos y planes, importación de
-// requerimientos sin duplicados ni pisar lo escrito en QAflow, cambios pendientes, requerimientos que
-// salen de la bandeja, resultados de sus casos y datos que no se pueden leer.
+// IssueStore (application/IssueStore.h): alta y edición, asociaciones con casos y planes, avance del
+// flujo y revisiones (acta, publicación y registro), importación de requerimientos sin duplicados ni
+// pisar lo escrito en QAflow, cambios pendientes, requerimientos que salen de la bandeja, resultados
+// de sus casos y datos que no se pueden leer.
 
 #include "support/AppFixture.h"
 #include "support/MemoryRepositories.h"
@@ -74,6 +75,88 @@ private slots:
         QCOMPARE(f.store.find(a)->planIds, QStringList{QStringLiteral("PL-0001")});
         f.store.unlinkPlan(a, QStringLiteral("PL-0001"));
         QVERIFY(f.store.find(a)->planIds.isEmpty());
+    }
+
+    // ---- Flujo y revisiones ---------------------------------------------------------------------
+    void theFirstCaseMovesThePendingIssueToPreparing() {
+        Fixture f;
+        const QString id = f.store.createIssue(QStringLiteral("A"));
+        QVERIFY(f.store.find(id)->state == IssueState::Pending);
+        f.store.linkCase(id, QStringLiteral("TC-101"));
+        QVERIFY(f.store.find(id)->state == IssueState::Preparing);
+
+        // Un estado más avanzado no retrocede al vincular otro caso.
+        f.store.updateIssue(id, [](Issue& i) { i.state = IssueState::Testing; });
+        f.store.linkCase(id, QStringLiteral("TC-102"));
+        QVERIFY(f.store.find(id)->state == IssueState::Testing);
+    }
+
+    void startingACycleOfItsPlanOpensTheRevisionAndPutsItInTesting() {
+        Fixture f;
+        const QString id = f.store.createIssue(QStringLiteral("A"));
+        const QString other = f.store.createIssue(QStringLiteral("B"));
+        f.store.linkPlan(id, QStringLiteral("PL-0001"));
+        f.store.linkPlan(other, QStringLiteral("PL-0002"));
+
+        f.store.notePlanStarted(QStringLiteral("PL-0001"));
+        const Issue* issue = f.store.find(id);
+        QVERIFY(issue->state == IssueState::Testing);
+        QCOMPARE(issue->revisions.size(), 1);
+        QCOMPARE(issue->currentRevision()->number, 1);
+        QVERIFY(f.store.find(other)->revisions.isEmpty());   // su plan no arrancó
+
+        // Otro ciclo de la misma ronda no abre una revisión nueva.
+        f.store.notePlanStarted(QStringLiteral("PL-0001"));
+        QCOMPARE(f.store.find(id)->revisions.size(), 1);
+
+        // Cerrada la revisión, volver a probar abre la siguiente.
+        f.store.closeRevision(id, QaOutcome::Observado);
+        QVERIFY(f.store.find(id)->state == IssueState::Done);
+        f.store.notePlanStarted(QStringLiteral("PL-0001"));
+        issue = f.store.find(id);
+        QCOMPARE(issue->revisions.size(), 2);
+        QCOMPARE(issue->currentRevision()->number, 2);
+        QVERIFY(issue->state == IssueState::Testing);
+        QVERIFY(issue->lastOutcome() == QaOutcome::Observado);   // el de la revisión ya cerrada
+    }
+
+    void theRevisionKeepsTheRecordThePublicationAndTheRegistration() {
+        Fixture f;
+        const QString id = f.store.createIssue(QStringLiteral("A"));
+        QCOMPARE(f.store.openRevision(id), 1);
+        QCOMPARE(f.store.openRevision(id), 1);   // ya estaba abierta
+
+        QualityRecord record;
+        record.greq = QStringLiteral("2026997");
+        record.revisionNumber = 1;
+        f.store.setRevisionRecord(id, record, QStringLiteral("/tmp/ControlCalidad_2026997.docx"));
+        const IssueRevision* revision = f.store.find(id)->currentRevision();
+        QCOMPARE(revision->record.greq, QStringLiteral("2026997"));
+        QVERIFY(revision->hasDocument());
+        QVERIFY(revision->documentAt.isValid());
+
+        RevisionPublication published;
+        published.key = QStringLiteral("SUMA2-2907");
+        published.publishedAt = QDateTime::currentDateTime();
+        published.attachedDocument = true;
+        f.store.setRevisionPublication(id, published);
+        QCOMPARE(f.store.find(id)->currentRevision()->jira.key, QStringLiteral("SUMA2-2907"));
+
+        RevisionRegistration registered;
+        registered.registeredAt = QDateTime::currentDateTime();
+        registered.result = QaOutcome::Conforme;
+        f.store.setRevisionRegistration(id, registered);
+        QVERIFY(f.store.find(id)->currentRevision()->gesreq.result == QaOutcome::Conforme);
+
+        f.store.closeRevision(id, QaOutcome::Conforme);
+        const Issue* issue = f.store.find(id);
+        QVERIFY(!issue->currentRevision());
+        QVERIFY(issue->state == IssueState::Done);
+        QVERIFY(issue->lastOutcome() == QaOutcome::Conforme);
+        // Con la revisión cerrada, el acta se puede regenerar sin reabrirla.
+        f.store.setRevisionRecord(id, record, QStringLiteral("/tmp/otra.docx"));
+        QCOMPARE(f.store.find(id)->revisions.size(), 1);
+        QCOMPARE(f.store.find(id)->revisions.last().documentPath, QStringLiteral("/tmp/otra.docx"));
     }
 
     void removingAnIssueSelectsTheNextOne() {

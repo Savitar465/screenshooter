@@ -48,6 +48,13 @@ add_library(qaflow_core STATIC
         src/core/models/Requirement.cpp
         src/core/models/Issue.h
         src/core/models/Issue.cpp
+        src/core/models/IssueProgress.h
+        src/core/models/IssueProgress.cpp
+        src/core/models/QualityRecord.h
+        src/core/models/QualityRecord.cpp
+        src/core/models/QualityRecordDraft.h
+        src/core/models/QualityRecordDraft.cpp
+        src/core/services/IQualityRecordWriter.h
         src/core/services/IRequirementSource.h
         src/core/services/IIssueRepository.h
         src/core/services/ITestCaseRepository.h
@@ -98,6 +105,8 @@ add_library(qaflow_application STATIC
         src/application/IssueStore.cpp
         src/application/IssuePublishService.h
         src/application/IssuePublishService.cpp
+        src/application/QualityRecordService.h
+        src/application/QualityRecordService.cpp
 )
 target_link_libraries(qaflow_application PUBLIC qaflow_core Qt6::Gui PRIVATE qaflow_warnings)
 
@@ -152,6 +161,12 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/tracker/TrackerRouter.cpp
         src/infrastructure/testmgmt/ZephyrClient.h
         src/infrastructure/testmgmt/ZephyrClient.cpp
+        src/infrastructure/report/ZipWriter.h
+        src/infrastructure/report/ZipWriter.cpp
+        src/infrastructure/report/DocxWriter.h
+        src/infrastructure/report/DocxWriter.cpp
+        src/infrastructure/report/QualityRecordDocx.h
+        src/infrastructure/report/QualityRecordDocx.cpp
         src/infrastructure/requirements/GesreqParser.h
         src/infrastructure/requirements/GesreqParser.cpp
         src/infrastructure/requirements/GesreqClient.h
@@ -233,6 +248,10 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/BugView.cpp
         src/presentation/views/IssuesView.h
         src/presentation/views/IssuesView.cpp
+        src/presentation/views/RevisionResultDialog.h
+        src/presentation/views/RevisionResultDialog.cpp
+        src/presentation/views/QualityRecordDialog.h
+        src/presentation/views/QualityRecordDialog.cpp
         src/presentation/views/JiraPublishDialog.h
         src/presentation/views/JiraPublishDialog.cpp
         src/presentation/views/RequirementImportDialog.h

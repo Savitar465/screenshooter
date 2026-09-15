@@ -51,6 +51,24 @@ public:
     void linkPlan(const QString& issueId, const QString& planId);
     void unlinkPlan(const QString& issueId, const QString& planId);
 
+    // ---- Flujo de la revisión ------------------------------------------------------------------
+    /// Empezó un ciclo de ese plan: los issues que lo agrupan pasan a «En pruebas» y, si no tenían
+    /// ninguna revisión abierta, abren la siguiente (un requerimiento observado que vuelve a probarse
+    /// es la revisión N+1 del acta). El avance automático nunca retrocede de estado por su cuenta.
+    void notePlanStarted(const QString& planId);
+    /// Abre la ronda siguiente (la primera si no hay ninguna) y deja el issue «En pruebas».
+    /// Devuelve su número, o 0 si el issue no existe.
+    int openRevision(const QString& issueId);
+    /// Guarda en la última revisión lo escrito en el acta y, si se generó, dónde quedó el fichero.
+    void setRevisionRecord(const QString& issueId, const QualityRecord& record, const QString& documentPath = QString());
+    /// Guarda lo que se hizo con el resultado en el gestor.
+    void setRevisionPublication(const QString& issueId, const RevisionPublication& publication);
+    /// Guarda el registro del resultado en GESREQ.
+    void setRevisionRegistration(const QString& issueId, const RevisionRegistration& registration);
+    /// Cierra la revisión en curso con su resultado y deja el issue en Finalizado. Sin revisión
+    /// abierta no hace nada.
+    void closeRevision(const QString& issueId, QaOutcome outcome);
+
     // ---- Importación ---------------------------------------------------------------------------
     struct ImportCandidate {
         enum class Kind { New, Changed, Unchanged };
@@ -98,6 +116,8 @@ signals:
 
 private:
     Issue* findMutable(const QString& id);
+    /// La última revisión del issue, creando la primera si todavía no hay ninguna.
+    IssueRevision& revisionFor(Issue& issue);
     QString nextId() const;
     void persist(const QString& changedId = QString());
 

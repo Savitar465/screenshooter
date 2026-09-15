@@ -13,11 +13,13 @@ src/
 │   ├── models/      TestCase, TestRun, TestPlan, BugReport, Settings (TrackerSettings, AppSettings), IssueLink,
 │   │                RunHistory (RunRecord, PlanRun), PlanReport (informe calculado + Markdown),
 │   │                Metrics (tasa por suite, evolución entre ciclos), CaseFilter, CaseFormats (JSON / CSV / Markdown),
-│   │                Requirement (requerimientos de GESREQ: fila de la bandeja, ficha y motivos de fallo),
-│   │                Issue (issue de QA, lo importado del requerimiento, cambios entre lecturas, filtro)
+│   │                Requirement (requerimientos de GESREQ: fila de la bandeja, ficha, registro del resultado y motivos de fallo),
+│   │                Issue (issue de QA, lo importado del requerimiento, cambios entre lecturas, revisiones, filtro),
+│   │                IssueProgress (cómo va el control de calidad y qué resultado se propone),
+│   │                QualityRecord + QualityRecordDraft (el acta R-213 como datos y el borrador que se propone)
 │   └── services/    ITestCaseRepository, IRunHistoryRepository, IRunSessionRepository, IBugRepository,
 │                    ISettingsRepository, ISecretStore, IScreenCapture, IScreenRecorder, IGlobalHotkey, IIssueTracker,
-│                    ITestManagement, IRequirementSource, IIssueRepository
+│                    ITestManagement, IRequirementSource, IIssueRepository, IQualityRecordWriter
 ├── application/     Casos de uso y estado observable (QObject + señales). Sin UI.
 │   ├── TestCaseStore      fuente de verdad de los casos; toda mutación pasa por aquí;
 │   │                      deshacer de un nivel para borrados
@@ -32,7 +34,9 @@ src/
 │   ├── BugReportService   borrador de bug, envío al gestor, cola offline, estados y metadatos
 │   ├── BugStore           libro de bugs: issues enlazados a su caso y cola de pendientes
 │   ├── IssueStore         issues de QA: asociaciones con casos y planes, importación de GESREQ sin duplicados
-│   ├── IssuePublishService publicación del issue en el gestor: crear, vincular, actualizar y estado
+│   ├── IssuePublishService publicación del issue en el gestor: crear, vincular, actualizar, estado y
+│   │                      el resultado de la revisión (comentario con el acta adjunta)
+│   ├── QualityRecordService el acta de la revisión: la propone, la escribe y la guarda en el issue
 │   ├── RequirementSourceService conexión con GESREQ: probarla, bandeja, fichas y catálogo de sistemas
 │   ├── SeedData           datos de ejemplo del primer arranque
 │   └── AppContext         agrupa los servicios ya construidos para la presentación
@@ -47,6 +51,7 @@ src/
 │   ├── secrets/     SecretStores: secret-tool (Linux), Keychain (macOS), DPAPI (Windows), fichero en claro
 │   ├── http/        HttpClient: base HTTP (JSON, multipart, formularios, cookies, errores, reintentables) de tracker/, testmgmt/ y requirements/
 │   ├── testmgmt/    ZephyrClient: ciclos, ejecuciones y evidencias en Zephyr for Jira
+│   ├── report/      ZipWriter (ZIP mínimo), DocxWriter (OOXML) y QualityRecordDocx (la maqueta del R-213)
 │   ├── requirements/ GesreqClient (sesión y lectura de GESREQ) y GesreqParser (sus páginas HTML → modelos)
 │   └── tracker/     HttpTrackerClient (base) → JiraClient, GitHubClient, GitLabClient, AzureDevOpsClient;
 │                    TrackerRouter despacha por TrackerSettings::kind
@@ -56,7 +61,8 @@ src/
     │                FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard,
     │                EvidencePreview (visor de la ejecución), ImageViewer (visor a tamaño completo),
     │                AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
-    ├── views/       Una clase por pantalla: IssuesView (+ RequirementImportDialog, JiraPublishDialog), CasesView, PlanView, RunView, HistoryView, BugView,
+    ├── views/       Una clase por pantalla: IssuesView (+ RequirementImportDialog, JiraPublishDialog,
+    │                QualityRecordDialog, RevisionResultDialog), CasesView, PlanView, RunView, HistoryView, BugView,
     │                SettingsView (+ SettingsDialog, su ventana); Sidebar (rail de iconos),
     │                StatusStrip (barra de estado) y MainWindow (menú, atajos, bandeja,
     │                navegación, avisos)
@@ -174,7 +180,8 @@ muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`
 | Conexión con GESREQ    | QSettings (grupo `gesreq`: URL, usuario, conectado); la contraseña, en `ISecretStore` (`gesreq/password`) |
 | Proyectos y su sistema de GESREQ | `$XDG_DATA_HOME/QAflow/QAflow/projects.json` (`requirementSystem` de cada proyecto) |
 | Bugs y cola offline    | `$XDG_DATA_HOME/QAflow/QAflow/bugs.json`                    |
-| Issues (asociaciones, lo importado de GESREQ, sus cambios y la publicación en el gestor) | `issues.json` en el directorio de datos de cada proyecto |
+| Issues (asociaciones, lo importado de GESREQ, sus cambios, la publicación en el gestor y las revisiones con su acta) | `issues.json` en el directorio de datos de cada proyecto |
+| Actas generadas (.docx)  | donde las guarde el usuario; el issue recuerda la ruta de cada revisión |
 | Capturas, GIF y adjuntos | Carpeta configurable (por defecto `~/QAflow/capturas`)     |
 
 ## Gestión de casos
@@ -540,7 +547,10 @@ mano) y reúne sus casos, sus planes y los resultados de sus pruebas. Es la prim
 | Representación en Jira | `jiraKey`, `jiraUrl` (el filtro «Jira» ya los usa; la publicación llega después) | la publicación |
 
 El **estado de QA** (Pendiente, En preparación, En pruebas, Finalizado) es de QAflow y no se deduce del
-estado de GESREQ, del de Jira ni del resultado de las pruebas. La prioridad y el título salen del
+estado de GESREQ, del de Jira ni del resultado de las pruebas. Sí avanza solo con el trabajo, y nunca
+hacia atrás: vincular el primer caso pasa un issue Pendiente a «En preparación», y arrancar un ciclo de
+uno de sus planes lo pone «En pruebas» (`RunController::planStarted` → `IssueStore::notePlanStarted`,
+conectados en `ProjectSession`). Cerrar la revisión lo deja Finalizado. La prioridad y el título salen del
 requerimiento al importarlo y a partir de ahí son de QAflow. Un caso puede validar varios issues: la
 asociación vive en el issue, así que `cases.json` y `plans.json` no cambian y los casos y planes sin
 issue siguen como estaban; los ids que ya no existen se enseñan como tales, sin borrarlos.
@@ -603,6 +613,26 @@ vive en los ajustes de cada proyecto y sólo los tiene abiertos su sesión: el d
 lo pide con `projectJiraKeyRequested`, que la raíz de composición aplica sobre la sesión de ese proyecto
 antes de activarlo.
 
+**Revisiones: el control de calidad de punta a punta.** Un requerimiento se prueba en rondas: se prueba,
+se cierra con un resultado y, si queda **observado**, vuelve a pruebas y se abre la ronda siguiente. Cada
+ronda es un `IssueRevision` (número, cuándo empezó y cuándo se cerró, resultado, el acta con su fichero, y
+qué se hizo con ella en el gestor y en GESREQ), y todas se guardan en el issue: el «Número de Revisión» del
+acta es el de la ronda.
+
+| Momento | Qué pasa |
+|---------|----------|
+| Arranca un ciclo del plan del issue | Se abre la revisión (la primera, o la siguiente si la anterior está cerrada) y el issue pasa a «En pruebas» |
+| Durante la ronda | `issueProgress()` (core, función pura) cuenta la **última ejecución de cada caso dentro de la revisión** y los bugs del issue: de ahí salen los contadores y el resultado que se propone |
+| Se genera el acta | `QualityRecordService` la arma, la escribe y la guarda en la revisión, con lo escrito en ella |
+| Se manda el resultado | Al gestor, como comentario con el acta adjunta; a GESREQ, como registro del control de calidad |
+| Se cierra la revisión | Queda con su resultado (Conforme u Observado) y el issue, Finalizado. Volver a probar abre la siguiente |
+
+El **resultado** (`QaOutcome`: Pendiente, Conforme, Observado) es una propuesta hasta que alguien lo
+confirma: se propone **Observado** si hay casos fallidos o bloqueados o bugs abiertos, **Conforme** si se
+ejecutó todo y no queda ninguno, y Pendiente mientras falte ejecutar. `IssueProgress::blockers` dice por
+qué («2 casos sin ejecutar», «1 bug abierto») en vez de dar sólo un veredicto, y la pantalla lo enseña en
+la tarjeta «Revisión» junto al paso del flujo, los contadores, el acta y las revisiones ya cerradas.
+
 **Publicación en el gestor.** `IssuePublishService` (application) crea la representación del issue en Jira,
 o enlaza una que ya existe, y guarda en `Issue::publication` las tres identidades juntas: el requerimiento
 de GESREQ, el issue de QAflow y el issue del gestor (con su instancia, proyecto, tipo, estado y fechas).
@@ -613,11 +643,43 @@ de GESREQ, el issue de QAflow y el issue del gestor (con su instancia, proyecto,
 | Vincular | `fetchIssue()` comprueba que la clave existe y la guarda como `linked`: lo escribió otra persona, así que QAflow no ofrece sobrescribirlo |
 | Actualizar | `needsUpdate()` compara lo de ahora con `publishedTitle`/`publishedDescription` (lo último que salió de QAflow) y avisa; sólo esta acción reescribe el título y la descripción en el gestor, diciendo antes que lo editado allí se pierde |
 | Estado | `refreshStatus()` guarda el estado del gestor, que se enseña aparte del estado de QA |
+| Resultado | `publishResult()` comenta en el issue cómo quedó la revisión (resumen de `quality::summaryOf`) y le adjunta el acta, con `IIssueTracker::commentIssue()` — opcional, sólo Jira (`POST /rest/api/2/issue/{clave}/comment` y los adjuntos del issue). El diálogo enseña el texto antes de enviarlo |
 
 Nada se publica ni se sobrescribe solo. Si un envío se corta sin respuesta, el issue queda marcado como
 **sin confirmar** (`publication.uncertain`): puede haberse creado igualmente, así que la pantalla dice cómo
 buscarlo por su etiqueta y publicar otra vez pide confirmación expresa. Un rechazo del contenido (un tipo de
 incidencia que no existe, por ejemplo) no deja esa duda y no marca nada.
+
+## Acta de control de calidad (R-213)
+
+Cada revisión termina en el formulario **R-213, «REVISIÓN CONTROL DE CALIDAD DE SOFTWARE»**, que es lo que
+la institución espera: un documento de Word con los datos del requerimiento, el resumen de observaciones
+por tipo, dónde están los casos y los bugs, y las cuatro características que se revisan. QAflow lo genera.
+
+`QualityRecord` (core) es el acta **como datos**, celda a celda: los generales (GREQ, sistema, módulo,
+servidor, base de datos, descripción, quién lo desarrolló, el recurso de QA, el número de revisión y sus
+fechas), las cinco filas del resumen (A Funcionamiento/Lógica, B Datos, C Estético/Forma,
+D Recomendaciones, E Vulnerabilidades, cada una con sus observaciones y correcciones), los tres detalles
+(casos, ejecución y bugs, con las capturas que se quieran pegar) y los resultados con sus observaciones
+generales.
+
+`quality::draftFor()` (core, pura) propone el acta con lo que ya hay: el requerimiento y su ficha, los
+casos con su Test de Zephyr o su historia, los contadores de la ejecución, los bugs de la revisión por su
+clasificación y, como **correcciones**, las observaciones de rondas anteriores que ya están cerradas. Lo
+que GESREQ no tiene (servidor, base de datos, módulo, departamento, membrete) se hereda del **acta
+anterior del proyecto**, así que sólo se escribe una vez; lo que nadie rellena queda como en el formulario
+(`S/D`, `n/a`). `QualityRecordDialog` lo enseña todo, corregible, antes de generar.
+
+| Quién | Qué hace |
+|-------|----------|
+| `QualityRecordService` (application) | arma el borrador (respetando lo ya escrito en la revisión), escribe el fichero por `IQualityRecordWriter`, lo guarda en la revisión (`documentPath`) y propone el nombre `ControlCalidad_<GREQ>_<marca de tiempo>.docx` |
+| `QualityRecordDocx` (infrastructure/report) | la maqueta del R-213: cabecera con el membrete, «Generales» sobre una rejilla de diez columnas, «Resumen Observaciones» A–E con su total, «Detalles de la revisión» y «Resultados» |
+| `DocxWriter` | las piezas de OOXML: párrafos, tablas con `gridSpan`/`vMerge`, sombreados e imágenes (escaladas al ancho de su celda; una que no se pueda leer se omite en vez de romper el acta) |
+| `ZipWriter` | el ZIP del .docx, con las entradas **sin comprimir** y su CRC-32: Word y LibreOffice lo leen igual y QAflow no necesita zlib ni API privada de Qt |
+
+No hay plantilla que mantener: cambiar el formulario es cambiar esas tablas. El **membrete** no viaja en el
+repositorio (que es público): se elige una vez en el diálogo, se guarda en el acta y se hereda de ahí en
+adelante.
 
 ## Requerimientos externos (GESREQ)
 
@@ -667,7 +729,15 @@ codificado entero: con `QUrlQuery` una contraseña con `+` llegaría con un espa
 | Ficha | `GET publico.do?id=N&bandera=1` | pares `th`/`td` de la tabla general, bloques `h5.titulo`, adjuntos `docDownload.do`; se descartan las `div.modalWindow` con el historial de cada control |
 | Catálogo de sistemas | `GET poai.do` («Seguimiento Requerimiento») y, si no trae el desplegable, `GET registroadicional.do` | `select[name=sistema]`: el valor es el mismo código que usa la bandeja y el texto, «CÓDIGO - NOMBRE» |
 
-El cliente nunca pide `calidadregGestionRequerimiento.do` («Registrar»), que cambia el estado del requerimiento.
+**Registrar el resultado.** Leer no es todo: al cerrar una revisión, QAflow puede registrar en GESREQ el
+resultado del control de calidad con su acta. Es la **única escritura** del conector, así que va aparte en
+la interfaz (`IRequirementSource::canRegisterResult()` / `registerResult()`, opcionales) y nunca se lanza
+sola: sale del botón «Registrar en GESREQ…» de la pantalla de issues, que avisa de que **cambia el estado
+del requerimiento**, enseña resultado, comentario y acta, y pide confirmación. Lo registrado queda en la
+revisión (`RevisionRegistration`) y, con ella cerrada, el issue queda Finalizado; si el resultado fue
+Observado, volver a probar abre la revisión siguiente. Un envío que se corta sin respuesta queda **sin
+confirmar**, como en el gestor: puede haberse registrado igualmente, así que hay que mirarlo en GESREQ
+antes de repetirlo. Mientras el conector no lo implemente, el botón lo dice en vez de fallar.
 
 `ExternalRequirement` es una fila de la bandeja: el número GREQ es el identificador estable, `systemCode`
 (lo que va antes del primer guion de «Sistema») es el proyecto externo que se vinculará a un proyecto de
@@ -736,6 +806,7 @@ tests/
 │   ├── test_gesreq_parser.cpp       extractor de GESREQ sobre fixtures anonimizados: bandeja, ficha, ficha vacía e inexistente, login
 │   ├── test_gesreq_client.cpp       sesión de GESREQ contra un servidor falso (login, caducidad, reintento único, errores);
 │   │                                opcionalmente, contra uno real
+│   ├── test_docx_writer.cpp         el ZIP y el .docx que QAflow escribe, y el acta R-213 con lo que dice el modelo
 │   └── test_gif_encoder.cpp         cuantización (exacta y median cut) y GIF animado leído de vuelta con el plugin de Qt
 └── presentation/              ventana completa con plataforma offscreen
     ├── test_main_window.cpp   navegación, ventana de ajustes, atajos del menú, Ctrl+F y filtro, teclas de veredicto, captura, cuenta atrás,
@@ -748,7 +819,9 @@ tests/
 `application/test_issue_store.cpp`, el store (asociaciones, importación, ausencias, resultados, datos ilegibles) e
 `infrastructure/test_issue_repository.cpp`, `issues.json`;
 `application/test_issue_publish_service.cpp`, la publicación en el gestor (borrador, creación, vinculación,
-actualización pendiente y envíos sin confirmar).
+actualización pendiente, el resultado de la revisión y envíos sin confirmar);
+`core/test_quality_record.cpp`, el acta y su borrador, y `application/test_quality_record_service.cpp`, el
+acta de la revisión en curso (lo que hereda, lo que respeta y el fichero generado).
 
 Cada fichero es una clase QtTest con los slots agrupados por tema (`// ---- …`). Los tests se
 registran como `<capa>/<nombre>` y llevan la capa como etiqueta:

@@ -12,6 +12,31 @@ QStringList BugReport::environments() {
     return {QStringLiteral("Staging"), QStringLiteral("QA"), QStringLiteral("Producción")};
 }
 
+QStringList BugReport::classifications() {
+    return {QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("C"), QStringLiteral("D"), QStringLiteral("E")};
+}
+
+QString BugReport::classificationName(const QString& classification) {
+    if (classification == QStringLiteral("A")) return QStringLiteral("Funcionamiento/Lógica");
+    if (classification == QStringLiteral("B")) return QStringLiteral("Datos");
+    if (classification == QStringLiteral("C")) return QStringLiteral("Estético/Forma");
+    if (classification == QStringLiteral("D")) return QStringLiteral("Recomendaciones");
+    if (classification == QStringLiteral("E")) return QStringLiteral("Vulnerabilidades");
+    return {};
+}
+
+QString BugReport::classificationLabel(const QString& classification) {
+    const QString name = classificationName(classification);
+    if (name.isEmpty()) return classification;
+    QString translated = name;
+    if (classification == QStringLiteral("A")) translated = QCoreApplication::translate("core", "Funcionamiento/Lógica");
+    else if (classification == QStringLiteral("B")) translated = QCoreApplication::translate("core", "Datos");
+    else if (classification == QStringLiteral("C")) translated = QCoreApplication::translate("core", "Estético/Forma");
+    else if (classification == QStringLiteral("D")) translated = QCoreApplication::translate("core", "Recomendaciones");
+    else if (classification == QStringLiteral("E")) translated = QCoreApplication::translate("core", "Vulnerabilidades");
+    return QStringLiteral("%1 · %2").arg(classification, translated);
+}
+
 QString BugReport::severityLabel(const QString& severity) {
     if (severity == QStringLiteral("Bloqueante")) return QCoreApplication::translate("core", "Bloqueante");
     if (severity == QStringLiteral("Crítica")) return QCoreApplication::translate("core", "Crítica");
@@ -39,6 +64,7 @@ QString BugReport::jiraDescription() const {
     QString d;
     d += QCoreApplication::translate("core", "h3. Entorno\n%1\n\n").arg(environmentLabel(environment));
     d += QCoreApplication::translate("core", "h3. Severidad\n%1\n\n").arg(severityLabel(severity));
+    d += QCoreApplication::translate("core", "h3. Clasificación\n%1\n\n").arg(classificationLabel(classification));
     d += QCoreApplication::translate("core", "h3. Caso vinculado\n%1\n\n").arg(linkedCaseId.isEmpty() ? QStringLiteral("—") : linkedCaseId);
     if (!linkedStoryKey.isEmpty()) d += QCoreApplication::translate("core", "h3. Historia relacionada\n%1\n\n").arg(linkedStoryKey);
     d += QCoreApplication::translate("core", "h3. Pasos para reproducir\n%1\n\n").arg(stepsToReproduce);
@@ -49,7 +75,8 @@ QString BugReport::jiraDescription() const {
 
 QString BugReport::markdownDescription(const QStringList& attachmentLinks) const {
     QStringList out;
-    out << QCoreApplication::translate("core", "**Entorno:** %1 · **Severidad:** %2").arg(environmentLabel(environment), severityLabel(severity));
+    out << QCoreApplication::translate("core", "**Entorno:** %1 · **Severidad:** %2 · **Clasificación:** %3")
+                .arg(environmentLabel(environment), severityLabel(severity), classificationLabel(classification));
     out << QCoreApplication::translate("core", "**Caso vinculado:** %1").arg(linkedCaseId.isEmpty() ? QStringLiteral("—") : linkedCaseId);
     if (!linkedStoryKey.isEmpty()) out << QCoreApplication::translate("core", "**Historia relacionada:** %1").arg(linkedStoryKey);
     out << QString() << QCoreApplication::translate("core", "### Pasos para reproducir") << stepsToReproduce;
@@ -65,7 +92,8 @@ QString BugReport::markdownDescription(const QStringList& attachmentLinks) const
 QString BugReport::htmlDescription() const {
     auto esc = [](const QString& s) { return s.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br>")); };
     QString d;
-    d += QCoreApplication::translate("core", "<p><b>Entorno:</b> %1 · <b>Severidad:</b> %2</p>").arg(esc(environmentLabel(environment)), esc(severityLabel(severity)));
+    d += QCoreApplication::translate("core", "<p><b>Entorno:</b> %1 · <b>Severidad:</b> %2 · <b>Clasificación:</b> %3</p>")
+                 .arg(esc(environmentLabel(environment)), esc(severityLabel(severity)), esc(classificationLabel(classification)));
     d += QCoreApplication::translate("core", "<p><b>Caso vinculado:</b> %1</p>").arg(linkedCaseId.isEmpty() ? QStringLiteral("—") : esc(linkedCaseId));
     if (!linkedStoryKey.isEmpty()) d += QCoreApplication::translate("core", "<p><b>Historia relacionada:</b> %1</p>").arg(esc(linkedStoryKey));
     d += QCoreApplication::translate("core", "<h3>Pasos para reproducir</h3><p>%1</p>").arg(esc(stepsToReproduce));

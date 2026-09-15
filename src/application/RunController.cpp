@@ -81,6 +81,7 @@ void RunController::startSequence(const QStringList& caseIds, const QString& pla
     m_queue = caseIds.mid(1);
     begin(caseIds.first());
     changed();
+    emit planStarted(m_planRunId, planId);
 }
 
 void RunController::restart() {

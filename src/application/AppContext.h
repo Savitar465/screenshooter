@@ -8,6 +8,7 @@
 #include "application/IssueStore.h"
 #include "application/PlanStore.h"
 #include "application/ProjectStore.h"
+#include "application/QualityRecordService.h"
 #include "application/RequirementSourceService.h"
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
@@ -38,6 +39,8 @@ struct AppContext {
     IssueStore* issues = nullptr;
     /// Publicación del issue en el gestor (puede ser nullptr en tests).
     IssuePublishService* issuePublish = nullptr;
+    /// Acta de control de calidad del issue (puede ser nullptr en tests).
+    QualityRecordService* records = nullptr;
     /// Publicación de ciclos en Zephyr (puede ser nullptr en tests).
     TestPublishService* publish = nullptr;
     /// Conexión con GESREQ, del que se importan los requerimientos (puede ser nullptr en tests).

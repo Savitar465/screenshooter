@@ -1,5 +1,6 @@
 // JsonIssueRepository (infrastructure/persistence/): issues.json de ida y vuelta con todo lo escrito en
-// QAflow y lo importado de GESREQ; sin fichero no hay issues, y un fichero dañado no se lee como vacío.
+// QAflow, lo importado de GESREQ y las revisiones con su acta; sin fichero no hay issues, y un fichero
+// dañado no se lee como vacío.
 
 #include "infrastructure/persistence/JsonIssueRepository.h"
 
@@ -64,6 +65,44 @@ Issue fullIssue() {
     r.detail.sections = {RequirementSection{QStringLiteral("Datos Asignado"), {RequirementField{QStringLiteral("Recurso(s)"), QStringLiteral("LÓPEZ")}}}};
     r.detail.attachments = {RequirementAttachment{QStringLiteral("Archivo de respaldo inicial"), QStringLiteral("req.pdf"), QStringLiteral("http://gesreq.test:7401/greq/docDownload.do?doc=req.pdf")}};
     r.detailFetchedAt = QDateTime(QDate(2026, 9, 3), QTime(8, 5));
+
+    IssueRevision first;
+    first.number = 1;
+    first.startedAt = QDateTime(QDate(2026, 9, 9), QTime(8, 0));
+    first.closedAt = QDateTime(QDate(2026, 9, 10), QTime(18, 0));
+    first.outcome = QaOutcome::Observado;
+    first.documentPath = QStringLiteral("/tmp/ControlCalidad_2025175.docx");
+    first.documentAt = QDateTime(QDate(2026, 9, 10), QTime(17, 30));
+    first.record.greq = QStringLiteral("2025175");
+    first.record.system = QStringLiteral("SUMA V2 INGRESO");
+    first.record.server = QStringLiteral("10.0.67.131");
+    first.record.description = QStringLiteral("Integración de nuevos servicios");
+    first.record.developedBy = QStringLiteral("CANAZA ESTEBAN");
+    first.record.qaResource = QStringLiteral("MAIDANA JUAN JONAS");
+    first.record.revisionNumber = 1;
+    first.record.from = QDate(2026, 9, 9);
+    first.record.to = QDate(2026, 9, 10);
+    first.record.observations[0].observations = 3;
+    first.record.characteristics[0].satisfied = false;
+    first.record.characteristics[0].note = QStringLiteral("Falta la ayuda de la pantalla");
+    first.record.caseDesign = QStringLiteral("Jira: QA - Elaboración de casos de prueba GREQ 2025175");
+    first.record.bugs = QStringLiteral("http://jira.test/browse/SUMA2-2912");
+    first.record.executionImages = {QStringLiteral("/tmp/cap_001.png")};
+    first.record.generalNotes = QStringLiteral("Se reprograma la revisión");
+    first.record.logoPath = QStringLiteral("/tmp/logo.png");
+    first.jira.key = QStringLiteral("QA-12");
+    first.jira.publishedAt = QDateTime(QDate(2026, 9, 10), QTime(18, 5));
+    first.jira.attachedDocument = true;
+    first.gesreq.registeredAt = QDateTime(QDate(2026, 9, 10), QTime(18, 10));
+    first.gesreq.result = QaOutcome::Observado;
+    first.gesreq.comment = QStringLiteral("3 observaciones de funcionamiento");
+    first.gesreq.attachedDocument = true;
+    first.gesreq.uncertain = true;
+    first.gesreq.lastError = QStringLiteral("Se cortó la conexión");
+    IssueRevision second;
+    second.number = 2;
+    second.startedAt = QDateTime(QDate(2026, 9, 14), QTime(9, 0));
+    i.revisions = {first, second};
     return i;
 }
 } // namespace
@@ -131,6 +170,39 @@ private slots:
 
         QVERIFY(!loaded->at(1).isImported());
         QVERIFY(loaded->at(1).requirement.detail.id.isEmpty());
+
+        QCOMPARE(i.revisions.size(), 2);
+        const IssueRevision& first = i.revisions.first();
+        QCOMPARE(first.number, 1);
+        QCOMPARE(first.startedAt, expected.revisions.first().startedAt);
+        QCOMPARE(first.closedAt, expected.revisions.first().closedAt);
+        QVERIFY(first.outcome == QaOutcome::Observado);
+        QVERIFY(!first.isOpen());
+        QVERIFY(first.hasDocument());
+        QCOMPARE(first.documentAt, expected.revisions.first().documentAt);
+        QCOMPARE(first.record.system, QStringLiteral("SUMA V2 INGRESO"));
+        QCOMPARE(first.record.server, QStringLiteral("10.0.67.131"));
+        QCOMPARE(first.record.from, QDate(2026, 9, 9));
+        QCOMPARE(first.record.reviewDates(), QStringLiteral("09/09/2026 a 10/09/2026"));
+        QCOMPARE(first.record.observations.size(), 5);
+        QCOMPARE(first.record.totalObservations(), 3);
+        QCOMPARE(first.record.characteristics.size(), 4);
+        QVERIFY(!first.record.characteristics[0].satisfied);
+        QCOMPARE(first.record.characteristics[0].note, QStringLiteral("Falta la ayuda de la pantalla"));
+        QVERIFY(first.record.characteristics[1].satisfied);
+        QCOMPARE(first.record.executionImages.size(), 1);
+        QCOMPARE(first.record.logoPath, QStringLiteral("/tmp/logo.png"));
+        QCOMPARE(first.jira.key, QStringLiteral("QA-12"));
+        QVERIFY(first.jira.attachedDocument);
+        QVERIFY(first.gesreq.result == QaOutcome::Observado);
+        QCOMPARE(first.gesreq.comment, QStringLiteral("3 observaciones de funcionamiento"));
+        QVERIFY(first.gesreq.uncertain);
+        QCOMPARE(first.gesreq.lastError, QStringLiteral("Se cortó la conexión"));
+        // La revisión en curso vuelve abierta y sin nada enviado.
+        QVERIFY(i.revisions.last().isOpen());
+        QVERIFY(i.revisions.last().jira.isEmpty());
+        QVERIFY(i.revisions.last().gesreq.isEmpty());
+        QVERIFY(loaded->at(1).revisions.isEmpty());
     }
 
     void withoutAFileThereAreNoIssuesYet() {

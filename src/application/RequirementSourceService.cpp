@@ -36,6 +36,23 @@ void RequirementSourceService::fetchSystems(std::function<void(const Requirement
     m_source->fetchSystems(m_settings.requirementSource(), std::move(done));
 }
 
+bool RequirementSourceService::canRegisterResult() const {
+    const RequirementSourceSettings settings = m_settings.requirementSource();
+    return m_source && m_source->canRegisterResult() && !settings.baseUrl().isEmpty() && !settings.user.trimmed().isEmpty();
+}
+
+void RequirementSourceService::registerResult(const RequirementRegistration& registration,
+                                              std::function<void(const RequirementRegistrationResult&)> done) {
+    if (!canRegisterResult()) {
+        RequirementRegistrationResult result;
+        result.failure = RequirementSourceFailure::Configuration;
+        result.error = tr("Configura la conexión con GESREQ en Ajustes para registrar el resultado");
+        done(result);
+        return;
+    }
+    m_source->registerResult(m_settings.requirementSource(), registration, std::move(done));
+}
+
 void RequirementSourceService::rememberSystems(const QList<ExternalRequirement>& inbox) {
     QStringList systems;
     for (const auto& r : inbox)

@@ -27,6 +27,12 @@ public:
     void fetchDetail(const QString& id, std::function<void(const RequirementDetailResult&)> done);
     /// Catálogo de sistemas de GESREQ con los ajustes actuales, para elegir el del proyecto.
     void fetchSystems(std::function<void(const RequirementSystemsResult&)> done);
+    /// ¿Puede QAflow registrar el resultado del control de calidad en el sistema? Hace falta que el
+    /// conector lo implemente y que la conexión esté configurada.
+    bool canRegisterResult() const;
+    /// Registra el resultado de una revisión en el requerimiento. Es la única operación que cambia algo
+    /// en GESREQ: sólo se llama cuando alguien lo confirma en la pantalla.
+    void registerResult(const RequirementRegistration& registration, std::function<void(const RequirementRegistrationResult&)> done);
     /// Códigos de sistema de la última bandeja leída, ordenados y sin repetir.
     const QStringList& systems() const { return m_systems; }
     /// Conexión con la que se identifican los requerimientos importados: la dirección de GESREQ.

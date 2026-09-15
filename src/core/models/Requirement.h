@@ -115,6 +115,29 @@ struct RequirementDetailResult {
     bool retryable() const { return failure == RequirementSourceFailure::Network; }
 };
 
+/// Lo que QAflow registra en el sistema de requerimientos al terminar una revisión: el resultado del
+/// control de calidad, el comentario que lo explica y el acta que lo respalda. Es la única escritura
+/// que QAflow hace en GESREQ, y siempre a petición expresa.
+struct RequirementRegistration {
+    QString requirementId;     // número GREQ
+    /// Valor canónico del resultado ("Conforme" / "Observado"): lo traduce el conector a lo que espera
+    /// el formulario del sistema.
+    QString result;
+    QString comment;
+    QString attachmentPath;    // acta generada; vacío = se registra sin adjunto
+};
+
+struct RequirementRegistrationResult {
+    bool ok = false;
+    RequirementSourceFailure failure = RequirementSourceFailure::None;
+    QString error;
+    /// El envío se cortó sin respuesta: puede haber quedado registrado igualmente, así que hay que
+    /// comprobarlo en el sistema antes de repetirlo.
+    bool uncertain = false;
+
+    bool retryable() const { return failure == RequirementSourceFailure::Network; }
+};
+
 /// Un sistema del catálogo de GESREQ: el código con el que aparece en la bandeja y su nombre.
 struct RequirementSystem {
     QString code;   // "SUMA TRANSITO"

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/models/QualityRecord.h"
 #include "core/models/Requirement.h"
 #include "core/models/TestCase.h"   // Priority
 
@@ -20,6 +21,16 @@ QString toString(IssueState s);
 IssueState issueStateFromString(const QString& s);
 /// Texto para mostrar: Pendiente, En preparación, En pruebas, Finalizado.
 QString label(IssueState s);
+
+/// Resultado del control de calidad de una ronda de pruebas: es lo que se lleva al acta, a Jira y a
+/// GESREQ. No es el estado del issue (se puede finalizar el trabajo con el requerimiento observado).
+enum class QaOutcome { Pendiente, Conforme, Observado };
+
+/// Valor canónico (se persiste en issues.json y viaja a GESREQ). No traducir.
+QString toString(QaOutcome o);
+QaOutcome qaOutcomeFromString(const QString& s);
+/// Texto para mostrar: Pendiente, Conforme, Observado.
+QString label(QaOutcome o);
 
 /// Un dato del requerimiento que cambió en el sistema desde la última vez que se revisó en QAflow.
 struct RequirementChange {
@@ -71,6 +82,50 @@ struct IssuePublication {
     bool isEmpty() const { return key.trimmed().isEmpty(); }
 };
 
+/// Lo que se hizo con el resultado de una revisión en el gestor: el comentario con el resumen y el
+/// acta adjunta al issue ya publicado. Sigue las reglas de `IssuePublication`: nada se manda solo y
+/// un envío cortado queda sin confirmar.
+struct RevisionPublication {
+    QString key;                 // issue del gestor en el que quedó el resultado
+    QDateTime publishedAt;
+    bool attachedDocument = false;
+    bool uncertain = false;
+    QString lastError;
+
+    bool isEmpty() const { return !publishedAt.isValid() && !uncertain; }
+};
+
+/// El registro del resultado en GESREQ: la única escritura que QAflow hace en el sistema de
+/// requerimientos, siempre a petición expresa.
+struct RevisionRegistration {
+    QDateTime registeredAt;
+    QaOutcome result = QaOutcome::Pendiente;
+    QString comment;
+    bool attachedDocument = false;
+    bool uncertain = false;      // el envío se cortó: puede haberse registrado igualmente
+    QString lastError;
+
+    bool isEmpty() const { return !registeredAt.isValid() && !uncertain; }
+};
+
+/// Una ronda de control de calidad del requerimiento: se abre al empezar a probar y se cierra con su
+/// resultado (Conforme u Observado), su acta y lo que se hizo con ella. Un requerimiento observado
+/// vuelve a pruebas y abre la revisión siguiente, que es el «Número de Revisión» del acta.
+struct IssueRevision {
+    int number = 1;
+    QDateTime startedAt;
+    QDateTime closedAt;                        // inválida mientras la revisión sigue abierta
+    QaOutcome outcome = QaOutcome::Pendiente;
+    QualityRecord record;                      // lo escrito en el acta, para regenerarla sin teclearla otra vez
+    QString documentPath;                      // acta generada
+    QDateTime documentAt;
+    RevisionPublication jira;
+    RevisionRegistration gesreq;
+
+    bool isOpen() const { return !closedAt.isValid(); }
+    bool hasDocument() const { return !documentPath.trimmed().isEmpty(); }
+};
+
 /// Issue de QAflow: organiza el trabajo de QA de un requerimiento (o de algo que se crea a mano). Su
 /// identidad es local e independiente de la clave de Jira, que se le añade al publicarlo.
 struct Issue {
@@ -83,11 +138,19 @@ struct Issue {
     QStringList planIds;           // planes que agrupan sus pruebas
     RequirementLink requirement;   // vacío en un issue creado a mano
     IssuePublication publication;  // vacío mientras no se publique ni se vincule
+    /// Rondas de control de calidad, de la primera a la última. Vacío mientras no se haya empezado.
+    QList<IssueRevision> revisions;
     QDateTime createdAt;
     QDateTime updatedAt;
 
     bool isImported() const { return !requirement.isEmpty(); }
     bool isPublished() const { return !publication.isEmpty(); }
+    /// La revisión en curso; nullptr si no hay ninguna abierta (o todavía ninguna).
+    const IssueRevision* currentRevision() const;
+    /// La última revisión cerrada; nullptr si ninguna lo está.
+    const IssueRevision* lastClosedRevision() const;
+    /// Resultado de la última revisión cerrada; Pendiente si no hay ninguna.
+    QaOutcome lastOutcome() const;
     /// Texto en el que busca el filtro: id, título, notas, clave del gestor y lo importado (número,
     /// sistema, descripción, estados, solicitante, referencia y alcance).
     QString searchText() const;

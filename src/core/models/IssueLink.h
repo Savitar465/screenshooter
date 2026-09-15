@@ -16,6 +16,9 @@ struct IssueLink {
     QString caseId;          // caso desde el que se reportó (puede ya no existir)
     QString tracker;         // "Jira", "GitHub", …
     QString severity;
+    /// Tipo de observación del acta (A–E) con el que se reportó; los bugs guardados antes de que
+    /// existiera cuentan como "A".
+    QString classification = QStringLiteral("A");
     QString status;          // último estado conocido ("Open", "Done", …); vacío = nunca consultado
     bool resolved = false;   // el gestor lo considera cerrado
     QDateTime createdAt;

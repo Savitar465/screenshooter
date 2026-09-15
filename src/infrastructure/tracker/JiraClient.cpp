@@ -267,6 +267,28 @@ void JiraClient::updateIssue(const TrackerSettings& s, const QString& key, const
                });
 }
 
+void JiraClient::commentIssue(const TrackerSettings& s, const QString& key, const QString& body, const QStringList& attachments,
+                              std::function<void(const IssueResult&)> done) {
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) { IssueResult f; f.error = missing; done(f); return; }
+    const QString issue = key.trimmed();
+    if (issue.isEmpty()) {
+        IssueResult f;
+        f.error = QCoreApplication::translate("infrastructure", "Indica el issue del gestor que se comenta");
+        done(f);
+        return;
+    }
+    postJson(request(s, QStringLiteral("/rest/api/2/issue/%1/comment").arg(issue)), QJsonDocument(QJsonObject{{"body", body}}),
+             [this, s, issue, attachments, done](const Response& r) {
+                 if (!r.ok) { IssueResult f; f.error = errorFor(s, r); f.retryable = r.retryable; done(f); return; }
+                 IssueResult res;
+                 res.ok = true;
+                 res.key = issue;
+                 res.url = s.issueUrl(issue);
+                 // El comentario ya está; los adjuntos que fallen no lo deshacen, se cuentan aparte.
+                 uploadAttachments(s, res, existingFiles(attachments), done);
+             });
+}
+
 void JiraClient::fetchProjects(const TrackerSettings& s, std::function<void(const TrackerProjectList&)> done) {
     if (const QString missing = missingCredentials(s); !missing.isEmpty()) { done(TrackerProjectList{false, {}, missing}); return; }
     // `/project` devuelve de una vez los proyectos que puede ver el usuario, en Jira Server 7 y 8 y en

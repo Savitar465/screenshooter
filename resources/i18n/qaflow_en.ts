@@ -1617,6 +1617,26 @@
         <source>Clasificación</source>
         <translation>Classification</translation>
     </message>
+    <message>
+        <source>Paso en el que se vio el fallo; el defecto se cuelga de él al publicar la ejecución</source>
+        <translation>Step where the failure was seen; the defect hangs from it when the run is published</translation>
+    </message>
+    <message>
+        <source>Paso</source>
+        <translation>Step</translation>
+    </message>
+    <message>
+        <source>Todo el caso</source>
+        <translation>The whole case</translation>
+    </message>
+    <message>
+        <source>Paso %1 · %2</source>
+        <translation>Step %1 · %2</translation>
+    </message>
+    <message>
+        <source>%1 · paso %2</source>
+        <translation>%1 · step %2</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::CaseTransferService</name>
@@ -1958,6 +1978,10 @@
     <message>
         <source> · %1 evidencias</source>
         <translation> · %1 pieces of evidence</translation>
+    </message>
+    <message>
+        <source>paso %1</source>
+        <translation>step %1</translation>
     </message>
 </context>
 <context>
@@ -5311,6 +5335,14 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>Ir al paso %1</source>
         <translation>Go to step %1</translation>
+    </message>
+    <message>
+        <source>Bug reportado en este paso</source>
+        <translation>Bug reported on this step</translation>
+    </message>
+    <message>
+        <source>Bugs reportados en este paso</source>
+        <translation>Bugs reported on this step</translation>
     </message>
 </context>
 <context>

@@ -144,7 +144,7 @@ void run(MainWindow& window, AppContext& ctx) {
         {"04-bug", [&] {
             IssueLink link;
             link.key = QStringLiteral("SHOP-143"); link.url = QStringLiteral("https://acme.atlassian.net/browse/SHOP-143");
-            link.title = QStringLiteral("[Checkout] El cupón QA10 no descuenta"); link.caseId = QStringLiteral("TC-104");
+            link.title = QStringLiteral("[Checkout] El cupón QA10 no descuenta"); link.caseId = QStringLiteral("TC-104"); link.step = 2;
             link.tracker = QStringLiteral("Jira"); link.severity = QStringLiteral("Mayor"); link.status = QStringLiteral("In Progress");
             link.createdAt = QDateTime::currentDateTime().addDays(-2);
             ctx.bugLedger->recordIssue(link);

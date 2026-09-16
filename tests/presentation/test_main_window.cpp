@@ -385,6 +385,50 @@ private slots:
         QCOMPARE(severity->currentData().toString(), QStringLiteral("Bloqueante"));
     }
 
+    /// El bug que se crea pertenece al paso del que se reportó: el formulario lo trae puesto, se
+    /// puede cambiar y el paso llega al libro de bugs (de ahí sale el defecto de Zephyr).
+    void aReportedBugBelongsToItsStep() {
+        WindowFixture f;
+        f.action("actRun")->trigger();   // TC-104, 4 pasos
+        QTest::keyClick(f.window.get(), Qt::Key_P);
+        f.app.run.setNote(QStringLiteral("el total no cambia"));   // el parte necesita resultado actual
+        QTest::keyClick(f.window.get(), Qt::Key_F);                // falla el paso 2
+
+        auto* report = f.window->findChild<QPushButton*>(QStringLiteral("runReportBug"));
+        QVERIFY(report);
+        QTRY_VERIFY(report->isVisible() && report->width() > 0);
+        QTest::mouseClick(report, Qt::LeftButton);
+
+        auto* step = f.window->findChild<QComboBox*>(QStringLiteral("bugStep"));
+        QVERIFY(step);
+        QCOMPARE(step->count(), 5);                        // «Todo el caso» + los cuatro pasos
+        QCOMPARE(step->currentData().toInt(), 2);          // el paso que falló, ya elegido
+        step->setCurrentIndex(step->findData(3));          // y se puede corregir a mano
+
+        auto* title = f.window->findChild<QLineEdit*>(QStringLiteral("bugTitle"));
+        QVERIFY(title && !title->text().isEmpty());
+        auto* send = f.window->findChild<QPushButton*>(QStringLiteral("bugSubmit"));
+        QVERIFY(send);
+        QTRY_VERIFY(send->isVisible() && send->width() > 0);
+        QTest::mouseClick(send, Qt::LeftButton);
+        QTRY_COMPARE(f.app.bugLedger.issues().size(), 1);
+        const IssueLink& link = f.app.bugLedger.issues().first();
+        QCOMPARE(link.caseId, QStringLiteral("TC-104"));
+        QCOMPARE(link.step, 3);
+
+        // Y la tarjeta del paso 3 de la ejecución lo enseña. (La lista se rehace en cada refresco:
+        // se espera a que las tarjetas viejas, en cola de borrado, desaparezcan.)
+        f.window->navigate(Screen::Run);
+        const QString key = link.key;
+        const auto bugShownOnThirdStep = [&f, &key]() {
+            const auto cards = f.window->findChildren<QFrame*>(QStringLiteral("stepCard3"));
+            if (cards.size() != 1) return false;
+            for (auto* l : cards.first()->findChildren<QLabel*>()) if (l->text() == key) return true;
+            return false;
+        };
+        QTRY_VERIFY(bugShownOnThirdStep());
+    }
+
     /// Los atajos de la ejecución (los mismos que main.cpp registra en el sistema) avanzan y
     /// retroceden de paso desde el menú, sin pasar por la pantalla.
     void runStepActionsFollowTheSettings() {

@@ -137,7 +137,8 @@ void BugView::buildForm(QVBoxLayout* v) {
     mg->addWidget(field(tr("Entorno"), m_env), 0, 2);
     mg->addWidget(field(tr("Caso vinculado"), m_linkedCase), 0, 3);
     mg->addWidget(field(tr("Paso"), m_linkedStep), 0, 4);
-    for (int i = 0; i < 5; ++i) mg->setColumnStretch(i, 1);
+    for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
+    mg->setColumnStretch(4, 2);   // el paso lleva la acción: necesita más sitio que el resto
     bv->addWidget(meta);
 
     // Campos del gestor
@@ -234,6 +235,7 @@ void BugView::buildForm(QVBoxLayout* v) {
     auto* cancel = ui::button(tr("Cancelar"), "ghost");
     connect(cancel, &QPushButton::clicked, this, &BugView::cancelled);
     m_submit = ui::button(QString(), "primary");
+    m_submit->setObjectName(QStringLiteral("bugSubmit"));
     connect(m_submit, &QPushButton::clicked, this, &BugView::submit);
     ah->addWidget(cancel);
     ah->addWidget(m_submit);
@@ -341,7 +343,7 @@ void BugView::refreshStepOptions(int step) {
     m_linkedStep->addItem(tr("Todo el caso"), 0);
     if (c)
         for (int i = 0; i < c->steps.size(); ++i)
-            m_linkedStep->addItem(tr("Paso %1 · %2").arg(i + 1).arg(ui::elide(c->steps[i].action, 28)), i + 1);
+            m_linkedStep->addItem(tr("Paso %1 · %2").arg(i + 1).arg(ui::elide(c->steps[i].action, 34)), i + 1);
     m_linkedStep->setCurrentIndex(std::max(0, m_linkedStep->findData(step)));
     m_linkedStep->setEnabled(c && !c->steps.isEmpty());
 }

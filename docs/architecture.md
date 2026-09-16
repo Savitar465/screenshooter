@@ -300,7 +300,8 @@ corta la ejecución: un bloqueo se queda en su paso y se sigue navegando por el 
   vista muestra un reloj por paso y por caso (un `QTimer` de un segundo sólo actualiza etiquetas).
 * **La pantalla, en tres columnas.** `RunView` se construye con una función por columna:
   `buildCasePanel()` (estado del caso, progreso, la lista de pasos con su veredicto —la pastilla de
-  cada paso ya marcado abre el menú para corregirlo, y un clic en la tarjeta va a ese paso—, los
+  cada paso ya marcado abre el menú para corregirlo, la clave del bug que se reportó en él, y un clic
+  en la tarjeta va a ese paso—, los
   botones de navegación y «Cerrar ejecución»), `buildStepPanel()` (el paso en pantalla, sus
   veredictos, «Reportar bug» —que sale en cualquier momento de la ejecución, no sólo al final—, el
   visor grande de la evidencia elegida con la barra «Asignar a» y las observaciones del paso) y `buildFilmPanel()` (la columna «Capturas», con todas las evidencias del caso).
@@ -436,14 +437,20 @@ cuya evidencia sigue siendo suya y todavía no puede sellarse.
 
 ## Bugs y gestores de incidencias
 
+**Cada bug es de un paso.** `BugReport::linkedStep` (1..N; 0 = el caso entero) viaja hasta
+`IssueLink::step` y de ahí a `bugs.json`. Con él, publicar la ejecución cuelga el defecto **del
+resultado de ese paso** en Zephyr (`TestPublishService` → `PublishDefect`), el informe del ciclo y el
+acta dicen de qué paso salió cada observación, y la lista de pasos de la ejecución enseña la clave del
+bug en la tarjeta del suyo (`RunView` escucha `BugStore::bugsChanged`). El formulario lo trae puesto y
+lo deja cambiar en el combo «Paso», junto a «Caso vinculado».
+
 **El borrador.** `BugReportService::draftFromCurrentContext(stepIndex)` prellena el parte con el caso
 seleccionado y un paso de la ejecución: el que pida quien abre el parte —«Reportar bug» de la pantalla
 de ejecución manda el paso que se tiene delante— o, si no dice ninguno, el fallo o bloqueo más cercano
-(`RunState::reportableStepIndex()`). Ese paso es el que se enlaza (`BugReport::linkedStep`) y el que
-Zephyr usa para colgar el defecto del resultado que le toca. Si el paso está **bloqueado**, el borrador
-sale con severidad «Bloqueante» (y por tanto prioridad `Highest` en Jira) y el título habla de bloqueo
-en vez de falla. Como un fallo o un bloqueo ya no cortan la ejecución, el parte se levanta en cuanto se
-ve el problema y se sigue probando el resto del caso.
+(`RunState::reportableStepIndex()`). Si el paso está **bloqueado**, el borrador sale con severidad
+«Bloqueante» (y por tanto prioridad `Highest` en Jira) y el título habla de bloqueo en vez de falla.
+Como un fallo o un bloqueo ya no cortan la ejecución, el parte se levanta en cuanto se ve el problema
+y se sigue probando el resto del caso.
 
 `IIssueTracker` (core) tiene cuatro operaciones asíncronas: probar conexión, crear issue,
 consultar estado y leer metadatos del proyecto (tipos, prioridades, componentes, versiones,

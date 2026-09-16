@@ -121,6 +121,7 @@ private:
     QLineEdit* m_stepPass;
     QLineEdit* m_stepFail;
     QLineEdit* m_stepBack;
+    QLineEdit* m_stepNext;
 };
 
 } // namespace qaflow

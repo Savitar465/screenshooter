@@ -31,6 +31,30 @@ private slots:
         QVERIFY(d.stepsToReproduce.startsWith(QStringLiteral("1. ")));
     }
 
+    /// Un paso bloqueado da un parte bloqueante, y quien lo abre puede pedir otro paso distinto
+    /// del que la ejecución elegiría sola.
+    void draftFollowsTheBlockedStepAndTheRequestedOne() {
+        AppFixture f;
+        f.store.select(QStringLiteral("TC-104"));   // 4 pasos
+        f.run.start(QStringLiteral("TC-104"));
+        f.run.mark(StepResult::Pass);
+        f.run.setNote(QStringLiteral("el servicio no responde"));
+        f.run.mark(StepResult::Block);              // la ejecución sigue abierta en el paso 3
+
+        const BugReport blocked = f.bugs.draftFromCurrentContext();
+        QVERIFY(blocked.title.contains(QStringLiteral("Bloqueo en paso 2")));
+        QCOMPARE(blocked.linkedStep, 2);
+        QCOMPARE(blocked.severity, QStringLiteral("Bloqueante"));
+        QCOMPARE(blocked.priority, QStringLiteral("Highest"));
+        QCOMPARE(blocked.actual, QStringLiteral("el servicio no responde"));
+
+        // Reportar el paso que se tiene delante, aunque todavía no tenga veredicto.
+        const BugReport current = f.bugs.draftFromCurrentContext(2);
+        QVERIFY(current.title.contains(QStringLiteral("Falla en paso 3")));
+        QCOMPARE(current.linkedStep, 3);
+        QCOMPARE(current.severity, QStringLiteral("Mayor"));
+    }
+
     void successfulSubmitRecordsLinkedIssue() {
         AppFixture f;
         BugReport b = f.bugs.draftFromCurrentContext();

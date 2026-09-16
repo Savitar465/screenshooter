@@ -97,6 +97,7 @@ struct RunShortcuts {
     QString passAndNext = QStringLiteral("Ctrl+Alt+P");
     QString failAndNext = QStringLiteral("Ctrl+Alt+F");
     QString previous = QStringLiteral("Ctrl+Alt+A");
+    QString next = QStringLiteral("Ctrl+Alt+D");
 };
 
 struct CaptureSettings {

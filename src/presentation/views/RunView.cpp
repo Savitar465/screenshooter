@@ -1,5 +1,6 @@
 #include "RunView.h"
 
+#include "application/BugStore.h"
 #include "application/EvidenceService.h"
 #include "application/RunController.h"
 #include "application/SettingsStore.h"
@@ -19,6 +20,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
@@ -82,8 +84,9 @@ QLabel* statePill(const QString& text, const QString& color) {
 
 } // namespace
 
-RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, EvidenceService& evidence, QWidget* parent)
-    : QWidget(parent), m_cases(cases), m_run(run), m_settings(settings), m_evidence(evidence) {
+RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, EvidenceService& evidence,
+                 BugStore& bugs, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_run(run), m_settings(settings), m_evidence(evidence), m_bugs(bugs) {
     auto* root = ui::hbox(this, 0, 0);
     root->addWidget(buildCasePanel());
     root->addWidget(buildStepPanel(), 1);
@@ -96,13 +99,23 @@ RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settin
         sc->setContext(Qt::WindowShortcut);
         connect(sc, &QShortcut::activated, this, [this, res]() { if (isVisible() && m_run.isRunning()) m_run.mark(res); });
     }
-    auto* backKey = new QShortcut(QKeySequence(Qt::Key_Backspace), this);
-    backKey->setContext(Qt::WindowShortcut);
-    connect(backKey, &QShortcut::activated, this, [this]() { if (isVisible() && !m_run.state().caseId.isEmpty()) m_run.back(); });
+    // Ir y venir por los pasos sin tocar sus veredictos.
+    const struct { QKeySequence key; int delta; } moves[] = {
+        {QKeySequence(Qt::Key_Backspace), -1}, {QKeySequence(Qt::ALT | Qt::Key_Left), -1}, {QKeySequence(Qt::ALT | Qt::Key_Right), +1}};
+    for (const auto& m : moves) {
+        auto* sc = new QShortcut(m.key, this);
+        sc->setContext(Qt::WindowShortcut);
+        connect(sc, &QShortcut::activated, this, [this, delta = m.delta]() {
+            if (!isVisible() || m_run.state().caseId.isEmpty()) return;
+            if (delta < 0) m_run.back(); else m_run.next();
+        });
+    }
 
     connect(&m_run, &RunController::runChanged, this, &RunView::refresh);
     connect(&m_cases, &TestCaseStore::caseChanged, this, [this](const QString& id) { if (id == m_run.state().caseId) refresh(); });
     connect(&m_settings, &SettingsStore::captureChanged, this, &RunView::refresh);
+    // Reportar un bug de un paso se ve en su tarjeta al volver a la ejecución.
+    connect(&m_bugs, &BugStore::bugsChanged, this, &RunView::refresh);
     m_clock.setInterval(1000);
     connect(&m_clock, &QTimer::timeout, this, &RunView::tick);
     refresh();
@@ -152,13 +165,33 @@ QWidget* RunView::buildCasePanel() {
     m_stepsLayout->addStretch(1);
     v->addWidget(sa, 1);
 
+    // Los pasos se recorren en cualquier orden: por la lista, con estos botones o con el teclado.
+    auto* nav = new QWidget;
+    auto* nh = ui::hbox(nav, 0, 8);
+    m_back = ui::button(tr("← Anterior"), "outline");
+    m_back->setObjectName(QStringLiteral("stepPrev"));
+    m_back->setToolTip(tr("Vuelve al paso anterior sin tocar su veredicto (Retroceso o Alt+←)"));
+    m_back->setStyleSheet(QStringLiteral("padding:7px;font-size:11.5px;"));
+    connect(m_back, &QPushButton::clicked, this, [this]() { m_run.back(); });
+    nh->addWidget(m_back, 1);
+    m_next = ui::button(tr("Siguiente →"), "outline");
+    m_next->setObjectName(QStringLiteral("stepNext"));
+    m_next->setToolTip(tr("Pasa al siguiente sin darle veredicto a este (Alt+→)"));
+    m_next->setStyleSheet(QStringLiteral("padding:7px;font-size:11.5px;"));
+    connect(m_next, &QPushButton::clicked, this, [this]() { m_run.next(); });
+    nh->addWidget(m_next, 1);
+    v->addWidget(nav);
+
     m_finish = ui::button(tr("Cerrar ejecución"), "outline");
     m_finish->setStyleSheet(QStringLiteral("padding:10px;"));
     connect(m_finish, &QPushButton::clicked, this, [this]() {
-        // Cerrarla a medias descarta los pasos sin marcar: se avisa antes.
-        if (m_run.isRunning() &&
+        // Cerrarla a medias la archiva con lo que se llegó a marcar: se avisa antes.
+        const RunState& r = m_run.state();
+        const int pending = m_run.totalSteps() - r.markedCount();
+        if (m_run.isRunning() && pending > 0 &&
             QMessageBox::question(this, tr("Cerrar la ejecución"),
-                                  tr("Quedan pasos sin marcar. Si la cierras ahora no se archivará en el historial.")) != QMessageBox::Yes)
+                                  tr("Quedan %1 pasos sin marcar. Se archivará en el historial con los %2 que ya tienen veredicto; "
+                                     "los demás quedan como N/A.").arg(pending).arg(r.markedCount())) != QMessageBox::Yes)
             return;
         emit finishRequested();
     });
@@ -185,11 +218,6 @@ QWidget* RunView::buildStepPanel() {
     m_stepClock = ui::label(QString(), "mono-muted");
     m_stepClock->setToolTip(tr("Tiempo en este paso"));
     crh->addWidget(m_stepClock);
-    m_back = ui::button(tr("← Paso anterior"), "ghost");
-    m_back->setToolTip(tr("Deshace el último veredicto y vuelve a ese paso (Retroceso)"));
-    m_back->setStyleSheet(QStringLiteral("padding:2px 8px;font-size:11px;border-radius:7px;"));
-    connect(m_back, &QPushButton::clicked, this, [this]() { m_run.back(); });
-    crh->addWidget(m_back);
     crh->addStretch(1);
     tv->addWidget(counterRow);
     m_action = new QLabel;
@@ -223,9 +251,6 @@ QWidget* RunView::buildStepPanel() {
     // Mismo hueco cuando la ejecución ya ha terminado.
     m_doneActions = new QWidget;
     auto* dh = ui::hbox(m_doneActions, 0, 8);
-    m_reportBug = ui::button(tr("Reportar bug"), "danger");
-    connect(m_reportBug, &QPushButton::clicked, this, &RunView::reportBugRequested);
-    dh->addWidget(m_reportBug);
     m_reopen = ui::button(tr("← Último paso"), "outline");
     m_reopen->setToolTip(tr("Reabre el último paso para cambiar su veredicto"));
     connect(m_reopen, &QPushButton::clicked, this, [this]() { m_run.back(); });
@@ -235,6 +260,16 @@ QWidget* RunView::buildStepPanel() {
     connect(repeat, &QPushButton::clicked, this, [this]() { m_run.restart(); });
     dh->addWidget(repeat);
     av->addWidget(m_doneActions, 0, Qt::AlignRight);
+
+    // El parte de un bug se abre en cualquier momento de la ejecución, no sólo al terminarla: el
+    // paso que falla o bloquea se reporta en cuanto se ve y se sigue probando el resto.
+    m_bugRow = new QWidget;
+    auto* bg = ui::hbox(m_bugRow, 0, 8);
+    m_reportBug = ui::button(tr("Reportar bug"), "danger");
+    m_reportBug->setObjectName(QStringLiteral("runReportBug"));
+    connect(m_reportBug, &QPushButton::clicked, this, [this]() { emit reportBugRequested(bugStepIndex()); });
+    bg->addWidget(m_reportBug);
+    av->addWidget(m_bugRow, 0, Qt::AlignRight);
 
     m_capture = ui::button(QString(), "primary");
     auto* ch = ui::hbox(m_capture, 0, 8);
@@ -385,7 +420,7 @@ void RunView::tick() {
     const TestCase* c = m_cases.find(r.caseId);
     if (!c) return;
     m_caseStats->setText(tr("%1 de %2 pasos · %3 capturas · ⏱ %4")
-                             .arg(r.results.size()).arg(c->steps.size()).arg(c->shotsOfRun(QString()).size()).arg(formatDuration(r.elapsedSecs())));
+                             .arg(r.markedCount()).arg(c->steps.size()).arg(c->shotsOfRun(QString()).size()).arg(formatDuration(r.elapsedSecs())));
 }
 
 void RunView::refresh() {
@@ -404,6 +439,7 @@ void RunView::refresh() {
     m_verdicts->setVisible(active);
     m_capture->setVisible(hasRun);
     m_doneActions->setVisible(hasRun && r.finished);
+    m_bugRow->setVisible(hasRun);
     if (!hasRun) {
         m_clock.stop();
         ui::clearLayout(m_stepsLayout);
@@ -423,7 +459,7 @@ void RunView::refresh() {
 
     QStringList colors;
     for (int i = 0; i < c->steps.size(); ++i) {
-        if (i < r.results.size()) colors << resultColor(r.results[i].result);
+        if (r.isMarked(i)) colors << resultColor(r.results[i].result);
         else if (i == r.idx && !r.finished) colors << theme::Blue;
         else colors << theme::Border;
     }
@@ -434,12 +470,16 @@ void RunView::refresh() {
         m_stateDot->show();
         m_stateText->setText(tr("EJECUTANDO"));
         m_stateText->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Green));
-        m_stepCounter->setText(tr("PASO %1 DE %2").arg(r.idx + 1).arg(c->steps.size()));
+        // Un paso ya marcado se puede volver a ver (y a marcar): el rótulo lo dice.
+        m_stepCounter->setText(r.isMarked(r.idx)
+                                   ? tr("PASO %1 DE %2 · %3").arg(r.idx + 1).arg(c->steps.size()).arg(resultLabel(r.results[r.idx].result))
+                                   : tr("PASO %1 DE %2").arg(r.idx + 1).arg(c->steps.size()));
         m_action->setText(c->steps[r.idx].action);
         m_expected->setText(tr("<b>Esperado:</b> %1").arg(c->steps[r.idx].expected.toHtmlEscaped()));
         m_note->setTextSilently(r.note);
         m_note->setPlaceholderText(tr("Observaciones del paso %1…").arg(r.idx + 1));
-        m_back->setVisible(!r.results.isEmpty());
+        m_back->setEnabled(m_run.canGoBack());
+        m_next->setEnabled(m_run.canGoNext());
         m_finish->setText(tr("Cerrar ejecución"));
         m_action->setStyleSheet(QStringLiteral("font-size:22px;font-weight:800;color:%1;").arg(theme::Text));
     } else {
@@ -451,7 +491,8 @@ void RunView::refresh() {
         m_stateText->setStyleSheet(QStringLiteral("color:%1;").arg(color));
         m_stepCounter->setText(tr("EJECUCIÓN TERMINADA"));
         m_stepClock->clear();
-        m_back->hide();
+        m_back->setEnabled(m_run.canGoBack());   // reabre el último paso
+        m_next->setEnabled(false);
         m_action->setText(text);
         m_action->setStyleSheet(QStringLiteral("font-size:22px;font-weight:800;color:%1;").arg(color));
         QString summary = tr("%1 pasan · %2 fallan · %3 bloqueados")
@@ -459,15 +500,29 @@ void RunView::refresh() {
         if (r.count(StepResult::Skip) > 0) summary += tr(" · %1 N/A").arg(r.count(StepResult::Skip));
         summary += QStringLiteral(" · %1").arg(formatDuration(r.elapsedSecs()));
         m_expected->setText(summary);
-        m_reportBug->setVisible(r.count(StepResult::Fail) > 0);
-        m_reopen->setVisible(!r.results.isEmpty());
+        m_reopen->setVisible(r.markedCount() > 0);
         m_finish->setText(m_run.queuedCount() > 0 ? tr("Siguiente caso · quedan %1").arg(m_run.queuedCount())
                           : !m_run.planRunId().isEmpty() ? tr("Terminar plan y ver informe")
                                                          : tr("Finalizar y volver"));
     }
+    // El bug se cuelga del paso con problema; un paso bloqueado pide un bug bloqueante.
+    const int bugStep = bugStepIndex();
+    const bool blocked = r.isMarked(bugStep) && r.results[bugStep].result == StepResult::Block;
+    m_reportBug->setText(blocked ? tr("Reportar bug bloqueante") : tr("Reportar bug"));
+    m_reportBug->setToolTip(bugStep >= 0 && bugStep < c->steps.size()
+                                ? tr("Abre el parte enlazado al paso %1 · %2").arg(bugStep + 1).arg(ui::elide(c->steps[bugStep].action, 40))
+                                : tr("Abre el parte de un bug de este caso"));
+
     tick();
     refreshSteps();
     refreshShots();
+}
+
+int RunView::bugStepIndex() const {
+    const RunState& r = m_run.state();
+    if (r.caseId.isEmpty()) return -1;
+    const int broken = r.reportableStepIndex();
+    return broken >= 0 ? broken : r.idx;
 }
 
 void RunView::refreshSteps() {
@@ -480,12 +535,19 @@ void RunView::refreshSteps() {
 }
 
 QWidget* RunView::stepCard(int index, const TestCase& c, const RunState& r) {
-    const bool done = index < r.results.size();
-    const bool current = !done && index == r.idx && !r.finished;
+    const bool done = r.isMarked(index);
+    const bool current = index == r.idx && !r.finished;
     const QString accent = done ? resultColor(r.results[index].result) : current ? theme::Blue : theme::Border;
 
     auto* card = ui::card("step-card");
     ui::setFlag(card, "active", current);
+    // La lista es el mando de la ejecución: un clic pone ese paso en pantalla, esté marcado o no.
+    card->setObjectName(QStringLiteral("stepCard%1").arg(index + 1));
+    card->setProperty("stepIndex", index);
+    card->setCursor(Qt::PointingHandCursor);
+    card->setAttribute(Qt::WA_Hover);
+    card->setToolTip(tr("Ir al paso %1").arg(index + 1));
+    card->installEventFilter(this);
     auto* h = ui::hbox(card, 0, 0);
     auto* bar = ui::accentBar(accent);
     bar->setFixedWidth(3);
@@ -500,6 +562,7 @@ QWidget* RunView::stepCard(int index, const TestCase& c, const RunState& r) {
     if (done) {
         // El veredicto se puede corregir desde su propia pastilla.
         const StepResult res = r.results[index].result;
+        if (current) hh->addWidget(statePill(tr("ACTIVO"), theme::Blue));
         auto* badge = ui::button(resultLabel(res), "chip");
         badge->setStyleSheet(QStringLiteral("padding:1px 7px;font-size:10px;font-weight:800;background:%1;color:%2;border-color:%1;")
                                  .arg(resultColor(res), res == StepResult::Fail ? QStringLiteral("#ffffff") : theme::Bg));
@@ -524,9 +587,22 @@ QWidget* RunView::stepCard(int index, const TestCase& c, const RunState& r) {
 
     int shots = 0;
     for (const auto& s : c.shots) if (s.step == index + 1 && s.runId.isEmpty()) ++shots;
+    auto* foot = new QWidget;
+    auto* fh = ui::hbox(foot, 0, 6);
     auto* evidence = ui::label(shots == 0 ? tr("sin evidencia") : shots == 1 ? tr("1 captura") : tr("%1 capturas").arg(shots), "muted-sm");
     evidence->setStyleSheet(QStringLiteral("font-size:11px;"));
-    v->addWidget(evidence);
+    fh->addWidget(evidence);
+    // Cada bug pertenece a un paso: el suyo lo enseña aquí, para no reportarlo dos veces.
+    QStringList keys;
+    for (const auto& b : m_bugs.issuesForCase(c.id)) if (b.step == index + 1) keys << b.key;
+    if (!keys.isEmpty()) {
+        auto* bug = ui::pill(keys.join(QStringLiteral(" · ")), theme::tint(theme::Red, 38), theme::Red);
+        bug->setStyleSheet(bug->styleSheet() + QStringLiteral("font-size:10px;font-weight:700;"));
+        bug->setToolTip(keys.size() == 1 ? tr("Bug reportado en este paso") : tr("Bugs reportados en este paso"));
+        fh->addWidget(bug);
+    }
+    fh->addStretch(1);
+    v->addWidget(foot);
     h->addWidget(body, 1);
     return card;
 }
@@ -602,6 +678,14 @@ void RunView::selectShot(int shotId) {
     if (shotId == m_selectedShot) return;
     m_selectedShot = shotId;
     refreshShots();
+}
+
+bool RunView::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonPress && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+        const QVariant step = watched->property("stepIndex");
+        if (step.isValid()) { m_run.goTo(step.toInt()); return true; }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void RunView::selectRelativeShot(int delta) {

@@ -87,13 +87,16 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 | Ctrl+Shift+G         | Iniciar o detener la grabación de GIF (configurable, global) |
 | Ctrl+Alt+P           | Pasa el paso actual y avanza al siguiente (configurable, global) |
 | Ctrl+Alt+F           | Falla el paso actual y avanza al siguiente (configurable, global) |
-| Ctrl+Alt+A           | Vuelve al paso anterior (configurable, global) |
+| Ctrl+Alt+A           | Vuelve al paso anterior, sin tocar su veredicto (configurable, global) |
+| Ctrl+Alt+D           | Pasa al siguiente sin darle veredicto a este (configurable, global) |
 | Ctrl+Shift+A         | Adjuntar archivos como evidencia (o arrastrarlos a la ventana) |
 | Clic en una miniatura | Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia) |
 | Ctrl+B               | Reportar bug                        |
 | Ctrl+1 … Ctrl+5      | Cambiar de pantalla                 |
 | Ctrl+,               | Abrir los ajustes                   |
 | P / F / B / S        | Veredicto del paso en ejecución     |
+| Retroceso · Alt+← · Alt+→ | Moverse por los pasos de la ejecución |
+| Clic en un paso de la lista | Ir a ese paso                 |
 | Ctrl+Q               | Salir                               |
 
 ## Pantallas
@@ -102,9 +105,9 @@ como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 |-------------------|----------------------------------------------------------------------------|
 | Casos de prueba   | Lista filtrable por suite, estado, prioridad, última ejecución y texto (título, ID, etiquetas, componente, historia); editor con suites nuevas, etiquetas, componente, enlace a historia de Jira, pasos reordenables e insertables y sus últimas ejecuciones, cada una con un clic para abrir sus resultados en el historial (las evidencias son de cada ejecución y se ven allí); duplicar y eliminar con confirmación y deshacer; importar y exportar en JSON, CSV y Markdown |
 | Planes            | Varios planes (crear, duplicar, archivar, eliminar), casos en orden de ejecución propio, progreso del ciclo actual con enlace a su informe, historial de ciclos del plan con el resultado de cada uno (ejecutados, superados, fallidos, bloqueados, tasa de éxito y su variación respecto al ciclo anterior, enlace al informe y, con Zephyr, dónde se publicó, el Test de cada ejecución y los botones de publicar o actualizar el ciclo), estimación basada en las duraciones reales del historial (3 min/paso si no hay datos) y arranque de un ciclo nuevo |
-| Ejecución         | Tres columnas: el caso con su progreso y la lista de pasos (veredicto corregible en cada uno), el paso actual con Pasa / Falla / Bloq. / N/A (teclas P / F / B / S), paso anterior (Retroceso), **atajos globales** para avanzar de paso sin volver a la ventana (Ctrl+Alt+P / Ctrl+Alt+F / Ctrl+Alt+A), cronómetro por paso y por caso, visor grande de la evidencia elegida con «Asignar a» y observaciones, y la columna de capturas con las evidencias de esta ejecución. Sobrevive al cierre de la aplicación |
+| Ejecución         | Tres columnas: el caso con su progreso y la lista de pasos (veredicto corregible en cada uno y **un clic para ir a él**), el paso en pantalla con Pasa / Falla / Bloq. / N/A (teclas P / F / B / S), **navegación libre entre pasos** —«← Anterior / Siguiente →», Retroceso, Alt+← y Alt+→— que no toca ningún veredicto y reabre una ejecución terminada, «Reportar bug» en cualquier momento (bloqueante si el paso quedó bloqueado), **atajos globales** para avanzar de paso sin volver a la ventana (Ctrl+Alt+P / Ctrl+Alt+F / Ctrl+Alt+A / Ctrl+Alt+D), cronómetro por paso y por caso, visor grande de la evidencia elegida con «Asignar a» y observaciones, y la columna de capturas con las evidencias de esta ejecución. Fallar o bloquear un paso no corta la ejecución; cerrarla a medias la archiva con lo marcado. Sobrevive al cierre de la aplicación |
 | Historial         | Ejecuciones archivadas (pasos, resultados, notas, duración y sus evidencias, con lo que está enlazado en Jira y Zephyr), informes de plan con exportación a Markdown, publicación en Zephyr y eliminación (con sus ejecuciones y evidencias; el ciclo en curso no se puede borrar) y panel de métricas: tasa de éxito por suite y evolución entre ciclos |
-| Reportar bug      | Formulario prellenado con el paso fallido y campos reales del gestor (tipo, prioridad, asignado, componentes, versión, etiquetas) cargados del proyecto, con las personas buscadas en Jira según se escribe; crea el issue en Jira, GitHub, GitLab o Azure DevOps y sube las capturas; lista de bugs reportados con su estado y cola offline con reintento |
+| Reportar bug      | Formulario prellenado con el paso del que se levanta el parte —el que se tenía delante en la ejecución, o el fallo o bloqueo más cercano; un paso bloqueado lo trae como «Bloqueante»— y campos reales del gestor (tipo, prioridad, asignado, componentes, versión, etiquetas) cargados del proyecto, con las personas buscadas en Jira según se escribe; crea el issue en Jira, GitHub, GitLab o Azure DevOps y sube las capturas; lista de bugs reportados con su estado y cola offline con reintento |
 | Ajustes (ventana) | Se abre desde «Archivo → Ajustes» (Ctrl+,), en su propia ventana: idioma (español / inglés / sistema), tema (oscuro / claro / sistema), cerrar a la bandeja; atajos de la ejecución; gestor de incidencias (Jira, GitHub, GitLab o Azure DevOps: URL, proyecto, modo de autenticación en Jira y credenciales en el llavero del sistema), publicación de ciclos en Zephyr y preferencias de captura (atajos de captura y grabación, formato, modo, retardo, carpeta, atajo global, editor tras capturar, copia al portapapeles, fps y duración del GIF) |
 
 ## Conexión con Jira

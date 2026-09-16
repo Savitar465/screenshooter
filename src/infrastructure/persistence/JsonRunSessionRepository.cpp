@@ -33,7 +33,9 @@ std::optional<RunSession> JsonRunSessionRepository::loadSession() {
     s.run.stepElapsedSecs = run["stepElapsedSecs"].toInt();
     for (const auto& v : run["results"].toArray()) {
         const auto r = v.toObject();
-        s.run.results.append(StepRecord{stepResultFromString(r["result"].toString()), r["note"].toString(), r["durationSecs"].toInt()});
+        // Las sesiones anteriores sólo guardaban los pasos ya ejecutados: sin "marked", todos lo están.
+        s.run.results.append(StepRecord{stepResultFromString(r["result"].toString()), r["note"].toString(),
+                                        r["durationSecs"].toInt(), r["marked"].toBool(true)});
     }
     for (const auto& v : o["queue"].toArray()) s.queue << v.toString();
     s.planRunId = o["planRunId"].toString();
@@ -43,7 +45,7 @@ std::optional<RunSession> JsonRunSessionRepository::loadSession() {
 bool JsonRunSessionRepository::saveSession(const RunSession& s) {
     QJsonArray results;
     for (const auto& r : s.run.results)
-        results.append(QJsonObject{{"result", toString(r.result)}, {"note", r.note}, {"durationSecs", r.durationSecs}});
+        results.append(QJsonObject{{"result", toString(r.result)}, {"note", r.note}, {"durationSecs", r.durationSecs}, {"marked", r.marked}});
     const QJsonObject run{
         {"caseId", s.run.caseId}, {"idx", s.run.idx}, {"note", s.run.note},
         {"startedAt", s.run.startedAt.isValid() ? s.run.startedAt.toString(Qt::ISODate) : QString()},

@@ -23,8 +23,10 @@ public:
     BugReportService(std::shared_ptr<IIssueTracker> tracker, TestCaseStore& cases, RunController& run,
                      SettingsStore& settings, BugStore& bugs, QObject* parent = nullptr);
 
-    /// Borrador prellenado con el caso seleccionado y, si existe, el primer paso fallido de la ejecución.
-    BugReport draftFromCurrentContext() const;
+    /// Borrador prellenado con el caso seleccionado y un paso de la ejecución: el que se pida en
+    /// `stepIndex` (0-based) o, con -1, el fallo o bloqueo que haya visto la ejecución en curso.
+    /// Un paso bloqueado trae la severidad en "Bloqueante".
+    BugReport draftFromCurrentContext(int stepIndex = -1) const;
 
     struct SubmitResult {
         bool ok = false;         // creado en el gestor

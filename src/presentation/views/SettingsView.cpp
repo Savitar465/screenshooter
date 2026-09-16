@@ -474,7 +474,8 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     const struct { QLineEdit** field; QString title; QString tip; } runFields[] = {
         {&m_stepPass, tr("Pasa y siguiente"), tr("Marca el paso actual como superado y avanza al siguiente")},
         {&m_stepFail, tr("Falla y siguiente"), tr("Marca el paso actual como fallido y avanza al siguiente")},
-        {&m_stepBack, tr("Paso anterior"), tr("Deshace el último veredicto y vuelve a ese paso")}};
+        {&m_stepBack, tr("Paso anterior"), tr("Vuelve al paso anterior sin tocar su veredicto")},
+        {&m_stepNext, tr("Paso siguiente"), tr("Pasa al siguiente sin darle veredicto a este")}};
     int col = 0;
     for (const auto& f : runFields) {
         *f.field = new QLineEdit;
@@ -488,7 +489,8 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     const struct { QLineEdit** field; void (*apply)(RunShortcuts&, const QString&); } runBindings[] = {
         {&m_stepPass, [](RunShortcuts& r, const QString& t) { r.passAndNext = t; }},
         {&m_stepFail, [](RunShortcuts& r, const QString& t) { r.failAndNext = t; }},
-        {&m_stepBack, [](RunShortcuts& r, const QString& t) { r.previous = t; }}};
+        {&m_stepBack, [](RunShortcuts& r, const QString& t) { r.previous = t; }},
+        {&m_stepNext, [](RunShortcuts& r, const QString& t) { r.next = t; }}};
     for (const auto& b : runBindings) {
         QLineEdit* edit = *b.field;
         auto apply = b.apply;
@@ -650,6 +652,7 @@ void SettingsView::refreshRunShortcuts() {
     m_stepPass->setText(r.passAndNext);
     m_stepFail->setText(r.failAndNext);
     m_stepBack->setText(r.previous);
+    m_stepNext->setText(r.next);
     m_selfEdit = false;
 }
 

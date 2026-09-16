@@ -14,9 +14,10 @@ class TestCaseStore;
 class RunHistoryStore;
 
 /// Ejecución manual paso a paso de un caso (o de una cola de casos: plan de pruebas).
-/// No conoce la UI; sólo emite cambios de estado. Cada ejecución terminada se archiva
-/// en el historial y actualiza la "última ejecución" del caso. La ejecución en curso se
-/// guarda en disco para sobrevivir al cierre de la aplicación.
+/// No conoce la UI; sólo emite cambios de estado. Los pasos se pueden recorrer en cualquier orden:
+/// marcar uno no cierra el camino a los demás y un fallo o un bloqueo no cortan la ejecución.
+/// Cada ejecución terminada se archiva en el historial y actualiza la "última ejecución" del caso.
+/// La ejecución en curso se guarda en disco para sobrevivir al cierre de la aplicación.
 class RunController : public QObject {
     Q_OBJECT
 public:
@@ -33,6 +34,8 @@ public:
     int queuedCount() const { return m_queue.size(); }
     /// Id de la ejecución de plan en curso (vacío si el caso se ejecuta suelto).
     QString planRunId() const { return m_planRunId; }
+    bool canGoBack() const { return !m_run.caseId.isEmpty() && (m_run.finished || m_run.idx > 0); }
+    bool canGoNext() const { return !m_run.caseId.isEmpty() && m_run.idx + 1 < m_run.results.size(); }
 
     void start(const QString& caseId);
     /// Ejecuta los casos en orden; `finish()` pasa al siguiente automáticamente.
@@ -42,12 +45,17 @@ public:
     void setNote(const QString& note);
     /// Fuerza la escritura de la sesión. Falso (y `saveFailed`) si no se pudo.
     bool persistSessionNow() { return persistSession(); }
+    /// Da veredicto al paso en pantalla (lo cambia si ya lo tenía) y pasa al siguiente pendiente.
     void mark(StepResult result);
-    /// Deshace el último veredicto y vuelve a ese paso (también reabre una ejecución terminada).
+    /// Pone en pantalla otro paso del caso, marcado o no. Reabre una ejecución ya terminada.
+    void goTo(int index);
+    /// Paso anterior; sobre una ejecución terminada, reabre el paso en pantalla.
     void back();
-    /// Corrige el veredicto de un paso ya marcado. Si se quita un bloqueo, la ejecución continúa.
+    void next();
+    /// Corrige (o pone) el veredicto de un paso desde la lista, sin moverse de sitio.
     void setResult(int index, StepResult result);
-    /// Cierra la ejecución actual archivándola. Devuelve true si arrancó el siguiente caso de la cola.
+    /// Cierra la ejecución archivándola —con lo marcado hasta ahora si quedan pasos pendientes—.
+    /// Devuelve true si arrancó el siguiente caso de la cola.
     bool finish();
     void abandon();
 
@@ -61,10 +69,14 @@ signals:
 
 private:
     void begin(const QString& caseId);
-    void startStepClock();
+    /// Vuelca al registro del paso en pantalla su nota y lo que lleva corriendo su cronómetro.
+    void holdStep();
+    /// Pone en pantalla el paso `index`: guarda lo del anterior y retoma la nota y el reloj del nuevo.
+    void enterStep(int index);
     void recomputeFinished();
-    /// Si la ejecución actual ha terminado, la archiva en el historial y registra el veredicto en el caso.
-    void commitIfFinished();
+    /// Archiva la ejecución en el historial y registra el veredicto en el caso. `evenIfPending`
+    /// archiva también una ejecución a medias (los pasos sin marcar quedan como N/A).
+    void commitRun(bool evenIfPending);
     void closePlan();
     /// Emite runChanged() y programa el guardado de la sesión.
     void changed();

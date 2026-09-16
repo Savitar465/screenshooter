@@ -21,6 +21,8 @@
 #include <QScrollArea>
 #include <QTimer>
 
+#include <algorithm>
+
 namespace qaflow {
 
 namespace {
@@ -100,6 +102,7 @@ void BugView::buildForm(QVBoxLayout* v) {
     bv->setContentsMargins(22, 22, 24, 22);
 
     m_title = new QLineEdit;
+    m_title->setObjectName(QStringLiteral("bugTitle"));
     m_title->setPlaceholderText(tr("Resumen corto: qué falla y dónde"));
     m_title->setStyleSheet(QStringLiteral("font-size:14px;padding:9px 12px;"));
     connect(m_title, &QLineEdit::textChanged, this, [this]() { if (m_touched) ui::setFlag(m_title, "invalid", m_title->text().trimmed().isEmpty()); });
@@ -110,6 +113,7 @@ void BugView::buildForm(QVBoxLayout* v) {
     mg->setContentsMargins(0, 0, 0, 0);
     mg->setHorizontalSpacing(12);
     m_severity = new QComboBox;
+    m_severity->setObjectName(QStringLiteral("bugSeverity"));
     for (const auto& s : BugReport::severities()) m_severity->addItem(BugReport::severityLabel(s), s);
     connect(m_severity, &QComboBox::currentIndexChanged, this, [this](int) {
         // La severidad sugiere la prioridad de Jira mientras el usuario no haya elegido otra.
@@ -123,11 +127,17 @@ void BugView::buildForm(QVBoxLayout* v) {
     for (const auto& e : BugReport::environments()) m_env->addItem(BugReport::environmentLabel(e), e);
     m_linkedCase = new QLabel;
     m_linkedCase->setStyleSheet(QStringLiteral("background:%1;border:1px solid %2;border-radius:9px;padding:8px 10px;font-family:'Consolas','DejaVu Sans Mono',monospace;color:%3;").arg(theme::Elevated, theme::Border, theme::Muted));
+    // Un bug es de un paso concreto: es lo que hace que al publicar la ejecución el defecto cuelgue
+    // del resultado de ese paso y no del caso entero.
+    m_linkedStep = new QComboBox;
+    m_linkedStep->setObjectName(QStringLiteral("bugStep"));
+    m_linkedStep->setToolTip(tr("Paso en el que se vio el fallo; el defecto se cuelga de él al publicar la ejecución"));
     mg->addWidget(field(tr("Severidad"), m_severity), 0, 0);
     mg->addWidget(field(tr("Clasificación"), m_classification), 0, 1);
     mg->addWidget(field(tr("Entorno"), m_env), 0, 2);
     mg->addWidget(field(tr("Caso vinculado"), m_linkedCase), 0, 3);
-    for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
+    mg->addWidget(field(tr("Paso"), m_linkedStep), 0, 4);
+    for (int i = 0; i < 5; ++i) mg->setColumnStretch(i, 1);
     bv->addWidget(meta);
 
     // Campos del gestor
@@ -300,7 +310,8 @@ void BugView::refreshTrackerFields() {
 }
 
 void BugView::loadDraft() {
-    const BugReport d = m_bugs.draftFromCurrentContext();
+    const BugReport d = m_bugs.draftFromCurrentContext(m_draftStep);
+    m_draftStep = -1;   // sólo vale para este borrador
     m_touched = false;
     ui::setFlag(m_title, "invalid", false);
     ui::setFlag(m_actual, "invalid", false);
@@ -309,6 +320,7 @@ void BugView::loadDraft() {
     m_classification->setCurrentIndex(std::max(0, m_classification->findData(d.classification)));
     m_env->setCurrentIndex(std::max(0, m_env->findData(d.environment)));
     m_linkedCase->setText(d.linkedCaseId.isEmpty() ? QStringLiteral("—") : d.linkedCaseId);
+    refreshStepOptions(d.linkedStep);
     m_priority->setCurrentText(m_settings.tracker().kind == TrackerKind::Jira ? d.priority : QString());
     m_assignee->setCurrentText(QString());
     m_components->setText(d.components.join(QStringLiteral(", ")));
@@ -320,6 +332,18 @@ void BugView::loadDraft() {
     refreshShots();
     refreshTrackerFields();
     if (m_settings.tracker().connected && !m_bugs.hasMetadata()) loadMetadata(false);
+}
+
+void BugView::refreshStepOptions(int step) {
+    const TestCase* c = m_cases.selected();
+    const QSignalBlocker block(m_linkedStep);
+    m_linkedStep->clear();
+    m_linkedStep->addItem(tr("Todo el caso"), 0);
+    if (c)
+        for (int i = 0; i < c->steps.size(); ++i)
+            m_linkedStep->addItem(tr("Paso %1 · %2").arg(i + 1).arg(ui::elide(c->steps[i].action, 28)), i + 1);
+    m_linkedStep->setCurrentIndex(std::max(0, m_linkedStep->findData(step)));
+    m_linkedStep->setEnabled(c && !c->steps.isEmpty());
 }
 
 void BugView::refreshShots() {
@@ -361,7 +385,8 @@ void BugView::refreshIssues() {
         auto* title = new QLabel(l.title.isEmpty() ? tr("(sin título)") : l.title);
         title->setWordWrap(true);
         h->addWidget(title, 1);
-        if (!l.caseId.isEmpty()) h->addWidget(ui::label(l.caseId, "mono-muted"));
+        if (!l.caseId.isEmpty())
+            h->addWidget(ui::label(l.step > 0 ? tr("%1 · paso %2").arg(l.caseId).arg(l.step) : l.caseId, "mono-muted"));
         h->addWidget(ui::label(when(l.createdAt), "muted-sm"));
         const QString statusText = l.status.isEmpty() ? tr("SIN CONSULTAR") : l.status.toUpper();
         h->addWidget(ui::pill(statusText, l.status.isEmpty() ? theme::tint(theme::Muted, 38) : l.resolved ? theme::Green : theme::tint(theme::Blue, 38),
@@ -443,6 +468,7 @@ BugReport BugView::collect() const {
     b.classification = m_classification->currentData().toString();
     b.environment = m_env->currentData().toString();
     b.linkedCaseId = m_linkedCase->text() == QStringLiteral("—") ? QString() : m_linkedCase->text();
+    b.linkedStep = m_linkedStep->currentData().toInt();
     if (const TestCase* c = m_cases.selected(); c && c->id == b.linkedCaseId) b.linkedStoryKey = c->jiraKey;
     b.stepsToReproduce = m_steps->toPlainText();
     b.expected = m_expected->toPlainText();

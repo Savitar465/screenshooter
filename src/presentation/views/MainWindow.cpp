@@ -67,7 +67,7 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     m_stack = new QStackedWidget;
     m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence);
     m_plan = new PlanView(*ctx.cases, *ctx.plan, ctx.publish);
-    m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence);
+    m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence, *ctx.bugLedger);
     m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish, ctx.evidence, ctx.run);
     m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger, *ctx.evidence);
     m_issuesView = new IssuesView(ctx);
@@ -408,7 +408,9 @@ void MainWindow::buildMenus() {
     m_actStepFail->setObjectName(QStringLiteral("actStepFail"));
     m_actStepBack = runMenu->addAction(tr("Paso &anterior"), this, [this]() { m_ctx.run->back(); announceRunStep(); });
     m_actStepBack->setObjectName(QStringLiteral("actStepBack"));
-    for (QAction* a : {m_actStepPass, m_actStepFail, m_actStepBack}) a->setShortcutContext(Qt::ApplicationShortcut);
+    m_actStepNext = runMenu->addAction(tr("Paso si&guiente"), this, [this]() { m_ctx.run->next(); announceRunStep(); });
+    m_actStepNext->setObjectName(QStringLiteral("actStepNext"));
+    for (QAction* a : {m_actStepPass, m_actStepFail, m_actStepBack, m_actStepNext}) a->setShortcutContext(Qt::ApplicationShortcut);
 
     // Ayuda
     QMenu* help = bar->addMenu(tr("A&yuda"));
@@ -433,16 +435,18 @@ void MainWindow::buildMenus() {
                                     "<tr><td><b>Clic en una miniatura</b></td><td>Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)</td></tr>"
                                     "<tr><td><b>%3</b></td><td>Pasa el paso actual y avanza al siguiente (global)</td></tr>"
                                     "<tr><td><b>%4</b></td><td>Falla el paso actual y avanza al siguiente (global)</td></tr>"
-                                    "<tr><td><b>%5</b></td><td>Vuelve al paso anterior (global)</td></tr>"
+                                    "<tr><td><b>%5</b></td><td>Vuelve al paso anterior, sin tocar su veredicto (global)</td></tr>"
+                                    "<tr><td><b>%6</b></td><td>Pasa al siguiente sin darle veredicto a este (global)</td></tr>"
                                     "<tr><td><b>Ctrl+B</b></td><td>Reportar bug</td></tr>"
                                     "<tr><td><b>Ctrl+1 … Ctrl+6</b></td><td>Cambiar de pantalla</td></tr>"
                                     "<tr><td><b>Ctrl+,</b></td><td>Abrir los ajustes</td></tr>"
                                     "<tr><td><b>P / F / B / S</b></td><td>Veredicto del paso en ejecución</td></tr>"
-                                    "<tr><td><b>Retroceso</b></td><td>Volver al paso anterior</td></tr>"
+                                    "<tr><td><b>Retroceso · Alt+← · Alt+→</b></td><td>Moverse por los pasos de la ejecución</td></tr>"
+                                    "<tr><td><b>Clic en un paso de la lista</b></td><td>Ir a ese paso</td></tr>"
                                     "<tr><td><b>Ctrl+Q</b></td><td>Salir</td></tr></table>")
                                      .arg(m_ctx.settings->capture().shortcut, m_ctx.settings->capture().recordShortcut,
                                           m_ctx.settings->runShortcuts().passAndNext, m_ctx.settings->runShortcuts().failAndNext,
-                                          m_ctx.settings->runShortcuts().previous));
+                                          m_ctx.settings->runShortcuts().previous, m_ctx.settings->runShortcuts().next));
     });
 }
 
@@ -486,10 +490,10 @@ void MainWindow::updateActions() {
     m_actRecord->setEnabled(hasSelection || m_ctx.evidence->isRecording());
     m_actAttach->setEnabled(hasSelection);
     m_actReportBug->setEnabled(hasSelection);
-    const RunState& run = m_ctx.run->state();
     m_actStepPass->setEnabled(m_ctx.run->isRunning());
     m_actStepFail->setEnabled(m_ctx.run->isRunning());
-    m_actStepBack->setEnabled(!run.caseId.isEmpty() && !run.results.isEmpty());
+    m_actStepBack->setEnabled(m_ctx.run->canGoBack());
+    m_actStepNext->setEnabled(m_ctx.run->canGoNext());
     if (m_trayToggle) m_trayToggle->setText(window()->isVisible() ? tr("Ocultar QAflow") : tr("Mostrar QAflow"));
 }
 
@@ -610,7 +614,10 @@ void MainWindow::wireSignals() {
 
     // Ejecución
     connect(m_run, &RunView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
-    connect(m_run, &RunView::reportBugRequested, this, [this]() { navigateInto(Screen::Bug); });
+    connect(m_run, &RunView::reportBugRequested, this, [this](int stepIndex) {
+        m_bug->setDraftStep(stepIndex);
+        navigateInto(Screen::Bug);
+    });
     connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
 
     // Historial
@@ -736,6 +743,7 @@ void MainWindow::updateShortcuts() {
     m_actStepPass->setShortcut(QKeySequence(r.passAndNext));
     m_actStepFail->setShortcut(QKeySequence(r.failAndNext));
     m_actStepBack->setShortcut(QKeySequence(r.previous));
+    m_actStepNext->setShortcut(QKeySequence(r.next));
 }
 
 void MainWindow::announceRunStep() {

@@ -161,6 +161,7 @@ private:
     QAction* m_actStepPass = nullptr;
     QAction* m_actStepFail = nullptr;
     QAction* m_actStepBack = nullptr;
+    QAction* m_actStepNext = nullptr;
     QMap<Screen, QAction*> m_screenActions;
     QActionGroup* m_themeGroup = nullptr;
     QActionGroup* m_languageGroup = nullptr;

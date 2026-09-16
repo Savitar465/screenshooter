@@ -7,6 +7,11 @@
 
 using namespace qaflow;
 
+namespace {
+/// Un paso ya ejecutado, que es lo que miran el veredicto y los recuentos.
+StepRecord marked(StepResult r) { return StepRecord{r, {}, 0, true}; }
+}   // namespace
+
 class TestRunTest : public QObject {
     Q_OBJECT
 private slots:
@@ -14,21 +19,54 @@ private slots:
 
     void verdictIsWorstResultSeen() {
         RunState r;
-        r.results = {StepRecord{StepResult::Pass, {}}, StepRecord{StepResult::Pass, {}}};
+        r.results = {marked(StepResult::Pass), marked(StepResult::Pass)};
         QCOMPARE(static_cast<int>(r.verdict()), static_cast<int>(Verdict::Superado));
-        r.results.append(StepRecord{StepResult::Fail, {}});
+        r.results.append(marked(StepResult::Fail));
         QCOMPARE(static_cast<int>(r.verdict()), static_cast<int>(Verdict::Fallido));
         QCOMPARE(r.firstFailIndex(), 2);
-        r.results.append(StepRecord{StepResult::Block, {}});
+        r.results.append(marked(StepResult::Block));
         QCOMPARE(static_cast<int>(r.verdict()), static_cast<int>(Verdict::Bloqueado));
+        QCOMPARE(r.firstBlockIndex(), 3);
     }
 
     void skippedStepsDoNotAffectVerdict() {
         RunState r;
-        r.results = {StepRecord{StepResult::Skip, {}}, StepRecord{StepResult::Pass, {}}};
+        r.results = {marked(StepResult::Skip), marked(StepResult::Pass)};
         QCOMPARE(static_cast<int>(r.verdict()), static_cast<int>(Verdict::Superado));
         QCOMPARE(r.count(StepResult::Skip), 1);
         QCOMPARE(r.firstFailIndex(), -1);
+    }
+
+    /// Los pasos que todavía no se han marcado no cuentan para nada: ni veredicto ni recuento.
+    void pendingStepsAreIgnoredUntilTheyAreMarked() {
+        RunState r;
+        r.results = {marked(StepResult::Pass), StepRecord{}, marked(StepResult::Fail)};
+        QCOMPARE(r.markedCount(), 2);
+        QVERIFY(!r.allMarked());
+        QVERIFY(!r.isMarked(1));
+        QCOMPARE(r.count(StepResult::Pass), 1);
+        QCOMPARE(static_cast<int>(r.verdict()), static_cast<int>(Verdict::Fallido));
+        QCOMPARE(r.lastMarkedIndex(), 2);
+        QCOMPARE(r.nextPending(1), 1);
+        QCOMPARE(r.nextPending(2), 1);   // no queda nada por delante: vuelve al hueco de atrás
+        r.results[1] = marked(StepResult::Pass);
+        QVERIFY(r.allMarked());
+        QCOMPARE(r.nextPending(0), -1);
+    }
+
+    /// El bug se cuelga del paso en pantalla si tiene problema; si no, del más cercano por detrás.
+    void reportableStepPrefersTheStepOnScreen() {
+        RunState r;
+        r.results = {marked(StepResult::Fail), marked(StepResult::Pass), marked(StepResult::Block), StepRecord{}};
+        r.idx = 1;
+        QCOMPARE(r.reportableStepIndex(), 0);   // el de pantalla está bien: el fallo de atrás
+        r.idx = 2;
+        QCOMPARE(r.reportableStepIndex(), 2);   // el de pantalla está bloqueado
+        r.idx = 3;
+        QCOMPARE(r.reportableStepIndex(), 2);
+        RunState clean;
+        clean.results = {marked(StepResult::Pass)};
+        QCOMPARE(clean.reportableStepIndex(), -1);
     }
 
     void isActiveNeedsCaseAndNotFinished() {
@@ -46,7 +84,8 @@ private slots:
         const QDateTime now(QDate(2026, 9, 7), QTime(12, 0, 40));
         RunState r;
         r.caseId = QStringLiteral("TC-1");
-        r.results = {StepRecord{StepResult::Pass, {}, 30}, StepRecord{StepResult::Pass, {}, 20}};
+        r.results = {StepRecord{StepResult::Pass, {}, 30, true}, StepRecord{StepResult::Pass, {}, 20, true}, StepRecord{StepResult::Pass, {}, 5, false}};
+        r.idx = 2;                                    // el paso en pantalla no se suma dos veces
         r.stepStartedAt = now.addSecs(-10);
         r.stepElapsedSecs = 5;                        // acumulado de una sesión anterior
         QCOMPARE(r.currentStepSecs(now), 15);

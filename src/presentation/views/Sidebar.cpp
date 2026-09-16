@@ -132,7 +132,7 @@ void Sidebar::refresh() {
     // Ejecución: progreso del caso en curso.
     const RunState& r = m_run.state();
     const TestCase* running = m_run.isRunning() ? m_cases.find(r.caseId) : nullptr;
-    setBadge(Screen::Run, running ? QStringLiteral("%1/%2").arg(r.results.size()).arg(m_run.totalSteps()) : QString(),
+    setBadge(Screen::Run, running ? QStringLiteral("%1/%2").arg(r.markedCount()).arg(m_run.totalSteps()) : QString(),
              theme::Green, theme::OnAccent);
     setTooltip(Screen::Run, running ? tr("%1 · paso %2 de %3").arg(running->id).arg(r.idx + 1).arg(running->steps.size())
                                     : tr("sin ejecución en curso"));

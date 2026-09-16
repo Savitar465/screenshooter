@@ -31,6 +31,8 @@ public:
 
     /// Rellena el formulario con el borrador actual (caso seleccionado + ejecución).
     void loadDraft();
+    /// Paso (0-based) del que va el siguiente borrador; -1 deja que lo decida la ejecución.
+    void setDraftStep(int stepIndex) { m_draftStep = stepIndex; }
 
 signals:
     void captureRequested();
@@ -44,6 +46,8 @@ private:
     void buildLists(QVBoxLayout* v);
     void refreshHeader();
     void refreshShots();
+    /// Opciones del combo de paso, con los pasos del caso seleccionado.
+    void refreshStepOptions(int step);
     void refreshTrackerFields();
     void refreshIssues();
     void refreshPending();
@@ -63,6 +67,7 @@ private:
     BugStore& m_ledger;
     EvidenceService& m_evidence;
     bool m_touched = false;
+    int m_draftStep = -1;          // paso que pidió quien abrió el parte, para el próximo loadDraft()
     bool m_sending = false;
     bool m_busy = false;
 
@@ -72,6 +77,7 @@ private:
     QComboBox* m_classification;
     QComboBox* m_env;
     QLabel* m_linkedCase;
+    QComboBox* m_linkedStep;       // paso del caso al que pertenece el bug (0 = el caso entero)
     QComboBox* m_issueType;
     QComboBox* m_priority;
     QComboBox* m_assignee;

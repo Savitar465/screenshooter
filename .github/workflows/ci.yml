@@ -75,6 +75,23 @@ jobs:
         run: ctest --test-dir build --output-on-failure
         env:
           QT_QPA_PLATFORM: offscreen
+      - name: Mostrar detalle de QtTest
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem build/test-results/*.txt -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Output "--- $($_.Name) ---"
+            Get-Content $_.FullName
+          }
+      - name: Guardar resultados de tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qaflow-windows-test-results
+          path: |
+            build/test-results/*.txt
+            build/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
       - name: Instalador NSIS y .zip
         run: cpack --config build/CPackConfig.cmake -B build/packages
       - uses: actions/upload-artifact@v4

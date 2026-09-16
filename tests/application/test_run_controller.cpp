@@ -17,6 +17,7 @@ private slots:
         AppFixture f;
         f.run.start(QStringLiteral("TC-102"));   // 2 pasos
         QVERIFY(f.run.isRunning());
+        QCOMPARE(f.run.state().results.size(), 2);   // un registro por paso, pendientes de marcar
         f.run.mark(StepResult::Pass);
         QCOMPARE(f.run.state().idx, 1);
         f.run.setNote(QStringLiteral("se rompió"));
@@ -27,16 +28,58 @@ private slots:
         QCOMPARE(static_cast<int>(f.store.find(QStringLiteral("TC-102"))->lastRun.outcome), static_cast<int>(RunOutcome::Failed));
     }
 
-    void blockFinishesEarlyAndIsRecordedOnCase() {
+    /// Un bloqueo ya no corta la ejecución: se sigue pudiendo recorrer (y reportar) el resto.
+    void blockKeepsTheRunOpenAndIsRecordedOnCase() {
         AppFixture f;
         f.run.start(QStringLiteral("TC-104"));   // 4 pasos
         f.run.mark(StepResult::Block);
-        QVERIFY(f.run.state().finished);
+        QVERIFY(!f.run.state().finished);
+        QVERIFY(f.run.isRunning());
+        QCOMPARE(f.run.state().idx, 1);   // avanza como cualquier otro veredicto
         QCOMPARE(static_cast<int>(f.run.state().verdict()), static_cast<int>(Verdict::Bloqueado));
-        f.run.finish();
+
+        f.run.finish();   // cerrarla a medias la archiva con lo marcado
         QCOMPARE(static_cast<int>(f.store.find(QStringLiteral("TC-104"))->lastRun.outcome), static_cast<int>(RunOutcome::Blocked));
         QCOMPARE(f.history.runs().first().steps.size(), 1);
         QCOMPARE(f.history.runs().first().plannedSteps, 4);
+    }
+
+    /// Los pasos se recorren en cualquier orden; los huecos se archivan como N/A.
+    void stepsCanBeVisitedInAnyOrderAndPendingOnesAreArchivedAsSkipped() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-104"));   // 4 pasos
+        f.run.goTo(2);
+        QCOMPARE(f.run.state().idx, 2);
+        f.run.mark(StepResult::Fail);
+        QCOMPARE(f.run.state().idx, 3);          // sigue por el siguiente pendiente
+        QVERIFY(!f.run.state().finished);        // fallar tampoco corta la ejecución
+        f.run.mark(StepResult::Pass);
+        QCOMPARE(f.run.state().idx, 0);          // no queda nada por delante: vuelve al primer hueco
+        QVERIFY(!f.run.state().finished);
+
+        f.run.finish();
+        const RunRecord& rec = f.history.runs().first();
+        QCOMPARE(rec.steps.size(), 4);
+        QCOMPARE(static_cast<int>(rec.steps[0].result), static_cast<int>(StepResult::Skip));   // nunca se marcó
+        QCOMPARE(static_cast<int>(rec.steps[2].result), static_cast<int>(StepResult::Fail));
+        QCOMPARE(static_cast<int>(rec.verdict), static_cast<int>(Verdict::Fallido));
+    }
+
+    /// Volver a un paso ya marcado permite cambiarlo sin perder el resto.
+    void aMarkedStepCanBeVisitedAgainAndRemarked() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-102"));   // 2 pasos
+        f.run.mark(StepResult::Fail);
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.state().finished);
+
+        f.run.goTo(0);                           // reabre la ejecución terminada
+        QVERIFY(!f.run.state().finished);
+        QVERIFY(f.run.isRunning());
+        QCOMPARE(f.run.state().markedCount(), 2);
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.state().finished);
+        QCOMPARE(static_cast<int>(f.run.state().verdict()), static_cast<int>(Verdict::Superado));
     }
 
     void skipDoesNotAffectVerdict() {
@@ -52,7 +95,7 @@ private slots:
 
     // ---- Correcciones ------------------------------------------------------------------
 
-    void backReopensPreviousStepWithItsNote() {
+    void backReturnsToThePreviousStepWithItsNote() {
         AppFixture f;
         f.run.start(QStringLiteral("TC-104"));
         f.run.mark(StepResult::Pass);
@@ -62,9 +105,12 @@ private slots:
 
         f.run.back();
         QCOMPARE(f.run.state().idx, 1);
-        QCOMPARE(f.run.state().results.size(), 1);
         QCOMPARE(f.run.state().note, QStringLiteral("dudoso"));
+        QVERIFY(f.run.state().isMarked(1));     // el veredicto sigue puesto: volver no lo deshace
         QVERIFY(f.run.isRunning());
+        f.run.next();
+        QCOMPARE(f.run.state().idx, 2);
+        QVERIFY(f.run.state().note.isEmpty());   // cada paso trae la suya
     }
 
     void backReopensAFinishedRun() {
@@ -78,20 +124,20 @@ private slots:
         QCOMPARE(f.history.runs().size(), 0);   // nada archivado todavía
     }
 
-    void correctingAVerdictUnblocksTheRun() {
+    void correctingAVerdictFromTheListDoesNotMoveTheRun() {
         AppFixture f;
         f.run.start(QStringLiteral("TC-104"));
         f.run.mark(StepResult::Pass);
         f.run.mark(StepResult::Block);
-        QVERIFY(f.run.state().finished);
+        QCOMPARE(f.run.state().idx, 2);
 
         f.run.setResult(1, StepResult::Pass);
-        QVERIFY(!f.run.state().finished);
         QCOMPARE(f.run.state().idx, 2);
+        QCOMPARE(static_cast<int>(f.run.state().verdict()), static_cast<int>(Verdict::Superado));
         f.run.setResult(0, StepResult::Fail);
         QCOMPARE(static_cast<int>(f.run.state().verdict()), static_cast<int>(Verdict::Fallido));
         f.run.setResult(9, StepResult::Pass);   // índice inválido: se ignora
-        QCOMPARE(f.run.state().results.size(), 2);
+        QCOMPARE(f.run.state().markedCount(), 2);
     }
 
     // ---- Archivado en el historial -----------------------------------------------------
@@ -204,7 +250,7 @@ private slots:
         QVERIFY(again.isRunning());
         QCOMPARE(again.state().caseId, QStringLiteral("TC-104"));
         QCOMPARE(again.state().idx, 1);
-        QCOMPARE(again.state().results.size(), 1);
+        QCOMPARE(again.state().markedCount(), 1);
         QCOMPARE(again.state().note, QStringLiteral("a medias"));
         QCOMPARE(again.queuedCount(), 1);
         QCOMPARE(again.planRunId(), f.run.planRunId());
@@ -232,7 +278,7 @@ private slots:
         AppFixture f;
         RunSession s;
         s.run.caseId = QStringLiteral("TC-103");   // 1 paso
-        s.run.results = {StepRecord{StepResult::Pass, {}}, StepRecord{StepResult::Pass, {}}};
+        s.run.results = {StepRecord{StepResult::Pass, {}, 0, true}, StepRecord{StepResult::Pass, {}, 0, true}};
         f.sessionRepo->session = s;
         f.run.load();
         QCOMPARE(f.run.state().results.size(), 1);

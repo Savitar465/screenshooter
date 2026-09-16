@@ -12,7 +12,9 @@ function(qaflow_add_test layer name)
     add_executable(${name} ${layer}/${name}.cpp ${ARG_SOURCES})
     target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(${name} PRIVATE ${ARG_LIBS} Qt6::Test qaflow_warnings)
-    add_test(NAME ${layer}/${name} COMMAND ${name})
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/test-results")
+    add_test(NAME ${layer}/${name} COMMAND ${name}
+        -o -,txt -o "${CMAKE_BINARY_DIR}/test-results/${name}.txt,txt")
     set_tests_properties(${layer}/${name} PROPERTIES LABELS ${layer} ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endfunction()
 

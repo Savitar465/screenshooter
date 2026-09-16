@@ -327,12 +327,62 @@ private slots:
         QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Run));
         QVERIFY(f.app.run.isRunning());
         QTest::keyClick(f.window.get(), Qt::Key_P);
-        QCOMPARE(f.app.run.state().results.size(), 1);
+        QCOMPARE(f.app.run.state().markedCount(), 1);
         QTest::keyClick(f.window.get(), Qt::Key_F);
-        QCOMPARE(f.app.run.state().results.size(), 2);
+        QCOMPARE(f.app.run.state().markedCount(), 2);
         QCOMPARE(static_cast<int>(f.app.run.state().results[1].result), static_cast<int>(StepResult::Fail));
+        // Retroceso y Alt+→ sólo mueven el paso en pantalla: los veredictos se quedan donde están.
         QTest::keyClick(f.window.get(), Qt::Key_Backspace);
-        QCOMPARE(f.app.run.state().results.size(), 1);
+        QCOMPARE(f.app.run.state().idx, 1);
+        QCOMPARE(f.app.run.state().markedCount(), 2);
+        QTest::keyClick(f.window.get(), Qt::Key_Right, Qt::AltModifier);
+        QCOMPARE(f.app.run.state().idx, 2);
+    }
+
+    /// La lista de pasos de la ejecución es navegable: un clic lleva a ese paso, marcado o no.
+    void clickingAStepOfTheRunListGoesToIt() {
+        WindowFixture f;
+        f.action("actRun")->trigger();   // TC-104, 4 pasos
+        f.action("actStepPass")->trigger();
+        QCOMPARE(f.app.run.state().idx, 1);
+
+        auto* fourth = f.window->findChild<QFrame*>(QStringLiteral("stepCard4"));
+        QVERIFY(fourth);
+        QTest::mouseClick(fourth, Qt::LeftButton);
+        QCOMPARE(f.app.run.state().idx, 3);
+        QCOMPARE(f.app.run.state().markedCount(), 1);   // saltar no marca nada
+
+        auto* first = f.window->findChild<QFrame*>(QStringLiteral("stepCard1"));
+        QVERIFY(first);
+        QTest::mouseClick(first, Qt::LeftButton);       // volver a uno ya marcado
+        QCOMPARE(f.app.run.state().idx, 0);
+        QVERIFY(f.app.run.state().isMarked(0));
+    }
+
+    /// Un paso fallido se reporta sin esperar a que termine la ejecución, y el parte llega con ese
+    /// paso enlazado; un paso bloqueado además pide el bug como bloqueante.
+    void aFailedStepCanBeReportedWithoutClosingTheRun() {
+        WindowFixture f;
+        f.action("actRun")->trigger();   // TC-104, 4 pasos
+        QTest::keyClick(f.window.get(), Qt::Key_F);
+        QCOMPARE(f.app.run.state().idx, 1);   // sigue abierta por el paso siguiente
+        auto* report = f.window->findChild<QPushButton*>(QStringLiteral("runReportBug"));
+        QVERIFY(report);
+        QTRY_VERIFY(report->isVisible() && report->width() > 0);   // hasta que la columna se coloca
+        QTest::mouseClick(report, Qt::LeftButton);
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Bug));
+        QCOMPARE(f.window->findChild<QLineEdit*>(QStringLiteral("bugTitle"))->text().contains(QStringLiteral("paso 1")), true);
+
+        f.window->navigate(Screen::Run);
+        QVERIFY(f.app.run.isRunning());       // y se puede seguir probando el resto
+        QTest::keyClick(f.window.get(), Qt::Key_B);
+        QCOMPARE(f.app.run.state().markedCount(), 2);
+        QVERIFY(f.app.run.isRunning());
+        QCOMPARE(report->text(), QStringLiteral("Reportar bug bloqueante"));
+        QTest::mouseClick(report, Qt::LeftButton);
+        auto* severity = f.window->findChild<QComboBox*>(QStringLiteral("bugSeverity"));
+        QVERIFY(severity);
+        QCOMPARE(severity->currentData().toString(), QStringLiteral("Bloqueante"));
     }
 
     /// Los atajos de la ejecución (los mismos que main.cpp registra en el sistema) avanzan y
@@ -342,20 +392,23 @@ private slots:
         QCOMPARE(f.action("actStepPass")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+P")));
         QCOMPARE(f.action("actStepFail")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+F")));
         QCOMPARE(f.action("actStepBack")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+A")));
+        QCOMPARE(f.action("actStepNext")->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+D")));
         QVERIFY(!f.action("actStepPass")->isEnabled());   // sin ejecución no hacen nada
         QVERIFY(!f.action("actStepBack")->isEnabled());
 
         f.action("actRun")->trigger();   // TC-104
         QVERIFY(f.action("actStepPass")->isEnabled());
         f.action("actStepPass")->trigger();
-        QCOMPARE(f.app.run.state().results.size(), 1);
+        QCOMPARE(f.app.run.state().markedCount(), 1);
         QCOMPARE(static_cast<int>(f.app.run.state().results[0].result), static_cast<int>(StepResult::Pass));
         QCOMPARE(f.app.run.state().idx, 1);
         f.action("actStepFail")->trigger();
         QCOMPARE(static_cast<int>(f.app.run.state().results[1].result), static_cast<int>(StepResult::Fail));
         f.action("actStepBack")->trigger();
-        QCOMPARE(f.app.run.state().results.size(), 1);
+        QCOMPARE(f.app.run.state().markedCount(), 2);
         QCOMPARE(f.app.run.state().idx, 1);
+        f.action("actStepNext")->trigger();
+        QCOMPARE(f.app.run.state().idx, 2);
 
         f.app.settings.updateRunShortcuts([](RunShortcuts& r) { r.passAndNext = QStringLiteral("F8"); });
         QCOMPARE(f.action("actStepPass")->shortcut(), QKeySequence(Qt::Key_F8));

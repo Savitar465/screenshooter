@@ -16,6 +16,7 @@ class QVBoxLayout;
 namespace qaflow {
 
 class TestCaseStore;
+class BugStore;
 class RunController;
 class SettingsStore;
 class EvidenceService;
@@ -31,11 +32,13 @@ class TextArea;
 class RunView : public QWidget {
     Q_OBJECT
 public:
-    RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, EvidenceService& evidence, QWidget* parent = nullptr);
+    RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, EvidenceService& evidence,
+            BugStore& bugs, QWidget* parent = nullptr);
 
 signals:
     void captureRequested();
-    void reportBugRequested();
+    /// Abrir el parte de un bug para el paso `stepIndex` (0-based; -1 = el que decida la ejecución).
+    void reportBugRequested(int stepIndex);
     /// El usuario pulsó "Cerrar ejecución": la ventana decide si sigue el plan, muestra el informe o vuelve.
     void finishRequested();
     void toast(const QString& message, const QString& color);
@@ -48,6 +51,9 @@ private:
 
     void refresh();
     void refreshSteps();
+    /// Paso al que se le colgaría un bug ahora mismo: el de la pantalla si tiene problema, si no
+    /// el fallo o bloqueo que haya visto la ejecución. -1 si no hay caso.
+    int bugStepIndex() const;
     void refreshShots();
     /// Tarjeta de un paso en la lista de la izquierda.
     QWidget* stepCard(int index, const TestCase& c, const RunState& r);
@@ -56,11 +62,14 @@ private:
     void selectRelativeShot(int delta);
     const Screenshot* selectedShot() const;
     void tick();   // cronómetros (cada segundo)
+    /// Un clic en una tarjeta de la lista pone ese paso en pantalla.
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
     TestCaseStore& m_cases;
     RunController& m_run;
     SettingsStore& m_settings;
     EvidenceService& m_evidence;
+    BugStore& m_bugs;
 
     // Columna del caso
     QFrame* m_casePanel;
@@ -78,10 +87,12 @@ private:
     QLabel* m_stepCounter;
     QLabel* m_stepClock;
     QPushButton* m_back;
+    QPushButton* m_next;
     QLabel* m_action;
     QLabel* m_expected;
     QWidget* m_verdicts;
     QWidget* m_doneActions;
+    QWidget* m_bugRow;
     QPushButton* m_reportBug;
     QPushButton* m_reopen;
     QPushButton* m_capture;

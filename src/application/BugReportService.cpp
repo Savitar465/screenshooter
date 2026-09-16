@@ -5,6 +5,8 @@
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
 
+#include <algorithm>
+
 namespace qaflow {
 
 BugReportService::BugReportService(std::shared_ptr<IIssueTracker> tracker, TestCaseStore& cases, RunController& run,
@@ -22,7 +24,7 @@ BugReportService::BugReportService(std::shared_ptr<IIssueTracker> tracker, TestC
     });
 }
 
-BugReport BugReportService::draftFromCurrentContext() const {
+BugReport BugReportService::draftFromCurrentContext(int stepIndex) const {
     BugReport b;
     const TestCase* c = m_cases.selected();
     if (!c) return b;
@@ -35,14 +37,22 @@ BugReport BugReportService::draftFromCurrentContext() const {
     b.stepsToReproduce = lines.join(QLatin1Char('\n'));
 
     const RunState& r = m_run.state();
-    const int failIdx = r.caseId == c->id ? r.firstFailIndex() : -1;
-    if (failIdx >= 0 && failIdx < c->steps.size()) {
-        // El paso que falló es el que se enlaza en Zephyr al publicar la ejecución.
-        b.linkedStep = failIdx + 1;
-        const TestStep& failed = c->steps[failIdx];
-        b.title = tr("[%1] Falla en paso %2: %3").arg(c->suite).arg(failIdx + 1).arg(failed.action);
-        b.expected = failed.expected;
-        b.actual = r.results[failIdx].note;
+    // El paso del que se reporta: el que pide quien abre el parte (el que tiene en pantalla) y, si
+    // no dice ninguno, el fallo o bloqueo que haya visto la ejecución.
+    const bool sameCase = r.caseId == c->id;
+    const int idx = !sameCase ? -1 : stepIndex >= 0 ? std::min(stepIndex, static_cast<int>(c->steps.size()) - 1)
+                                                    : r.reportableStepIndex();
+    if (idx >= 0 && idx < c->steps.size()) {
+        // El paso al que se le cuelga el defecto es el que se enlaza en Zephyr al publicar la ejecución.
+        b.linkedStep = idx + 1;
+        const TestStep& step = c->steps[idx];
+        // Un paso bloqueado da un bug bloqueante: es lo que impide seguir probando.
+        const bool blocked = r.isMarked(idx) && r.results[idx].result == StepResult::Block;
+        if (blocked) b.severity = QStringLiteral("Bloqueante");
+        b.title = blocked ? tr("[%1] Bloqueo en paso %2: %3").arg(c->suite).arg(idx + 1).arg(step.action)
+                          : tr("[%1] Falla en paso %2: %3").arg(c->suite).arg(idx + 1).arg(step.action);
+        b.expected = step.expected;
+        b.actual = idx == r.idx ? r.note : idx < r.results.size() ? r.results[idx].note : QString();
     }
     for (const auto& s : c->shots) b.attachmentPaths << s.path;
     b.priority = BugReport::jiraPriorityFor(b.severity);

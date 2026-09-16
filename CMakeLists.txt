@@ -19,6 +19,8 @@ endif ()
 # Avisos comunes a todas las capas.
 add_library(qaflow_warnings INTERFACE)
 target_compile_options(qaflow_warnings INTERFACE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra>)
+# Los fuentes y los literales con acentos usan UTF-8 también con MSVC.
+target_compile_options(qaflow_warnings INTERFACE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
 
 # ---- Capas -----------------------------------------------------------------
 # Cada capa es una biblioteca estática y sólo enlaza con las capas de las que puede depender,

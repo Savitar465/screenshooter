@@ -139,6 +139,7 @@ RunShortcuts QSettingsRepository::loadRunShortcuts() {
     r.passAndNext = s.value(QStringLiteral("passAndNext"), r.passAndNext).toString();
     r.failAndNext = s.value(QStringLiteral("failAndNext"), r.failAndNext).toString();
     r.previous = s.value(QStringLiteral("previous"), r.previous).toString();
+    r.next = s.value(QStringLiteral("next"), r.next).toString();
     return r;
 }
 
@@ -148,6 +149,7 @@ void QSettingsRepository::saveRunShortcuts(const RunShortcuts& s2) {
     s.setValue(QStringLiteral("passAndNext"), s2.passAndNext);
     s.setValue(QStringLiteral("failAndNext"), s2.failAndNext);
     s.setValue(QStringLiteral("previous"), s2.previous);
+    s.setValue(QStringLiteral("next"), s2.next);
 }
 
 } // namespace qaflow

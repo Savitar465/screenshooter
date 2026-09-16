@@ -167,7 +167,8 @@ como antes.
 
 `MainWindow::buildMenus()` crea el menú (Archivo, Editar, Ver, Ejecución, Ayuda) con `QAction`
 y los atajos estándar (`QKeySequence::New`, `Find`, `Undo`, `Quit`, F5, Ctrl+1…5). Los atajos de
-captura, de grabación y de la ejecución («Pasa y siguiente», «Falla y siguiente», «Paso anterior»)
+captura, de grabación y de la ejecución («Pasa y siguiente», «Falla y siguiente», «Paso anterior»,
+«Paso siguiente»)
 son acciones de ámbito aplicación cuya tecla sigue a Ajustes; además `main.cpp` los registra en el
 sistema con `IGlobalHotkey` (ver «Captura de pantalla»), para poder avanzar de paso y seguir
 capturando sin traer QAflow al frente. Tras cada atajo de la ejecución,
@@ -274,26 +275,35 @@ los casos de ejemplo.
 
 ## Ejecución paso a paso
 
-`RunState` guarda el caso, el índice del paso actual, un `StepRecord` por paso marcado (resultado,
-nota y segundos que estuvo en pantalla) y el cronómetro del paso actual. Resultados: `Pass`,
-`Fail`, `Block` (termina la ejecución en ese punto) y `Skip` (N/A: no cuenta para el veredicto).
+`RunState` guarda el caso, el índice del paso en pantalla, un `StepRecord` **por paso del caso**
+(resultado, nota, segundos que estuvo en pantalla y si ya está `marked`) y el cronómetro del paso
+actual. Resultados: `Pass`, `Fail`, `Block` y `Skip` (N/A: no cuenta para el veredicto). Ninguno
+corta la ejecución: un bloqueo se queda en su paso y se sigue navegando por el resto.
 
-* `mark()` registra el paso y avanza; `back()` deshace el último veredicto y devuelve su nota al
-  campo (también reabre una ejecución ya terminada); `setResult(i, r)` corrige un veredicto
-  anterior y, si con ello desaparece el bloqueo, la ejecución continúa. Nada se archiva hasta que
-  la ejecución termina y se cierra, así que estas correcciones no dejan rastro en el historial.
+* **Los pasos se recorren en cualquier orden.** `goTo(i)` pone en pantalla el paso `i` —marcado o
+  no— y `back()`/`next()` se mueven de uno en uno; en la vista se llega por la lista de la columna
+  izquierda (cada tarjeta es pinchable), por los botones «← Anterior / Siguiente →», con Retroceso
+  y Alt+←/Alt+→ o con los atajos globales configurables. Navegar no toca ningún veredicto y reabre
+  una ejecución ya terminada. Cada paso conserva su nota y su cronómetro entre visitas.
+* `mark()` da veredicto al paso en pantalla (o lo cambia) y salta al siguiente pendiente, volviendo
+  a los huecos de atrás cuando no queda nada por delante; `setResult(i, r)` corrige un veredicto
+  desde la lista sin moverse de sitio. La ejecución pasa a "terminada" cuando **todos** los pasos
+  están marcados. Nada se archiva hasta que se cierra, así que estas correcciones no dejan rastro
+  en el historial.
 * **Persistencia de la sesión.** Tras cada cambio (`changed()`) el controlador guarda un
   `RunSession` (estado, cola del plan, id del plan) mediante `IRunSessionRepository`. Al arrancar,
-  `load()` la restaura si el caso sigue existiendo, recorta resultados si el caso perdió pasos y
+  `load()` la restaura si el caso sigue existiendo, ajusta la lista de resultados si el caso ganó o
+  perdió pasos y
   reinicia el cronómetro del paso actual: el tiempo con la aplicación cerrada no cuenta, pero lo
   acumulado antes (`stepElapsedSecs`) sí. `MainWindow` abre directamente la pantalla de ejecución.
 * **Duración real.** Cada `StepRecord` mide su tiempo; `RunRecord::durationSecs` es la suma. La
   vista muestra un reloj por paso y por caso (un `QTimer` de un segundo sólo actualiza etiquetas).
 * **La pantalla, en tres columnas.** `RunView` se construye con una función por columna:
   `buildCasePanel()` (estado del caso, progreso, la lista de pasos con su veredicto —la pastilla de
-  cada paso ya marcado abre el menú para corregirlo— y «Cerrar ejecución»), `buildStepPanel()` (el
-  paso activo, sus veredictos, el visor grande de la evidencia elegida con la barra «Asignar a» y
-  las observaciones del paso) y `buildFilmPanel()` (la columna «Capturas», con todas las evidencias del caso).
+  cada paso ya marcado abre el menú para corregirlo, y un clic en la tarjeta va a ese paso—, los
+  botones de navegación y «Cerrar ejecución»), `buildStepPanel()` (el paso en pantalla, sus
+  veredictos, «Reportar bug» —que sale en cualquier momento de la ejecución, no sólo al final—, el
+  visor grande de la evidencia elegida con la barra «Asignar a» y las observaciones del paso) y `buildFilmPanel()` (la columna «Capturas», con todas las evidencias del caso).
   El visor es `EvidencePreview`, que dibuja la imagen ajustada al hueco con la etiqueta del paso y
   el nombre del fichero; las tarjetas de la columna de capturas son `ShotCard` con `Layout::Film`,
   que en vez de abrir el visor a tamaño completo emiten `selectRequested` para elegir qué se ve en
@@ -304,12 +314,14 @@ nota y segundos que estuvo en pantalla) y el cronómetro del paso actual. Result
 
 ## Historial de ejecuciones e informes de plan
 
-Cada ejecución que termina (todos los pasos marcados, o un paso bloqueado) se convierte en un
-`RunRecord`: instantánea del texto de los pasos, resultado y nota de cada uno, veredicto, inicio y
-fin. `RunController::commitIfFinished()` la archiva en `RunHistoryStore` y actualiza la "última
-ejecución" del caso (`Passed`, `Failed` o `Blocked`). Se archiva al pulsar «Finalizar», pero también
-si el usuario arranca otro caso, repite o abandona con la ejecución ya terminada, para que nada se
-pierda.
+Cada ejecución que se cierra se convierte en un `RunRecord`: instantánea del texto de los pasos,
+resultado y nota de cada uno, veredicto, inicio y fin. `RunController::commitRun()` la archiva en
+`RunHistoryStore` y actualiza la "última ejecución" del caso (`Passed`, `Failed` o `Blocked`).
+«Cerrar ejecución» archiva también una ejecución a medias —lo normal cuando un paso bloquea y no
+tiene sentido seguir—: se guardan los pasos hasta el último marcado y los huecos quedan como N/A,
+con `plannedSteps` diciendo cuántos tenía el caso ("2 de 5"). Arrancar otro caso, repetir o
+abandonar sólo archivan si la ejecución ya estaba terminada, para que nada se pierda sin que se
+cuele media prueba en el historial.
 
 Al iniciar un plan se abre un `PlanRun` (nombre, casos en orden, inicio) y todos los `RunRecord`
 que genera llevan su `planRunId`. Cuando la cola se vacía (o se abandona) el plan se cierra y
@@ -423,6 +435,15 @@ cuya evidencia sigue siendo suya y todavía no puede sellarse.
   Reportar bug) sólo conecten sus `ShotCard` con `wireCard()`.
 
 ## Bugs y gestores de incidencias
+
+**El borrador.** `BugReportService::draftFromCurrentContext(stepIndex)` prellena el parte con el caso
+seleccionado y un paso de la ejecución: el que pida quien abre el parte —«Reportar bug» de la pantalla
+de ejecución manda el paso que se tiene delante— o, si no dice ninguno, el fallo o bloqueo más cercano
+(`RunState::reportableStepIndex()`). Ese paso es el que se enlaza (`BugReport::linkedStep`) y el que
+Zephyr usa para colgar el defecto del resultado que le toca. Si el paso está **bloqueado**, el borrador
+sale con severidad «Bloqueante» (y por tanto prioridad `Highest` en Jira) y el título habla de bloqueo
+en vez de falla. Como un fallo o un bloqueo ya no cortan la ejecución, el parte se levanta en cuanto se
+ve el problema y se sigue probando el resto del caso.
 
 `IIssueTracker` (core) tiene cuatro operaciones asíncronas: probar conexión, crear issue,
 consultar estado y leer metadatos del proyecto (tipos, prioridades, componentes, versiones,
@@ -752,7 +773,7 @@ destinos, lo que iría a cada uno y lo que ya se hizo, para elegir y ver cómo t
 
 | Paso | Qué manda | Cuándo se puede |
 |------|-----------|-----------------|
-| Zephyr | Los ciclos de los planes del issue, con sus casos, pasos, evidencias y **defectos** —cada bug va en la ejecución y en el resultado del paso del que salió (`IssueLink::step`, que `BugReportService` toma del primer paso fallido)— (`TestPublishService`); los ya publicados se actualizan en vez de duplicarse | Zephyr activado en Ajustes y algún caso ejecutado en esos ciclos |
+| Zephyr | Los ciclos de los planes del issue, con sus casos, pasos, evidencias y **defectos** —cada bug va en la ejecución y en el resultado del paso del que salió (`IssueLink::step`, el paso del que se levantó el parte)— (`TestPublishService`); los ya publicados se actualizan en vez de duplicarse | Zephyr activado en Ajustes y algún caso ejecutado en esos ciclos |
 | El gestor | Un comentario en el issue con el resumen de la revisión, los enlaces de los ciclos de Zephyr y el acta adjunta; y del issue se **cuelgan sus pruebas**: los bugs de la revisión y los Tests de Zephyr de sus ejecuciones, enlazados con `IIssueTracker::linkIssues()` (`RevisionPublishService::linkEvidence`) | El issue está en el gestor (lo está desde que se importó) y el gestor sabe comentar |
 | GESREQ | El registro del control de calidad: resultado, comentario, las cinco cifras A–E del acta y el acta adjunta. Al guardar, el sistema dice con qué **estado** queda el requerimiento y el issue se actualiza con él (`IssueStore::noteRequirementState`), sin volver a leer la bandeja | El issue viene de GESREQ, el conector sabe registrar, **el sistema aceptaría el registro** y el control **no se registró ya** |
 

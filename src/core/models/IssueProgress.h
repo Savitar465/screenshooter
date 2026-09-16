@@ -12,15 +12,15 @@
 
 namespace qaflow {
 
-/// Cómo va el control de calidad de un issue: qué se ha ejecutado de sus casos, qué observaciones
-/// quedan abiertas y, con eso, si el requerimiento quedaría **Conforme** u **Observado**.
+/// Cómo va el control de calidad de un issue: qué se ha ejecutado de los casos de sus planes, qué
+/// observaciones quedan abiertas y, con eso, si el requerimiento quedaría **Conforme** u **Observado**.
 ///
 /// Es una función pura del issue y de lo que hay en el proyecto (casos, ejecuciones y bugs): no se
 /// persiste, se calcula al mostrarlo y al cerrar la revisión. El veredicto es una propuesta: quien
 /// cierra la revisión decide, y `blockers` explica por qué se propone eso.
 struct IssueProgress {
-    int cases = 0;            // casos vinculados que siguen existiendo
-    int missingCases = 0;     // ids vinculados de casos ya borrados
+    int cases = 0;            // casos de sus planes que siguen existiendo
+    int missingCases = 0;     // casos de sus planes que ya se borraron del catálogo
     int executed = 0;         // casos con alguna ejecución en esta revisión
     int passed = 0;
     int failed = 0;
@@ -35,10 +35,11 @@ struct IssueProgress {
     bool canClose() const { return executed > 0; }
 };
 
-/// Estado del issue a partir de sus casos, de las ejecuciones que ya trae el historial y del libro de
-/// bugs. `runs` son las ejecuciones de los casos del issue (`IssueStore::runsOf`) y `since` acota la
-/// revisión en curso: las ejecuciones anteriores son de rondas ya cerradas y no cuentan.
-IssueProgress issueProgress(const Issue& issue, const QList<TestCase>& cases, const QList<RunRecord>& runs,
+/// Estado del issue a partir de los casos que prueban sus planes (`caseIds`, en el orden de los
+/// planes), de las ejecuciones que ya trae el historial y del libro de bugs. `runs` son las
+/// ejecuciones de los ciclos de esos planes (`IssueStore::runsOf`) y `since` acota la revisión en
+/// curso: las ejecuciones anteriores son de rondas ya cerradas y no cuentan.
+IssueProgress issueProgress(const QStringList& caseIds, const QList<TestCase>& cases, const QList<RunRecord>& runs,
                             const QList<IssueLink>& bugs, const QDateTime& since = QDateTime());
 
 } // namespace qaflow

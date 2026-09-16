@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/models/QualityRecord.h"   // ObservationCount: el resumen del acta que pide GESREQ
+
 #include <QDate>
 #include <QDateTime>
 #include <QList>
@@ -93,6 +95,7 @@ enum class RequirementSourceFailure {
     Credentials,     // el sistema rechazó el usuario o la contraseña, o no conserva la sesión
     NotFound,        // el requerimiento no existe o el usuario no puede verlo
     PageChanged,     // la página no tiene la estructura esperada: hay que revisar el extractor
+    Rejected,        // el sistema entendió la petición y no la aceptó (sus reglas al registrar un resultado)
 };
 
 struct RequirementInboxResult {
@@ -120,15 +123,22 @@ struct RequirementDetailResult {
 /// que QAflow hace en GESREQ, y siempre a petición expresa.
 struct RequirementRegistration {
     QString requirementId;     // número GREQ
+    QString systemCode;        // sistema del requerimiento que se revisó: el que tiene el control de calidad
     /// Valor canónico del resultado ("Conforme" / "Observado"): lo traduce el conector a lo que espera
     /// el formulario del sistema.
     QString result;
     QString comment;
     QString attachmentPath;    // acta generada; vacío = se registra sin adjunto
+    /// El resumen de observaciones del acta (las cinco clasificaciones A–E). GESREQ pide las mismas
+    /// cinco cifras y las contrasta con el resultado, así que van tal y como las contó el acta.
+    QList<ObservationCount> observations;
 };
 
 struct RequirementRegistrationResult {
     bool ok = false;
+    /// Estado con el que queda el requerimiento tras registrar el control, tal y como lo devuelve el
+    /// sistema («CONTROL DE CALIDAD OBSERVADO»); vacío si no lo dijo.
+    QString state;
     RequirementSourceFailure failure = RequirementSourceFailure::None;
     QString error;
     /// El envío se cortó sin respuesta: puede haber quedado registrado igualmente, así que hay que

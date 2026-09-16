@@ -22,8 +22,11 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     run = std::make_unique<RunController>(*cases, *history, std::make_shared<JsonRunSessionRepository>(dir));
     plan = std::make_unique<PlanStore>(caseRepo, *cases, *history);
     bugLedger = std::make_unique<BugStore>(std::make_shared<JsonBugRepository>(dir));
+    // El informe de cada ciclo trae los bugs que se reportaron mientras corría; el libro se crea
+    // después que el historial, así que se le pasa aquí.
+    history->setBugs(bugLedger.get());
     bugs = std::make_unique<BugReportService>(std::make_shared<TrackerRouter>(), *cases, *run, *settings, *bugLedger);
-    publish = std::make_unique<TestPublishService>(std::make_shared<ZephyrClient>(), *cases, *history, *settings);
+    publish = std::make_unique<TestPublishService>(std::make_shared<ZephyrClient>(), *cases, *history, *settings, *bugLedger);
     capture = std::make_shared<ScreenCaptureService>();
     recorder = std::make_shared<GifRecorder>();
     evidence = std::make_unique<EvidenceService>(capture, *cases, *run, *settings);
@@ -32,9 +35,11 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     transfer = std::make_unique<CaseTransferService>(*cases);
     issues = std::make_unique<IssueStore>(std::make_shared<JsonIssueRepository>(dir));
     issuePublish = std::make_unique<IssuePublishService>(std::make_shared<TrackerRouter>(), *issues, *settings);
-    records = std::make_unique<QualityRecordService>(*issues, *cases, *history, *bugLedger, *settings,
-                                                     std::make_shared<QualityRecordDocx>());
+    records = std::make_unique<QualityRecordService>(*issues, *cases, *plan, *history, *bugLedger, *settings,
+                                                     std::make_shared<QualityRecordDocx>(), publish.get());
     requirements = std::make_unique<RequirementSourceService>(requirementSource ? requirementSource : std::make_shared<GesreqClient>(), *settings);
+    revisionPublish = std::make_unique<RevisionPublishService>(*issues, *history, *records, publish.get(), issuePublish.get(),
+                                                               requirements.get());
     // El issue sigue a sus pruebas: arrancar un ciclo de uno de sus planes lo pasa a «En pruebas» y
     // abre su revisión (la primera, o la siguiente si la anterior ya se cerró).
     QObject::connect(run.get(), &RunController::planStarted, issues.get(), [store = issues.get()](const QString&, const QString& planId) {
@@ -60,6 +65,7 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     ctx.bugs = bugs.get(); ctx.publish = publish.get(); ctx.evidence = evidence.get(); ctx.transfer = transfer.get();
     ctx.issues = issues.get(); ctx.issuePublish = issuePublish.get(); ctx.requirements = requirements.get();
     ctx.records = records.get();
+    ctx.revisionPublish = revisionPublish.get();
     ctx.captureBackend = capture->backendName();
 }
 bool ProjectSession::canLeave(QString* reason) const {

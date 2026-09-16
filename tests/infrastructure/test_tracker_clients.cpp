@@ -313,6 +313,53 @@ private slots:
         QVERIFY(server.requests[1].body.contains("filename=\"ControlCalidad_2026997.docx\""));
     }
 
+    // Enlazar dos issues: el tipo de enlace lo dice el servidor, porque cada instancia lo llama a su
+    // manera, y se pregunta una sola vez.
+    void jiraLinksIssuesWithTheRelatesTypeOfTheServer() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/issueLinkType", [](const HttpRequest&) {
+            return HttpResponse::json(200, R"({"issueLinkTypes":[
+                {"id":"1","name":"Blocks","inward":"is blocked by","outward":"blocks"},
+                {"id":"2","name":"Relacionada","inward":"está relacionada con","outward":"se relaciona con"}]})");
+        });
+        server.route("POST", "/rest/api/2/issueLink", [](const HttpRequest&) { return HttpResponse::json(201, "{}"); });
+
+        JiraClient client;
+        IssueResult out;
+        bool done = false;
+        client.linkIssues(jiraSettings(server.baseUrl()), QStringLiteral("SHOP-99"), QStringLiteral("SHOP-12"),
+                          [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.key, QStringLiteral("SHOP-99"));
+        const QJsonObject body = bodyOf(server.requests[1]);
+        QCOMPARE(body[QStringLiteral("type")].toObject()[QStringLiteral("name")].toString(), QStringLiteral("Relacionada"));
+        QCOMPARE(body[QStringLiteral("inwardIssue")].toObject()[QStringLiteral("key")].toString(), QStringLiteral("SHOP-99"));
+        QCOMPARE(body[QStringLiteral("outwardIssue")].toObject()[QStringLiteral("key")].toString(), QStringLiteral("SHOP-12"));
+
+        // El segundo enlace ya no vuelve a preguntar los tipos.
+        done = false;
+        client.linkIssues(jiraSettings(server.baseUrl()), QStringLiteral("SHOP-77"), QStringLiteral("SHOP-12"),
+                          [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(server.requests.size(), 3);
+        QVERIFY(std::none_of(server.requests.cbegin() + 2, server.requests.cend(),
+                             [](const HttpRequest& r) { return r.path.contains("issueLinkType"); }));
+    }
+
+    void jiraRefusesToLinkAnIssueWithItself() {
+        FakeHttpServer server;
+        JiraClient client;
+        IssueResult out;
+        bool done = false;
+        client.linkIssues(jiraSettings(server.baseUrl()), QStringLiteral("SHOP-12"), QStringLiteral(" SHOP-12 "),
+                          [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(server.requests.isEmpty());
+    }
+
     void jiraCommentFailureIsReportedAndRetryableOnServerError() {
         FakeHttpServer server;
         server.route("POST", "/rest/api/2/issue/SHOP-143/comment", [](const HttpRequest&) { return HttpResponse::json(500, "{}"); });

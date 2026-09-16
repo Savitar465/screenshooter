@@ -22,7 +22,7 @@ Palette makeDark() {
     p.green = QStringLiteral("#10b981"); p.greenHover = QStringLiteral("#34d399");
     p.red = QStringLiteral("#ef4444"); p.redHover = QStringLiteral("#f87171"); p.redSoft = QStringLiteral("#ff8f8f");
     p.amber = QStringLiteral("#f59e0b"); p.amberSoft = QStringLiteral("#fbbf24");
-    p.cyan = theme::Cyan; p.violet = QStringLiteral("#8b5cf6");
+    p.cyan = QStringLiteral("#22d3ee"); p.violet = QStringLiteral("#8b5cf6");
     p.gradientTop = QStringLiteral("#1a2130"); p.scrollHover = QStringLiteral("#3a4656");
     p.panelTranslucent = QStringLiteral("rgba(22,27,34,153)");
     return p;

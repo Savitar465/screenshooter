@@ -8,6 +8,7 @@
 
 namespace qaflow {
 
+class BugStore;
 class TestCaseStore;
 class RunHistoryStore;
 class SettingsStore;
@@ -22,7 +23,7 @@ class TestPublishService : public QObject {
     Q_OBJECT
 public:
     TestPublishService(std::shared_ptr<ITestManagement> zephyr, TestCaseStore& cases, RunHistoryStore& history,
-                       SettingsStore& settings, QObject* parent = nullptr);
+                       SettingsStore& settings, BugStore& bugs, QObject* parent = nullptr);
 
     /// ¿Está configurada la publicación? (gestor Jira, conectado y Zephyr activado en Ajustes).
     bool enabled() const;
@@ -50,10 +51,15 @@ public:
 private:
     void send(const PlanReport& report, bool update, std::function<void(const PublishResult&)> done);
 
+    /// Bugs reportados desde ese caso durante ese ciclo, con el paso del que salieron. Se enlazan a la
+    /// ejecución y a su paso en Zephyr, que es donde se buscan los defectos de una prueba.
+    QList<PublishDefect> defectsOf(const PlanReport& report, const QString& caseId) const;
+
     std::shared_ptr<ITestManagement> m_zephyr;
     TestCaseStore& m_cases;
     RunHistoryStore& m_history;
     SettingsStore& m_settings;
+    BugStore& m_bugs;
 };
 
 } // namespace qaflow

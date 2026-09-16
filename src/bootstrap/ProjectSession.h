@@ -34,6 +34,7 @@ public:
     std::unique_ptr<IssuePublishService> issuePublish;
     std::unique_ptr<QualityRecordService> records;
     std::unique_ptr<RequirementSourceService> requirements;
+    std::unique_ptr<RevisionPublishService> revisionPublish;
     std::unique_ptr<MainWindow> window;
 };
 } // namespace qaflow

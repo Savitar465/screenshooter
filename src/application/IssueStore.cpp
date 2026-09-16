@@ -1,5 +1,6 @@
 #include "IssueStore.h"
 
+#include "application/PlanStore.h"
 #include "application/RunHistoryStore.h"
 
 #include <QSet>
@@ -56,10 +57,10 @@ Issue* IssueStore::findMutable(const QString& id) {
     return it == m_issues.end() ? nullptr : &*it;
 }
 
-QList<Issue> IssueStore::issuesForCase(const QString& caseId) const {
+QList<Issue> IssueStore::issuesForPlan(const QString& planId) const {
     QList<Issue> out;
     for (const auto& i : m_issues)
-        if (i.caseIds.contains(caseId)) out << i;
+        if (i.planIds.contains(planId)) out << i;
     return out;
 }
 
@@ -122,26 +123,14 @@ void IssueStore::removeIssue(const QString& id) {
     emit selectionChanged(m_selectedId);
 }
 
-void IssueStore::linkCase(const QString& issueId, const QString& caseId) {
-    const Issue* issue = find(issueId);
-    if (!issue || caseId.isEmpty() || issue->caseIds.contains(caseId)) return;
-    updateIssue(issueId, [&caseId](Issue& i) {
-        i.caseIds << caseId;
-        // Ya hay con qué probar: el issue deja de estar pendiente. Un estado más avanzado no se toca.
-        if (i.state == IssueState::Pending) i.state = IssueState::Preparing;
-    });
-}
-
-void IssueStore::unlinkCase(const QString& issueId, const QString& caseId) {
-    const Issue* issue = find(issueId);
-    if (!issue || !issue->caseIds.contains(caseId)) return;
-    updateIssue(issueId, [&caseId](Issue& i) { i.caseIds.removeAll(caseId); });
-}
-
 void IssueStore::linkPlan(const QString& issueId, const QString& planId) {
     const Issue* issue = find(issueId);
     if (!issue || planId.isEmpty() || issue->planIds.contains(planId)) return;
-    updateIssue(issueId, [&planId](Issue& i) { i.planIds << planId; });
+    updateIssue(issueId, [&planId](Issue& i) {
+        i.planIds << planId;
+        // Ya hay con qué probar: el issue deja de estar pendiente. Un estado más avanzado no se toca.
+        if (i.state == IssueState::Pending) i.state = IssueState::Preparing;
+    });
 }
 
 void IssueStore::unlinkPlan(const QString& issueId, const QString& planId) {
@@ -203,11 +192,13 @@ int IssueStore::openRevision(const QString& issueId) {
     return number;
 }
 
-void IssueStore::setRevisionRecord(const QString& issueId, const QualityRecord& record, const QString& documentPath) {
+void IssueStore::setRevisionRecord(const QString& issueId, const QualityRecord& record, const QString& documentPath,
+                                   const QString& planRunId) {
     if (!find(issueId)) return;
     updateIssue(issueId, [&](Issue& i) {
         IssueRevision& revision = revisionFor(i);
         revision.record = record;
+        if (!planRunId.trimmed().isEmpty()) revision.planRunId = planRunId;
         if (documentPath.trimmed().isEmpty()) return;
         revision.documentPath = documentPath;
         revision.documentAt = QDateTime::currentDateTime();
@@ -334,6 +325,19 @@ int IssueStore::markInboxRead(const QList<ExternalRequirement>& inbox, const QSt
     return missing;
 }
 
+void IssueStore::noteRequirementState(const QString& issueId, const QString& state, const QDateTime& when) {
+    const Issue* issue = find(issueId);
+    const QString clean = state.simplified();
+    if (!issue || !issue->isImported() || clean.isEmpty()) return;
+    if (issue->requirement.data.states == QStringList{clean}) return;
+    updateIssue(issueId, [&clean, &when](Issue& i) {
+        i.requirement.data.states = {clean};
+        i.requirement.fetchedAt = when;
+        // Lo que dijera un cambio pendiente sobre el estado ya no vale: éste es el de ahora.
+        i.requirement.changes.removeIf([](const RequirementChange& c) { return c.field == QLatin1String("states"); });
+    });
+}
+
 void IssueStore::setRequirementDetail(const QString& issueId, const RequirementDetail& detail, const QDateTime& fetchedAt) {
     const Issue* issue = find(issueId);
     if (!issue || !issue->isImported()) return;
@@ -349,14 +353,30 @@ void IssueStore::acknowledgeChanges(const QString& issueId) {
     updateIssue(issueId, [](Issue& i) { i.requirement.changes.clear(); });
 }
 
-QList<RunRecord> IssueStore::runsOf(const Issue& issue, const RunHistoryStore& history) {
-    QList<RunRecord> runs;
-    QSet<QString> cases;
-    for (const auto& caseId : issue.caseIds) {
-        if (cases.contains(caseId)) continue;
-        cases.insert(caseId);
-        runs += history.runsForCase(caseId);
+QStringList IssueStore::caseIdsOf(const Issue& issue, const PlanStore& plans) {
+    QStringList out;
+    for (const auto& planId : issue.planIds)
+        for (const auto& caseId : plans.orderedCaseIds(planId))
+            if (!out.contains(caseId)) out << caseId;
+    return out;
+}
+
+QList<PlanRun> IssueStore::cyclesOf(const Issue& issue, const RunHistoryStore& history, const QDateTime& since) {
+    QList<PlanRun> cycles;
+    for (const auto& cycle : history.plans()) {
+        if (!issue.planIds.contains(cycle.planId)) continue;
+        if (since.isValid() && cycle.startedAt.isValid() && cycle.startedAt < since) continue;
+        cycles << cycle;
     }
+    std::sort(cycles.begin(), cycles.end(), [](const PlanRun& a, const PlanRun& b) {
+        return a.startedAt != b.startedAt ? a.startedAt > b.startedAt : a.id > b.id;
+    });
+    return cycles;
+}
+
+QList<RunRecord> IssueStore::runsOf(const Issue& issue, const RunHistoryStore& history, const QDateTime& since) {
+    QList<RunRecord> runs;
+    for (const auto& cycle : cyclesOf(issue, history, since)) runs += history.runsForPlan(cycle.id);
     std::sort(runs.begin(), runs.end(), [](const RunRecord& a, const RunRecord& b) {
         const QDateTime ta = a.finishedAt.isValid() ? a.finishedAt : a.startedAt;
         const QDateTime tb = b.finishedAt.isValid() ? b.finishedAt : b.startedAt;

@@ -16,6 +16,7 @@ struct Paragraph {
     bool bold = false;
     Align align = Align::Left;
     int size = 20;                 // medios puntos: 20 = 10 pt, el cuerpo del formulario
+    QString color;                 // color del texto en hexadecimal ("FFFFFF"); vacío = el del documento
     QString imagePath;             // si no está vacío, el párrafo es esa imagen
     int imageMaxWidth = 0;         // twips; 0 = el ancho útil de la página
 
@@ -58,7 +59,7 @@ struct Result {
 /// omiten en vez de romper el documento; el resto del acta sale igual.
 Result write(const QString& path, const QList<Block>& blocks);
 
-/// Ancho útil de una página A4 vertical con los márgenes que usa el formulario, en twips.
+/// Ancho útil de una página carta vertical con los márgenes que usa el formulario, en twips.
 int pageWidth();
 
 } // namespace qaflow::docx

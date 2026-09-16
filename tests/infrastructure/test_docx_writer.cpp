@@ -110,16 +110,25 @@ private slots:
         table.grid = {4000, 5000};
         docx::Row row;
         docx::Cell head;
-        head.paragraphs << docx::Paragraph{QStringLiteral("Cabecera"), true, docx::Align::Center, 20, {}, 0};
+        docx::Paragraph heading;
+        heading.text = QStringLiteral("Cabecera");
+        heading.bold = true;
+        heading.align = docx::Align::Center;
+        heading.color = QStringLiteral("FFFFFF");
+        head.paragraphs << heading;
         head.gridSpan = 2;
         head.shade = QStringLiteral("D9D9D9");
         row.cells << head;
         table.rows << row;
         docx::Row second;
         docx::Cell a;
-        a.paragraphs << docx::Paragraph{QStringLiteral("línea 1\nlínea 2"), false, docx::Align::Left, 20, {}, 0};
+        docx::Paragraph lines;
+        lines.text = QStringLiteral("línea 1\nlínea 2");
+        a.paragraphs << lines;
         docx::Cell b;
-        b.paragraphs << docx::Paragraph{QStringLiteral("5 < 6 & \"comillas\""), false, docx::Align::Left, 20, {}, 0};
+        docx::Paragraph escaped;
+        escaped.text = QStringLiteral("5 < 6 & \"comillas\"");
+        b.paragraphs << escaped;
         second.cells << a << b;
         table.rows << second;
 
@@ -140,9 +149,11 @@ private slots:
         QVERIFY(document.contains(QStringLiteral("<w:t xml:space=\"preserve\">Cabecera</w:t>")));
         QVERIFY(document.contains(QStringLiteral("<w:gridSpan w:val=\"2\"/>")));
         QVERIFY(document.contains(QStringLiteral("w:fill=\"D9D9D9\"")));
+        QVERIFY(document.contains(QStringLiteral("<w:color w:val=\"FFFFFF\"/>")));   // texto en blanco sobre el fondo
         QVERIFY(document.contains(QStringLiteral("<w:br/>")));                      // el salto dentro de la celda
         QVERIFY(document.contains(QStringLiteral("5 &lt; 6 &amp; &quot;comillas&quot;")));
         QVERIFY(document.contains(QStringLiteral("<w:sectPr>")));
+        QVERIFY(document.contains(QStringLiteral("<w:pgSz w:w=\"12240\" w:h=\"15840\"/>")));   // carta, como el formulario
         QVERIFY(!document.contains(QStringLiteral("<w:drawing>")));                 // sin imágenes
     }
 
@@ -230,6 +241,10 @@ private slots:
         QVERIFY(contains(QStringLiteral(">Si<")));
         QVERIFY(contains(QStringLiteral("Observaciones Generales")));
         QVERIFY(contains(QStringLiteral("Se reprograma la revisión")));
+        // El formato del R-213: títulos de sección en blanco sobre azul y etiquetas sobre azul claro.
+        QVERIFY(contains(QStringLiteral("w:fill=\"1F4E79\"")));
+        QVERIFY(contains(QStringLiteral("w:fill=\"DEEAF6\"")));
+        QVERIFY(contains(QStringLiteral("<w:color w:val=\"FFFFFF\"/>")));
     }
 
     void theRecordSaysWhereItCouldNotBeWritten() {

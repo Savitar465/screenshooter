@@ -52,6 +52,26 @@ protected:
     static QNetworkRequest pageRequest(const QString& url);
     /// Crea la parte multipart "file" de un fichero local (nullptr si no se puede abrir).
     static QHttpMultiPart* multipartFile(const QString& path, const QByteArray& fieldName = "file");
+    /// El envío de un formulario con adjunto, como lo compone el navegador: los campos en su orden y
+    /// el fichero al final (nullptr si no se puede abrir). Sin `filePath`, sólo los campos.
+    static QHttpMultiPart* multipartForm(const QList<QPair<QString, QString>>& fields, const QString& filePath = {},
+                                         const QByteArray& fileField = "file");
+
+    /// El cuerpo de un formulario con adjunto escrito byte a byte **como lo escribe un navegador**: el
+    /// delimitador sin comillas, los campos sin `Content-Type` y el fichero en el sitio que ocupa en el
+    /// formulario. `QHttpMultiPart` entrecomilla el delimitador y etiqueta cada campo, y hay servidores
+    /// (Struts sobre WebLogic, el de GESREQ) que con eso no encuentran ni un campo y responden un 500.
+    struct FormData {
+        QByteArray contentType;   // multipart/form-data; boundary=…
+        QByteArray body;
+        bool ok = false;          // falso si el adjunto no se pudo leer
+    };
+    /// `filePosition` es cuántos campos van antes del fichero; negativo o mayor que el número de campos,
+    /// el fichero va al final. Sin `filePath`, sólo los campos.
+    static FormData formData(const QList<QPair<QString, QString>>& fields, const QString& filePath = {},
+                             const QByteArray& fileField = "file", int filePosition = -1);
+    /// POST de ese cuerpo con su Content-Type (el resto de cabeceras, las de `req`).
+    void postFormData(const QNetworkRequest& req, const FormData& data, Handler done);
     /// Rutas que existen en disco, en el mismo orden.
     static QStringList existingFiles(const QStringList& paths);
 

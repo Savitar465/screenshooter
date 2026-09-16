@@ -42,6 +42,7 @@ qaflow_add_test(application test_requirement_source_service LIBS qaflow_applicat
 qaflow_add_test(application test_issue_store LIBS qaflow_application)
 qaflow_add_test(application test_issue_publish_service LIBS qaflow_application)
 qaflow_add_test(application test_quality_record_service LIBS qaflow_application)
+qaflow_add_test(application test_revision_publish_service LIBS qaflow_application)
 
 # infrastructure: repositorios JSON en un directorio temporal, QSettings en un fichero temporal
 # y clientes REST contra un servidor HTTP falso en localhost

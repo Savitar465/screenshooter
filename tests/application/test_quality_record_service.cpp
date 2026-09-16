@@ -1,6 +1,7 @@
 // QualityRecordService (application/QualityRecordService.h): el acta que se propone para la revisión
-// en curso (sólo con lo ejecutado en ella), lo que se hereda del acta anterior, lo que corrigió el
-// usuario, la generación del fichero y el resumen que se manda a Jira y a GESREQ.
+// en curso a partir de los ciclos de los planes del issue (con cuál se levanta cuando hay varios), lo
+// que se hereda del acta anterior, lo que corrigió el usuario, la generación del fichero y el resumen
+// que se manda a Jira y a GESREQ.
 
 #include "support/AppFixture.h"
 
@@ -26,26 +27,53 @@ ExternalRequirement requirement() {
     return r;
 }
 
-/// Un issue importado con dos casos de ejemplo y su plan, ya en pruebas (revisión 1 abierta).
-QString issueInTesting(AppFixture& f) {
+/// El issue importado y el plan con el que se prueba (dos casos), ya en pruebas (revisión 1 abierta).
+struct Testing {
+    QString issueId;
+    QString planId;
+};
+
+Testing issueInTesting(AppFixture& f) {
     f.issues.importRequirements({requirement()}, kConnection);
     const QString id = f.issues.issues().first().id;
-    f.issues.linkCase(id, QStringLiteral("TC-101"));
-    f.issues.linkCase(id, QStringLiteral("TC-102"));
-    f.issues.linkPlan(id, QStringLiteral("PL-0001"));
-    f.issues.notePlanStarted(QStringLiteral("PL-0001"));
-    return id;
+    const QString planId = f.plans.createPlan(QStringLiteral("Plan GREQ 2026997"));
+    f.plans.toggle(QStringLiteral("TC-101"));
+    f.plans.toggle(QStringLiteral("TC-102"));
+    f.issues.linkPlan(id, planId);
+    f.issues.notePlanStarted(planId);
+    return {id, planId};
 }
 
-/// Archiva una ejecución del caso con ese veredicto (el historial le pone el id).
-void archiveRun(AppFixture& f, const QString& caseId, Verdict verdict, const QDateTime& when) {
-    RunRecord run;
-    run.caseId = caseId;
-    run.caseTitle = QStringLiteral("Caso %1").arg(caseId);
-    run.verdict = verdict;
-    run.startedAt = when;
-    run.finishedAt = when.addSecs(600);
-    f.history.addRun(run);
+/// Añade al historial un ciclo de ese plan con sus resultados y en esa fecha (así se pueden colocar
+/// ciclos antes y después de que empiece la revisión) y devuelve su id.
+QString addCycle(AppFixture& f, const QString& planId, const QString& name, const QDateTime& startedAt,
+                 const QList<QPair<QString, Verdict>>& results, const QString& zephyrCycleId = QString()) {
+    RunHistory history = f.historyRepo->history.value_or(RunHistory{});
+    PlanRun plan;
+    plan.id = QStringLiteral("PR-%1").arg(history.plans.size() + 1);
+    plan.planId = planId;
+    plan.name = name;
+    plan.startedAt = startedAt;
+    plan.finishedAt = startedAt.addSecs(3600);
+    plan.zephyrCycleId = zephyrCycleId;
+    if (!zephyrCycleId.isEmpty()) plan.publishedAt = startedAt.addSecs(4000);
+    int n = history.runs.size();
+    for (const auto& [caseId, verdict] : results) {
+        plan.caseIds << caseId;
+        RunRecord run;
+        run.id = QStringLiteral("R-%1").arg(++n);
+        run.caseId = caseId;
+        run.caseTitle = QStringLiteral("Caso %1").arg(caseId);
+        run.planRunId = plan.id;
+        run.verdict = verdict;
+        run.startedAt = startedAt.addSecs(60);
+        run.finishedAt = startedAt.addSecs(600);
+        history.runs << run;
+    }
+    history.plans << plan;
+    f.historyRepo->history = history;
+    f.history.load();
+    return plan.id;
 }
 
 IssueLink bugOf(const QString& key, const QString& caseId, const QString& classification, const QDateTime& when, bool resolved = false) {
@@ -67,21 +95,22 @@ class QualityRecordServiceTest : public QObject {
 private slots:
     void theDraftOnlyCountsWhatThisRevisionExecuted() {
         AppFixture f;
-        const QDateTime beforeEverything = QDateTime::currentDateTime().addDays(-10);
-        archiveRun(f, QStringLiteral("TC-101"), Verdict::Fallido, beforeEverything);   // de antes de la revisión
-        const QString id = issueInTesting(f);
-        const QDateTime now = QDateTime::currentDateTime();
-        archiveRun(f, QStringLiteral("TC-101"), Verdict::Superado, now);
-        archiveRun(f, QStringLiteral("TC-102"), Verdict::Fallido, now);
+        const Testing t = issueInTesting(f);
+        // Un ciclo de la ronda anterior (antes de que se abriera la revisión) no cuenta.
+        addCycle(f, t.planId, QStringLiteral("Ronda anterior"), QDateTime::currentDateTime().addDays(-10),
+                 {{QStringLiteral("TC-101"), Verdict::Fallido}});
+        addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), QDateTime::currentDateTime(),
+                 {{QStringLiteral("TC-101"), Verdict::Superado}, {QStringLiteral("TC-102"), Verdict::Fallido}});
 
-        const QualityRecord draft = f.records.draftFor(id);
+        const QualityRecord draft = f.records.draftFor(t.issueId);
         QCOMPARE(draft.greq, QStringLiteral("2026997"));
         QCOMPARE(draft.system, QStringLiteral("SUMA2-INGRESO"));
         QCOMPARE(draft.revisionNumber, 1);
-        QVERIFY(draft.execution.contains(QStringLiteral("2 caso(s) ejecutado(s): 1 superado(s), 1 fallido(s)")));
-        QCOMPARE(f.records.revisionRuns(*f.issues.find(id)).size(), 2);   // la ejecución vieja no entra
+        QVERIFY(draft.execution.contains(QStringLiteral("2 de 2 ejecutados: 1 superado(s), 1 fallido(s), 0 bloqueado(s)")));
+        QCOMPARE(f.records.revisionRuns(*f.issues.find(t.issueId)).size(), 2);   // el ciclo viejo no entra
+        QCOMPARE(f.records.cyclesFor(t.issueId).size(), 1);
 
-        const IssueProgress progress = f.records.progressFor(id);
+        const IssueProgress progress = f.records.progressFor(t.issueId);
         QCOMPARE(progress.cases, 2);
         QCOMPARE(progress.executed, 2);
         QCOMPARE(progress.failed, 1);
@@ -89,18 +118,54 @@ private slots:
         QVERIFY(progress.canClose());
     }
 
+    // Con varias ejecuciones en la misma revisión, el acta se levanta con la que se elija.
+    void theRecordIsRaisedWithTheChosenCycle() {
+        AppFixture f;
+        const Testing t = issueInTesting(f);
+        const QDateTime now = QDateTime::currentDateTime();
+        const QString first = addCycle(f, t.planId, QStringLiteral("Primera pasada"), now.addSecs(60),
+                                       {{QStringLiteral("TC-101"), Verdict::Fallido}});
+        const QString second = addCycle(f, t.planId, QStringLiteral("Repetición"), now.addSecs(3600),
+                                        {{QStringLiteral("TC-101"), Verdict::Superado}, {QStringLiteral("TC-102"), Verdict::Superado}},
+                                        QStringLiteral("42"));
+
+        const QList<PlanReport> cycles = f.records.cyclesFor(t.issueId);
+        QCOMPARE(cycles.size(), 2);
+        QCOMPARE(cycles.first().plan.id, second);            // la más reciente primero
+        QCOMPARE(f.records.recordCycleFor(t.issueId), second);   // y es con la que se propone el acta
+
+        const QualityRecord latest = f.records.draftFor(t.issueId, second);
+        QVERIFY(latest.execution.contains(QStringLiteral("Repetición")));
+        QVERIFY(!latest.execution.contains(QStringLiteral("Primera pasada")));
+        QVERIFY(latest.execution.contains(QStringLiteral("2 de 2 ejecutados: 2 superado(s)")));
+
+        const QualityRecord older = f.records.draftFor(t.issueId, first);
+        QVERIFY(older.execution.contains(QStringLiteral("Primera pasada")));
+        QVERIFY(older.execution.contains(QStringLiteral("1 de 1 ejecutados: 0 superado(s), 1 fallido(s)")));
+
+        // Sin elegir ninguna, el acta habla de todas las ejecuciones de la revisión.
+        const QualityRecord all = f.records.draftFor(t.issueId);
+        QVERIFY(all.execution.contains(QStringLiteral("Primera pasada")));
+        QVERIFY(all.execution.contains(QStringLiteral("Repetición")));
+
+        // El ciclo elegido queda en la revisión y se conserva al regenerarla.
+        QVERIFY(f.records.generate(t.issueId, latest, QStringLiteral("/tmp/acta.docx"), second).ok);
+        QCOMPARE(f.issues.find(t.issueId)->currentRevision()->planRunId, second);
+        QCOMPARE(f.records.recordCycleFor(t.issueId), second);
+    }
+
     void bugsOfTheRevisionAreObservationsAndTheOlderFixedOnesAreCorrections() {
         AppFixture f;
         const QDateTime old = QDateTime::currentDateTime().addDays(-5);
         f.bugLedger.recordIssue(bugOf(QStringLiteral("SHOP-1"), QStringLiteral("TC-101"), QStringLiteral("A"), old, true));
         f.bugLedger.recordIssue(bugOf(QStringLiteral("SHOP-2"), QStringLiteral("TC-101"), QStringLiteral("B"), old, false));
-        const QString id = issueInTesting(f);
+        const Testing t = issueInTesting(f);
         const QDateTime now = QDateTime::currentDateTime();
-        archiveRun(f, QStringLiteral("TC-101"), Verdict::Fallido, now);
+        addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), now, {{QStringLiteral("TC-101"), Verdict::Fallido}});
         f.bugLedger.recordIssue(bugOf(QStringLiteral("SHOP-3"), QStringLiteral("TC-101"), QStringLiteral("A"), now));
         f.bugLedger.recordIssue(bugOf(QStringLiteral("SHOP-4"), QStringLiteral("TC-102"), QStringLiteral("C"), now));
 
-        const QualityRecord draft = f.records.draftFor(id);
+        const QualityRecord draft = f.records.draftFor(t.issueId);
         QCOMPARE(draft.observations[0].observations, 1);   // A, de esta ronda
         QCOMPARE(draft.observations[2].observations, 1);   // C
         QCOMPARE(draft.totalObservations(), 2);
@@ -112,47 +177,50 @@ private slots:
 
     void generatingTheRecordSavesItInTheRevisionAndTheNextDraftKeepsIt() {
         AppFixture f;
-        const QString id = issueInTesting(f);
-        archiveRun(f, QStringLiteral("TC-101"), Verdict::Superado, QDateTime::currentDateTime());
+        const Testing t = issueInTesting(f);
+        addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), QDateTime::currentDateTime(),
+                 {{QStringLiteral("TC-101"), Verdict::Superado}});
 
-        QualityRecord record = f.records.draftFor(id);
+        QualityRecord record = f.records.draftFor(t.issueId);
         record.server = QStringLiteral("10.0.67.131");
         record.dbSchema = QStringLiteral("SUMA2");
         record.generalNotes = QStringLiteral("Sin observaciones");
         record.characteristics[0].satisfied = false;
         const QString path = QStringLiteral("/tmp/ControlCalidad_2026997.docx");
-        const auto result = f.records.generate(id, record, path);
+        const auto result = f.records.generate(t.issueId, record, path);
         QVERIFY(result.ok);
         QCOMPARE(result.path, path);
         QCOMPARE(f.recordWriter->calls, 1);
         QCOMPARE(f.recordWriter->lastRecord.server, QStringLiteral("10.0.67.131"));
 
-        const IssueRevision* revision = f.issues.find(id)->currentRevision();
+        const IssueRevision* revision = f.issues.find(t.issueId)->currentRevision();
         QVERIFY(revision);
         QCOMPARE(revision->documentPath, path);
         QCOMPARE(revision->record.dbSchema, QStringLiteral("SUMA2"));
 
         // Volver a pedir el borrador conserva lo corregido y actualiza lo que sale del proyecto.
-        archiveRun(f, QStringLiteral("TC-102"), Verdict::Fallido, QDateTime::currentDateTime());
-        const QualityRecord again = f.records.draftFor(id);
+        addCycle(f, t.planId, QStringLiteral("Segunda pasada"), QDateTime::currentDateTime().addSecs(3600),
+                 {{QStringLiteral("TC-101"), Verdict::Superado}, {QStringLiteral("TC-102"), Verdict::Fallido}});
+        const QualityRecord again = f.records.draftFor(t.issueId);
         QCOMPARE(again.server, QStringLiteral("10.0.67.131"));
         QCOMPARE(again.generalNotes, QStringLiteral("Sin observaciones"));
         QVERIFY(!again.characteristics[0].satisfied);
-        QVERIFY(again.execution.contains(QStringLiteral("2 caso(s) ejecutado(s)")));
+        QCOMPARE(f.records.cyclesFor(t.issueId).size(), 2);
     }
 
     void theSecondRevisionInheritsTheEnvironmentOfTheFirst() {
         AppFixture f;
-        const QString id = issueInTesting(f);
-        archiveRun(f, QStringLiteral("TC-101"), Verdict::Fallido, QDateTime::currentDateTime());
-        QualityRecord first = f.records.draftFor(id);
+        const Testing t = issueInTesting(f);
+        addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), QDateTime::currentDateTime(),
+                 {{QStringLiteral("TC-101"), Verdict::Fallido}});
+        QualityRecord first = f.records.draftFor(t.issueId);
         first.server = QStringLiteral("10.0.67.131");
         first.moduleLink = QStringLiteral("https://gitlab.test/proyecto");
-        QVERIFY(f.records.generate(id, first, QStringLiteral("/tmp/acta1.docx")).ok);
-        f.issues.closeRevision(id, QaOutcome::Observado);
+        QVERIFY(f.records.generate(t.issueId, first, QStringLiteral("/tmp/acta1.docx")).ok);
+        f.issues.closeRevision(t.issueId, QaOutcome::Observado);
 
-        f.issues.notePlanStarted(QStringLiteral("PL-0001"));   // vuelve a pruebas: revisión 2
-        const QualityRecord second = f.records.draftFor(id);
+        f.issues.notePlanStarted(t.planId);   // vuelve a pruebas: revisión 2
+        const QualityRecord second = f.records.draftFor(t.issueId);
         QCOMPARE(second.revisionNumber, 2);
         QCOMPARE(second.server, QStringLiteral("10.0.67.131"));
         QCOMPARE(second.moduleLink, QStringLiteral("https://gitlab.test/proyecto"));
@@ -160,25 +228,27 @@ private slots:
 
     void aRecordThatCouldNotBeWrittenChangesNothing() {
         AppFixture f;
-        const QString id = issueInTesting(f);
+        const Testing t = issueInTesting(f);
         f.recordWriter->fail = true;
-        const auto result = f.records.generate(id, f.records.draftFor(id), QStringLiteral("/tmp/acta.docx"));
+        const auto result = f.records.generate(t.issueId, f.records.draftFor(t.issueId), QStringLiteral("/tmp/acta.docx"));
         QVERIFY(!result.ok);
         QCOMPARE(result.error, QStringLiteral("no se pudo escribir"));
-        QVERIFY(!f.issues.find(id)->currentRevision()->hasDocument());
+        QVERIFY(!f.issues.find(t.issueId)->currentRevision()->hasDocument());
     }
 
     void theSuggestedNameAndTheSummaryUseTheRequirement() {
         AppFixture f;
-        const QString id = issueInTesting(f);
-        archiveRun(f, QStringLiteral("TC-101"), Verdict::Superado, QDateTime::currentDateTime());
-        const QString name = f.records.suggestedFileName(id);
+        const Testing t = issueInTesting(f);
+        addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), QDateTime::currentDateTime(),
+                 {{QStringLiteral("TC-101"), Verdict::Superado}});
+        const QString name = f.records.suggestedFileName(t.issueId);
         QVERIFY(name.startsWith(QStringLiteral("ControlCalidad_2026997_")));
         QVERIFY(name.endsWith(QStringLiteral(".docx")));
 
-        const QString summary = f.records.summaryFor(id, f.records.draftFor(id), QaOutcome::Conforme);
+        const QString summary = f.records.summaryFor(t.issueId, f.records.draftFor(t.issueId), QaOutcome::Conforme);
         QVERIFY(summary.contains(QStringLiteral("GREQ 2026997 — revisión 1: Conforme")));
-        QVERIFY(summary.contains(QStringLiteral("Casos ejecutados: 1")));
+        QVERIFY(summary.contains(QStringLiteral("Casos ejecutados: 1 de 1")));
+        QVERIFY(summary.contains(QStringLiteral("Plan «Plan GREQ 2026997»")));
         QVERIFY(summary.contains(QStringLiteral("Sin observaciones")));
     }
 };

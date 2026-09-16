@@ -5,6 +5,7 @@
 #include "application/RunHistoryStore.h"
 #include "application/TestPublishService.h"
 #include "application/TestCaseStore.h"
+#include "core/models/BugReport.h"
 #include "core/models/Metrics.h"
 #include "core/models/PlanReport.h"
 #include "presentation/theme/Theme.h"
@@ -389,6 +390,12 @@ void HistoryView::renderPlan(const PlanReport& report) {
     sg->addWidget(stat(tr("Bloqueados"), QString::number(report.blocked), theme::Amber));
     sg->addWidget(stat(tr("Pendientes"), QString::number(report.pending()), theme::Muted));
     sg->addWidget(stat(tr("Éxito"), QStringLiteral("%1 %").arg(report.successRate()), theme::Blue));
+    // Los bugs sólo ocupan sitio en el resumen si el ciclo dejó alguno.
+    if (const int bugs = report.bugCount(); bugs > 0) {
+        const int open = report.openBugCount();
+        sg->addWidget(stat(tr("Bugs"), open > 0 ? tr("%1 · %2 abiertos").arg(bugs).arg(open) : QString::number(bugs),
+                           open > 0 ? theme::Red : theme::Green));
+    }
     sg->addWidget(stat(tr("Duración"), formatDuration(report.durationSecs)));
     sg->addStretch(1);
     m_detailLayout->addWidget(stats);
@@ -398,6 +405,8 @@ void HistoryView::renderPlan(const PlanReport& report) {
     auto* cells = new ProgressCells;
     cells->setColors(colors);
     m_detailLayout->addWidget(cells);
+
+    if (auto* bugs = bugsCard(report)) m_detailLayout->addWidget(bugs);
 
     // Una tarjeta por caso del plan
     auto* rowsHead = ui::label(tr("CASOS · %1").arg(report.total()), "eyebrow");
@@ -426,11 +435,63 @@ void HistoryView::renderPlan(const PlanReport& report) {
         cv->addWidget(top);
         // Con qué está enlazado: la historia de Jira del caso y el Test que se creó para esta ejecución.
         if (auto* links = issueLinks(row.jiraKey, row.testKey)) cv->addWidget(links);
+        // Los bugs que salieron de este caso, junto a los pasos donde se vieron.
+        for (const auto& bug : row.bugs) cv->addWidget(bugRow(bug, false));
         if (row.executed) cv->addWidget(stepsList(row.run));
         if (row.executed)
             if (auto* shots = evidenceGrid(row.caseId, row.run.id, 4)) cv->addWidget(shots);
         m_detailLayout->addWidget(card);
     }
+}
+
+QWidget* HistoryView::bugsCard(const PlanReport& report) {
+    const QList<IssueLink> bugs = report.bugs();
+    if (bugs.isEmpty()) return nullptr;
+    const int open = report.openBugCount();
+    auto* card = ui::card("card");
+    auto* v = ui::vbox(card, 0, 8);
+    v->setContentsMargins(16, 14, 16, 14);
+    auto* head = new QWidget;
+    auto* hh = ui::hbox(head, 0, 10);
+    hh->addWidget(ui::label(tr("BUGS ENCONTRADOS · %1").arg(bugs.size()), "eyebrow"));
+    hh->addWidget(open > 0 ? ui::pill(tr("%1 ABIERTOS").arg(open), theme::tint(theme::Red, 38), theme::Red)
+                           : ui::pill(tr("TODOS CERRADOS"), theme::tint(theme::Green, 38), theme::Green));
+    hh->addStretch(1);
+    v->addWidget(head);
+    v->addWidget(ui::label(tr("Reportados mientras corría el ciclo, desde los casos que estaba ejecutando."), "muted-sm"));
+    for (const auto& bug : bugs) v->addWidget(bugRow(bug, true));
+    return card;
+}
+
+QWidget* HistoryView::bugRow(const IssueLink& bug, bool withCase) {
+    auto* row = ui::card("card-flat");
+    auto* h = ui::hbox(row, 0, 10);
+    h->setContentsMargins(12, 7, 12, 7);
+    const QString color = bug.resolved ? theme::Green : theme::Red;
+    h->addWidget(ui::pill(BugReport::severityLabel(bug.severity).toUpper(), theme::tint(color, 46), color));
+    auto* key = ui::label(bug.key, "mono-muted");
+    key->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Blue));
+    h->addWidget(key);
+    auto* title = new QLabel(bug.title.isEmpty() ? tr("(sin título)") : bug.title);
+    title->setWordWrap(true);
+    h->addWidget(title, 1);
+    // De dónde salió: en la tarjeta del ciclo hace falta el caso; dentro del caso basta el paso.
+    const QString origin = withCase ? (bug.step > 0 ? tr("%1 · paso %2").arg(bug.caseId).arg(bug.step) : bug.caseId)
+                                    : (bug.step > 0 ? tr("paso %1").arg(bug.step) : QString());
+    if (!origin.isEmpty()) h->addWidget(ui::label(origin, "muted-sm"));
+    h->addWidget(ui::label(bug.status.isEmpty() ? (bug.resolved ? tr("Cerrado") : tr("Abierto")) : bug.status, "muted-sm"));
+    h->addWidget(ui::label(when(bug.createdAt), "muted-sm"));
+    if (!bug.url.isEmpty() || !bug.key.isEmpty()) {
+        auto* open = ui::button(tr("Abrir"), "chip");
+        open->setObjectName(QStringLiteral("openBug-%1").arg(bug.key));
+        open->setToolTip(tr("Abrir el bug en el gestor"));
+        connect(open, &QPushButton::clicked, this, [this, url = bug.url, key = bug.key]() {
+            if (!url.isEmpty()) emit openUrlRequested(url);
+            else emit openJiraRequested(key);
+        });
+        h->addWidget(open);
+    }
+    return row;
 }
 
 void HistoryView::renderMetrics() {

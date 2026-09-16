@@ -33,10 +33,14 @@ src/
 │   │                      portapapeles y sustitución de la imagen anotada; único sitio que toca ficheros
 │   ├── BugReportService   borrador de bug, envío al gestor, cola offline, estados y metadatos
 │   ├── BugStore           libro de bugs: issues enlazados a su caso y cola de pendientes
-│   ├── IssueStore         issues de QA: asociaciones con casos y planes, importación de GESREQ sin duplicados
+│   ├── IssueStore         issues de QA: los planes que prueban cada requerimiento (y los casos y ciclos que
+│   │                      salen de ellos), importación de GESREQ sin duplicados
 │   ├── IssuePublishService publicación del issue en el gestor: crear, vincular, actualizar, estado y
 │   │                      el resultado de la revisión (comentario con el acta adjunta)
-│   ├── QualityRecordService el acta de la revisión: la propone, la escribe y la guarda en el issue
+│   ├── QualityRecordService el acta de la revisión: la propone con el ciclo de plan que se elija, la escribe
+│   │                      y la guarda en el issue
+│   ├── RevisionPublishService publicar el resultado de una revisión: los ciclos en Zephyr, el resultado y el
+│   │                      acta en el gestor y el registro en GESREQ
 │   ├── RequirementSourceService conexión con GESREQ: probarla, bandeja, fichas y catálogo de sistemas
 │   ├── SeedData           datos de ejemplo del primer arranque
 │   └── AppContext         agrupa los servicios ya construidos para la presentación
@@ -52,7 +56,7 @@ src/
 │   ├── http/        HttpClient: base HTTP (JSON, multipart, formularios, cookies, errores, reintentables) de tracker/, testmgmt/ y requirements/
 │   ├── testmgmt/    ZephyrClient: ciclos, ejecuciones y evidencias en Zephyr for Jira
 │   ├── report/      ZipWriter (ZIP mínimo), DocxWriter (OOXML) y QualityRecordDocx (la maqueta del R-213)
-│   ├── requirements/ GesreqClient (sesión y lectura de GESREQ) y GesreqParser (sus páginas HTML → modelos)
+│   ├── requirements/ GesreqClient (sesión, lectura y registro del control en GESREQ) y GesreqParser (sus páginas HTML → modelos)
 │   └── tracker/     HttpTrackerClient (base) → JiraClient, GitHubClient, GitLabClient, AzureDevOpsClient;
 │                    TrackerRouter despacha por TrackerSettings::kind
 └── presentation/    Widgets Qt. Depende de application; nunca de infrastructure.
@@ -62,7 +66,7 @@ src/
     │                EvidencePreview (visor de la ejecución), ImageViewer (visor a tamaño completo),
     │                AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
     ├── views/       Una clase por pantalla: IssuesView (+ RequirementImportDialog, JiraPublishDialog,
-    │                QualityRecordDialog, RevisionResultDialog), CasesView, PlanView, RunView, HistoryView, BugView,
+    │                QualityRecordDialog, RevisionPublishDialog), CasesView, PlanView, RunView, HistoryView, BugView,
     │                SettingsView (+ SettingsDialog, su ventana); Sidebar (rail de iconos),
     │                StatusStrip (barra de estado) y MainWindow (menú, atajos, bandeja,
     │                navegación, avisos)
@@ -129,6 +133,36 @@ Lo que antes eran las tarjetas del sidebar («En ejecución», «Tasa de éxito�
 `StatusStrip`, la barra del pie: los mismos datos en una línea y con los mismos destinos al hacer
 clic. Ambas vistas se refrescan con las señales de los stores, como el resto.
 
+### Camino de vuelta
+
+Sobre el rail hay una segunda navegación, la de profundidad, al estilo de las aplicaciones del móvil:
+`MainWindow` distingue **ir a la raíz de una sección** de **entrar en algo desde donde se está**.
+
+* `navigate(Screen)` es la raíz: lo que hacen el rail, el menú Ver y los atajos `Ctrl+1…6`. Vacía el
+  camino de vuelta, así que el botón «atrás» desaparece y nunca promete una vuelta que ya no tiene
+  sentido.
+* `navigateInto(Screen)` entra en profundidad: lo que hacen las acciones de las tarjetas —crear un
+  caso desde un plan, «Ir al plan» desde un issue, abrir el informe de un ciclo, reportar un bug
+  desde la ejecución—. Apila de qué pantalla se vino **con el nombre que tenía en ese momento**
+  (`screenLabel()`: el nombre del plan, el id del issue), no el que tenga al volver.
+* `goBack()` deshace un paso. Lo disparan el botón `navbarBack` de la barra superior (que dice a
+  dónde vuelve: «‹ Suite de regresión»), la acción `actBack` del menú Ver con `Alt+←` y el botón
+  «atrás» del ratón.
+
+Entrar en una pantalla por la que ya se pasó no alarga el camino: lo **deshace hasta ella**, para que
+ir y venir entre un issue y su plan no deje una pila que cueste diez clics vaciar. `showScreen()` es
+lo que realmente cambia la pila de widgets y refresca el botón; las tres funciones pasan por ella.
+
+### Fin de un ciclo de plan
+
+`MainWindow::finishRun()` decide a dónde lleva terminar el último caso de un ciclo. Si el plan prueba
+un requerimiento (`issueOfPlanRun()` lo resuelve por `IssueStore::issuesForPlan()`, y entre varios
+gana el issue seleccionado), el ciclo **termina en su issue**: es donde está el paso siguiente del
+control de calidad —levantar el acta— y donde se ven los resultados que acaba de dar. El informe del
+ciclo no se pierde: el aviso del resumen lleva un botón «Ver informe» que lo abre en el historial,
+ya con vuelta al issue. Un ciclo que no prueba ningún requerimiento sigue terminando en su informe,
+como antes.
+
 ## Menú, atajos y bandeja
 
 `MainWindow::buildMenus()` crea el menú (Archivo, Editar, Ver, Ejecución, Ayuda) con `QAction`
@@ -180,7 +214,8 @@ muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`
 | Conexión con GESREQ    | QSettings (grupo `gesreq`: URL, usuario, conectado); la contraseña, en `ISecretStore` (`gesreq/password`) |
 | Proyectos y su sistema de GESREQ | `$XDG_DATA_HOME/QAflow/QAflow/projects.json` (`requirementSystem` de cada proyecto) |
 | Bugs y cola offline    | `$XDG_DATA_HOME/QAflow/QAflow/bugs.json`                    |
-| Issues (asociaciones, lo importado de GESREQ, sus cambios, la publicación en el gestor y las revisiones con su acta) | `issues.json` en el directorio de datos de cada proyecto |
+| Issues (sus planes, lo importado de GESREQ, sus cambios, la publicación en el gestor y las revisiones con su ciclo y su acta) | `issues.json` en el directorio de datos de cada proyecto |
+| Bugs (el issue del gestor, su caso y el paso del que salió, su clasificación y su estado) | `bugs.json` en el directorio de datos de cada proyecto |
 | Actas generadas (.docx)  | donde las guarde el usuario; el issue recuerda la ruta de cada revisión |
 | Capturas, GIF y adjuntos | Carpeta configurable (por defecto `~/QAflow/capturas`)     |
 
@@ -218,6 +253,12 @@ muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`
 las mutaciones de contenido (`toggle`, `moveCase`, `sortByPriority`, …) actúan sobre el activo y
 `orderedCaseIds()` devuelve su orden saltando obsoletos e inexistentes (los obsoletos siguen en
 el plan por si vuelven a estar listos; los borrados se retiran de todos los planes).
+
+La pantalla del plan es donde se compone y donde se prueba: **«▶ Ejecutar plan»** arranca su ciclo
+(`PlanView::runPlanRequested` → `MainWindow::startPlanRun`, que avisa si hay una ejecución o una captura
+en curso y lleva a la pantalla de ejecución) y **«+ Nuevo caso»** crea un caso, lo añade al final del
+plan y lo abre para escribir sus pasos. Son los dos pasos que la pantalla de issues manda hacer aquí,
+así que están donde se llega desde ella.
 
 Un **ciclo** es una ejecución del plan: `RunController::startSequence()` abre un `PlanRun` en el
 historial con el `planId` del plan. `PlanStore::latestCycle(planId)` devuelve el `PlanReport` del
@@ -277,14 +318,32 @@ lo calcula a partir del `PlanRun` y sus registros (si un caso se repitió dentro
 última ejecución; los casos que quedaron sin ejecutar aparecen como pendientes). `toMarkdown()`
 produce el informe exportable; la vista sólo abre el diálogo de guardado o copia al portapapeles.
 
+### Los bugs del ciclo
+
+El informe trae también **los bugs que se reportaron mientras corría**. Un `IssueLink` no guarda de
+qué ciclo salió —sólo su caso y el paso—, así que la pertenencia se deduce: `PlanReport::reportedDuring()`
+acepta el bug si su fecha cae entre el arranque del ciclo y su cierre **más una hora**, porque el parte
+se escribe justo después de ver el fallo, cuando la ejecución ya se ha archivado; un ciclo en curso
+admite todo lo posterior a su arranque. `PlanReport::build()` recibe el libro de bugs entero y reparte
+los que cuadran en `PlanReportRow::bugs`, caso por caso.
+
+Quien pasa ese libro es `RunHistoryStore::setBugs()` (el `BugStore` se crea después que el historial,
+así que se inyecta desde `ProjectSession`), de modo que **todos** los informes lo traen: la pantalla,
+el Markdown, el acta y la publicación en Zephyr. Sin él —tests que no miran bugs— el informe sale
+igual, sólo que sin ellos. `TestPublishService::defectsOf()` usa la misma `reportedDuring()`, así que
+lo que el informe enseña es exactamente lo que se sube como defectos del ciclo.
+
 `HistoryView` lista planes y ejecuciones sueltas (las de un plan se ven dentro de su informe, o con
 el filtro «Casos»). Un informe se puede eliminar desde su cabecera: `RunHistoryStore::removePlanRun()`
 quita el `PlanRun` y sus `RunRecord`, suelta las evidencias de esas ejecuciones
 (`TestCaseStore::releaseShotsOfRuns()`, que emite `filesReleased` para que `EvidenceService` borre
 los ficheros) y, a los casos cuya «última ejecución» era una de las borradas, les deja la más
 reciente que quede. Es definitivo, sin deshacer, y la vista no lo ofrece para el ciclo en curso
-(`RunController::planRunId()`), que sigue recibiendo ejecuciones. `MainWindow::finishRun()` es la acción «Finalizar»: continúa con el siguiente
-caso del plan, abre el informe cuando el plan termina o vuelve a la lista de casos.
+(`RunController::planRunId()`), que sigue recibiendo ejecuciones. El informe enseña los bugs dos
+veces: juntos en su propia tarjeta («Bugs encontrados · N», con cuántos siguen abiertos) y otra vez
+dentro de la tarjeta de su caso, junto a los pasos donde se vieron. `MainWindow::finishRun()` es la
+acción «Finalizar»: continúa con el siguiente caso del plan, lleva al issue que se está probando o
+abre el informe cuando el ciclo no prueba ningún requerimiento (ver «Fin de un ciclo de plan»).
 
 ## Captura de pantalla
 
@@ -384,6 +443,13 @@ opcionales y sólo Jira los implementa (`GET /rest/api/2/project`: los proyectos
 por nombre); `BugReportService` los expone a la presentación y Ajustes los ofrece en «Buscar…», junto al
 código Jira de «Configuración del proyecto». En los demás gestores el proyecto es un ajuste general que se
 escribe.
+
+**Enlazar issues entre sí.** `canLinkIssues()` y `linkIssues()` son opcionales y sólo Jira los
+implementa: `POST /rest/api/2/issueLink` con el tipo que ofrezca el servidor —cada instancia lo llama a
+su manera («Relates», «Relacionada con»…), así que se leen los tipos (`GET /rest/api/2/issueLinkType`),
+se elige el que relaciona y se recuerda para esa instancia—. Con eso, al publicar el resultado de una
+revisión, del issue del requerimiento cuelgan sus bugs y los Tests de Zephyr de sus ejecuciones: desde el
+issue se llega a todo lo que se probó. Un enlace que falle no tumba la publicación, se dice cuál.
 
 **Los issues de QAflow en el gestor.** `canPublishIssues()`, `publishIssue()`, `fetchIssue()` y
 `updateIssue()` son opcionales y sólo Jira los implementa: crean el issue (`POST /rest/api/2/issue` con
@@ -542,18 +608,24 @@ mano) y reúne sus casos, sus planes y los resultados de sus pruebas. Es la prim
 
 | Parte | Qué lleva | Quién la cambia |
 |-------|-----------|-----------------|
-| Del issue | id local (`IS-0001`, independiente de Jira), título, notas, prioridad, estado de QA, `caseIds`, `planIds` | QAflow |
+| Del issue | id local (`IS-0001`, independiente de Jira), título, notas, prioridad, estado de QA, `planIds` | QAflow |
 | `RequirementLink` | conexión, la fila de la bandeja (`ExternalRequirement`), la ficha si se consultó, fechas de importación y lectura, `missing` y `changes` | cada consulta a GESREQ |
 | Representación en Jira | `jiraKey`, `jiraUrl` (el filtro «Jira» ya los usa; la publicación llega después) | la publicación |
 
 El **estado de QA** (Pendiente, En preparación, En pruebas, Finalizado) es de QAflow y no se deduce del
 estado de GESREQ, del de Jira ni del resultado de las pruebas. Sí avanza solo con el trabajo, y nunca
-hacia atrás: vincular el primer caso pasa un issue Pendiente a «En preparación», y arrancar un ciclo de
+hacia atrás: vincular el primer plan pasa un issue Pendiente a «En preparación», y arrancar un ciclo de
 uno de sus planes lo pone «En pruebas» (`RunController::planStarted` → `IssueStore::notePlanStarted`,
 conectados en `ProjectSession`). Cerrar la revisión lo deja Finalizado. La prioridad y el título salen del
-requerimiento al importarlo y a partir de ahí son de QAflow. Un caso puede validar varios issues: la
-asociación vive en el issue, así que `cases.json` y `plans.json` no cambian y los casos y planes sin
-issue siguen como estaban; los ids que ya no existen se enseñan como tales, sin borrarlos.
+requerimiento al importarlo y a partir de ahí son de QAflow.
+
+**Lo que prueba un requerimiento son planes, no casos sueltos.** El issue se asocia sólo a `planIds`; sus
+casos son los de esos planes (`IssueStore::caseIdsOf`, en el orden de los planes y sin repetir) y sus
+resultados, los de los **ciclos** de esos planes (`cyclesOf`, `runsOf`). Así lo que la pantalla y el acta
+cuentan es del requerimiento y sólo de él: la misma ejecución suelta de un caso, o un ciclo de otro plan que
+reutiliza ese caso, no es un resultado suyo. Un plan puede agrupar las pruebas de varios issues
+(`issuesForPlan`), la asociación vive en el issue —`cases.json` y `plans.json` no cambian— y los ids que ya
+no existen se enseñan como tales, sin borrarlos.
 
 `IssueStore` (application) persiste en `issues.json` (`JsonIssueRepository`, un fichero por proyecto) en
 cada cambio. Un fichero que existe pero no se puede leer —dañado o de otra versión— deja el store en solo
@@ -580,12 +652,29 @@ se lee bajo demanda («Cargar ficha», `RequirementSourceService::fetchDetail`) 
 fecha; «Abrir en GESREQ» abre la ficha en el navegador, donde hace falta haber entrado.
 
 **Pantalla.** `IssuesView` sigue el esquema de Casos: lista filtrable (texto sobre `Issue::searchText()`,
-estado, prioridad, publicación en Jira) y el issue a la derecha, con su requerimiento (cambios, ausencia,
-datos y ficha), notas de QA (se guardan 600 ms después de dejar de escribir, al cambiar de issue o al salir
-de la pantalla), casos (crear uno con el título del issue y abrirlo, o vincular con `ChoiceDialog`),
-planes (crear uno con los casos del issue, que queda activo y se abre, o vincular) y resultados:
-`IssueStore::runsOf()` junta las ejecuciones de sus casos, la más reciente primero, con el plan y el ciclo
-al que pertenecen.
+estado, prioridad, publicación en Jira) y el issue a la derecha, en el orden en que se trabaja: el
+requerimiento (cambios, ausencia, datos y ficha), la **revisión**, el **plan de pruebas** con sus casos
+dentro, los **resultados** —los ciclos de sus planes, el más reciente primero, con su veredicto, sus
+contadores, si está publicado en Zephyr y las ejecuciones de cada caso—, los **bugs reportados** en esas
+ejecuciones (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en
+curso) y, al final, la publicación en el gestor, que desde que el requerimiento se importa ya está hecha
+y es contexto.
+
+La **revisión es el corazón del issue**, así que se enseña como lo que es: una serie de pasos, cada uno
+con lo que lleva hecho y su acción. El primero sin terminar es el que toca y se destaca; los hechos se
+marcan con un visto y se apagan.
+
+| Paso | Hecho cuando | Su acción |
+|------|--------------|-----------|
+| 1 · Preparar el plan de pruebas | el issue tiene un plan y el plan, casos | crear el plan o abrirlo |
+| 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | ir al plan, que es donde se arrancan los ciclos |
+| 3 · Generar el acta (R-213) | la revisión tiene su .docx | generar (o regenerar) el acta, y abrir la que hay |
+| 4 · Cerrar la revisión | la revisión está cerrada con su resultado | cerrarla, eligiendo conforme u observado |
+| 5 · Publicar el resultado | se publicó en el gestor o en GESREQ | «Publicar…», sólo con la revisión cerrada |
+| 6 · Volver a probar | — | abrir la ronda siguiente (un requerimiento observado vuelve a pruebas) |
+
+No hay tarjeta de casos ni notas de QA: los casos del issue son los del plan y se ven dentro de él, y lo
+que hay que contar del control de calidad va en el acta y en el comentario del resultado.
 
 **Iniciar pruebas (entre proyectos).** La bandeja de GESREQ es del usuario, no del proyecto: el diálogo de
 importación enseña también los requerimientos de los demás sistemas, cada uno con el proyecto que los
@@ -593,7 +682,7 @@ trabaja (`ProjectStore::projectForRequirementSystem`). «Iniciar pruebas» resue
 
 | Situación | Qué pasa |
 |-----------|----------|
-| Es el proyecto activo | `IssueStore::openForRequirement()` abre su issue aquí mismo: lo crea la primera vez y luego reutiliza el que hay, con sus casos, planes y lo escrito en QAflow |
+| Es el proyecto activo | `IssueStore::openForRequirement()` abre su issue aquí mismo: lo crea la primera vez —y con él, su issue en el gestor y su plan de pruebas (`IssuesView::ensurePlan`), listos para empezar— y luego reutiliza el que hay, con sus planes y lo escrito en QAflow |
 | Es otro proyecto | La vista sólo lo pide (`IssuesView::startTestingRequested` → `MainWindow`); la raíz de composición guarda el actual, activa el destino y allí abre el issue (`MainWindow::startTesting`) |
 | Ningún proyecto tiene ese sistema vinculado | `ProjectSetupDialog` pregunta en cuál se prueban: uno que ya existe (se le vincula el sistema) o uno nuevo, con el sistema ya escrito y su código Jira opcional; hecho eso se sigue por una de las dos filas anteriores |
 | Ejecución o captura en curso | `ProjectSession::canLeave()` no deja salir y dice qué hay que terminar; si el guardado falla, el cambio se cancela y no se inicia nada |
@@ -623,9 +712,9 @@ acta es el de la ronda.
 |---------|----------|
 | Arranca un ciclo del plan del issue | Se abre la revisión (la primera, o la siguiente si la anterior está cerrada) y el issue pasa a «En pruebas» |
 | Durante la ronda | `issueProgress()` (core, función pura) cuenta la **última ejecución de cada caso dentro de la revisión** y los bugs del issue: de ahí salen los contadores y el resultado que se propone |
-| Se genera el acta | `QualityRecordService` la arma, la escribe y la guarda en la revisión, con lo escrito en ella |
-| Se manda el resultado | Al gestor, como comentario con el acta adjunta; a GESREQ, como registro del control de calidad |
+| Se genera el acta | `QualityRecordService` la arma con el **ciclo de plan** que se elija (`cyclesFor`), la escribe y la guarda en la revisión, con lo escrito en ella y con cuál fue ese ciclo (`IssueRevision::planRunId`) |
 | Se cierra la revisión | Queda con su resultado (Conforme u Observado) y el issue, Finalizado. Volver a probar abre la siguiente |
+| Se publica el resultado | Con la revisión cerrada aparece «Publicar…»: los ciclos a Zephyr, el resultado y el acta al gestor y el registro a GESREQ (`RevisionPublishService`) |
 
 El **resultado** (`QaOutcome`: Pendiente, Conforme, Observado) es una propuesta hasta que alguien lo
 confirma: se propone **Observado** si hay casos fallidos o bloqueados o bugs abiertos, **Conforme** si se
@@ -637,18 +726,67 @@ la tarjeta «Revisión» junto al paso del flujo, los contadores, el acta y las 
 o enlaza una que ya existe, y guarda en `Issue::publication` las tres identidades juntas: el requerimiento
 de GESREQ, el issue de QAflow y el issue del gestor (con su instancia, proyecto, tipo, estado y fechas).
 
+El issue importado **nace ya en el gestor y con su plan**: al traer el requerimiento de GESREQ («Iniciar
+pruebas») se crea allí su issue con el borrador de siempre (`IssuesView::publishImported`) y se deja listo
+el plan con el que se prueba (`ensurePlan`, que no crea otro si ya tiene uno), para que los casos, los
+bugs y el resultado tengan dónde colgarse desde el principio. Si el gestor no está configurado, si el
+envío falla o si quedó uno **sin confirmar**, no se insiste solo: el issue se queda sin publicar y se
+publica a mano desde su tarjeta, que es donde además se puede vincular uno que ya existe.
+
 | Acción | Qué hace |
 |--------|----------|
 | Publicar | `draftFor()` arma título y descripción (lo importado de GESREQ, las notas de QA y de qué issue salió) y el diálogo los enseña para corregirlos antes de enviar; se crea con las etiquetas `qaflow`, el id del issue y `GREQ-<número>` |
 | Vincular | `fetchIssue()` comprueba que la clave existe y la guarda como `linked`: lo escribió otra persona, así que QAflow no ofrece sobrescribirlo |
 | Actualizar | `needsUpdate()` compara lo de ahora con `publishedTitle`/`publishedDescription` (lo último que salió de QAflow) y avisa; sólo esta acción reescribe el título y la descripción en el gestor, diciendo antes que lo editado allí se pierde |
 | Estado | `refreshStatus()` guarda el estado del gestor, que se enseña aparte del estado de QA |
-| Resultado | `publishResult()` comenta en el issue cómo quedó la revisión (resumen de `quality::summaryOf`) y le adjunta el acta, con `IIssueTracker::commentIssue()` — opcional, sólo Jira (`POST /rest/api/2/issue/{clave}/comment` y los adjuntos del issue). El diálogo enseña el texto antes de enviarlo |
+| Resultado | `publishResult()` comenta en el issue cómo quedó la revisión (resumen de `quality::summaryOf`) y le adjunta el acta, con `IIssueTracker::commentIssue()` — opcional, sólo Jira (`POST /rest/api/2/issue/{clave}/comment` y los adjuntos del issue). Lo llama la publicación de la revisión, que enseña el texto antes de enviarlo |
 
 Nada se publica ni se sobrescribe solo. Si un envío se corta sin respuesta, el issue queda marcado como
 **sin confirmar** (`publication.uncertain`): puede haberse creado igualmente, así que la pantalla dice cómo
 buscarlo por su etiqueta y publicar otra vez pide confirmación expresa. Un rechazo del contenido (un tipo de
 incidencia que no existe, por ejemplo) no deja esa duda y no marca nada.
+
+**Publicar el resultado de una revisión.** Cuando la revisión se cierra, la tarjeta «Revisión» ofrece
+«Publicar…» (`RevisionPublishDialog` sobre `RevisionPublishService`): una sola pantalla con los tres
+destinos, lo que iría a cada uno y lo que ya se hizo, para elegir y ver cómo termina cada paso.
+
+| Paso | Qué manda | Cuándo se puede |
+|------|-----------|-----------------|
+| Zephyr | Los ciclos de los planes del issue, con sus casos, pasos, evidencias y **defectos** —cada bug va en la ejecución y en el resultado del paso del que salió (`IssueLink::step`, que `BugReportService` toma del primer paso fallido)— (`TestPublishService`); los ya publicados se actualizan en vez de duplicarse | Zephyr activado en Ajustes y algún caso ejecutado en esos ciclos |
+| El gestor | Un comentario en el issue con el resumen de la revisión, los enlaces de los ciclos de Zephyr y el acta adjunta; y del issue se **cuelgan sus pruebas**: los bugs de la revisión y los Tests de Zephyr de sus ejecuciones, enlazados con `IIssueTracker::linkIssues()` (`RevisionPublishService::linkEvidence`) | El issue está en el gestor (lo está desde que se importó) y el gestor sabe comentar |
+| GESREQ | El registro del control de calidad: resultado, comentario, las cinco cifras A–E del acta y el acta adjunta. Al guardar, el sistema dice con qué **estado** queda el requerimiento y el issue se actualiza con él (`IssueStore::noteRequirementState`), sin volver a leer la bandeja | El issue viene de GESREQ, el conector sabe registrar, **el sistema aceptaría el registro** y el control **no se registró ya** |
+
+El envío se escribe **byte a byte como el de un navegador** (`HttpClient::formData`): delimitador sin
+comillas, cada campo con sólo su `Content-Disposition` y el acta en el sitio que ocupa en el formulario
+(`ControlForm::filePosition`). El multipart que compone `QHttpMultiPart` entrecomilla el delimitador y
+etiqueta cada campo con un `Content-Type`, y el servidor de GESREQ (Struts sobre WebLogic) respondía a
+eso con un 500 sin llegar a leer un solo campo.
+
+Si el servidor falla al guardar (un HTTP 500 de la aplicación), lo que se enseña es lo que dice su
+página —`gesreq::serverErrorReason` saca el mensaje, la excepción o la causa raíz del volcado de
+Tomcat—, más el tamaño del acta si es grande: «se cortó sin respuesta» sería falso y no diría por dónde
+mirar. El registro queda **sin confirmar** igualmente, porque el fallo pudo llegar después de guardar.
+El comentario viaja recortado a lo que admite el campo del formulario (`kControlCommentMax`, los mismos
+2000 caracteres que limita la propia página en su campo hermano).
+
+Las reglas de GESREQ se preguntan **antes** de enviar nada (`IRequirementSource::registrationProblem`, que
+`GesreqClient` responde con las mismas comprobaciones que hace al registrar): sin acta generada, con un
+resultado que no es Conforme ni Observado, con un «OK» que lleva observaciones que no son recomendaciones o
+con un «OBSERVADO» sin ninguna, el paso aparece bloqueado con el motivo en vez de fallar a mitad del
+registro. Cambiar el resultado en el diálogo, o desmarcar el acta, vuelve a preguntarlo.
+
+**Registrar es definitivo y se hace una sola vez por ronda.** Cambia el estado del requerimiento en
+GESREQ y lo saca de la bandeja de control, así que el paso queda bloqueado en cuanto la revisión tiene su
+registro, y un control cerrado como **Conforme** no se vuelve a registrar nunca: sólo un **Observado**
+devuelve el requerimiento a pruebas y deja que la ronda siguiente registre el suyo
+(`RevisionPublishService::alreadyRegistered`, que además protege al servicio de un segundo envío aunque
+se lo pidan). Publicado el resultado en el gestor, el issue también se pone al día allí
+(`refreshStatus`).
+
+Se ejecutan en ese orden —Zephyr primero, para que sus enlaces viajen en el comentario y en el registro— y
+un paso que falle no impide los demás: cada uno cuenta su resultado en el diálogo y lo que se cortó sin
+respuesta queda **sin confirmar**, como en el resto de la aplicación. Lo que ya se hizo en esta revisión
+viene desmarcado: repetirlo es una decisión, no un descuido. Nada se envía hasta pulsar «Publicar».
 
 ## Acta de control de calidad (R-213)
 
@@ -663,18 +801,23 @@ D Recomendaciones, E Vulnerabilidades, cada una con sus observaciones y correcci
 (casos, ejecución y bugs, con las capturas que se quieran pegar) y los resultados con sus observaciones
 generales.
 
-`quality::draftFor()` (core, pura) propone el acta con lo que ya hay: el requerimiento y su ficha, los
-casos con su Test de Zephyr o su historia, los contadores de la ejecución, los bugs de la revisión por su
-clasificación y, como **correcciones**, las observaciones de rondas anteriores que ya están cerradas. Lo
-que GESREQ no tiene (servidor, base de datos, módulo, departamento, membrete) se hereda del **acta
-anterior del proyecto**, así que sólo se escribe una vez; lo que nadie rellena queda como en el formulario
-(`S/D`, `n/a`). `QualityRecordDialog` lo enseña todo, corregible, antes de generar.
+`quality::draftFor()` (core, pura) propone el acta con lo que ya hay: el requerimiento y **su ficha de
+GESREQ** (de la que salen el alcance, quién lo pidió y con qué prioridad y estado, quién lo desarrolló, el
+enlace del módulo —también el repositorio que aparezca en la descripción, sin la parte del merge request—,
+el servidor, el esquema y las tablas y funciones afectadas), el **ciclo de plan** que se está documentando
+(sus fechas, sus casos con el Test de Zephyr de cada uno, cómo terminó caso a caso y el enlace del ciclo
+publicado) y los bugs de la revisión por su clasificación, más, como **correcciones**, las observaciones de
+rondas anteriores que ya están cerradas. Lo que GESREQ no tiene (base de datos, usuarios, departamento,
+membrete) se hereda del **acta anterior del proyecto**, así que sólo se escribe una vez; lo que nadie
+rellena queda como en el formulario (`S/D`, `n/a`). `QualityRecordDialog` lo enseña todo, corregible, antes
+de generar, y si la revisión tuvo **varias ejecuciones** deja elegir con cuál se levanta el acta (o con
+todas), rehaciéndola al cambiar de una a otra.
 
 | Quién | Qué hace |
 |-------|----------|
 | `QualityRecordService` (application) | arma el borrador (respetando lo ya escrito en la revisión), escribe el fichero por `IQualityRecordWriter`, lo guarda en la revisión (`documentPath`) y propone el nombre `ControlCalidad_<GREQ>_<marca de tiempo>.docx` |
-| `QualityRecordDocx` (infrastructure/report) | la maqueta del R-213: cabecera con el membrete, «Generales» sobre una rejilla de diez columnas, «Resumen Observaciones» A–E con su total, «Detalles de la revisión» y «Resultados» |
-| `DocxWriter` | las piezas de OOXML: párrafos, tablas con `gridSpan`/`vMerge`, sombreados e imágenes (escaladas al ancho de su celda; una que no se pueda leer se omite en vez de romper el acta) |
+| `QualityRecordDocx` (infrastructure/report) | la maqueta del R-213: cabecera con el membrete, y las secciones numeradas «1. Generales» (rejilla de diez columnas), «2. Resumen Observaciones» A–E con su total, «3. Detalles de la revisión», «4. Resultados» y «5. Observaciones Generales», con el formato del formulario: títulos en blanco sobre azul (`1F4E79`), etiquetas sobre azul claro (`DEEAF6`) y el cuerpo a 10 pt |
+| `DocxWriter` | las piezas de OOXML: párrafos (con su color), tablas con `gridSpan`/`vMerge`, sombreados e imágenes (escaladas al ancho de su celda; una que no se pueda leer se omite en vez de romper el acta), en página carta con los márgenes del formulario |
 | `ZipWriter` | el ZIP del .docx, con las entradas **sin comprimir** y su CRC-32: Word y LibreOffice lo leen igual y QAflow no necesita zlib ni API privada de Qt |
 
 No hay plantilla que mantener: cambiar el formulario es cambiar esas tablas. El **membrete** no viaja en el
@@ -739,6 +882,26 @@ Observado, volver a probar abre la revisión siguiente. Un envío que se corta s
 confirmar**, como en el gestor: puede haberse registrado igualmente, así que hay que mirarlo en GESREQ
 antes de repetirlo. Mientras el conector no lo implemente, el botón lo dice en vez de fallar.
 
+`GesreqClient` recorre para ello las mismas páginas que el usuario, pidiéndole al servidor cada enlace en
+vez de componerlo:
+
+| Paso | Petición | Por qué así |
+|------|----------|-------------|
+| Enlace del registro | `GET calidadreg.do` → el «Registrar» de esa fila | lleva el `estado` con el que el requerimiento figura en la bandeja; **sin ese `estado` la pantalla de gestión se abre sin el formulario** |
+| Sistema a registrar | `GET calidadregGestionRequerimiento.do?id=…&accion=calidadreg&estado=…` | sólo muestra la gestión, no cambia nada; trae un control por sistema del requerimiento, y se elige el del `systemCode` del issue |
+| Formulario | `GET calidadregFuncionalForm.do?gestion=…&idItem=…&corr=…&sis_cod=…` | la ventana con los campos y sus valores actuales |
+| Envío | `POST calidadregGestionControlGuardar.do` (multipart) | **no es el `action` del formulario**: su propio script lo manda por AJAX ahí, y la respuesta es el estado de `Anb.form.ajax` (`OK`, `UPDATE`… = guardado) |
+
+Del formulario viaja lo que puso el servidor (`gestion`, `corr`, `id`, `tip_control`, `cod_asignado`,
+`fecha_ini`, las correcciones…) y QAflow sólo cambia lo suyo: `resultado_control` (`OK` / `OBSERVADO`), el
+comentario y las cinco cifras del resumen de observaciones, que son las clasificaciones **A–E de los bugs**
+(funcionamiento, datos, forma, recomendaciones, vulnerabilidades) tal y como las cuenta el acta, más el
+acta misma en `arch_funcional`. Se reproduce también lo que el script de la ventana deshabilita antes de
+enviar: los campos deshabilitados y la casilla visible de cada corrección, que si no viajaría dos veces.
+Las reglas del sistema se comprueban antes de pedir nada (acta obligatoria y con extensión admitida, «OK»
+sin observaciones que no sean recomendaciones y «OBSERVADO» con al menos una), para no dejar el resultado a
+medias entre los dos sistemas; lo que aun así rechace GESREQ llega como `Rejected` con su motivo.
+
 `ExternalRequirement` es una fila de la bandeja: el número GREQ es el identificador estable, `systemCode`
 (lo que va antes del primer guion de «Sistema») es el proyecto externo que se vinculará a un proyecto de
 QAflow, y `states` es una lista porque un requerimiento está a la vez en «CONTROL DE CALIDAD OBSERVADO» y
@@ -756,7 +919,8 @@ todo llega con 200, y el cliente lo distingue por el contenido.
 | Sin la tabla, sin una columna imprescindible (Requerimiento, Sistema, Descripción Corta, Estado), una fila sin número o una ficha sin «Estado» | la página cambió | `PageChanged`, diciendo qué falta |
 
 `RequirementSourceFailure` completa la lista con `Configuration` (faltan la dirección o las credenciales,
-o la dirección responde 404) y `Network` (red o 5xx), la única que `retryable()` marca para reintentar. La
+o la dirección responde 404), `Rejected` (GESREQ entendió el registro y no lo aceptó) y `Network` (red o
+5xx), la única que `retryable()` marca para reintentar. La
 sesión es de una dirección y un usuario; las peticiones que llegan mientras se inicia esperan a ese mismo
 login en vez de lanzar otro, que cambiaría la cookie a las demás.
 
@@ -809,8 +973,9 @@ tests/
 │   ├── test_docx_writer.cpp         el ZIP y el .docx que QAflow escribe, y el acta R-213 con lo que dice el modelo
 │   └── test_gif_encoder.cpp         cuantización (exacta y median cut) y GIF animado leído de vuelta con el plugin de Qt
 └── presentation/              ventana completa con plataforma offscreen
-    ├── test_main_window.cpp   navegación, ventana de ajustes, atajos del menú, Ctrl+F y filtro, teclas de veredicto, captura, cuenta atrás,
-    │                          grabación, adjuntar por arrastre, abrir el visor, deshacer, métricas y el aviso «Reintentar»
+    ├── test_main_window.cpp   navegación (rail, camino de vuelta y fin de ciclo), ventana de ajustes, atajos del menú, Ctrl+F y filtro,
+    │                          teclas de veredicto, captura, cuenta atrás, grabación, adjuntar por arrastre, abrir el visor, deshacer,
+    │                          métricas y el aviso «Reintentar»
     ├── test_evidence_widgets.cpp renderAnnotations (formas, texto, difuminado), AnnotationEditor, ImageViewer, Thumbnail y ShotCard
     └── test_choice_dialog.cpp  selector con búsqueda: carga, filtro sin tildes, flechas, error y reintento, respuestas tardías
 ```

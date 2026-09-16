@@ -21,7 +21,9 @@ struct PlanReport;
 
 /// Pantalla "Planes": lista de planes (activos y archivados) a la izquierda; a la derecha el
 /// plan abierto: casos en orden de ejecución, ciclo actual, historial de ciclos con sus
-/// resultados. Los ciclos se inician desde la barra superior de la ventana.
+/// resultados. Desde aquí se ejecuta el plan y se crean los casos que le falten, que es lo que se
+/// hace con un plan recién traído de un requerimiento; los ciclos también pueden arrancarse desde la
+/// barra superior de la ventana.
 class PlanView : public QWidget {
     Q_OBJECT
 public:
@@ -33,6 +35,10 @@ public:
     void refresh();
 
 signals:
+    /// Ejecutar ese plan: arrancar su ciclo es cosa de quien maneja la ejecución, no de la pantalla.
+    void runPlanRequested(const QString& planId);
+    /// Abrir un caso en la pantalla de casos (el que se acaba de crear para el plan).
+    void openCaseRequested(const QString& caseId);
     /// Abrir en el historial el informe de un ciclo.
     void cycleReportRequested(const QString& planRunId);
     /// Abrir en el navegador el Test de Zephyr de una ejecución.
@@ -61,6 +67,8 @@ private:
     void refreshCasePager(CasePager& pager, int count);
     void refreshRows();
     void newPlan();
+    /// Crea un caso, lo añade al plan abierto y lo abre para escribir sus pasos.
+    void newCaseInPlan();
     void duplicateActive();
     void toggleArchiveActive();
     void removeActive();
@@ -80,6 +88,7 @@ private:
     QLabel* m_eyebrow = nullptr;
     QLineEdit* m_name = nullptr;
     QLabel* m_archivedBadge = nullptr;
+    QPushButton* m_runPlan = nullptr;
     QLabel* m_count = nullptr;
     QLabel* m_steps = nullptr;
     QLabel* m_time = nullptr;

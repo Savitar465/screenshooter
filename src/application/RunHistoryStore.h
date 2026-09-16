@@ -10,6 +10,7 @@
 namespace qaflow {
 
 class TestCaseStore;
+class BugStore;
 
 /// Fuente de verdad del historial de ejecuciones. Sólo crece: cada ejecución terminada
 /// añade un RunRecord; cada plan arrancado añade un PlanRun que se cierra al acabar.
@@ -19,6 +20,10 @@ public:
     RunHistoryStore(std::shared_ptr<IRunHistoryRepository> repo, TestCaseStore& cases, QObject* parent = nullptr);
 
     void load();
+    /// Libro de bugs del proyecto: con él, el informe de cada ciclo trae los bugs que se reportaron
+    /// mientras corría. Se pone aparte porque el libro se crea después que el historial; sin él los
+    /// informes salen sin bugs, que es lo que quieren los tests que no los miran.
+    void setBugs(const BugStore* bugs) { m_bugs = bugs; }
 
     const QList<RunRecord>& runs() const { return m_history.runs; }
     const QList<PlanRun>& plans() const { return m_history.plans; }
@@ -28,7 +33,8 @@ public:
     /// Ejecuciones de un caso, la más reciente primero.
     QList<RunRecord> runsForCase(const QString& caseId) const;
     QList<RunRecord> runsForPlan(const QString& planRunId) const;
-    /// Informe de un plan. Los títulos de los casos pendientes se resuelven contra los casos actuales.
+    /// Informe de un plan. Los títulos de los casos pendientes se resuelven contra los casos actuales
+    /// y los bugs, contra el libro de `setBugs()`.
     PlanReport report(const QString& planRunId) const;
 
     /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos).
@@ -65,6 +71,7 @@ private:
 
     std::shared_ptr<IRunHistoryRepository> m_repo;
     TestCaseStore& m_cases;
+    const BugStore* m_bugs = nullptr;
     RunHistory m_history;
 };
 

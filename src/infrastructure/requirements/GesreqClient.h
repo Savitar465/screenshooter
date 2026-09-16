@@ -2,6 +2,7 @@
 
 #include "core/services/IRequirementSource.h"
 #include "infrastructure/http/HttpClient.h"
+#include "infrastructure/requirements/GesreqParser.h"
 
 #include <QList>
 #include <QPair>
@@ -28,6 +29,20 @@ public:
     void fetchDetail(const RequirementSourceSettings& s, const QString& id,
                      std::function<void(const RequirementDetailResult&)> done) override;
     void fetchSystems(const RequirementSourceSettings& s, std::function<void(const RequirementSystemsResult&)> done) override;
+
+    bool canRegisterResult() const override { return true; }
+    /// Las reglas del formulario del control de calidad, comprobadas sin tocar la red: el acta que
+    /// GESREQ exige y la coherencia entre el resultado y el resumen de observaciones.
+    QString registrationProblem(const RequirementRegistration& registration) const override;
+    /// A partir de este tamaño, un fallo del servidor al guardar apunta al adjunto (el formulario lo
+    /// comprueba en el navegador con su propio límite, que no viaja en la página).
+    static constexpr qint64 kBigAttachment = 2 * 1024 * 1024;
+    /// Registra el resultado en el formulario de control de calidad del requerimiento, con el acta
+    /// adjunta. Es lo único que GESREQ escribe desde QAflow: recorre las mismas páginas que el usuario
+    /// (bandeja → gestión → formulario del sistema) para que cada enlace y cada campo los ponga el
+    /// servidor, y sólo entonces envía.
+    void registerResult(const RequirementSourceSettings& s, const RequirementRegistration& registration,
+                        std::function<void(const RequirementRegistrationResult&)> done) override;
 
     /// Hay una sesión iniciada para estos ajustes (la misma dirección y el mismo usuario).
     bool hasSession(const RequirementSourceSettings& s) const;
@@ -58,6 +73,10 @@ private:
     void getPage(const RequirementSourceSettings& s, const QString& path, bool retried, PageHandler done);
     void loadDetail(const RequirementSourceSettings& s, const QString& id, bool retried,
                     std::function<void(const RequirementDetailResult&)> done);
+    /// Envía el formulario del control con el resultado, el comentario y el acta de QAflow. No se
+    /// reintenta solo: un envío repetido registraría el control dos veces.
+    void sendControl(const RequirementSourceSettings& s, const RequirementRegistration& registration,
+                     const gesreq::ControlForm& form, std::function<void(const RequirementRegistrationResult&)> done);
     /// Busca el catálogo en la página `index` de `gesreq::kSystemsPaths` y, si no está, en la siguiente.
     void loadSystems(const RequirementSourceSettings& s, int index, const QString& firstError,
                      std::function<void(const RequirementSystemsResult&)> done);

@@ -98,6 +98,23 @@ void seedEvidence(AppContext& ctx) {
     for (int i = 0; i < c->shots.size(); ++i) ctx.cases->assignShotStep(c->id, c->shots[i].id, i + 1);
 }
 
+/// Anota un bug ya creado en el gestor, como si se hubiera reportado en este momento de la demo.
+void reportBug(AppContext& ctx, const QString& key, const QString& title, const QString& caseId, int step,
+               const QString& severity, const QString& status, bool resolved) {
+    IssueLink link;
+    link.key = key;
+    link.url = QStringLiteral("https://acme.atlassian.net/browse/") + key;
+    link.title = title;
+    link.caseId = caseId;
+    link.step = step;
+    link.tracker = QStringLiteral("Jira");
+    link.severity = severity;
+    link.status = status;
+    link.resolved = resolved;
+    link.createdAt = QDateTime::currentDateTime();
+    ctx.bugLedger->recordIssue(link);
+}
+
 } // namespace
 
 void run(MainWindow& window, AppContext& ctx) {
@@ -143,10 +160,15 @@ void run(MainWindow& window, AppContext& ctx) {
             ctx.run->mark(StepResult::Pass);
             ctx.run->setNote(QStringLiteral("El descuento no se refleja en el resumen"));
             ctx.run->mark(StepResult::Fail);
+            // Dos bugs reportados mientras corría el ciclo: así el informe enseña su bloque de bugs.
+            reportBug(ctx, QStringLiteral("SHOP-151"), QStringLiteral("[Auth] El bloqueo no salta al quinto intento"),
+                      QStringLiteral("TC-102"), 2, QStringLiteral("Mayor"), QStringLiteral("In Progress"), false);
             ctx.run->finish();
             ctx.run->mark(StepResult::Pass);
             ctx.run->finish();
             ctx.run->setNote(QStringLiteral("El servicio de notificaciones está caído en staging"));
+            reportBug(ctx, QStringLiteral("SHOP-152"), QStringLiteral("[Notificaciones] El servicio de staging no responde"),
+                      QStringLiteral("TC-107"), 1, QStringLiteral("Bloqueante"), QStringLiteral("Done"), true);
             ctx.run->mark(StepResult::Block);
             window.finishRun();   // termina el plan y abre su informe
         }},
@@ -199,8 +221,6 @@ void run(MainWindow& window, AppContext& ctx) {
             b.priority = QStringLiteral("MEDIA");
             b.detailUrl = connection + QStringLiteral("/publico.do?id=2026310&bandera=1");
             const QString first = ctx.issues->importRequirements({a, b}, connection).created.value(0);
-            ctx.issues->linkCase(first, QStringLiteral("TC-104"));
-            ctx.issues->linkCase(first, QStringLiteral("TC-102"));
             ctx.issues->linkPlan(first, QStringLiteral("PL-0001"));
             ctx.issues->updateIssue(first, [](Issue& i) {
                 i.state = IssueState::Testing;

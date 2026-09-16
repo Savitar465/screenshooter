@@ -107,6 +107,8 @@ add_library(qaflow_application STATIC
         src/application/IssuePublishService.cpp
         src/application/QualityRecordService.h
         src/application/QualityRecordService.cpp
+        src/application/RevisionPublishService.h
+        src/application/RevisionPublishService.cpp
 )
 target_link_libraries(qaflow_application PUBLIC qaflow_core Qt6::Gui PRIVATE qaflow_warnings)
 
@@ -248,8 +250,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/BugView.cpp
         src/presentation/views/IssuesView.h
         src/presentation/views/IssuesView.cpp
-        src/presentation/views/RevisionResultDialog.h
-        src/presentation/views/RevisionResultDialog.cpp
+        src/presentation/views/RevisionPublishDialog.h
+        src/presentation/views/RevisionPublishDialog.cpp
         src/presentation/views/QualityRecordDialog.h
         src/presentation/views/QualityRecordDialog.cpp
         src/presentation/views/JiraPublishDialog.h

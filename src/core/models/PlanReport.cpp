@@ -3,6 +3,8 @@
 #include <QCoreApplication>
 #include <QHash>
 
+#include <algorithm>
+
 namespace qaflow {
 
 Verdict PlanReport::verdict() const {
@@ -11,7 +13,33 @@ Verdict PlanReport::verdict() const {
     return Verdict::Superado;
 }
 
-PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOfPlan, const CaseLookup& caseOf) {
+QList<IssueLink> PlanReport::bugs() const {
+    QList<IssueLink> out;
+    for (const auto& row : rows) out += row.bugs;
+    return out;
+}
+
+int PlanReport::bugCount() const {
+    int n = 0;
+    for (const auto& row : rows) n += int(row.bugs.size());
+    return n;
+}
+
+int PlanReport::openBugCount() const {
+    int n = 0;
+    for (const auto& row : rows)
+        n += int(std::count_if(row.bugs.cbegin(), row.bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
+    return n;
+}
+
+bool PlanReport::reportedDuring(const PlanRun& plan, const IssueLink& bug) {
+    if (!plan.startedAt.isValid() || !bug.createdAt.isValid()) return true;   // sin fechas no se puede descartar
+    const QDateTime until = plan.isFinished() ? plan.finishedAt.addSecs(3600) : QDateTime::currentDateTime();
+    return bug.createdAt >= plan.startedAt && bug.createdAt <= until;
+}
+
+PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOfPlan, const CaseLookup& caseOf,
+                             const QList<IssueLink>& bugs) {
     PlanReport r;
     r.plan = plan;
 
@@ -45,6 +73,9 @@ PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOf
         } else {
             row.title = info.title;
         }
+        for (const auto& bug : bugs)
+            if (bug.caseId == caseId && reportedDuring(plan, bug)) row.bugs.append(bug);
+        std::sort(row.bugs.begin(), row.bugs.end(), [](const IssueLink& a, const IssueLink& b) { return a.createdAt > b.createdAt; });
         r.rows.append(row);
     }
     return r;
@@ -64,6 +95,8 @@ QString PlanReport::toMarkdown() const {
     out << QCoreApplication::translate("core", "- **Casos:** %1 · Superados %2 · Fallidos %3 · Bloqueados %4 · Pendientes %5")
                .arg(total()).arg(passed).arg(failed).arg(blocked).arg(pending());
     out << QCoreApplication::translate("core", "- **Tasa de éxito:** %1 %").arg(successRate());
+    if (bugCount() > 0)
+        out << QCoreApplication::translate("core", "- **Bugs encontrados:** %1 · %2 abiertos").arg(bugCount()).arg(openBugCount());
     out << QCoreApplication::translate("core", "- **Duración acumulada:** %1").arg(formatDuration(durationSecs));
     out << QString();
     out << QCoreApplication::translate("core", "| Caso | Título | Suite | Resultado | Pasos | Duración |");
@@ -79,6 +112,26 @@ QString PlanReport::toMarkdown() const {
                    .arg(formatDuration(row.run.durationSecs));
     }
 
+    // Los bugs que salieron del ciclo, juntos: es lo primero que se mira al leer el informe en un ticket.
+    if (bugCount() > 0) {
+        out << QString();
+        out << QCoreApplication::translate("core", "## Bugs encontrados · %1").arg(bugCount());
+        out << QString();
+        out << QCoreApplication::translate("core", "| Bug | Caso | Paso | Título | Severidad | Estado |");
+        out << QStringLiteral("|-----|------|------|--------|-----------|--------|");
+        for (const auto& row : rows) {
+            for (const auto& bug : row.bugs) {
+                out << QStringLiteral("| %1 | %2 | %3 | %4 | %5 | %6 |")
+                           .arg(bug.key, bug.caseId,
+                                bug.step > 0 ? QString::number(bug.step) : QString(),
+                                bug.title, BugReport::severityLabel(bug.severity),
+                                bug.status.isEmpty() ? (bug.resolved ? QCoreApplication::translate("core", "Cerrado")
+                                                                     : QCoreApplication::translate("core", "Abierto"))
+                                                     : bug.status);
+            }
+        }
+    }
+
     for (const auto& row : rows) {
         if (!row.executed) continue;
         out << QString();
@@ -86,6 +139,12 @@ QString PlanReport::toMarkdown() const {
         QStringList links;
         if (!row.jiraKey.trimmed().isEmpty()) links << QCoreApplication::translate("core", "**Historia:** %1").arg(row.jiraKey.trimmed());
         if (!row.testKey.trimmed().isEmpty()) links << QCoreApplication::translate("core", "**Test:** %1").arg(row.testKey.trimmed());
+        if (!row.bugs.isEmpty()) {
+            QStringList keys;
+            for (const auto& bug : row.bugs)
+                keys << (bug.step > 0 ? QCoreApplication::translate("core", "%1 (paso %2)").arg(bug.key).arg(bug.step) : bug.key);
+            links << QCoreApplication::translate("core", "**Bugs:** %1").arg(keys.join(QStringLiteral(", ")));
+        }
         if (!links.isEmpty()) out << links.join(QStringLiteral(" · "));
         for (int i = 0; i < row.run.steps.size(); ++i) {
             const auto& s = row.run.steps[i];

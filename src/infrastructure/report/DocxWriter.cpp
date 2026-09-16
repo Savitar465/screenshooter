@@ -16,7 +16,8 @@ namespace {
 
 // Medidas de Word: 1 pulgada = 1440 twips = 914400 EMU, así que un twip son 635 EMU.
 constexpr int kEmuPerTwip = 635;
-constexpr int kPageWidth = 9070;   // A4 (11906 twips) menos los márgenes de 1418
+// Carta (12240 twips de ancho) menos los márgenes laterales del formulario, que son de 1701.
+constexpr int kPageWidth = 8838;
 
 /// Una imagen del documento, ya leída del disco y lista para ir en `word/media/`.
 struct Image {
@@ -56,8 +57,10 @@ QString alignment(Align align) {
 /// El texto de un párrafo: cada salto de línea es un `<w:br/>` para que la celda no se parta en dos.
 QString runsFor(const Paragraph& p) {
     const QStringList lines = p.text.split(QLatin1Char('\n'));
-    QString properties = QStringLiteral("<w:rPr>%1<w:sz w:val=\"%2\"/><w:szCs w:val=\"%2\"/></w:rPr>")
-                             .arg(p.bold ? QStringLiteral("<w:b/>") : QString())
+    const QString color = p.color.trimmed().isEmpty() ? QString()
+                                                      : QStringLiteral("<w:color w:val=\"%1\"/>").arg(p.color.trimmed());
+    QString properties = QStringLiteral("<w:rPr>%1%2<w:sz w:val=\"%3\"/><w:szCs w:val=\"%3\"/></w:rPr>")
+                             .arg(p.bold ? QStringLiteral("<w:b/>") : QString(), color)
                              .arg(p.size);
     QString out;
     for (int i = 0; i < lines.size(); ++i) {
@@ -125,8 +128,8 @@ QString tableXml(const Table& table, const QHash<QString, Image>& images, int& i
     int total = 0;
     for (const int width : table.grid) total += width;
     QString out = QStringLiteral("<w:tbl><w:tblPr><w:tblW w:w=\"%1\" w:type=\"dxa\"/>%2"
-                                 "<w:tblCellMar><w:top w:w=\"40\" w:type=\"dxa\"/><w:left w:w=\"80\" w:type=\"dxa\"/>"
-                                 "<w:bottom w:w=\"40\" w:type=\"dxa\"/><w:right w:w=\"80\" w:type=\"dxa\"/></w:tblCellMar>"
+                                 "<w:tblCellMar><w:top w:w=\"40\" w:type=\"dxa\"/><w:left w:w=\"85\" w:type=\"dxa\"/>"
+                                 "<w:bottom w:w=\"40\" w:type=\"dxa\"/><w:right w:w=\"85\" w:type=\"dxa\"/></w:tblCellMar>"
                                  "</w:tblPr><w:tblGrid>")
                       .arg(total > 0 ? total : pageWidth())
                       .arg(borders);
@@ -149,8 +152,9 @@ QByteArray documentXml(const QList<Block>& blocks, const QHash<QString, Image>& 
     }
     // Dos tablas seguidas se pegarían en una sola: Word necesita un párrafo entre ellas y al final.
     body += QStringLiteral("<w:p><w:pPr><w:spacing w:after=\"0\"/></w:pPr></w:p>");
-    body += QStringLiteral("<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/>"
-                           "<w:pgMar w:top=\"1134\" w:right=\"1418\" w:bottom=\"1134\" w:left=\"1418\" "
+    // Página carta con los márgenes del formulario R-213.
+    body += QStringLiteral("<w:sectPr><w:pgSz w:w=\"12240\" w:h=\"15840\"/>"
+                           "<w:pgMar w:top=\"1134\" w:right=\"1701\" w:bottom=\"1417\" w:left=\"1701\" "
                            "w:header=\"709\" w:footer=\"709\" w:gutter=\"0\"/></w:sectPr>");
 
     const QString xml =

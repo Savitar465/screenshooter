@@ -373,6 +373,161 @@ SystemsPage parseSystems(const QString& html) {
     return page;
 }
 
+// ---- Registro del control de calidad ----------------------------------------------------------
+
+namespace {
+/// Valor de un atributo de una etiqueta, entre comillas o sin ellas; vacío si no lo lleva. Sólo se
+/// reconoce precedido de un espacio, así `data-sistema` no pasa por `sistema`.
+QString attributeOf(const QString& tag, const QString& name) {
+    const QRegularExpression attr(QStringLiteral("\\s%1\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s\"'>]+))").arg(name), kOptions);
+    const QRegularExpressionMatch m = attr.match(tag);
+    if (!m.hasMatch()) return {};
+    for (int i = 1; i <= 3; ++i)
+        if (!m.captured(i).isNull()) return decodeEntities(m.captured(i));
+    return {};
+}
+
+/// La etiqueta lleva ese atributo, con valor o sin él (`disabled`, `selected`, `checked`).
+bool hasAttribute(const QString& tag, const QString& name) {
+    const QRegularExpression flag(QStringLiteral("\\s%1\\s*(?:=|/?>|\\s)").arg(name), kOptions);
+    return flag.match(tag).hasMatch();
+}
+
+/// Etiqueta de apertura de un fragmento ("<select …>") y lo que encierra.
+QPair<QString, QString> openAndBody(const QString& fragment) {
+    const qsizetype end = fragment.indexOf(QLatin1Char('>'));
+    if (end < 0) return {fragment, QString()};
+    return {fragment.left(end + 1), fragment.mid(end + 1)};
+}
+} // namespace
+
+QString registrationPath(const QString& html, const QString& id) {
+    static const QRegularExpression link(QStringLiteral("href\\s*=\\s*\"([^\"]*calidadregGestionRequerimiento\\.do[^\"]*)\""), kOptions);
+    for (auto it = link.globalMatch(withoutComments(html)); it.hasNext();) {
+        const QString href = decodeEntities(it.next().captured(1)).trimmed();
+        if (QUrlQuery(QUrl(href).query()).queryItemValue(QStringLiteral("id"), QUrl::FullyDecoded).trimmed() == id.trimmed()) return href;
+    }
+    return {};
+}
+
+QList<ControlItem> parseControlItems(const QString& html) {
+    // El enlace del formulario no está en un href sino en la llamada que abre la ventana.
+    static const QRegularExpression modal(QStringLiteral("Anb\\.modal\\.show\\(\\s*'\\s*(calidadregFuncionalForm\\.do\\?[^']*)'"), kOptions);
+    QList<ControlItem> items;
+    for (auto it = modal.globalMatch(withoutComments(html)); it.hasNext();) {
+        const QString path = decodeEntities(it.next().captured(1)).trimmed();
+        const QUrlQuery query(QUrl(path).query());
+        items << ControlItem{query.queryItemValue(QStringLiteral("sis_cod"), QUrl::FullyDecoded).simplified(),
+                             query.queryItemValue(QStringLiteral("sistema"), QUrl::FullyDecoded).simplified(), path};
+    }
+    return items;
+}
+
+ControlForm parseControlForm(const QString& html) {
+    ControlForm form;
+    static const QRegularExpression formRe(QStringLiteral("<form\\b[^>]*\\sid\\s*=\\s*\"formc\"[^>]*>(.*?)</form\\s*>"), kOptions);
+    const QRegularExpressionMatch found = formRe.match(withoutComments(html));
+    if (!found.hasMatch()) {
+        form.error = QCoreApplication::translate("infrastructure", "no está el formulario del control de calidad");
+        return form;
+    }
+    static const QRegularExpression fieldRe(QStringLiteral("<input\\b[^>]*>|<select\\b[^>]*>.*?</select\\s*>|<textarea\\b[^>]*>.*?</textarea\\s*>"), kOptions);
+    static const QRegularExpression optionRe(QStringLiteral("<option\\b[^>]*>.*?</option\\s*>"), kOptions);
+    for (auto it = fieldRe.globalMatch(found.captured(1)); it.hasNext();) {
+        const QString fragment = it.next().captured();
+        const auto [tag, body] = openAndBody(fragment);
+        const QString name = attributeOf(tag, QStringLiteral("name"));
+        // Un campo deshabilitado no se envía: así se quedan fuera las observaciones del solicitante y
+        // las del desarrollo, que la ventana enseña pero no deja tocar.
+        if (name.isEmpty() || hasAttribute(tag, QStringLiteral("disabled"))) continue;
+
+        if (tag.startsWith(QLatin1String("<textarea"), Qt::CaseInsensitive)) {
+            form.fields << qMakePair(name, decodeEntities(body.left(body.lastIndexOf(QLatin1Char('<')))));
+            continue;
+        }
+        if (tag.startsWith(QLatin1String("<select"), Qt::CaseInsensitive)) {
+            QString value;
+            bool first = true;
+            for (auto options = optionRe.globalMatch(body); options.hasNext();) {
+                const auto [option, text] = openAndBody(options.next().captured());
+                const QString chosen = hasAttribute(option, QStringLiteral("value")) ? attributeOf(option, QStringLiteral("value"))
+                                                                                     : toPlainText(text).simplified();
+                if (first) value = chosen;   // sin ninguna marcada, el navegador envía la primera
+                first = false;
+                if (hasAttribute(option, QStringLiteral("selected"))) { value = chosen; break; }
+            }
+            form.fields << qMakePair(name, value);
+            continue;
+        }
+        const QString type = attributeOf(tag, QStringLiteral("type")).toLower();
+        // El adjunto lo pone quien envía, pero se recuerda dónde iba: el navegador lo manda en su sitio.
+        if (type == QLatin1String("file")) {
+            if (form.filePosition < 0) form.filePosition = int(form.fields.size());
+            continue;
+        }
+        // Los botones no son datos.
+        if (type == QLatin1String("submit") || type == QLatin1String("button") || type == QLatin1String("reset")
+            || type == QLatin1String("image"))
+            continue;
+        if ((type == QLatin1String("checkbox") || type == QLatin1String("radio")) && !hasAttribute(tag, QStringLiteral("checked"))) continue;
+        // Las correcciones son del control de desarrollo: en el de calidad el script las deshabilita
+        // antes de enviar y viajan en los ocultos del final, con el valor que puso el sistema. Sin
+        // esto irían dos veces, la visible con el valor de la pantalla y la oculta con el bueno.
+        if (attributeOf(tag, QStringLiteral("class")).split(QLatin1Char(' '), Qt::SkipEmptyParts).contains(QStringLiteral("correccion"))) continue;
+        form.fields << qMakePair(name, attributeOf(tag, QStringLiteral("value")));
+    }
+
+    // Lo que identifica el control que se está registrando: sin ello el envío no llegaría a ninguna parte.
+    for (const auto& required : {QStringLiteral("gestion"), QStringLiteral("corr"), QStringLiteral("id"),
+                                 QStringLiteral("tip_control"), QStringLiteral("resultado_control")}) {
+        const bool present = std::any_of(form.fields.cbegin(), form.fields.cend(),
+                                         [&required](const QPair<QString, QString>& f) { return f.first == required; });
+        if (present) continue;
+        form.error = QCoreApplication::translate("infrastructure", "falta el campo «%1» en el formulario del control de calidad").arg(required);
+        return form;
+    }
+    form.ok = true;
+    return form;
+}
+
+QString serverErrorReason(const QString& html) {
+    if (html.trimmed().isEmpty()) return {};
+    const QString page = withoutComments(html);
+    // Tomcat: «<b>Message</b> …», «<b>Description</b> …», y el volcado de la excepción o su causa raíz.
+    static const QRegularExpression labelled(
+            QStringLiteral("<b>\\s*(?:Message|Mensaje|Exception|Excepci[oó]n|Root Cause|Causa ra[ií]z)\\s*</b>\\s*(.*?)(?:<(?:/p|br|h\\d)\\b|$)"),
+            kOptions);
+    QStringList reasons;
+    for (auto it = labelled.globalMatch(page); it.hasNext();) {
+        const QString text = toPlainText(it.next().captured(1)).simplified();
+        if (!text.isEmpty() && !reasons.contains(text)) reasons << text;
+    }
+    // El volcado de la pila: la primera línea es la excepción y su mensaje, que es lo que se busca.
+    static const QRegularExpression pre(QStringLiteral("<pre\\b[^>]*>(.*?)</pre\\s*>"), kOptions);
+    for (auto it = pre.globalMatch(page); it.hasNext();) {
+        const QString text = toPlainText(it.next().captured(1)).trimmed();
+        const QString first = text.left(text.indexOf(QLatin1Char('\n'))).simplified();
+        const QString line = first.isEmpty() ? text.simplified() : first;
+        if (!line.isEmpty() && !reasons.contains(line)) reasons << line;
+    }
+    if (reasons.isEmpty()) {
+        // Una página sin estructura conocida: su título ya dice algo más que el código.
+        static const QRegularExpression title(QStringLiteral("<title\\b[^>]*>(.*?)</title\\s*>"), kOptions);
+        const QRegularExpressionMatch found = title.match(page);
+        if (found.hasMatch()) reasons << toPlainText(found.captured(1)).simplified();
+    }
+    return reasons.join(QStringLiteral(" · ")).left(400);
+}
+
+bool isSavedState(const QString& state) {
+    // Los estados que main.js (`Anb.form.ajax`) trata como éxito.
+    static const QStringList saved{QStringLiteral("OK"),        QStringLiteral("AJAX"),        QStringLiteral("CREATE"),
+                                   QStringLiteral("CREATED"),   QStringLiteral("CREATE-AJAX"), QStringLiteral("CREATED-AJAX"),
+                                   QStringLiteral("UPDATE"),    QStringLiteral("UPDATE-AJAX"), QStringLiteral("MAIL"),
+                                   QStringLiteral("CREATE-AND-MAIL"), QStringLiteral("UPDATE-AND-MAIL")};
+    return saved.contains(state.trimmed(), Qt::CaseInsensitive);
+}
+
 QString toPlainText(const QString& html) {
     static const QRegularExpression space(QStringLiteral("\\s+"));
     static const QRegularExpression lineBreak(QStringLiteral("<br\\b[^>]*>"), kOptions);

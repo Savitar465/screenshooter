@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMimeDatabase>
+#include <QRandomGenerator>
 #include <QNetworkCookieJar>
 #include <QNetworkReply>
 
@@ -153,6 +154,72 @@ QHttpMultiPart* HttpClient::multipartFile(const QString& path, const QByteArray&
     file->setParent(multi);
     multi->append(part);
     return multi;
+}
+
+QHttpMultiPart* HttpClient::multipartForm(const QList<QPair<QString, QString>>& fields, const QString& filePath,
+                                          const QByteArray& fileField) {
+    auto* multi = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+    for (const auto& [name, value] : fields) {
+        QHttpPart part;
+        // Sin juego de caracteres declarado, el servidor lee las tildes con el suyo por omisión.
+        part.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("text/plain; charset=utf-8"));
+        part.setHeader(QNetworkRequest::ContentDispositionHeader, QStringLiteral("form-data; name=\"%1\"").arg(name));
+        part.setBody(value.toUtf8());
+        multi->append(part);
+    }
+    if (filePath.isEmpty()) return multi;
+    auto* file = new QFile(filePath);
+    if (!file->open(QIODevice::ReadOnly)) { delete file; delete multi; return nullptr; }
+    QHttpPart part;
+    part.setHeader(QNetworkRequest::ContentTypeHeader, QMimeDatabase().mimeTypeForFile(filePath).name());
+    part.setHeader(QNetworkRequest::ContentDispositionHeader,
+                   QStringLiteral("form-data; name=\"%1\"; filename=\"%2\"").arg(QString::fromLatin1(fileField), QFileInfo(filePath).fileName()));
+    part.setBodyDevice(file);
+    file->setParent(multi);
+    multi->append(part);
+    return multi;
+}
+
+HttpClient::FormData HttpClient::formData(const QList<QPair<QString, QString>>& fields, const QString& filePath,
+                                          const QByteArray& fileField, int filePosition) {
+    FormData out;
+    // Un delimitador como el de un navegador: sin comillas y con caracteres que no aparecen en los datos.
+    QByteArray boundary = "----QAflowFormBoundary";
+    for (int i = 0; i < 16; ++i) boundary += QByteArray::number(QRandomGenerator::global()->bounded(16), 16);
+    out.contentType = "multipart/form-data; boundary=" + boundary;
+
+    QByteArray file;
+    if (!filePath.isEmpty()) {
+        QFile source(filePath);
+        if (!source.open(QIODevice::ReadOnly)) return out;
+        const QString name = QFileInfo(filePath).fileName();
+        file = "--" + boundary + "\r\n";
+        file += "Content-Disposition: form-data; name=\"" + fileField + "\"; filename=\"" + name.toUtf8() + "\"\r\n";
+        file += "Content-Type: " + QMimeDatabase().mimeTypeForFile(filePath).name().toUtf8() + "\r\n\r\n";
+        file += source.readAll();
+        file += "\r\n";
+    }
+
+    const int at = file.isEmpty() ? -1 : (filePosition < 0 || filePosition > fields.size() ? int(fields.size()) : filePosition);
+    for (int i = 0; i < fields.size(); ++i) {
+        if (i == at) out.body += file;
+        // Como el navegador: sólo `Content-Disposition`, y el valor en los bytes de la página (UTF-8).
+        out.body += "--" + boundary + "\r\n";
+        out.body += "Content-Disposition: form-data; name=\"" + fields[i].first.toUtf8() + "\"\r\n\r\n";
+        out.body += fields[i].second.toUtf8();
+        out.body += "\r\n";
+    }
+    if (at == fields.size()) out.body += file;
+    out.body += "--" + boundary + "--\r\n";
+    out.ok = true;
+    return out;
+}
+
+void HttpClient::postFormData(const QNetworkRequest& req, const FormData& data, Handler done) {
+    QNetworkRequest request = req;
+    request.setHeader(QNetworkRequest::ContentTypeHeader, QString::fromLatin1(data.contentType));
+    request.setHeader(QNetworkRequest::ContentLengthHeader, data.body.size());
+    finish(m_nam.post(request, data.body), std::move(done));
 }
 
 QNetworkRequest HttpClient::pageRequest(const QString& url) {

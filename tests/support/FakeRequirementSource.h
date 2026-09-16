@@ -56,6 +56,8 @@ public:
     bool registersResults = true;                       // como GesreqClient contra el formulario «Registrar»
     QList<RequirementRegistration> registrations;       // lo que se mandó registrar, en orden
     bool registrationCutOff = false;                    // el envío se corta sin respuesta
+    /// Estado con el que el sistema deja el requerimiento al registrar, como hace GESREQ.
+    QString registrationState = QStringLiteral("CONTROL DE CALIDAD OBSERVADO");
 
     bool canRegisterResult() const override { return registersResults; }
 
@@ -73,6 +75,9 @@ public:
             r.error = QStringLiteral("GESREQ rechazó el usuario o la contraseña");
         } else {
             r.ok = true;
+            r.state = registration.result.compare(QStringLiteral("Conforme"), Qt::CaseInsensitive) == 0
+                              ? QStringLiteral("CONTROL DE CALIDAD REALIZADO")
+                              : registrationState;
         }
         done(r);
     }

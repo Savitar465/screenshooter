@@ -101,6 +101,9 @@ struct RevisionRegistration {
     QDateTime registeredAt;
     QaOutcome result = QaOutcome::Pendiente;
     QString comment;
+    /// Estado con el que quedó el requerimiento en GESREQ al registrar («CONTROL DE CALIDAD OBSERVADO»).
+    /// Lo dice el propio sistema al guardar, así que el issue no necesita volver a consultarlo.
+    QString requirementState;
     bool attachedDocument = false;
     bool uncertain = false;      // el envío se cortó: puede haberse registrado igualmente
     QString lastError;
@@ -116,6 +119,11 @@ struct IssueRevision {
     QDateTime startedAt;
     QDateTime closedAt;                        // inválida mientras la revisión sigue abierta
     QaOutcome outcome = QaOutcome::Pendiente;
+    /// Ciclo del plan (`PlanRun::id`) del que habla el acta. Una revisión puede tener varios ciclos
+    /// (se repitieron las pruebas); el acta se genera con el que se elija y aquí queda cuál fue, para
+    /// que regenerarla, mandarla a Jira o registrarla en GESREQ hablen todos del mismo. Vacío = el
+    /// último ciclo de la revisión.
+    QString planRunId;
     QualityRecord record;                      // lo escrito en el acta, para regenerarla sin teclearla otra vez
     QString documentPath;                      // acta generada
     QDateTime documentAt;
@@ -134,8 +142,9 @@ struct Issue {
     QString notes;                 // lo escrito en QAflow; lo extraído vive en `requirement`
     Priority priority = Priority::Media;
     IssueState state = IssueState::Pending;
-    QStringList caseIds;           // casos que lo validan; un caso puede cubrir varios issues
-    QStringList planIds;           // planes que agrupan sus pruebas
+    /// Planes que prueban el requerimiento: el issue se organiza por planes, y sus casos son los de
+    /// éstos (`IssueStore::caseIdsOf`). No hay casos sueltos colgando del issue.
+    QStringList planIds;
     RequirementLink requirement;   // vacío en un issue creado a mano
     IssuePublication publication;  // vacío mientras no se publique ni se vincule
     /// Rondas de control de calidad, de la primera a la última. Vacío mientras no se haya empezado.

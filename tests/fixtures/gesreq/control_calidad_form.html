@@ -1,0 +1,149 @@
+<div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+    <h4 class="modal-title">Registro Control Calidad</h4>
+</div>
+<form name="ItemForm" id="formc" method="post" action="/greq/gestionControlCalidad.do" class="form-horizontal" enctype="multipart/form-data">
+    <div class="modal-body">
+        <input type="hidden" name="gestion" value="2025">
+        <input type="hidden" name="unidad" value="">
+        <input type="hidden" name="corr" value="101">
+        <input type="hidden" name="sis_cod" value="PORTAL WEB">
+        <input type="hidden" name="sistema" value="PORTAL INSTITUCIONAL">
+        <input type="hidden" name="tipo" value="">
+        <input type="hidden" name="tip_control" value="CALIDAD">
+        <input type="hidden" name="cod_asignado" value="15573">
+        <input type="hidden" name="id" value="1">
+        <input type="hidden" name="cod_control_func" value="0">
+        <input type="hidden" name="fecha_ini" value="11/08/2025" id="fecha_ini">
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <div class="form-group" style="width:95%">
+                    <label class="col-sm-2 control-label">Sistema:</label>
+                    <div class="col-sm-8">
+                        PORTAL INSTITUCIONAL
+                        <input type="hidden" name="sis_cod" value="PORTAL WEB">
+                    </div>
+                </div>
+                <div class="form-group" style="width:100%">
+                    <label class="col-sm-2 control-label">Observaciones:</label>
+                    <div class="col-sm-8">
+                        <textarea name="observaciones" disabled="true" id="detalle" class="form-control" data-maxlength="500" cols="200">Revisar el formulario de contacto</textarea>
+                    </div>
+                </div>
+                <div class="panel panel-primary">
+                    <div class="panel-heading" role="tab" id="headingOne">
+                        <h4 class="panel-title"><strong>DATOS CONTROL CALIDAD</strong></h4>
+                    </div>
+                    <div class="panel-body">
+                        <div class="form-group" style="width:100%;padding-top: 10px;">
+                            <table style="border: darkgray 2px solid;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 80%;"><label class="control-label label-required">Clasificación de Observaciones</label></th>
+                                        <th>Observaciones</th>
+                                        <th>Correcciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <th style="text-align: left;">Funcionamiento/lógica <span style="font-size: 11px; color: darkgray;">[no acorde al requerimiento/ lógica de negocio]</span></th>
+                                        <td><input type="text" name="tot_obs_func" value="1" style="text-align: center;" class="form-control obs numeric"></td>
+                                        <td><input type="text" name="tot_corr_func" value="36" style="text-align: center;" class="form-control correccion numeric"></td>
+                                    </tr>
+                                    <tr>
+                                        <th style="text-align: left;">Datos <span style="font-size: 11px; color: darkgray;">[inconsistencia datos, versionamiento, información incompleta]</span></th>
+                                        <td><input type="text" name="tot_obs_datos" value="0" style="text-align: center;" class="form-control obs numeric"></td>
+                                        <td><input type="text" name="tot_corr_datos" value="0" style="text-align: center;" class="form-control correccion numeric"></td>
+                                    </tr>
+                                    <tr>
+                                        <th style="text-align: left;">Estético/Forma <span style="font-size: 11px; color: darkgray;">[título faltante, ortografía, formatos, tamaños, colores, alineaciones]</span></th>
+                                        <td><input type="text" name="tot_obs_forma" value="0" style="text-align: center;" class="form-control obs numeric"></td>
+                                        <td><input type="text" name="tot_corr_forma" value="0" style="text-align: center;" class="form-control correccion numeric"></td>
+                                    </tr>
+                                    <tr>
+                                        <th style="text-align: left;">Recomendaciones <span style="font-size: 11px; color: darkgray;">[funcionalidades faltantes, que mejoran el flujo, se entiende de mejor manera]</span></th>
+                                        <td><input type="text" name="tot_obs_rec" value="0" id="total_recomen" style="text-align: center;" class="form-control obs numeric"></td>
+                                        <td><input type="text" name="tot_corr_rec" value="0" style="text-align: center;" class="form-control correccion numeric"></td>
+                                    </tr>
+                                    <tr>
+                                        <th style="text-align: left;">Vulnerabilidades B&aacute;sicas <span style="font-size: 11px; color: darkgray;">[Vulnerabilidades/Alertas ROJAS con evidencia]</span></th>
+                                        <td><input type="text" name="tot_obs_vul" value="0" style="text-align: center;" class="form-control obs numeric"></td>
+                                        <td><input type="text" name="tot_corr_vul" value="0" style="text-align: center;" class="form-control correccion numeric"></td>
+                                    </tr>
+                                    <tr>
+                                        <th style="float: right;">Total Observaciones </th>
+                                        <td class="tot_obs">1</td>
+                                        <td class="tot_corr">36</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="form-group" style="padding-top: 10px; padding-bottom: 10px; width: 100%">
+                            <label class="col-sm-3 control-label">Satisface:</label>
+                            <div class="col-sm-4">
+                                <select name="resultado_control" id="resultado_control" class="form-control required"><option value="" id="opvacio">Seleccione un Resultado</option>
+                                    <option value="OBSERVADO" selected="selected">OBSERVADO</option>
+                                    <option value="OK">OK</option></select>
+                            </div>
+                        </div>
+                        <div class="form-group" style="width: 100%">
+                            <label class="col-sm-3 control-label">Adjuntar Archivo (detalle errores):</label>
+                            <div class="col-sm-4 input-group">
+                                <input type="file" name="arch_funcional" id="arch_funcional" class="form-control dfile required arch_peso" title="adjunto"
+                                       onchange="comprueba_extension(this.form, this.form.arch_funcional.value)"/>
+                                <span class="input-group-btn">
+                                    <a class="btn btn-primary" href="docDownload.do?doc=2026/2025101/CONTROLCALIDAD202510120260608104411.docx&req=2025101">
+                                        <i class="fa fa-file-pdf-o"></i>
+                                    </a>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="form-group" style="width: 100%">
+                            <label class="col-sm-3 control-label">Observaciones control</label>
+                            <div class="col-sm-8">
+                                <textarea name="obs_controlfuncional" class="form-control">Se debe generar el documento actualizado con los cambios realizados.</textarea>
+                            </div>
+                        </div>
+                        <div class="form-group" style="width: 100%; display:none">
+                            <label class="col-sm-3 control-label">Observaciones desarrollo </label>
+                            <div class="col-sm-8">
+                                <textarea name="obs_controlcalidad" onkeydown="maximo(this,2000);" onkeyup="maximo(this,2000);" disabled="disabled" class="form-control"></textarea>
+                            </div>
+                        </div>
+                        <div><code class="label-required">Campos Obligatorios</code></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <input type="hidden" name="tot_corr_func" value="36">
+    <input type="hidden" name="tot_corr_datos" value="0">
+    <input type="hidden" name="tot_corr_forma" value="0">
+    <input type="hidden" name="tot_corr_rec" value="0">
+    <input type="hidden" name="tot_corr_vul" value="0">
+    <div class="modal-footer">
+        <button type="submit" class="btn btn-primary btn-principal">Guardar</button>
+        <button type="button" class="btn btn-default cancelar" data-dismiss="modal">Cancelar </button>
+    </div>
+</form>
+<script>
+    $(document).ready(function () {
+        var tipo = "CALIDAD";
+        var url1 = "";
+        $("#opvacio").prop("selected", "selected");
+        if (tipo == 'CALIDAD') {
+            url1 = 'calidadregGestionControlGuardar.do';
+            $(".obs").prop("disabled", "");
+            $(".correccion").prop("disabled", "disabled");
+        } else {
+            url1 = 'gestionControlGuardar.do';
+            $(".obs").prop("disabled", "disabled");
+            $(".correccion").prop("disabled", "");
+        }
+        Anb.form.submit('#formc', function (form) {
+            Anb.confirm("¿Está seguro de registrar el Control?", function () {
+                Anb.form.ajax(form, url1, {});
+            });
+        });
+    });
+</script>

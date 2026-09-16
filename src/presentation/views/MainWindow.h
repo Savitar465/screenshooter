@@ -42,7 +42,15 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(AppContext& ctx, QWidget* parent = nullptr);
 
+    /// Va a la raíz de esa sección: es lo que hacen el rail, el menú y los atajos, así que vacía el
+    /// camino de vuelta (el botón «atrás» desaparece).
     void navigate(Screen s);
+    /// Entra en profundidad, al estilo de iOS: guarda la pantalla actual para que el botón «atrás»
+    /// vuelva a ella con su contexto (el plan desde el que se creó el caso, el issue desde el que se
+    /// abrió el plan). Es lo que hacen las acciones de las tarjetas, no la navegación del rail.
+    void navigateInto(Screen s);
+    /// Vuelve a la pantalla anterior del camino. No hace nada si no hay ninguna.
+    void goBack();
     void setProjectActive(bool active);
     Screen currentScreen() const { return m_current; }
     /// Acción "Finalizar" de la ejecución: sigue con el plan, muestra su informe o vuelve a los casos.
@@ -79,6 +87,8 @@ signals:
 
 protected:
     void resizeEvent(QResizeEvent* e) override;
+    /// El botón «atrás» del ratón vuelve por el camino, como en el navegador.
+    void mousePressEvent(QMouseEvent* e) override;
     void closeEvent(QCloseEvent* e) override;
     /// Arrastrar ficheros a la ventana los adjunta como evidencia del caso seleccionado.
     void dragEnterEvent(QDragEnterEvent* e) override;
@@ -87,7 +97,18 @@ protected:
 private:
     QWidget* buildNavbar();
     void refreshNavbar();
+    /// Cambia de pantalla sin tocar el camino de vuelta; `navigate` y `navigateInto` lo usan.
+    void showScreen(Screen s);
+    /// Pone al día el botón «atrás» y su acción del menú con lo último del camino.
+    void refreshBackButton();
+    /// Nombre con el que el camino de vuelta anuncia una pantalla, con su contexto cuando lo tiene
+    /// («Suite de regresión», «Issue ISS-0003»).
+    QString screenLabel(Screen s) const;
+    /// Issue que se prueba con ese ciclo de plan; vacío si el plan no prueba ningún requerimiento.
+    QString issueOfPlanRun(const QString& planRunId) const;
     void runSelectedTarget();
+    /// Arranca un ciclo de ese plan y lleva a la ejecución; avisa si hay algo en curso que lo impida.
+    void startPlanRun(const QString& planId);
     void selectContextTarget();
     void buildMenus();
     void buildTray();
@@ -111,9 +132,17 @@ private:
     Toast* m_toast;
     FlashOverlay* m_flash;
     Screen m_current = Screen::Casos;
+    /// Camino de vuelta: cada paso guarda de qué pantalla se vino y con qué nombre anunciarla, tomado
+    /// en el momento de salir para que diga el plan o el issue que se estaba mirando y no el de ahora.
+    struct BackStep {
+        Screen screen = Screen::Casos;
+        QString label;
+    };
+    QList<BackStep> m_back;
 
     QComboBox* m_projects = nullptr;
     QPushButton* m_projectMenu = nullptr;
+    QPushButton* m_navBack = nullptr;
     QComboBox* m_runTarget = nullptr;
     QPushButton* m_navRun = nullptr;
     QPushButton* m_navStop = nullptr;
@@ -123,6 +152,7 @@ private:
     QAction* m_actRecord = nullptr;
     QAction* m_actAttach = nullptr;
     QAction* m_trayRecord = nullptr;
+    QAction* m_actBack = nullptr;
     QAction* m_actUndo = nullptr;
     QAction* m_actRun = nullptr;
     QAction* m_actDuplicate = nullptr;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/models/IssueLink.h"
 #include "core/models/RunHistory.h"
 
 #include <QWidget>
@@ -59,6 +60,11 @@ private:
     void refreshList();
     void refreshDetail();
     void renderPlan(const PlanReport& report);
+    /// Tarjeta «Bugs encontrados» del informe: los reportados mientras corría el ciclo, con su caso,
+    /// el paso que falló y su estado en el gestor. nullptr si el ciclo no dejó ninguno.
+    QWidget* bugsCard(const PlanReport& report);
+    /// Una línea de bug, para la tarjeta del ciclo y para la del caso.
+    QWidget* bugRow(const IssueLink& bug, bool withCase);
     void renderRun(const RunRecord& run);
     void renderMetrics();
     QWidget* stepsList(const RunRecord& run) const;

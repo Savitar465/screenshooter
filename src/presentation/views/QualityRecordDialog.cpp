@@ -6,6 +6,7 @@
 #include "presentation/widgets/Ui.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDateEdit>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -15,6 +16,9 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSpinBox>
+
+#include <algorithm>
+#include <utility>
 
 namespace qaflow {
 
@@ -44,8 +48,10 @@ QSpinBox* counter(int value) {
 
 } // namespace
 
-QualityRecordDialog::QualityRecordDialog(const QualityRecord& record, QaOutcome outcome, const QStringList& blockers, QWidget* parent)
-    : QDialog(parent), m_record(record) {
+QualityRecordDialog::QualityRecordDialog(const QualityRecord& record, QaOutcome outcome, const QStringList& blockers,
+                                         const QList<CycleChoice>& cycles, const QString& currentCycle,
+                                         std::function<QualityRecord(const QString& planRunId)> redraft, QWidget* parent)
+    : QDialog(parent), m_record(record), m_redraft(std::move(redraft)) {
     setObjectName(QStringLiteral("qualityRecordDialog"));
     setWindowTitle(tr("Acta de control de calidad"));
     setWindowIcon(ui::appIcon());
@@ -56,10 +62,12 @@ QualityRecordDialog::QualityRecordDialog(const QualityRecord& record, QaOutcome 
     const QString summary = blockers.isEmpty()
                                 ? tr("Resultado propuesto: %1").arg(label(outcome))
                                 : tr("Resultado propuesto: %1 · %2").arg(label(outcome), blockers.join(QStringLiteral(" · ")));
-    auto* proposal = ui::label(summary, "muted-sm");
-    proposal->setWordWrap(true);
-    proposal->setStyleSheet(QStringLiteral("color:%1;").arg(outcome == QaOutcome::Conforme ? theme::Green : theme::AmberSoft));
-    root->addWidget(proposal);
+    m_proposal = ui::label(summary, "muted-sm");
+    m_proposal->setWordWrap(true);
+    m_proposal->setStyleSheet(QStringLiteral("color:%1;").arg(outcome == QaOutcome::Conforme ? theme::Green : theme::AmberSoft));
+    root->addWidget(m_proposal);
+
+    buildCycles(root, cycles, currentCycle);
 
     QWidget* content = nullptr;
     QVBoxLayout* v = nullptr;
@@ -85,6 +93,57 @@ QualityRecordDialog::QualityRecordDialog(const QualityRecord& record, QaOutcome 
     h->addWidget(cancel);
     h->addWidget(accept);
     root->addWidget(buttons);
+}
+
+void QualityRecordDialog::buildCycles(QVBoxLayout* v, const QList<CycleChoice>& cycles, const QString& currentCycle) {
+    if (cycles.isEmpty()) {
+        auto* none = ui::label(tr("La revisión no tiene ninguna ejecución de plan: el acta sale sin resultados de pruebas."), "muted-sm");
+        none->setWordWrap(true);
+        v->addWidget(none);
+        return;
+    }
+    m_cycles = new QComboBox;
+    m_cycles->setObjectName(QStringLiteral("recordCycle"));
+    for (const auto& cycle : cycles) m_cycles->addItem(cycle.text, cycle.planRunId);
+    // Con varias ejecuciones se puede levantar el acta de una o de todas.
+    if (cycles.size() > 1) m_cycles->addItem(tr("Todas las ejecuciones de la revisión"), QString());
+    m_cycles->setCurrentIndex(std::max(0, m_cycles->findData(currentCycle)));
+    connect(m_cycles, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (!m_redraft) return;
+        loadRecord(m_redraft(planRunId()));
+    });
+    v->addWidget(field(tr("Ejecución del plan con la que se levanta el acta"), m_cycles));
+}
+
+void QualityRecordDialog::loadRecord(const QualityRecord& record) {
+    m_record = record;
+    m_system->setText(record.system);
+    m_moduleLink->setText(record.moduleLink);
+    m_server->setText(record.server);
+    m_dbAccess->setText(record.dbAccess);
+    m_dbSchema->setText(record.dbSchema);
+    m_dbUser->setText(record.dbUser);
+    m_appUser->setText(record.appUser);
+    m_tables->setText(record.tables);
+    m_functions->setText(record.functions);
+    m_description->setTextSilently(record.description);
+    m_developedBy->setText(record.developedBy);
+    m_qaResource->setText(record.qaResource);
+    m_department->setText(record.department);
+    m_revision->setValue(record.revisionNumber);
+    if (record.from.isValid()) m_from->setDate(record.from);
+    if (record.to.isValid()) m_to->setDate(record.to);
+    m_caseDesign->setTextSilently(record.caseDesign);
+    m_execution->setTextSilently(record.execution);
+    m_bugs->setTextSilently(record.bugs);
+    for (const auto& row : m_observations) {
+        const auto it = std::find_if(record.observations.cbegin(), record.observations.cend(),
+                                     [&row](const ObservationCount& o) { return o.type == row.type; });
+        if (it == record.observations.cend()) continue;
+        row.observations->setValue(it->observations);
+        row.corrections->setValue(it->corrections);
+    }
+    refreshTotals();
 }
 
 void QualityRecordDialog::buildGeneral(QVBoxLayout* v) {
@@ -284,6 +343,8 @@ void QualityRecordDialog::addImage() {
                                                             tr("Imágenes (*.png *.jpg *.jpeg)"));
     for (const auto& path : paths) appendImage(path);
 }
+
+QString QualityRecordDialog::planRunId() const { return m_cycles ? m_cycles->currentData().toString() : QString(); }
 
 QualityRecord QualityRecordDialog::record() const {
     QualityRecord record = m_record;

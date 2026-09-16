@@ -230,7 +230,7 @@ QualityRecord recordFromJson(const QJsonObject& o) {
 QJsonObject revisionToJson(const IssueRevision& r) {
     QJsonObject o{
         {"number", r.number}, {"startedAt", iso(r.startedAt)}, {"closedAt", iso(r.closedAt)},
-        {"outcome", toString(r.outcome)}, {"record", recordToJson(r.record)},
+        {"outcome", toString(r.outcome)}, {"planRunId", r.planRunId}, {"record", recordToJson(r.record)},
         {"documentPath", r.documentPath}, {"documentAt", iso(r.documentAt)},
     };
     if (!r.jira.isEmpty())
@@ -241,6 +241,7 @@ QJsonObject revisionToJson(const IssueRevision& r) {
     if (!r.gesreq.isEmpty())
         o.insert(QStringLiteral("gesreq"), QJsonObject{
             {"registeredAt", iso(r.gesreq.registeredAt)}, {"result", toString(r.gesreq.result)}, {"comment", r.gesreq.comment},
+            {"requirementState", r.gesreq.requirementState},
             {"attachedDocument", r.gesreq.attachedDocument}, {"uncertain", r.gesreq.uncertain}, {"lastError", r.gesreq.lastError},
         });
     return o;
@@ -252,6 +253,7 @@ IssueRevision revisionFromJson(const QJsonObject& o) {
     r.startedAt = dateTime(o["startedAt"]);
     r.closedAt = dateTime(o["closedAt"]);
     r.outcome = qaOutcomeFromString(o["outcome"].toString());
+    r.planRunId = o["planRunId"].toString();
     r.record = recordFromJson(o["record"].toObject());
     r.documentPath = o["documentPath"].toString();
     r.documentAt = dateTime(o["documentAt"]);
@@ -265,6 +267,7 @@ IssueRevision revisionFromJson(const QJsonObject& o) {
     r.gesreq.registeredAt = dateTime(gesreq["registeredAt"]);
     r.gesreq.result = qaOutcomeFromString(gesreq["result"].toString());
     r.gesreq.comment = gesreq["comment"].toString();
+    r.gesreq.requirementState = gesreq["requirementState"].toString();
     r.gesreq.attachedDocument = gesreq["attachedDocument"].toBool();
     r.gesreq.uncertain = gesreq["uncertain"].toBool();
     r.gesreq.lastError = gesreq["lastError"].toString();
@@ -274,7 +277,7 @@ IssueRevision revisionFromJson(const QJsonObject& o) {
 QJsonObject issueToJson(const Issue& i) {
     QJsonObject o{
         {"id", i.id}, {"title", i.title}, {"notes", i.notes}, {"priority", toString(i.priority)}, {"state", toString(i.state)},
-        {"caseIds", QJsonArray::fromStringList(i.caseIds)}, {"planIds", QJsonArray::fromStringList(i.planIds)},
+        {"planIds", QJsonArray::fromStringList(i.planIds)},
         {"createdAt", iso(i.createdAt)}, {"updatedAt", iso(i.updatedAt)},
     };
     if (i.isImported()) o.insert(QStringLiteral("requirement"), requirementToJson(i.requirement));
@@ -294,7 +297,6 @@ Issue issueFromJson(const QJsonObject& o) {
     i.notes = o["notes"].toString();
     i.priority = priorityFromString(o["priority"].toString());
     i.state = issueStateFromString(o["state"].toString());
-    i.caseIds = strings(o["caseIds"]);
     i.planIds = strings(o["planIds"]);
     if (o.contains(QStringLiteral("publication"))) {
         i.publication = publicationFromJson(o["publication"].toObject());

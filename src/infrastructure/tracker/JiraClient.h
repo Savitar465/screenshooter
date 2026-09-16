@@ -37,7 +37,16 @@ public:
     void commentIssue(const TrackerSettings& s, const QString& key, const QString& body, const QStringList& attachments,
                       std::function<void(const IssueResult&)> done) override;
 
+    bool canLinkIssues(const TrackerSettings& s) const override { Q_UNUSED(s); return true; }
+    void linkIssues(const TrackerSettings& s, const QString& from, const QString& to,
+                    std::function<void(const IssueResult&)> done) override;
+
 private:
+    /// Tipo de enlace con el que se relacionan dos issues, preguntado al servidor una vez: el nombre lo
+    /// configura cada instancia («Relates», «Relacionada con»…), así que no se puede dar por supuesto.
+    void withLinkType(const TrackerSettings& s, std::function<void(const QString& type, const QString& error)> done);
+    QString m_linkType;    // el elegido; vacío mientras no se haya preguntado
+    QString m_linkTypeFor; // instancia para la que vale
     QNetworkRequest request(const TrackerSettings& s, const QString& path) const;
     /// `GET /user/assignable/search` con el texto buscado: Jira Server filtra por `username` y Cloud por `query`.
     static QString assignableSearchPath(const TrackerSettings& s, const QString& query, int maxResults);

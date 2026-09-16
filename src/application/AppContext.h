@@ -10,6 +10,7 @@
 #include "application/ProjectStore.h"
 #include "application/QualityRecordService.h"
 #include "application/RequirementSourceService.h"
+#include "application/RevisionPublishService.h"
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
@@ -35,12 +36,14 @@ struct AppContext {
     BugReportService* bugs = nullptr;
     BugStore* bugLedger = nullptr;
     CaseTransferService* transfer = nullptr;
-    /// Issues del proyecto: el trabajo de QA de cada requerimiento, con sus casos y planes.
+    /// Issues del proyecto: el trabajo de QA de cada requerimiento, con los planes que lo prueban.
     IssueStore* issues = nullptr;
     /// Publicación del issue en el gestor (puede ser nullptr en tests).
     IssuePublishService* issuePublish = nullptr;
     /// Acta de control de calidad del issue (puede ser nullptr en tests).
     QualityRecordService* records = nullptr;
+    /// Publicación del resultado de una revisión (Zephyr + gestor + GESREQ; puede ser nullptr en tests).
+    RevisionPublishService* revisionPublish = nullptr;
     /// Publicación de ciclos en Zephyr (puede ser nullptr en tests).
     TestPublishService* publish = nullptr;
     /// Conexión con GESREQ, del que se importan los requerimientos (puede ser nullptr en tests).

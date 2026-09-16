@@ -556,10 +556,6 @@
         <translation>With findings</translation>
     </message>
     <message>
-        <source>sin casos vinculados</source>
-        <translation>no linked cases</translation>
-    </message>
-    <message>
         <source>Este gestor no admite comentarios desde QAflow</source>
         <translation>This tracker does not accept comments from QAflow</translation>
     </message>
@@ -612,20 +608,12 @@
         <translation>%1 — %2 — %3 step(s)</translation>
     </message>
     <message>
-        <source>%1 caso(s) ejecutado(s): %2 superado(s), %3 fallido(s), %4 bloqueado(s)</source>
-        <translation>%1 case(s) executed: %2 passed, %3 failed, %4 blocked</translation>
-    </message>
-    <message>
         <source>Control de calidad GREQ %1 — revisión %2: %3</source>
         <translation>Quality control GREQ %1 — review %2: %3</translation>
     </message>
     <message>
         <source>Fecha de revisión: %1</source>
         <translation>Review date: %1</translation>
-    </message>
-    <message>
-        <source>Casos ejecutados: %1 (%2 superados, %3 fallidos, %4 bloqueados)</source>
-        <translation>Cases executed: %1 (%2 passed, %3 failed, %4 blocked)</translation>
     </message>
     <message>
         <source>Observaciones: %1</source>
@@ -638,6 +626,98 @@
     <message>
         <source>Observaciones generales: %1</source>
         <translation>General findings: %1</translation>
+    </message>
+    <message>
+        <source>sin casos en sus planes</source>
+        <translation>no cases in its plans</translation>
+    </message>
+    <message>
+        <source>%1 %2 — sin ejecutar</source>
+        <translation>%1 %2 — not run</translation>
+    </message>
+    <message>
+        <source>%1 %2 — %3 (%4 de %5 pasos)</source>
+        <translation>%1 %2 — %3 (%4 of %5 steps)</translation>
+    </message>
+    <message>
+        <source>Solicitado por: %1</source>
+        <translation>Requested by: %1</translation>
+    </message>
+    <message>
+        <source>Tipo: %1</source>
+        <translation>Type: %1</translation>
+    </message>
+    <message>
+        <source>Referencia: %1</source>
+        <translation>Reference: %1</translation>
+    </message>
+    <message>
+        <source>Prioridad: %1</source>
+        <translation>Priority: %1</translation>
+    </message>
+    <message>
+        <source>Estado en GESREQ: %1</source>
+        <translation>State in GESREQ: %1</translation>
+    </message>
+    <message>
+        <source>Plan «%1» · %2 caso(s)</source>
+        <translation>Plan “%1” · %2 case(s)</translation>
+    </message>
+    <message>
+        <source>%1 a %2</source>
+        <translation>%1 to %2</translation>
+    </message>
+    <message>
+        <source>%1 · ciclo del %2 · %3 de %4 ejecutados: %5 superado(s), %6 fallido(s), %7 bloqueado(s)</source>
+        <translation>%1 · cycle of %2 · %3 of %4 executed: %5 passed, %6 failed, %7 blocked</translation>
+    </message>
+    <message>
+        <source>Ciclo en Zephyr: %1</source>
+        <translation>Zephyr cycle: %1</translation>
+    </message>
+    <message>
+        <source>Casos ejecutados: %1 de %2 (%3 superados, %4 fallidos, %5 bloqueados)</source>
+        <translation>Cases executed: %1 of %2 (%3 passed, %4 failed, %5 blocked)</translation>
+    </message>
+    <message>
+        <source>Plan «%1» · ciclo del %2</source>
+        <translation>Plan “%1” · cycle of %2</translation>
+    </message>
+    <message>
+        <source>Plan «%1» · ciclo del %2 · %3</source>
+        <translation>Plan “%1” · cycle of %2 · %3</translation>
+    </message>
+    <message>
+        <source>Este gestor no enlaza issues desde QAflow</source>
+        <translation>This tracker does not link issues from QAflow</translation>
+    </message>
+    <message>
+        <source>- **Bugs encontrados:** %1 · %2 abiertos</source>
+        <translation>- **Bugs found:** %1 · %2 open</translation>
+    </message>
+    <message>
+        <source>## Bugs encontrados · %1</source>
+        <translation>## Bugs found · %1</translation>
+    </message>
+    <message>
+        <source>| Bug | Caso | Paso | Título | Severidad | Estado |</source>
+        <translation>| Bug | Case | Step | Title | Severity | Status |</translation>
+    </message>
+    <message>
+        <source>Cerrado</source>
+        <translation>Closed</translation>
+    </message>
+    <message>
+        <source>Abierto</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>%1 (paso %2)</source>
+        <translation>%1 (step %2)</translation>
+    </message>
+    <message>
+        <source>**Bugs:** %1</source>
+        <translation>**Bugs:** %1</translation>
     </message>
 </context>
 <context>
@@ -1049,6 +1129,97 @@
     <message>
         <source>Indica el issue del gestor que se comenta</source>
         <translation>Say which tracker issue is being commented</translation>
+    </message>
+    <message>
+        <source>GESREQ sólo admite «Conforme» u «Observado» como resultado del control, y la revisión está en «%1»</source>
+        <translation>GESREQ only accepts “Conforme” or “Observado” as the control result, and the revision is “%1”</translation>
+    </message>
+    <message>
+        <source>GESREQ exige adjuntar el acta del control: genérala antes de registrar el resultado</source>
+        <translation>GESREQ requires the control record as an attachment: generate it before registering the result</translation>
+    </message>
+    <message>
+        <source>No se encuentra el acta %1</source>
+        <translation>The record %1 cannot be found</translation>
+    </message>
+    <message>
+        <source>GESREQ no admite adjuntos «%1»: el acta tiene que ser .doc, .docx, .pdf, .xls, .xlsx, .vsd, .jpg o .gif</source>
+        <translation>GESREQ does not accept “%1” attachments: the record must be .doc, .docx, .pdf, .xls, .xlsx, .vsd, .jpg or .gif</translation>
+    </message>
+    <message numerus="yes">
+        <source>GESREQ no acepta un control «OK» con %n observación(es) que no sean recomendaciones: registra esta ronda como observada</source>
+        <translation>
+            <numerusform>GESREQ does not accept an “OK” control with %n observation that is not a recommendation: register this round as observed</numerusform>
+            <numerusform>GESREQ does not accept an “OK” control with %n observations that are not recommendations: register this round as observed</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>GESREQ no acepta un control «OBSERVADO» sin ninguna observación de funcionamiento, datos, forma o vulnerabilidades</source>
+        <translation>GESREQ does not accept an “OBSERVADO” control without any behaviour, data, appearance or vulnerability observation</translation>
+    </message>
+    <message>
+        <source>El requerimiento %1 no está en tu bandeja de control de calidad o ya no admite registro</source>
+        <translation>Requirement %1 is not in your quality control inbox, or no longer accepts a registration</translation>
+    </message>
+    <message>
+        <source>La pantalla de gestión del requerimiento %1 no ofrece el formulario del control de calidad</source>
+        <translation>The management screen of requirement %1 does not offer the quality control form</translation>
+    </message>
+    <message>
+        <source>El requerimiento %1 no tiene un control de calidad del sistema «%2» (tiene: %3)</source>
+        <translation>Requirement %1 has no quality control for the system “%2” (it has: %3)</translation>
+    </message>
+    <message>
+        <source>sin indicar</source>
+        <translation>not given</translation>
+    </message>
+    <message>
+        <source>El formulario del control de calidad no tiene la estructura esperada: %1</source>
+        <translation>The quality control form does not have the expected structure: %1</translation>
+    </message>
+    <message>
+        <source>No se pudo leer el acta %1</source>
+        <translation>The record %1 could not be read</translation>
+    </message>
+    <message>
+        <source>GESREQ pidió iniciar sesión en vez de registrar el control; vuelve a intentarlo</source>
+        <translation>GESREQ asked to sign in instead of registering the control; try again</translation>
+    </message>
+    <message>
+        <source>GESREQ no confirmó el registro del control</source>
+        <translation>GESREQ did not confirm the control registration</translation>
+    </message>
+    <message>
+        <source>GESREQ no registró el control: %1</source>
+        <translation>GESREQ did not register the control: %1</translation>
+    </message>
+    <message>
+        <source>no está el formulario del control de calidad</source>
+        <translation>the quality control form is missing</translation>
+    </message>
+    <message>
+        <source>falta el campo «%1» en el formulario del control de calidad</source>
+        <translation>the field “%1” is missing from the quality control form</translation>
+    </message>
+    <message>
+        <source>GESREQ falló al guardar el control (HTTP %1)</source>
+        <translation>GESREQ failed while saving the control (HTTP %1)</translation>
+    </message>
+    <message>
+        <source>GESREQ falló al guardar el control (HTTP %1): %2</source>
+        <translation>GESREQ failed while saving the control (HTTP %1): %2</translation>
+    </message>
+    <message>
+        <source> · el acta pesa %1 MB, prueba a generarla sin capturas</source>
+        <translation> · the record is %1 MB, try generating it without screenshots</translation>
+    </message>
+    <message>
+        <source>Jira no ofrece ningún tipo de enlace entre issues</source>
+        <translation>Jira offers no issue link type</translation>
+    </message>
+    <message>
+        <source>Hacen falta dos issues distintos para enlazarlos</source>
+        <translation>Two different issues are needed to link them</translation>
     </message>
 </context>
 <context>
@@ -2228,6 +2399,54 @@
         <source>Abre en el navegador las ejecuciones de este ciclo en Zephyr</source>
         <translation>Opens in the browser the executions of this cycle in Zephyr</translation>
     </message>
+    <message>
+        <source>Bugs</source>
+        <translation>Bugs</translation>
+    </message>
+    <message>
+        <source>%1 · %2 abiertos</source>
+        <translation>%1 · %2 open</translation>
+    </message>
+    <message>
+        <source>BUGS ENCONTRADOS · %1</source>
+        <translation>BUGS FOUND · %1</translation>
+    </message>
+    <message>
+        <source>%1 ABIERTOS</source>
+        <translation>%1 OPEN</translation>
+    </message>
+    <message>
+        <source>TODOS CERRADOS</source>
+        <translation>ALL CLOSED</translation>
+    </message>
+    <message>
+        <source>Reportados mientras corría el ciclo, desde los casos que estaba ejecutando.</source>
+        <translation>Reported while the cycle was running, from the cases it was executing.</translation>
+    </message>
+    <message>
+        <source>%1 · paso %2</source>
+        <translation>%1 · step %2</translation>
+    </message>
+    <message>
+        <source>paso %1</source>
+        <translation>step %1</translation>
+    </message>
+    <message>
+        <source>Cerrado</source>
+        <translation>Closed</translation>
+    </message>
+    <message>
+        <source>Abierto</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>Abrir</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>Abrir el bug en el gestor</source>
+        <translation>Open the bug in the tracker</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ImageViewer</name>
@@ -2505,38 +2724,6 @@
         <translation>Mark as reviewed</translation>
     </message>
     <message>
-        <source>NOTAS DE QA</source>
-        <translation>QA NOTES</translation>
-    </message>
-    <message>
-        <source>Ambiente, datos de prueba, acuerdos… Son de QAflow: consultar GESREQ no las cambia.</source>
-        <translation>Environment, test data, agreements… They belong to QAflow: checking GESREQ does not change them.</translation>
-    </message>
-    <message>
-        <source>+ Nuevo caso</source>
-        <translation>+ New case</translation>
-    </message>
-    <message>
-        <source>Crea un caso con el título del issue, lo vincula y lo abre para escribir sus pasos</source>
-        <translation>Creates a case with the issue title, links it and opens it to write its steps</translation>
-    </message>
-    <message>
-        <source>Vincular caso…</source>
-        <translation>Link case…</translation>
-    </message>
-    <message>
-        <source>Un caso puede validar varios issues</source>
-        <translation>A case can validate several issues</translation>
-    </message>
-    <message>
-        <source>+ Plan con sus casos</source>
-        <translation>+ Plan with its cases</translation>
-    </message>
-    <message>
-        <source>Crea un plan con los casos del issue y lo abre para ajustarlo</source>
-        <translation>Creates a plan with the issue cases and opens it to adjust it</translation>
-    </message>
-    <message>
         <source>Vincular plan…</source>
         <translation>Link plan…</translation>
     </message>
@@ -2617,14 +2804,6 @@
         <translation>Open in the browser</translation>
     </message>
     <message>
-        <source>CASOS DE PRUEBA · %1</source>
-        <translation>TEST CASES · %1</translation>
-    </message>
-    <message>
-        <source>Sin casos. Crea uno o vincula los que ya validan este requerimiento.</source>
-        <translation>No cases. Create one or link the ones that already validate this requirement.</translation>
-    </message>
-    <message>
         <source>(sin título)</source>
         <translation>(untitled)</translation>
     </message>
@@ -2635,18 +2814,6 @@
     <message>
         <source>Abrir</source>
         <translation>Open</translation>
-    </message>
-    <message>
-        <source>Desvincular el caso del issue (el caso no se borra)</source>
-        <translation>Unlink the case from the issue (the case is not deleted)</translation>
-    </message>
-    <message>
-        <source>PLANES · %1</source>
-        <translation>PLANS · %1</translation>
-    </message>
-    <message>
-        <source>Sin planes. Crea uno con los casos del issue o vincula uno existente.</source>
-        <translation>No plans. Create one with the issue cases or link an existing one.</translation>
     </message>
     <message>
         <source>%1 (archivado)</source>
@@ -2661,32 +2828,8 @@
         <translation>%1 cases</translation>
     </message>
     <message>
-        <source> · último ciclo: %1 de %2 ejecutados, %3 superados</source>
-        <translation> · last cycle: %1 of %2 run, %3 passed</translation>
-    </message>
-    <message>
         <source>Desvincular el plan del issue (el plan no se borra)</source>
         <translation>Unlink the plan from the issue (the plan is not deleted)</translation>
-    </message>
-    <message>
-        <source>RESULTADOS · %1 EJECUCIONES</source>
-        <translation>RESULTS · %1 RUNS</translation>
-    </message>
-    <message>
-        <source>Todavía no se ha ejecutado ningún caso del issue.</source>
-        <translation>No case of the issue has been run yet.</translation>
-    </message>
-    <message>
-        <source>%1 · ciclo del %2</source>
-        <translation>%1 · cycle of %2</translation>
-    </message>
-    <message>
-        <source>Ejecución suelta</source>
-        <translation>Standalone run</translation>
-    </message>
-    <message>
-        <source> · plan del issue</source>
-        <translation> · issue plan</translation>
     </message>
     <message>
         <source>Ver</source>
@@ -2695,10 +2838,6 @@
     <message>
         <source>Abrir la ejecución en el historial</source>
         <translation>Open the run in the history</translation>
-    </message>
-    <message>
-        <source>y %1 más en el historial</source>
-        <translation>and %1 more in the history</translation>
     </message>
     <message>
         <source>Vincula un sistema de GESREQ a este proyecto en Ajustes → Configuración del proyecto</source>
@@ -2711,18 +2850,6 @@
     <message>
         <source>No se pudo consultar GESREQ · %1</source>
         <translation>Could not check GESREQ · %1</translation>
-    </message>
-    <message>
-        <source>%1 creado y vinculado a %2</source>
-        <translation>%1 created and linked to %2</translation>
-    </message>
-    <message>
-        <source>Vincular caso a %1</source>
-        <translation>Link case to %1</translation>
-    </message>
-    <message>
-        <source>%1 creado con %2 casos de %3</source>
-        <translation>%1 created with %2 cases of %3</translation>
     </message>
     <message>
         <source>Vincular plan a %1</source>
@@ -2909,22 +3036,6 @@ Create another one anyway?</translation>
         <translation>Builds the quality control record (R-213) from the issue and saves it as .docx</translation>
     </message>
     <message>
-        <source>Enviar resultado a Jira…</source>
-        <translation>Send result to Jira…</translation>
-    </message>
-    <message>
-        <source>Comenta en el issue del gestor cómo quedó la revisión y le adjunta el acta</source>
-        <translation>Comments on the tracker issue how the review went and attaches the record</translation>
-    </message>
-    <message>
-        <source>Registrar en GESREQ…</source>
-        <translation>Register in GESREQ…</translation>
-    </message>
-    <message>
-        <source>Registra el resultado del control de calidad en el requerimiento, con su acta</source>
-        <translation>Registers the quality control result in the requirement, with its record</translation>
-    </message>
-    <message>
         <source>Cerrar revisión…</source>
         <translation>Close review…</translation>
     </message>
@@ -2941,52 +3052,8 @@ Create another one anyway?</translation>
         <translation>The requirement goes back to testing: opens the next round of the record</translation>
     </message>
     <message>
-        <source>%1 de %2 casos ejecutados · %3 superados · %4 fallidos · %5 bloqueados · %6 bugs (%7 abiertos)</source>
-        <translation>%1 of %2 cases executed · %3 passed · %4 failed · %5 blocked · %6 bugs (%7 open)</translation>
-    </message>
-    <message>
-        <source>Sin revisión abierta · %1</source>
-        <translation>No open review · %1</translation>
-    </message>
-    <message>
-        <source>Revisión %1 · %2</source>
-        <translation>Review %1 · %2</translation>
-    </message>
-    <message>
         <source>nada pendiente</source>
         <translation>nothing pending</translation>
-    </message>
-    <message>
-        <source>Resultado: %1</source>
-        <translation>Result: %1</translation>
-    </message>
-    <message>
-        <source>Resultado propuesto: %1 · %2</source>
-        <translation>Proposed result: %1 · %2</translation>
-    </message>
-    <message>
-        <source>Acta: &lt;a href=&quot;%1&quot;&gt;%2&lt;/a&gt;</source>
-        <translation>Record: &lt;a href=&quot;%1&quot;&gt;%2&lt;/a&gt;</translation>
-    </message>
-    <message>
-        <source>Sin acta generada todavía.</source>
-        <translation>No record generated yet.</translation>
-    </message>
-    <message>
-        <source>Comenta en %1 cómo quedó la revisión y le adjunta el acta</source>
-        <translation>Comments on %1 how the review went and attaches the record</translation>
-    </message>
-    <message>
-        <source>Publica antes el issue en el gestor para dejar allí el resultado</source>
-        <translation>Publish the issue in the tracker first to leave the result there</translation>
-    </message>
-    <message>
-        <source>Registra el resultado del control de calidad en GESREQ, con su acta</source>
-        <translation>Registers the quality control result in GESREQ, with its record</translation>
-    </message>
-    <message>
-        <source>Esta versión todavía no registra resultados en GESREQ: hazlo en el sistema</source>
-        <translation>This version does not register results in GESREQ yet: do it in the system</translation>
     </message>
     <message>
         <source>Abrir revisión</source>
@@ -3033,42 +3100,6 @@ Create another one anyway?</translation>
         <translation>Record generated in %1</translation>
     </message>
     <message>
-        <source>%1 · %2</source>
-        <translation>%1 · %2</translation>
-    </message>
-    <message>
-        <source>el gestor</source>
-        <translation>the tracker</translation>
-    </message>
-    <message>
-        <source>Resultado enviado a %1</source>
-        <translation>Result sent to %1</translation>
-    </message>
-    <message>
-        <source>El envío se cortó sin respuesta: comprueba el comentario en el gestor antes de repetirlo · %1</source>
-        <translation>The send was cut off with no answer: check the comment in the tracker before repeating it · %1</translation>
-    </message>
-    <message>
-        <source>No se pudo enviar el resultado · %1</source>
-        <translation>Could not send the result · %1</translation>
-    </message>
-    <message>
-        <source>GESREQ · GREQ %1</source>
-        <translation>GESREQ · GREQ %1</translation>
-    </message>
-    <message>
-        <source>Resultado registrado en GESREQ como %1</source>
-        <translation>Result registered in GESREQ as %1</translation>
-    </message>
-    <message>
-        <source>El registro se cortó sin respuesta: comprueba en GESREQ si quedó antes de repetirlo · %1</source>
-        <translation>The registration was cut off with no answer: check in GESREQ whether it went through before repeating it · %1</translation>
-    </message>
-    <message>
-        <source>No se pudo registrar en GESREQ · %1</source>
-        <translation>Could not register in GESREQ · %1</translation>
-    </message>
-    <message>
         <source>Cerrar la revisión</source>
         <translation>Close the review</translation>
     </message>
@@ -3103,6 +3134,250 @@ Create another one anyway?</translation>
     <message>
         <source>Revisión %1 abierta: el issue vuelve a pruebas</source>
         <translation>Review %1 opened: the issue goes back to testing</translation>
+    </message>
+    <message>
+        <source>Publica los planes con sus casos en Zephyr, deja el resultado y el acta en el gestor y registra el control de calidad en GESREQ</source>
+        <translation>Publishes the plans with their cases in Zephyr, leaves the result and the record in the tracker and registers the quality control in GESREQ</translation>
+    </message>
+    <message>
+        <source>+ Nuevo plan</source>
+        <translation>+ New plan</translation>
+    </message>
+    <message>
+        <source>Publicado en Zephyr</source>
+        <translation>Published in Zephyr</translation>
+    </message>
+    <message>
+        <source>%1 · %2 · %3 de %4 ejecutados, %5 superados</source>
+        <translation>%1 · %2 · %3 of %4 executed, %5 passed</translation>
+    </message>
+    <message>
+        <source>Resultado publicado</source>
+        <translation>Result published</translation>
+    </message>
+    <message>
+        <source>La publicación terminó con avisos: mira el detalle de cada destino</source>
+        <translation>The publication finished with warnings: check the detail of each destination</translation>
+    </message>
+    <message>
+        <source> · %1 ejecución(es)</source>
+        <translation> · %1 run(s)</translation>
+    </message>
+    <message>
+        <source>RESULTADOS · %1 EJECUCIÓN(ES) DE SUS PLANES</source>
+        <translation>RESULTS · %1 RUN(S) OF ITS PLANS</translation>
+    </message>
+    <message>
+        <source>Sin planes: los resultados del issue son los de los ciclos de sus planes.</source>
+        <translation>No plans: the issue results are those of its plan cycles.</translation>
+    </message>
+    <message>
+        <source>Todavía no se ha ejecutado ningún plan del issue.</source>
+        <translation>No plan of the issue has been run yet.</translation>
+    </message>
+    <message>
+        <source>REVISIÓN EN CURSO</source>
+        <translation>CURRENT REVISION</translation>
+    </message>
+    <message>
+        <source>%1 de %2 ejecutados · %3 superados · %4 fallidos · %5 bloqueados</source>
+        <translation>%1 of %2 executed · %3 passed · %4 failed · %5 blocked</translation>
+    </message>
+    <message>
+        <source>EN ZEPHYR</source>
+        <translation>IN ZEPHYR</translation>
+    </message>
+    <message>
+        <source>Ver plan</source>
+        <translation>View plan</translation>
+    </message>
+    <message>
+        <source>Abrir el plan de esta ejecución</source>
+        <translation>Open the plan of this run</translation>
+    </message>
+    <message>
+        <source>…el resto de las ejecuciones está en el historial</source>
+        <translation>…the remaining runs are in the history</translation>
+    </message>
+    <message>
+        <source>%1 creado y vinculado a %2: añádele sus casos</source>
+        <translation>%1 created and linked to %2: now add its cases</translation>
+    </message>
+    <message>
+        <source>%1 creado en el gestor para %2</source>
+        <translation>%1 created in the tracker for %2</translation>
+    </message>
+    <message>
+        <source>El envío al gestor se cortó sin respuesta: comprueba si %1 se creó antes de publicarlo otra vez · %2</source>
+        <translation>The send to the tracker was cut off with no answer: check whether %1 was created before publishing it again · %2</translation>
+    </message>
+    <message>
+        <source>%1 no se pudo crear en el gestor · %2 · publícalo desde la tarjeta del issue</source>
+        <translation>%1 could not be created in the tracker · %2 · publish it from the issue card</translation>
+    </message>
+    <message>
+        <source>Crea otro plan para este requerimiento y lo abre para componerlo</source>
+        <translation>Creates another plan for this requirement and opens it to compose it</translation>
+    </message>
+    <message>
+        <source>REVISIÓN %1 · %2</source>
+        <translation>REVISION %1 · %2</translation>
+    </message>
+    <message>
+        <source>Cerrada como %1 · %2 de %3 casos ejecutados · %4 bugs (%5 abiertos)</source>
+        <translation>Closed as %1 · %2 of %3 cases executed · %4 bugs (%5 open)</translation>
+    </message>
+    <message>
+        <source>%1 de %2 casos ejecutados · %3 superados · %4 fallidos · %5 bloqueados · %6 bugs (%7 abiertos) · resultado propuesto: %8 (%9)</source>
+        <translation>%1 of %2 cases executed · %3 passed · %4 failed · %5 blocked · %6 bugs (%7 open) · proposed result: %8 (%9)</translation>
+    </message>
+    <message>
+        <source>Preparar el plan de pruebas</source>
+        <translation>Prepare the test plan</translation>
+    </message>
+    <message>
+        <source>El requerimiento todavía no tiene plan</source>
+        <translation>The requirement has no plan yet</translation>
+    </message>
+    <message>
+        <source>%1 · %2 caso(s)</source>
+        <translation>%1 · %2 case(s)</translation>
+    </message>
+    <message>
+        <source>Crear plan</source>
+        <translation>Create plan</translation>
+    </message>
+    <message>
+        <source>Abrir plan</source>
+        <translation>Open plan</translation>
+    </message>
+    <message>
+        <source>Ejecutar el plan</source>
+        <translation>Run the plan</translation>
+    </message>
+    <message>
+        <source>%1 de %2 casos ejecutados en esta revisión</source>
+        <translation>%1 of %2 cases executed in this revision</translation>
+    </message>
+    <message>
+        <source>Arrancar un ciclo del plan abre la revisión y deja el issue en pruebas</source>
+        <translation>Starting a plan cycle opens the revision and puts the issue in testing</translation>
+    </message>
+    <message>
+        <source>Ir al plan</source>
+        <translation>Go to the plan</translation>
+    </message>
+    <message>
+        <source>Los ciclos se arrancan desde la pantalla del plan</source>
+        <translation>Cycles are started from the plan screen</translation>
+    </message>
+    <message>
+        <source>Generar el acta (R-213)</source>
+        <translation>Generate the record (R-213)</translation>
+    </message>
+    <message>
+        <source>%1 · generada el %2</source>
+        <translation>%1 · generated on %2</translation>
+    </message>
+    <message>
+        <source>Con lo del requerimiento, la ejecución elegida y los bugs de la revisión</source>
+        <translation>With the requirement data, the chosen run and the bugs of the revision</translation>
+    </message>
+    <message>
+        <source>Regenerar…</source>
+        <translation>Regenerate…</translation>
+    </message>
+    <message>
+        <source>Cerrada el %1 como %2</source>
+        <translation>Closed on %1 as %2</translation>
+    </message>
+    <message>
+        <source>Se cierra con el resultado del control: conforme u observado</source>
+        <translation>It is closed with the control result: compliant or with findings</translation>
+    </message>
+    <message>
+        <source>gestor</source>
+        <translation>tracker</translation>
+    </message>
+    <message>
+        <source>GESREQ</source>
+        <translation>GESREQ</translation>
+    </message>
+    <message>
+        <source>Publicar el resultado</source>
+        <translation>Publish the result</translation>
+    </message>
+    <message>
+        <source>Los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ</source>
+        <translation>The cycles to Zephyr, the result and the record to the tracker and the registration in GESREQ</translation>
+    </message>
+    <message>
+        <source>Publicado en %1</source>
+        <translation>Published in %1</translation>
+    </message>
+    <message>
+        <source> y </source>
+        <translation> and </translation>
+    </message>
+    <message>
+        <source>Cierra antes la revisión: se publica el resultado de una revisión terminada</source>
+        <translation>Close the revision first: what is published is the result of a finished revision</translation>
+    </message>
+    <message>
+        <source>Volver a probar</source>
+        <translation>Test again</translation>
+    </message>
+    <message>
+        <source>El requerimiento quedó observado: al corregirlo se abre la revisión %1</source>
+        <translation>The requirement was left with findings: fixing it opens revision %1</translation>
+    </message>
+    <message>
+        <source>Abre otra ronda de pruebas del requerimiento</source>
+        <translation>Opens another testing round of the requirement</translation>
+    </message>
+    <message>
+        <source>GESREQ: %1</source>
+        <translation>GESREQ: %1</translation>
+    </message>
+    <message>
+        <source>PLAN DE PRUEBAS</source>
+        <translation>TEST PLAN</translation>
+    </message>
+    <message>
+        <source>PLANES DE PRUEBAS · %1</source>
+        <translation>TEST PLANS · %1</translation>
+    </message>
+    <message>
+        <source>Sin plan todavía. Crea el plan con el que se prueba el requerimiento: sus casos son los casos del issue y sus ejecuciones, sus resultados.</source>
+        <translation>No plan yet. Create the plan the requirement is tested with: its cases are the issue cases and its runs, its results.</translation>
+    </message>
+    <message>
+        <source>    El plan todavía no tiene casos: ábrelo y añádeselos.</source>
+        <translation>    The plan has no cases yet: open it and add some.</translation>
+    </message>
+    <message>
+        <source>%1 · pruebas del requerimiento %2 · plan %3 listo</source>
+        <translation>%1 · tests of requirement %2 · plan %3 ready</translation>
+    </message>
+    <message>
+        <source>BUGS REPORTADOS · %1 (%2 abiertos)</source>
+        <translation>REPORTED BUGS · %1 (%2 open)</translation>
+    </message>
+    <message>
+        <source>Sin bugs reportados desde los casos del issue. Los que se reporten en sus ejecuciones salen aquí, cuentan en el acta y se enlazan al publicar.</source>
+        <translation>No bugs reported from the issue cases. The ones reported in its runs show up here, count in the record and are linked when publishing.</translation>
+    </message>
+    <message>
+        <source>%1 · paso %2</source>
+        <translation>%1 · step %2</translation>
+    </message>
+    <message>
+        <source>ESTA REVISIÓN</source>
+        <translation>THIS REVISION</translation>
+    </message>
+    <message>
+        <source>Abrir el bug en el gestor</source>
+        <translation>Open the bug in the tracker</translation>
     </message>
 </context>
 <context>
@@ -3534,6 +3809,74 @@ Create another one anyway?</translation>
         <source>No se pudieron leer los issues del proyecto: no se guardarán cambios en ellos para no perderlos</source>
         <translation>The project issues could not be read: no changes will be saved to them so they are not lost</translation>
     </message>
+    <message>
+        <source>Termina o detén la ejecución en curso antes de arrancar otra</source>
+        <translation>Finish or stop the current run before starting another</translation>
+    </message>
+    <message>
+        <source>Espera a que termine la captura</source>
+        <translation>Wait for the capture to finish</translation>
+    </message>
+    <message>
+        <source>El plan no tiene casos que ejecutar</source>
+        <translation>The plan has no cases to run</translation>
+    </message>
+    <message>
+        <source>&amp;Atrás</source>
+        <translation>&amp;Back</translation>
+    </message>
+    <message>
+        <source>Ver informe</source>
+        <translation>View report</translation>
+    </message>
+    <message>
+        <source>Volver a %1 (Alt+←)</source>
+        <translation>Back to %1 (Alt+←)</translation>
+    </message>
+    <message>
+        <source>Volver a %1</source>
+        <translation>Back to %1</translation>
+    </message>
+    <message>
+        <source>&amp;Atrás · %1</source>
+        <translation>&amp;Back · %1</translation>
+    </message>
+    <message>
+        <source>Caso %1</source>
+        <translation>Case %1</translation>
+    </message>
+    <message>
+        <source>Casos de prueba</source>
+        <translation>Test cases</translation>
+    </message>
+    <message>
+        <source>Plan de pruebas</source>
+        <translation>Test plan</translation>
+    </message>
+    <message>
+        <source>Ejecución</source>
+        <translation>Execution</translation>
+    </message>
+    <message>
+        <source>Historial</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>Reportar bug</source>
+        <translation>Report bug</translation>
+    </message>
+    <message>
+        <source>Issue %1</source>
+        <translation>Issue %1</translation>
+    </message>
+    <message>
+        <source>Issues</source>
+        <translation>Issues</translation>
+    </message>
+    <message>
+        <source>Atrás</source>
+        <translation>Back</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::PlanStore</name>
@@ -3904,6 +4247,38 @@ Create another one anyway?</translation>
         <source>Sin suite</source>
         <translation>No suite</translation>
     </message>
+    <message>
+        <source>▶ Ejecutar plan</source>
+        <translation>▶ Run plan</translation>
+    </message>
+    <message>
+        <source>Arranca un ciclo del plan con sus casos, en este orden</source>
+        <translation>Starts a plan cycle with its cases, in this order</translation>
+    </message>
+    <message>
+        <source>+ Nuevo caso</source>
+        <translation>+ New case</translation>
+    </message>
+    <message>
+        <source>Crea un caso, lo añade a este plan y lo abre para escribir sus pasos</source>
+        <translation>Creates a case, adds it to this plan and opens it to write its steps</translation>
+    </message>
+    <message>
+        <source>El plan está archivado</source>
+        <translation>The plan is archived</translation>
+    </message>
+    <message>
+        <source>El plan todavía no tiene casos que ejecutar</source>
+        <translation>The plan has no cases to run yet</translation>
+    </message>
+    <message>
+        <source>El plan está archivado: desarchívalo para añadirle casos</source>
+        <translation>The plan is archived: unarchive it to add cases</translation>
+    </message>
+    <message>
+        <source>%1 creado y añadido a %2</source>
+        <translation>%1 created and added to %2</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ProjectSetupDialog</name>
@@ -4257,6 +4632,18 @@ Create another one anyway?</translation>
         <source>Capturas del acta</source>
         <translation>Record screenshots</translation>
     </message>
+    <message>
+        <source>La revisión no tiene ninguna ejecución de plan: el acta sale sin resultados de pruebas.</source>
+        <translation>The revision has no plan run: the record comes out without test results.</translation>
+    </message>
+    <message>
+        <source>Todas las ejecuciones de la revisión</source>
+        <translation>All runs of the revision</translation>
+    </message>
+    <message>
+        <source>Ejecución del plan con la que se levanta el acta</source>
+        <translation>Plan run the record is raised with</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::QualityRecordService</name>
@@ -4394,58 +4781,229 @@ Status: %4
     </message>
 </context>
 <context>
-    <name>qaflow::RevisionResultDialog</name>
+    <name>qaflow::RevisionPublishDialog</name>
+    <message>
+        <source>Publicar los planes y sus casos en Zephyr</source>
+        <translation>Publish the plans and their cases in Zephyr</translation>
+    </message>
+    <message>
+        <source>Dejar el resultado y el acta en el gestor</source>
+        <translation>Leave the result and the record in the tracker</translation>
+    </message>
     <message>
         <source>Registrar el resultado en GESREQ</source>
         <translation>Register the result in GESREQ</translation>
     </message>
     <message>
-        <source>Enviar el resultado al gestor</source>
-        <translation>Send the result to the tracker</translation>
+        <source>Publicar el resultado de la revisión</source>
+        <translation>Publish the result of the revision</translation>
     </message>
     <message>
-        <source>Registrar en %1</source>
-        <translation>Register in %1</translation>
+        <source>Las pruebas van a Zephyr como ciclos con sus casos; el resultado y el acta, al issue del gestor; y el control de calidad queda registrado en el requerimiento de GESREQ.</source>
+        <translation>The tests go to Zephyr as cycles with their cases; the result and the record, to the tracker issue; and the quality control is registered in the GESREQ requirement.</translation>
     </message>
     <message>
-        <source>Comentar en %1</source>
-        <translation>Comment on %1</translation>
+        <source>Resultado del control de calidad</source>
+        <translation>Quality control result</translation>
     </message>
     <message>
-        <source>Resultado</source>
-        <translation>Result</translation>
-    </message>
-    <message>
-        <source>Texto que se envía</source>
-        <translation>Text that is sent</translation>
+        <source>Texto que se envía al gestor y a GESREQ</source>
+        <translation>Text sent to the tracker and to GESREQ</translation>
     </message>
     <message>
         <source>Adjuntar el acta %1</source>
         <translation>Attach the record %1</translation>
     </message>
     <message>
-        <source>Todavía no hay acta generada: se envía sólo el texto.</source>
-        <translation>No record generated yet: only the text is sent.</translation>
+        <source>Todavía no hay acta generada: se publica sólo el texto. Genérala antes si quieres adjuntarla.</source>
+        <translation>No record generated yet: only the text is published. Generate it first if you want to attach it.</translation>
     </message>
     <message>
-        <source>Registrar el resultado cambia el estado del requerimiento en GESREQ y queda a nombre del usuario de la conexión. Sólo se hace cuando lo pides aquí.</source>
-        <translation>Registering the result changes the requirement status in GESREQ and is recorded under the connection user. It only happens when you ask for it here.</translation>
-    </message>
-    <message>
-        <source>Se añade un comentario al issue del gestor; no se toca ningún otro campo.</source>
-        <translation>A comment is added to the tracker issue; no other field is touched.</translation>
+        <source>Registrar el resultado cambia el estado del requerimiento en GESREQ y queda a nombre del usuario de la conexión. Nada se envía hasta que pulses «Publicar».</source>
+        <translation>Registering the result changes the state of the requirement in GESREQ under the connection user. Nothing is sent until you press “Publish”.</translation>
     </message>
     <message>
         <source>Cancelar</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <source>Registrar en GESREQ</source>
-        <translation>Register in GESREQ</translation>
+        <source>Publicar</source>
+        <translation>Publish</translation>
     </message>
     <message>
-        <source>Enviar al gestor</source>
-        <translation>Send to the tracker</translation>
+        <source>Qué se publica</source>
+        <translation>What is published</translation>
+    </message>
+    <message>
+        <source>Publicando…</source>
+        <translation>Publishing…</translation>
+    </message>
+    <message>
+        <source>Cerrar</source>
+        <translation>Close</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::RevisionPublishService</name>
+    <message>
+        <source>Zephyr</source>
+        <translation>Zephyr</translation>
+    </message>
+    <message>
+        <source>el gestor</source>
+        <translation>the tracker</translation>
+    </message>
+    <message>
+        <source>GESREQ</source>
+        <translation>GESREQ</translation>
+    </message>
+    <message>
+        <source>Zephyr · %1 ciclo(s) de los planes del issue</source>
+        <translation>Zephyr · %1 cycle(s) of the issue plans</translation>
+    </message>
+    <message>
+        <source>Activa Zephyr en Ajustes para publicar los ciclos</source>
+        <translation>Enable Zephyr in Settings to publish the cycles</translation>
+    </message>
+    <message>
+        <source>La revisión no tiene ningún ciclo de plan ejecutado</source>
+        <translation>The revision has no plan cycle executed</translation>
+    </message>
+    <message>
+        <source>Ningún caso de esos ciclos llegó a ejecutarse</source>
+        <translation>No case of those cycles was actually run</translation>
+    </message>
+    <message>
+        <source>Ya publicados: se actualizan sus ejecuciones y evidencias</source>
+        <translation>Already published: their executions and evidence are updated</translation>
+    </message>
+    <message>
+        <source>%1 caso(s) ejecutado(s); los ciclos ya publicados se actualizan</source>
+        <translation>%1 case(s) executed; cycles already published are updated</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>El gestor configurado no admite comentarios</source>
+        <translation>The configured tracker does not support comments</translation>
+    </message>
+    <message>
+        <source>El resultado ya se comentó el %1</source>
+        <translation>The result was already commented on %1</translation>
+    </message>
+    <message>
+        <source>Comentario con el resultado, los enlaces de Zephyr y el acta adjunta</source>
+        <translation>Comment with the result, the Zephyr links and the record attached</translation>
+    </message>
+    <message>
+        <source>GESREQ · GREQ %1</source>
+        <translation>GESREQ · GREQ %1</translation>
+    </message>
+    <message>
+        <source>El issue no viene de GESREQ</source>
+        <translation>The issue does not come from GESREQ</translation>
+    </message>
+    <message>
+        <source>Esta versión no registra resultados en GESREQ: hazlo en el sistema</source>
+        <translation>This version does not register results in GESREQ: do it in the system</translation>
+    </message>
+    <message>
+        <source>Sólo se registra el resultado de un requerimiento importado</source>
+        <translation>Only the result of an imported requirement is registered</translation>
+    </message>
+    <message>
+        <source>Registrado el %1 como %2</source>
+        <translation>Registered on %1 as %2</translation>
+    </message>
+    <message>
+        <source>Cambia el estado del requerimiento en GESREQ</source>
+        <translation>Changes the state of the requirement in GESREQ</translation>
+    </message>
+    <message>
+        <source>No hay ciclos que publicar en Zephyr</source>
+        <translation>There are no cycles to publish in Zephyr</translation>
+    </message>
+    <message>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <source>%1 ciclo(s) en Zephyr · %2 Test(s) creado(s)</source>
+        <translation>%1 cycle(s) in Zephyr · %2 Test(s) created</translation>
+    </message>
+    <message>
+        <source>No se pudo publicar en Zephyr</source>
+        <translation>Could not publish in Zephyr</translation>
+    </message>
+    <message>
+        <source>No se puede dejar el resultado en el gestor</source>
+        <translation>The result cannot be left in the tracker</translation>
+    </message>
+    <message>
+        <source>Ciclo en Zephyr: %1</source>
+        <translation>Zephyr cycle: %1</translation>
+    </message>
+    <message>
+        <source>Resultado comentado en %1</source>
+        <translation>Result commented on %1</translation>
+    </message>
+    <message>
+        <source>El envío se cortó sin respuesta: compruébalo en el gestor · %1</source>
+        <translation>The send was cut off with no answer: check it in the tracker · %1</translation>
+    </message>
+    <message>
+        <source>No se pudo comentar en el gestor · %1</source>
+        <translation>Could not comment in the tracker · %1</translation>
+    </message>
+    <message>
+        <source>No se puede registrar el resultado en GESREQ</source>
+        <translation>The result cannot be registered in GESREQ</translation>
+    </message>
+    <message>
+        <source>Registrado en GESREQ como %1</source>
+        <translation>Registered in GESREQ as %1</translation>
+    </message>
+    <message>
+        <source>No se pudo registrar en GESREQ · %1</source>
+        <translation>Could not register in GESREQ · %1</translation>
+    </message>
+    <message>
+        <source>El issue no está en el gestor</source>
+        <translation>The issue is not in the tracker</translation>
+    </message>
+    <message>
+        <source>El issue no llegó a crearse en el gestor al importarlo: publícalo desde «Publicación en el gestor»</source>
+        <translation>The issue was not created in the tracker when it was imported: publish it from “Publication in the tracker”</translation>
+    </message>
+    <message>
+        <source>El registro no quedó confirmado: compruébalo en GESREQ antes de repetirlo · %1</source>
+        <translation>The registration was not confirmed: check it in GESREQ before repeating it · %1</translation>
+    </message>
+    <message>
+        <source>El resultado de esta revisión ya se registró en GESREQ el %1 como %2</source>
+        <translation>The result of this revision was already registered in GESREQ on %1 as %2</translation>
+    </message>
+    <message>
+        <source>El control ya se registró como Conforme el %1: el requerimiento salió de tu bandeja</source>
+        <translation>The control was already registered as Compliant on %1: the requirement left your inbox</translation>
+    </message>
+    <message>
+        <source> · el requerimiento quedó en «%1»</source>
+        <translation> · the requirement was left in “%1”</translation>
+    </message>
+    <message>
+        <source>Registrado en GESREQ como %1 · el requerimiento quedó en «%2»</source>
+        <translation>Registered in GESREQ as %1 · the requirement was left in “%2”</translation>
+    </message>
+    <message>
+        <source> · %1 enlace(s) al issue: %2 bug(s) y %3 Test(s)</source>
+        <translation> · %1 link(s) to the issue: %2 bug(s) and %3 Test(s)</translation>
+    </message>
+    <message>
+        <source>Sin enlazar: %1</source>
+        <translation>Not linked: %1</translation>
     </message>
 </context>
 <context>

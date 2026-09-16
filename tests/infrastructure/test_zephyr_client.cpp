@@ -218,6 +218,8 @@ private slots:
                                {StepResult::Pass, StepResult::Fail});
         c.attachments << PublishAttachment{shot, 2}     // evidencia del paso 2
                       << PublishAttachment{log, 0};     // evidencia del caso entero
+        c.defects << PublishDefect{QStringLiteral("SHOP-143"), 2}   // el bug salió del paso 2
+                  << PublishDefect{QStringLiteral("SHOP-150"), 0};  // y éste, del caso
         c.durationSecs = 245;
 
         ZephyrClient client;
@@ -252,6 +254,13 @@ private slots:
         const QJsonObject step2 = bodyOf(find("PUT", "/rest/zephyr/latest/stepResult/9002"));
         QCOMPARE(step2[QStringLiteral("status")].toString(), QStringLiteral("2"));
         QCOMPARE(step2[QStringLiteral("comment")].toString(), QStringLiteral("El cupón no descuenta"));
+        // Los defectos: todos en la ejecución, y en cada paso los que salieron de él.
+        const QJsonArray execDefects = bodyOf(find("PUT", "/rest/zephyr/latest/execution/501/execute"))[QStringLiteral("defects")].toArray();
+        QCOMPARE(execDefects.size(), 2);
+        QCOMPARE(execDefects[0].toString(), QStringLiteral("SHOP-143"));
+        QCOMPARE(step2[QStringLiteral("defects")].toArray().size(), 1);
+        QCOMPARE(step2[QStringLiteral("defects")].toArray()[0].toString(), QStringLiteral("SHOP-143"));
+        QVERIFY(!bodyOf(find("PUT", "/rest/zephyr/latest/stepResult/9001")).contains(QStringLiteral("defects")));
         // La evidencia del paso 2 va a su resultado; la del caso, a la ejecución.
         QStringList attachmentPaths;
         for (const auto& r : server.requests) if (r.method == "POST" && r.path.startsWith("/rest/zephyr/latest/attachment")) attachmentPaths << QString::fromUtf8(r.path);

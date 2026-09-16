@@ -15,6 +15,9 @@ struct BugReport {
     QString classification = QStringLiteral("A");
     QString environment = QStringLiteral("Staging"); // Staging, QA, Producción
     QString linkedCaseId;
+    /// Paso del caso en el que se vio el fallo (1..N); 0 = del caso entero. Es lo que permite colgar el
+    /// defecto del paso que le corresponde al publicar la ejecución en Zephyr.
+    int linkedStep = 0;
     QString linkedStoryKey;   // historia enlazada al caso (opcional)
     QString stepsToReproduce;
     QString expected;

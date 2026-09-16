@@ -20,6 +20,13 @@ struct PublishAttachment {
     int step = 0;      // 0 = del caso entero; 1..N = de ese paso
 };
 
+/// Un defecto ya creado en el gestor que salió de esa ejecución: se enlaza a la ejecución y, si se
+/// sabe de qué paso salió, también al resultado de ese paso.
+struct PublishDefect {
+    QString key;       // SHOP-143
+    int step = 0;      // 0 = de la ejecución entera; 1..N = de ese paso
+};
+
 /// Un caso ejecutado, listo para publicar en la herramienta de gestión de pruebas. Lleva además el
 /// caso tal y como está escrito (precondiciones y pasos), que es con lo que se crea su Test la
 /// primera vez, cuando el caso todavía no está enlazado a ninguno.
@@ -33,6 +40,8 @@ struct PublishCase {
     Verdict verdict = Verdict::Superado;
     QList<RunRecordStep> steps;      // los pasos tal y como se ejecutaron
     QList<PublishAttachment> attachments;
+    /// Bugs reportados desde este caso en esta ejecución.
+    QList<PublishDefect> defects;
     qint64 durationSecs = 0;
 };
 

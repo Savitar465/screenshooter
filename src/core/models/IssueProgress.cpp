@@ -15,7 +15,7 @@ QDateTime runTime(const RunRecord& run) { return run.finishedAt.isValid() ? run.
 
 } // namespace
 
-IssueProgress issueProgress(const Issue& issue, const QList<TestCase>& cases, const QList<RunRecord>& runs,
+IssueProgress issueProgress(const QStringList& caseIds, const QList<TestCase>& cases, const QList<RunRecord>& runs,
                             const QList<IssueLink>& bugs, const QDateTime& since) {
     IssueProgress p;
 
@@ -23,7 +23,7 @@ IssueProgress issueProgress(const Issue& issue, const QList<TestCase>& cases, co
     for (const auto& c : cases) known.insert(c.id);
 
     QSet<QString> linked;
-    for (const auto& caseId : issue.caseIds) {
+    for (const auto& caseId : caseIds) {
         if (caseId.isEmpty() || linked.contains(caseId)) continue;
         linked.insert(caseId);
         if (known.contains(caseId)) ++p.cases;
@@ -55,7 +55,7 @@ IssueProgress issueProgress(const Issue& issue, const QList<TestCase>& cases, co
     }
 
     // El singular y el plural van escritos uno a uno para que se puedan traducir por separado.
-    if (p.cases == 0) p.blockers << QCoreApplication::translate("core", "sin casos vinculados");
+    if (p.cases == 0) p.blockers << QCoreApplication::translate("core", "sin casos en sus planes");
     if (p.notRun() == 1) p.blockers << QCoreApplication::translate("core", "%1 caso sin ejecutar").arg(p.notRun());
     else if (p.notRun() > 1) p.blockers << QCoreApplication::translate("core", "%1 casos sin ejecutar").arg(p.notRun());
     if (p.failed == 1) p.blockers << QCoreApplication::translate("core", "%1 caso fallido").arg(p.failed);

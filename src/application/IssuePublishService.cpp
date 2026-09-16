@@ -116,6 +116,34 @@ void IssuePublishService::publishResult(const QString& issueId, const QString& c
     });
 }
 
+bool IssuePublishService::canLinkIssues(const Issue& issue) const {
+    return m_tracker && issue.isPublished() && m_tracker->canLinkIssues(m_settings.tracker());
+}
+
+void IssuePublishService::linkToIssue(const QString& issueId, const QStringList& keys, std::function<void(const LinkResult&)> done) {
+    const Issue* issue = m_issues.find(issueId);
+    if (!issue || !canLinkIssues(*issue)) { done({}); return; }
+    QStringList pending;
+    for (const auto& key : keys) {
+        const QString clean = key.trimmed();
+        // El propio issue no se enlaza consigo mismo, y cada clave va una sola vez.
+        if (clean.isEmpty() || pending.contains(clean) || clean.compare(issue->publication.key, Qt::CaseInsensitive) == 0) continue;
+        pending << clean;
+    }
+    linkNext(issue->publication.key, pending, {}, std::move(done));
+}
+
+void IssuePublishService::linkNext(const QString& key, QStringList pending, LinkResult acc, std::function<void(const LinkResult&)> done) {
+    if (pending.isEmpty()) { done(acc); return; }
+    const QString next = pending.takeFirst();
+    m_tracker->linkIssues(m_settings.tracker(), next, key, [this, key, next, pending, acc, done](const IssueResult& r) mutable {
+        if (r.ok) ++acc.linked;
+        else acc.failed << QStringLiteral("%1 · %2").arg(next, r.error);
+        // Un enlace que falla no impide los demás: lo que se pueda colgar del issue, colgado queda.
+        linkNext(key, pending, acc, done);
+    });
+}
+
 void IssuePublishService::publish(const QString& issueId, const IssueDraft& draft, std::function<void(const Result&)> done) {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) { done(Result{false, {}, {}, tr("El issue ya no existe"), false, false}); return; }

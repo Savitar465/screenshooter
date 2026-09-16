@@ -289,6 +289,70 @@ void JiraClient::commentIssue(const TrackerSettings& s, const QString& key, cons
              });
 }
 
+void JiraClient::withLinkType(const TrackerSettings& s, std::function<void(const QString&, const QString&)> done) {
+    if (!m_linkType.isEmpty() && m_linkTypeFor == s.baseUrl()) { done(m_linkType, {}); return; }
+    get(request(s, QStringLiteral("/rest/api/2/issueLinkType")), [this, s, done](const Response& r) {
+        if (!r.ok) { done({}, errorFor(s, r)); return; }
+        const QJsonArray types = r.json.object()[QStringLiteral("issueLinkTypes")].toArray();
+        QString chosen;
+        for (const auto& v : types) {
+            const QJsonObject type = v.toObject();
+            const QString name = type[QStringLiteral("name")].toString();
+            const QString inward = type[QStringLiteral("inward")].toString();
+            // «Relates» es el de serie; una instancia traducida lo llama de otra forma, así que se
+            // reconoce por la raíz de la palabra y, si no hay nada parecido, vale el primero.
+            if (name.compare(QStringLiteral("Relates"), Qt::CaseInsensitive) == 0) { chosen = name; break; }
+            const bool relates = name.contains(QStringLiteral("relat"), Qt::CaseInsensitive) ||
+                                 inward.contains(QStringLiteral("relacion"), Qt::CaseInsensitive) ||
+                                 inward.contains(QStringLiteral("relat"), Qt::CaseInsensitive);
+            if (chosen.isEmpty() || relates) chosen = name;
+            if (relates) break;
+        }
+        if (chosen.isEmpty()) {
+            done({}, QCoreApplication::translate("infrastructure", "Jira no ofrece ningún tipo de enlace entre issues"));
+            return;
+        }
+        m_linkType = chosen;
+        m_linkTypeFor = s.baseUrl();
+        done(chosen, {});
+    });
+}
+
+void JiraClient::linkIssues(const TrackerSettings& s, const QString& from, const QString& to,
+                            std::function<void(const IssueResult&)> done) {
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) { IssueResult f; f.error = missing; done(f); return; }
+    const QString source = from.trimmed();
+    const QString target = to.trimmed();
+    if (source.isEmpty() || target.isEmpty() || source.compare(target, Qt::CaseInsensitive) == 0) {
+        IssueResult f;
+        f.error = QCoreApplication::translate("infrastructure", "Hacen falta dos issues distintos para enlazarlos");
+        done(f);
+        return;
+    }
+    withLinkType(s, [this, s, source, target, done](const QString& type, const QString& error) {
+        if (type.isEmpty()) { IssueResult f; f.error = error; done(f); return; }
+        const QJsonObject body{
+            {"type", QJsonObject{{"name", type}}},
+            {"inwardIssue", QJsonObject{{"key", source}}},
+            {"outwardIssue", QJsonObject{{"key", target}}},
+        };
+        // Jira no duplica un enlace que ya existe, así que republicar no llena el issue de repetidos.
+        postJson(request(s, QStringLiteral("/rest/api/2/issueLink")), QJsonDocument(body), [s, source, target, done](const Response& r) {
+            IssueResult res;
+            if (!r.ok) {
+                res.error = errorFor(s, r);
+                res.retryable = r.retryable;
+                done(res);
+                return;
+            }
+            res.ok = true;
+            res.key = source;
+            res.url = s.issueUrl(source);
+            done(res);
+        });
+    });
+}
+
 void JiraClient::fetchProjects(const TrackerSettings& s, std::function<void(const TrackerProjectList&)> done) {
     if (const QString missing = missingCredentials(s); !missing.isEmpty()) { done(TrackerProjectList{false, {}, missing}); return; }
     // `/project` devuelve de una vez los proyectos que puede ver el usuario, en Jira Server 7 y 8 y en

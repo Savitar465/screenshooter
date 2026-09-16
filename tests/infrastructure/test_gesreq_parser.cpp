@@ -251,6 +251,75 @@ private slots:
         QVERIFY(!page.error.isEmpty());
     }
 
+    // ---- Registro del control de calidad --------------------------------------------------------
+    void theInboxGivesTheLinkThatRegistersEachRequirement() {
+        const QString inbox = fixture("bandeja_calidad.html");
+        const QString path = gesreq::registrationPath(inbox, QStringLiteral("2025101"));
+        // Con el estado con el que figura en la bandeja: sin él la pantalla se abre sin el formulario.
+        QVERIFY2(path.contains(QStringLiteral("estado=CONTROL DE CALIDAD OBSERVADO")), qPrintable(path));
+        QVERIFY(path.startsWith(QStringLiteral("calidadregGestionRequerimiento.do?id=2025101")));
+        QCOMPARE(gesreq::registrationPath(inbox, QStringLiteral("2026103")).contains(QStringLiteral("CORREGIDO")), true);
+        QVERIFY(gesreq::registrationPath(inbox, QStringLiteral("2029999")).isEmpty());
+    }
+
+    void eachSystemOfTheRequirementHasItsOwnControl() {
+        const QList<gesreq::ControlItem> items = gesreq::parseControlItems(fixture("gestion_calidad.html"));
+        QCOMPARE(items.size(), 2);
+        QCOMPARE(items[0].systemCode, QStringLiteral("PORTAL WEB"));
+        QCOMPARE(items[0].systemName, QStringLiteral("PORTAL INSTITUCIONAL"));
+        QVERIFY(items[0].formPath.contains(QStringLiteral("idItem=1")));
+        QCOMPARE(items[1].systemCode, QStringLiteral("PORTAL PAGOS"));
+        QVERIFY(items[1].formPath.contains(QStringLiteral("idItem=2")));
+        // Una pantalla sin la tabla de sistemas no ofrece ningún control.
+        QVERIFY(gesreq::parseControlItems(fixture("bandeja_calidad.html")).isEmpty());
+    }
+
+    void theControlFormIsReadAsTheBrowserWouldSendIt() {
+        const gesreq::ControlForm form = gesreq::parseControlForm(fixture("control_calidad_form.html"));
+        QVERIFY2(form.ok, qPrintable(form.error));
+        auto value = [&form](const QString& name) {
+            for (const auto& [field, v] : form.fields)
+                if (field == name) return v;
+            return QString();
+        };
+        auto count = [&form](const QString& name) {
+            return int(std::count_if(form.fields.cbegin(), form.fields.cend(),
+                                     [&name](const QPair<QString, QString>& f) { return f.first == name; }));
+        };
+        QCOMPARE(value(QStringLiteral("gestion")), QStringLiteral("2025"));
+        QCOMPARE(value(QStringLiteral("corr")), QStringLiteral("101"));
+        QCOMPARE(value(QStringLiteral("tip_control")), QStringLiteral("CALIDAD"));
+        QCOMPARE(value(QStringLiteral("fecha_ini")), QStringLiteral("11/08/2025"));
+        QCOMPARE(value(QStringLiteral("resultado_control")), QStringLiteral("OBSERVADO"));   // la opción marcada
+        QCOMPARE(value(QStringLiteral("obs_controlfuncional")).left(11), QStringLiteral("Se debe gen"));
+        QCOMPARE(value(QStringLiteral("tot_obs_func")), QStringLiteral("1"));
+        // Las correcciones van una sola vez y con el valor del sistema: la casilla visible la
+        // deshabilita el script de la ventana y sólo viaja el oculto del final.
+        QCOMPARE(count(QStringLiteral("tot_corr_func")), 1);
+        QCOMPARE(value(QStringLiteral("tot_corr_func")), QStringLiteral("36"));
+        // Los campos deshabilitados no se envían, y el adjunto lo pone quien envía.
+        QCOMPARE(count(QStringLiteral("observaciones")), 0);
+        QCOMPARE(count(QStringLiteral("obs_controlcalidad")), 0);
+        QCOMPARE(count(QStringLiteral("arch_funcional")), 0);
+    }
+
+    void aFormWithoutItsFieldsIsAnError() {
+        QString html = fixture("control_calidad_form.html");
+        html.remove(QStringLiteral("<input type=\"hidden\" name=\"tip_control\" value=\"CALIDAD\">"));
+        const gesreq::ControlForm form = gesreq::parseControlForm(html);
+        QVERIFY(!form.ok);
+        QVERIFY2(form.error.contains(QStringLiteral("tip_control")), qPrintable(form.error));
+        // Y una página que no es el formulario, tampoco.
+        QVERIFY(!gesreq::parseControlForm(fixture("bandeja_calidad.html")).ok);
+    }
+
+    void onlyTheStatesOfTheSystemCountAsSaved() {
+        QVERIFY(gesreq::isSavedState(QStringLiteral("OK")));
+        QVERIFY(gesreq::isSavedState(QStringLiteral("UPDATE-AJAX")));
+        QVERIFY(!gesreq::isSavedState(QStringLiteral("ERROR")));
+        QVERIFY(!gesreq::isSavedState(QString()));
+    }
+
     // ---- Texto y fechas ------------------------------------------------------------------------
     void plainTextResolvesEntitiesAndLineBreaks() {
         QCOMPARE(gesreq::toPlainText(QStringLiteral("Usuario aplicaci&oacute;n<br/>l&iacute;nea&nbsp;dos &#8211; &#x41;")),

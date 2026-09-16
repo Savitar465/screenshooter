@@ -76,8 +76,8 @@ private slots:
     }
 
     void progressCountsTheLastRunOfEachCaseAndProposesTheOutcome() {
-        Issue issue;
-        issue.caseIds = {QStringLiteral("TC-1"), QStringLiteral("TC-2"), QStringLiteral("TC-3"), QStringLiteral("TC-9")};
+        // Los casos del issue son los de sus planes; aquí llegan ya resueltos.
+        const QStringList caseIds{QStringLiteral("TC-1"), QStringLiteral("TC-2"), QStringLiteral("TC-3"), QStringLiteral("TC-9")};
         QList<TestCase> cases;
         for (const auto& id : {QStringLiteral("TC-1"), QStringLiteral("TC-2"), QStringLiteral("TC-3")}) {
             TestCase c;
@@ -98,7 +98,7 @@ private slots:
         QList<RunRecord> runs{run(QStringLiteral("R-1"), QStringLiteral("TC-1"), Verdict::Fallido, 30),
                               run(QStringLiteral("R-2"), QStringLiteral("TC-1"), Verdict::Superado, 5),   // repetido: manda el último
                               run(QStringLiteral("R-3"), QStringLiteral("TC-2"), Verdict::Superado, 20)};
-        IssueProgress p = issueProgress(issue, cases, runs, {});
+        IssueProgress p = issueProgress(caseIds, cases, runs, {});
         QCOMPARE(p.cases, 3);
         QCOMPARE(p.missingCases, 1);          // TC-9 ya no existe
         QCOMPARE(p.executed, 2);
@@ -108,7 +108,7 @@ private slots:
         QVERIFY(p.blockers.contains(QStringLiteral("1 caso sin ejecutar")));
 
         runs << run(QStringLiteral("R-4"), QStringLiteral("TC-3"), Verdict::Superado, 2);
-        p = issueProgress(issue, cases, runs, {});
+        p = issueProgress(caseIds, cases, runs, {});
         QCOMPARE(p.executed, 3);
         QVERIFY(p.suggested == QaOutcome::Conforme);
         QVERIFY(p.blockers.isEmpty());
@@ -118,19 +118,18 @@ private slots:
         IssueLink bug;
         bug.key = QStringLiteral("SHOP-99");
         bug.caseId = QStringLiteral("TC-2");
-        p = issueProgress(issue, cases, runs, {bug});
+        p = issueProgress(caseIds, cases, runs, {bug});
         QCOMPARE(p.bugs, 1);
         QCOMPARE(p.openBugs, 1);
         QVERIFY(p.suggested == QaOutcome::Observado);
         QVERIFY(p.blockers.contains(QStringLiteral("1 bug abierto")));
 
         bug.resolved = true;
-        QVERIFY(issueProgress(issue, cases, runs, {bug}).suggested == QaOutcome::Conforme);
+        QVERIFY(issueProgress(caseIds, cases, runs, {bug}).suggested == QaOutcome::Conforme);
     }
 
     void progressOnlyCountsTheRunsOfTheOpenRevision() {
-        Issue issue;
-        issue.caseIds = {QStringLiteral("TC-1")};
+        const QStringList caseIds{QStringLiteral("TC-1")};
         TestCase c;
         c.id = QStringLiteral("TC-1");
         const QDateTime revisionStart = QDateTime::currentDateTime().addSecs(-3600);
@@ -142,7 +141,7 @@ private slots:
         old.finishedAt = old.startedAt.addSecs(60);
 
         // La ejecución de la ronda anterior no cuenta: esta revisión todavía no ha probado nada.
-        IssueProgress p = issueProgress(issue, {c}, {old}, {}, revisionStart);
+        IssueProgress p = issueProgress(caseIds, {c}, {old}, {}, revisionStart);
         QCOMPARE(p.executed, 0);
         QVERIFY(!p.canClose());
 
@@ -151,7 +150,7 @@ private slots:
         fresh.verdict = Verdict::Superado;
         fresh.startedAt = revisionStart.addSecs(600);
         fresh.finishedAt = fresh.startedAt.addSecs(60);
-        p = issueProgress(issue, {c}, {old, fresh}, {}, revisionStart);
+        p = issueProgress(caseIds, {c}, {old, fresh}, {}, revisionStart);
         QCOMPARE(p.executed, 1);
         QCOMPARE(p.passed, 1);
         QVERIFY(p.suggested == QaOutcome::Conforme);

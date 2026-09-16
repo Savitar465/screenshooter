@@ -1,7 +1,8 @@
-// IssueStore (application/IssueStore.h): alta y edición, asociaciones con casos y planes, avance del
-// flujo y revisiones (acta, publicación y registro), importación de requerimientos sin duplicados ni
-// pisar lo escrito en QAflow, cambios pendientes, requerimientos que salen de la bandeja, resultados
-// de sus casos y datos que no se pueden leer.
+// IssueStore (application/IssueStore.h): alta y edición, los planes que prueban cada requerimiento
+// (y los casos que salen de ellos), avance del flujo y revisiones (acta, publicación y registro),
+// importación de requerimientos sin duplicados ni pisar lo escrito en QAflow, cambios pendientes,
+// requerimientos que salen de la bandeja, resultados de los ciclos de sus planes y datos que no se
+// pueden leer.
 
 #include "support/AppFixture.h"
 #include "support/MemoryRepositories.h"
@@ -56,38 +57,53 @@ private slots:
         QCOMPARE(f.repo->issues->size(), 2);   // persiste en cada cambio
     }
 
-    void linksCasesAndPlansOnceAndACaseCanCoverSeveralIssues() {
+    void linksPlansOnceAndAPlanCanCoverSeveralIssues() {
         Fixture f;
         const QString a = f.store.createIssue(QStringLiteral("A"));
         const QString b = f.store.createIssue(QStringLiteral("B"));
         QSignalSpy changed(&f.store, &IssueStore::issueChanged);
-        f.store.linkCase(a, QStringLiteral("TC-101"));
-        f.store.linkCase(a, QStringLiteral("TC-101"));
-        f.store.linkCase(b, QStringLiteral("TC-101"));
-        QCOMPARE(f.store.find(a)->caseIds, QStringList{QStringLiteral("TC-101")});
-        QCOMPARE(f.store.issuesForCase(QStringLiteral("TC-101")).size(), 2);
-        QCOMPARE(changed.count(), 2);   // el vínculo repetido no cambia nada
-        f.store.unlinkCase(a, QStringLiteral("TC-101"));
-        QCOMPARE(f.store.issuesForCase(QStringLiteral("TC-101")).size(), 1);
-
         f.store.linkPlan(a, QStringLiteral("PL-0001"));
         f.store.linkPlan(a, QStringLiteral("PL-0001"));
+        f.store.linkPlan(b, QStringLiteral("PL-0001"));
         QCOMPARE(f.store.find(a)->planIds, QStringList{QStringLiteral("PL-0001")});
+        QCOMPARE(f.store.issuesForPlan(QStringLiteral("PL-0001")).size(), 2);
+        QCOMPARE(changed.count(), 2);   // el vínculo repetido no cambia nada
         f.store.unlinkPlan(a, QStringLiteral("PL-0001"));
+        QCOMPARE(f.store.issuesForPlan(QStringLiteral("PL-0001")).size(), 1);
         QVERIFY(f.store.find(a)->planIds.isEmpty());
     }
 
+    // Los casos del issue no se vinculan uno a uno: son los de sus planes, en su orden y sin repetir.
+    void itsCasesAreTheOnesInItsPlans() {
+        AppFixture f;
+        const QString id = f.issues.createIssue(QStringLiteral("Checkout"));
+        QVERIFY(IssueStore::caseIdsOf(*f.issues.find(id), f.plans).isEmpty());
+
+        f.issues.linkPlan(id, QStringLiteral("PL-0001"));
+        const QStringList cases = IssueStore::caseIdsOf(*f.issues.find(id), f.plans);
+        QCOMPARE(cases, f.plans.orderedCaseIds(QStringLiteral("PL-0001")));
+        QVERIFY(cases.contains(QStringLiteral("TC-101")));
+
+        const QString other = f.plans.createPlan(QStringLiteral("Humo"));
+        f.plans.toggle(QStringLiteral("TC-101"));   // repetido: no sale dos veces
+        f.plans.toggle(QStringLiteral("TC-106"));
+        f.issues.linkPlan(id, other);
+        const QStringList both = IssueStore::caseIdsOf(*f.issues.find(id), f.plans);
+        QCOMPARE(both.size(), cases.size() + 1);
+        QCOMPARE(both.last(), QStringLiteral("TC-106"));
+    }
+
     // ---- Flujo y revisiones ---------------------------------------------------------------------
-    void theFirstCaseMovesThePendingIssueToPreparing() {
+    void theFirstPlanMovesThePendingIssueToPreparing() {
         Fixture f;
         const QString id = f.store.createIssue(QStringLiteral("A"));
         QVERIFY(f.store.find(id)->state == IssueState::Pending);
-        f.store.linkCase(id, QStringLiteral("TC-101"));
+        f.store.linkPlan(id, QStringLiteral("PL-0001"));
         QVERIFY(f.store.find(id)->state == IssueState::Preparing);
 
-        // Un estado más avanzado no retrocede al vincular otro caso.
+        // Un estado más avanzado no retrocede al vincular otro plan.
         f.store.updateIssue(id, [](Issue& i) { i.state = IssueState::Testing; });
-        f.store.linkCase(id, QStringLiteral("TC-102"));
+        f.store.linkPlan(id, QStringLiteral("PL-0002"));
         QVERIFY(f.store.find(id)->state == IssueState::Testing);
     }
 
@@ -196,7 +212,7 @@ private slots:
         const ExternalRequirement original = requirementOf(QStringLiteral("2025175"));
         f.store.importRequirements({original}, kConnection);
         const QString id = f.store.issues().first().id;
-        f.store.linkCase(id, QStringLiteral("TC-101"));
+        f.store.linkPlan(id, QStringLiteral("PL-0001"));
         f.store.updateIssue(id, [](Issue& i) {
             i.title = QStringLiteral("Mi título");
             i.notes = QStringLiteral("Probar con el usuario de aduana");
@@ -222,7 +238,7 @@ private slots:
         QCOMPARE(issue->notes, QStringLiteral("Probar con el usuario de aduana"));
         QVERIFY(issue->priority == Priority::Baja);
         QVERIFY(issue->state == IssueState::Testing);
-        QCOMPARE(issue->caseIds, QStringList{QStringLiteral("TC-101")});
+        QCOMPARE(issue->planIds, QStringList{QStringLiteral("PL-0001")});
         QCOMPARE(issue->requirement.data.summary, QStringLiteral("Nuevo resumen"));
         QCOMPARE(issue->requirement.changes.size(), 2);
         QCOMPARE(f.store.changedCount(), 1);
@@ -238,7 +254,7 @@ private slots:
     }
 
     // Iniciar las pruebas de un requerimiento lo abre: la primera vez crea su issue y después reutiliza
-    // el mismo, con sus casos y lo escrito en QAflow.
+    // el mismo, con sus planes y lo escrito en QAflow.
     void startingTestsOpensTheIssueOfTheRequirementAndReusesIt() {
         Fixture f;
         const ExternalRequirement requirement = requirementOf(QStringLiteral("2025175"));
@@ -246,7 +262,7 @@ private slots:
         QVERIFY(!id.isEmpty());
         QCOMPARE(f.store.issues().size(), 1);
         QCOMPARE(f.store.selectedId(), id);
-        f.store.linkCase(id, QStringLiteral("TC-101"));
+        f.store.linkPlan(id, QStringLiteral("PL-0001"));
         f.store.updateIssue(id, [](Issue& i) {
             i.title = QStringLiteral("Mi título");
             i.state = IssueState::Testing;
@@ -260,7 +276,7 @@ private slots:
         QCOMPARE(f.store.selectedId(), id);     // y lo deja delante para empezar
         const Issue* issue = f.store.find(id);
         QCOMPARE(issue->title, QStringLiteral("Mi título"));
-        QCOMPARE(issue->caseIds, QStringList{QStringLiteral("TC-101")});
+        QCOMPARE(issue->planIds, QStringList{QStringLiteral("PL-0001")});
         QVERIFY(issue->state == IssueState::Testing);
         QCOMPARE(issue->requirement.data.states, QStringList{QStringLiteral("CONTROL DE CALIDAD OBSERVADO")});
         QVERIFY(f.store.openForRequirement(ExternalRequirement{}, kConnection).isEmpty());
@@ -273,12 +289,12 @@ private slots:
         const ExternalRequirement b = requirementOf(QStringLiteral("2026310"));
         f.store.importRequirements({a, b}, kConnection);
         const QString idA = f.store.findByRequirement(kConnection, a.id)->id;
-        f.store.linkCase(idA, QStringLiteral("TC-101"));
+        f.store.linkPlan(idA, QStringLiteral("PL-0001"));
         const QString manual = f.store.createIssue(QStringLiteral("A mano"));
 
         QCOMPARE(f.store.markInboxRead({b}, kConnection), 1);
         QVERIFY(f.store.find(idA)->requirement.missing);
-        QCOMPARE(f.store.find(idA)->caseIds, QStringList{QStringLiteral("TC-101")});
+        QCOMPARE(f.store.find(idA)->planIds, QStringList{QStringLiteral("PL-0001")});
         QVERIFY(!f.store.findByRequirement(kConnection, b.id)->requirement.missing);
         QVERIFY(!f.store.find(manual)->requirement.missing);
 
@@ -302,28 +318,47 @@ private slots:
     }
 
     // ---- Resultados -----------------------------------------------------------------------------
-    void runsOfTheIssueCasesComeMostRecentFirst() {
+    // Los resultados del issue son los de los ciclos de sus planes: una ejecución suelta del mismo
+    // caso, o dentro de otro plan, no es un resultado suyo.
+    void itsResultsAreOnlyTheOnesOfItsPlanCycles() {
         AppFixture f;
         const QString id = f.issues.createIssue(QStringLiteral("Checkout"));
-        f.issues.linkCase(id, QStringLiteral("TC-101"));
-        f.issues.linkCase(id, QStringLiteral("TC-102"));
-        const qsizetype before = IssueStore::runsOf(*f.issues.find(id), f.history).size();
+        f.issues.linkPlan(id, QStringLiteral("PL-0001"));
+        QVERIFY(IssueStore::runsOf(*f.issues.find(id), f.history).isEmpty());
 
+        // Una ejecución suelta de un caso del plan: no es del issue.
         f.run.start(QStringLiteral("TC-101"));
         while (!f.run.state().finished) f.run.mark(StepResult::Pass);
         f.run.finish();
-        f.run.start(QStringLiteral("TC-102"));
-        while (!f.run.state().finished) f.run.mark(StepResult::Fail);
-        f.run.finish();
-        f.run.start(QStringLiteral("TC-104"));   // no es del issue
+        QVERIFY(IssueStore::runsOf(*f.issues.find(id), f.history).isEmpty());
+
+        // Un ciclo de otro plan con los mismos casos tampoco.
+        const QString other = f.plans.createPlan(QStringLiteral("Humo"));
+        f.plans.toggle(QStringLiteral("TC-101"));
+        f.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Humo"), other);
         while (!f.run.state().finished) f.run.mark(StepResult::Pass);
         f.run.finish();
+        QVERIFY(IssueStore::runsOf(*f.issues.find(id), f.history).isEmpty());
 
+        // El ciclo del plan del issue sí.
+        f.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-102")}, QStringLiteral("Regresión Sprint 14"),
+                            QStringLiteral("PL-0001"));
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+        f.run.finish();
+        while (!f.run.state().finished) f.run.mark(StepResult::Fail);
+        f.run.finish();
+
+        const QList<PlanRun> cycles = IssueStore::cyclesOf(*f.issues.find(id), f.history);
+        QCOMPARE(cycles.size(), 1);
+        QCOMPARE(cycles.first().planId, QStringLiteral("PL-0001"));
         const QList<RunRecord> runs = IssueStore::runsOf(*f.issues.find(id), f.history);
-        QCOMPARE(runs.size(), before + 2);
-        QCOMPARE(runs[0].caseId, QStringLiteral("TC-102"));
+        QCOMPARE(runs.size(), 2);
+        QCOMPARE(runs[0].caseId, QStringLiteral("TC-102"));   // la más reciente primero
         QVERIFY(runs[0].verdict == Verdict::Fallido);
         QCOMPARE(runs[1].caseId, QStringLiteral("TC-101"));
+
+        // Con `since` sólo cuentan los ciclos de la ronda en curso.
+        QVERIFY(IssueStore::runsOf(*f.issues.find(id), f.history, QDateTime::currentDateTime().addSecs(60)).isEmpty());
     }
 
     // ---- Datos que no se pueden leer ------------------------------------------------------------

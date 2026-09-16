@@ -8,10 +8,20 @@ using namespace qaflow;
 
 namespace {
 
+/// Bug ya creado en el gestor, enlazado a su caso y a su paso.
+IssueLink bug(const QString& key, const QString& caseId, int step, const QDateTime& at, bool resolved = false) {
+    IssueLink b;
+    b.key = key; b.caseId = caseId; b.step = step; b.createdAt = at; b.resolved = resolved;
+    b.title = QStringLiteral("Fallo de ") + caseId;
+    b.severity = QStringLiteral("Mayor");
+    return b;
+}
+
 /// Plan de tres casos con dos ejecutados (uno repetido) y uno pendiente.
 struct Sample {
     PlanRun plan;
     RunRecord first, retry, blocked, foreign;
+    QList<IssueLink> bugs;
 
     Sample() {
         plan.id = QStringLiteral("PR-0001");
@@ -36,13 +46,19 @@ struct Sample {
         blocked.steps = {RunRecordStep{QStringLiteral("pagar"), {}, StepResult::Block, QStringLiteral("pasarela caída")}};
 
         foreign.caseId = QStringLiteral("TC-3"); foreign.planRunId = QStringLiteral("PR-0002"); foreign.verdict = Verdict::Superado;   // de otro plan
+
+        // El libro de bugs del proyecto entero: dos del ciclo y dos que no son suyos.
+        bugs = {bug(QStringLiteral("SHOP-11"), QStringLiteral("TC-1"), 2, plan.startedAt.addSecs(50)),
+                bug(QStringLiteral("SHOP-12"), QStringLiteral("TC-2"), 1, plan.startedAt.addSecs(400), true),
+                bug(QStringLiteral("SHOP-90"), QStringLiteral("TC-1"), 1, plan.startedAt.addDays(-3)),    // de antes del ciclo
+                bug(QStringLiteral("SHOP-91"), QStringLiteral("TC-9"), 1, plan.startedAt.addSecs(60))};   // de un caso que no es del plan
     }
 
     PlanReport build() const {
         return PlanReport::build(plan, {first, retry, blocked, foreign}, [](const QString& id) {
             // El catálogo: título y la historia de Jira del caso.
             return PlanReport::CaseInfo{QStringLiteral("Título de ") + id, QStringLiteral("SHOP-9")};
-        });
+        }, bugs);
     }
 };
 
@@ -102,6 +118,48 @@ private slots:
         QVERIFY(!r.rows[2].executed);                // el pendiente trae la historia pero no tiene Test
         QCOMPARE(r.rows[2].jiraKey, QStringLiteral("SHOP-9"));
         QVERIFY(r.rows[2].testKey.isEmpty());
+    }
+
+    // Los bugs del informe son los de sus casos reportados mientras corría el ciclo.
+    void bugsAreThoseReportedDuringTheCycleOnItsCases() {
+        const PlanReport r = Sample().build();
+        QCOMPARE(r.bugCount(), 2);
+        QCOMPARE(r.openBugCount(), 1);
+        QCOMPARE(r.rows[0].bugs.size(), 1);
+        QCOMPARE(r.rows[0].bugs[0].key, QStringLiteral("SHOP-11"));   // el de hace tres días no cuenta
+        QCOMPARE(r.rows[1].bugs.size(), 1);
+        QVERIFY(r.rows[2].bugs.isEmpty());
+        QCOMPARE(r.bugs().size(), 2);
+        // Sin el libro de bugs el informe sale igual, sólo que sin ellos.
+        Sample s;
+        s.bugs.clear();
+        QCOMPARE(s.build().bugCount(), 0);
+    }
+
+    // El margen tras el cierre: el parte se escribe justo después de ver el fallo.
+    void aBugWrittenRightAfterTheCycleStillBelongsToIt() {
+        Sample s;
+        QVERIFY(PlanReport::reportedDuring(s.plan, bug(QStringLiteral("X"), QStringLiteral("TC-1"), 1, s.plan.finishedAt.addSecs(600))));
+        QVERIFY(!PlanReport::reportedDuring(s.plan, bug(QStringLiteral("X"), QStringLiteral("TC-1"), 1, s.plan.finishedAt.addSecs(7200))));
+        QVERIFY(!PlanReport::reportedDuring(s.plan, bug(QStringLiteral("X"), QStringLiteral("TC-1"), 1, s.plan.startedAt.addSecs(-1))));
+        // Un ciclo en curso admite todo lo reportado desde que arrancó.
+        s.plan.finishedAt = QDateTime();
+        QVERIFY(PlanReport::reportedDuring(s.plan, bug(QStringLiteral("X"), QStringLiteral("TC-1"), 1, QDateTime::currentDateTime())));
+    }
+
+    void markdownListsTheBugsOfTheCycle() {
+        const QString md = Sample().build().toMarkdown();
+        QVERIFY(md.contains(QStringLiteral("- **Bugs encontrados:** 2 · 1 abiertos")));
+        QVERIFY(md.contains(QStringLiteral("## Bugs encontrados · 2")));
+        QVERIFY(md.contains(QStringLiteral("| SHOP-11 | TC-1 | 2 | Fallo de TC-1 | Mayor | Abierto |")));
+        QVERIFY(md.contains(QStringLiteral("| SHOP-12 | TC-2 | 1 | Fallo de TC-2 | Mayor | Cerrado |")));
+        QVERIFY(!md.contains(QStringLiteral("SHOP-90")));   // el de antes del ciclo no sale
+        // Y cada caso nombra los suyos junto a sus enlaces.
+        QVERIFY(md.contains(QStringLiteral("**Bugs:** SHOP-11 (paso 2)")));
+
+        Sample s;
+        s.bugs.clear();
+        QVERIFY(!s.build().toMarkdown().contains(QStringLiteral("Bugs encontrados")));
     }
 
     // Publicado el ciclo, el informe dice en cuál de Zephyr quedaron sus resultados.

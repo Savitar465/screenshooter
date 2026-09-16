@@ -26,6 +26,7 @@
 #include "application/PlanStore.h"
 #include "application/QualityRecordService.h"
 #include "application/RequirementSourceService.h"
+#include "application/RevisionPublishService.h"
 #include "application/RunController.h"
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
@@ -56,13 +57,16 @@ struct AppFixture {
     SettingsStore settings{settingsRepo, secrets};
     BugStore bugLedger{bugRepo};
     BugReportService bugs{tracker, store, run, settings, bugLedger};
-    TestPublishService publish{zephyr, store, history, settings};
+    TestPublishService publish{zephyr, store, history, settings, bugLedger};
     RequirementSourceService requirements{requirementSource, settings};
     IssueStore issues{issueRepo};
     IssuePublishService issuePublish{tracker, issues, settings};
-    QualityRecordService records{issues, store, history, bugLedger, settings, recordWriter};
+    QualityRecordService records{issues, store, plans, history, bugLedger, settings, recordWriter, &publish};
+    RevisionPublishService revisionPublish{issues, history, records, &publish, &issuePublish, &requirements};
 
     AppFixture() {
+        // Los informes de ciclo traen los bugs que se reportaron mientras corrían, como en la aplicación.
+        history.setBugs(&bugLedger);
         store.load();
         history.load();
         plans.load();

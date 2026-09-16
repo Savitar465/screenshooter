@@ -4,9 +4,13 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QFileInfo>
+#include <QHash>
+#include <QJsonObject>
 #include <QRegularExpression>
 #include <QUrl>
 
+#include <algorithm>
 #include <iterator>
 #include <utility>
 
@@ -254,6 +258,244 @@ void GesreqClient::loadDetail(const RequirementSourceSettings& s, const QString&
                 result.error = QCoreApplication::translate("infrastructure", "La ficha del requerimiento %1 no tiene la estructura esperada: %2").arg(id, page.error);
                 break;
         }
+        done(result);
+    });
+}
+
+// ---- Registro del resultado --------------------------------------------------------------------
+
+namespace {
+/// Nombre que le da el formulario de GESREQ a cada clasificación del resumen del acta.
+QString observationField(const QString& classification) {
+    static const QHash<QString, QString> fields{
+        {QStringLiteral("A"), QStringLiteral("tot_obs_func")},  {QStringLiteral("B"), QStringLiteral("tot_obs_datos")},
+        {QStringLiteral("C"), QStringLiteral("tot_obs_forma")}, {QStringLiteral("D"), QStringLiteral("tot_obs_rec")},
+        {QStringLiteral("E"), QStringLiteral("tot_obs_vul")}};
+    return fields.value(classification.trimmed().toUpper());
+}
+
+/// Observaciones que GESREQ cuenta para decidir si el control puede ser «OK»: todas menos las
+/// recomendaciones, que no impiden dar por bueno el requerimiento.
+int blockingObservations(const QList<ObservationCount>& observations) {
+    int total = 0;
+    for (const auto& o : observations)
+        if (o.type.trimmed().toUpper() != QLatin1String("D")) total += std::max(0, o.observations);
+    return total;
+}
+
+/// Extensiones que admite el adjunto, las mismas que comprueba la ventana antes de enviar.
+bool allowedAttachment(const QString& path) {
+    static const QStringList extensions{QStringLiteral("gif"), QStringLiteral("jpg"),  QStringLiteral("doc"), QStringLiteral("docx"),
+                                        QStringLiteral("pdf"), QStringLiteral("xls"), QStringLiteral("xlsx"), QStringLiteral("vsd")};
+    return extensions.contains(QFileInfo(path).suffix().toLower());
+}
+} // namespace
+
+QString GesreqClient::registrationProblem(const RequirementRegistration& registration) const {
+    const QString outcome = registration.result.trimmed();
+    const bool conforme = outcome.compare(QStringLiteral("Conforme"), Qt::CaseInsensitive) == 0;
+    if (!conforme && outcome.compare(QStringLiteral("Observado"), Qt::CaseInsensitive) != 0)
+        return QCoreApplication::translate("infrastructure",
+                                           "GESREQ sólo admite «Conforme» u «Observado» como resultado del control, y la revisión está en «%1»")
+                .arg(registration.result);
+    if (registration.attachmentPath.trimmed().isEmpty())
+        return QCoreApplication::translate("infrastructure",
+                                           "GESREQ exige adjuntar el acta del control: genérala antes de registrar el resultado");
+    if (!QFileInfo::exists(registration.attachmentPath))
+        return QCoreApplication::translate("infrastructure", "No se encuentra el acta %1").arg(registration.attachmentPath);
+    if (!allowedAttachment(registration.attachmentPath))
+        return QCoreApplication::translate("infrastructure",
+                                           "GESREQ no admite adjuntos «%1»: el acta tiene que ser .doc, .docx, .pdf, .xls, .xlsx, .vsd, .jpg o .gif")
+                .arg(QFileInfo(registration.attachmentPath).suffix());
+    const int blocking = blockingObservations(registration.observations);
+    if (conforme && blocking > 0)
+        return QCoreApplication::translate("infrastructure",
+                                           "GESREQ no acepta un control «OK» con %n observación(es) que no sean recomendaciones: registra esta ronda como observada",
+                                           nullptr, blocking);
+    if (!conforme && blocking == 0)
+        return QCoreApplication::translate("infrastructure",
+                                           "GESREQ no acepta un control «OBSERVADO» sin ninguna observación de funcionamiento, datos, forma o vulnerabilidades");
+    return {};
+}
+
+void GesreqClient::registerResult(const RequirementSourceSettings& s, const RequirementRegistration& registration,
+                                  std::function<void(const RequirementRegistrationResult&)> done) {
+    auto fail = [done](RequirementSourceFailure kind, const QString& error, bool uncertain = false) {
+        RequirementRegistrationResult result;
+        result.failure = kind;
+        result.error = error;
+        result.uncertain = uncertain;
+        done(result);
+    };
+    if (const Failure invalid = checkSettings(s); invalid.failed()) { fail(invalid.kind, invalid.error); return; }
+
+    const QString id = registration.requirementId.trimmed();
+    static const QRegularExpression number(QStringLiteral("^\\d+$"));
+    if (!number.match(id).hasMatch()) {
+        fail(RequirementSourceFailure::NotFound,
+             QCoreApplication::translate("infrastructure", "«%1» no es un número de requerimiento de GESREQ").arg(registration.requirementId));
+        return;
+    }
+    // Las reglas del formulario: se comprueban aquí para no enviar algo que GESREQ va a rechazar y que
+    // dejaría el resultado a medias entre los dos sistemas. La pantalla las consulta antes (con
+    // `registrationProblem`) para avisar sin llegar a enviar nada.
+    if (const QString problem = registrationProblem(registration); !problem.isEmpty()) {
+        fail(RequirementSourceFailure::Configuration, problem);
+        return;
+    }
+
+    // La bandeja da el enlace del registro con el estado con el que figura el requerimiento: sin ese
+    // estado la pantalla de gestión se abre sin el botón del control.
+    getPage(s, QString::fromLatin1(gesreq::kInboxPath), false, [this, s, registration, id, fail, done](const QString& inbox, const Failure& failure, bool) {
+        if (failure.failed()) { fail(failure.kind, failure.error); return; }
+        const QString gestion = gesreq::registrationPath(inbox, id);
+        if (gestion.isEmpty()) {
+            fail(RequirementSourceFailure::NotFound,
+                 QCoreApplication::translate("infrastructure", "El requerimiento %1 no está en tu bandeja de control de calidad o ya no admite registro").arg(id));
+            return;
+        }
+        getPage(s, gestion, false, [this, s, registration, id, fail, done](const QString& page, const Failure& failure, bool) {
+            if (failure.failed()) { fail(failure.kind, failure.error); return; }
+            const QList<gesreq::ControlItem> items = gesreq::parseControlItems(page);
+            if (items.isEmpty()) {
+                fail(RequirementSourceFailure::PageChanged,
+                     QCoreApplication::translate("infrastructure", "La pantalla de gestión del requerimiento %1 no ofrece el formulario del control de calidad").arg(id));
+                return;
+            }
+            const QString wanted = registration.systemCode.simplified();
+            auto matches = [&wanted](const gesreq::ControlItem& item) { return item.systemCode.compare(wanted, Qt::CaseInsensitive) == 0; };
+            const auto found = wanted.isEmpty() ? items.cbegin() : std::find_if(items.cbegin(), items.cend(), matches);
+            // Un requerimiento puede tocar varios sistemas y cada uno lleva su propio control: registrar
+            // el de otro sería dar por revisado lo que no se ha probado.
+            if (found == items.cend() || (wanted.isEmpty() && items.size() > 1)) {
+                QStringList codes;
+                for (const auto& item : items) codes << item.systemCode;
+                fail(RequirementSourceFailure::NotFound,
+                     QCoreApplication::translate("infrastructure", "El requerimiento %1 no tiene un control de calidad del sistema «%2» (tiene: %3)")
+                             .arg(id, wanted.isEmpty() ? QCoreApplication::translate("infrastructure", "sin indicar") : wanted, codes.join(QStringLiteral(", "))));
+                return;
+            }
+            getPage(s, found->formPath, false, [this, s, registration, fail, done](const QString& html, const Failure& failure, bool) {
+                if (failure.failed()) { fail(failure.kind, failure.error); return; }
+                const gesreq::ControlForm form = gesreq::parseControlForm(html);
+                if (!form.ok) {
+                    fail(RequirementSourceFailure::PageChanged,
+                         QCoreApplication::translate("infrastructure", "El formulario del control de calidad no tiene la estructura esperada: %1").arg(form.error));
+                    return;
+                }
+                sendControl(s, registration, form, done);
+            });
+        });
+    });
+}
+
+void GesreqClient::sendControl(const RequirementSourceSettings& s, const RequirementRegistration& registration,
+                               const gesreq::ControlForm& form, std::function<void(const RequirementRegistrationResult&)> done) {
+    // El campo de observaciones del formulario es el de una columna de la base de datos: un texto más
+    // largo que su hermano («maximo(this,2000)») haría fallar el guardado en el servidor.
+    QString comment = registration.comment;
+    if (comment.size() > gesreq::kControlCommentMax) comment = comment.left(gesreq::kControlCommentMax - 1) + QChar(0x2026);
+    QHash<QString, QString> ours{
+        {QStringLiteral("resultado_control"), registration.result.compare(QStringLiteral("Conforme"), Qt::CaseInsensitive) == 0
+                                                      ? QStringLiteral("OK") : QStringLiteral("OBSERVADO")},
+        {QStringLiteral("obs_controlfuncional"), comment}};
+    for (const auto& count : registration.observations)
+        if (const QString field = observationField(count.type); !field.isEmpty())
+            ours.insert(field, QString::number(std::max(0, count.observations)));
+
+    // Lo que trae el formulario viaja tal cual (incluidas las correcciones que puso el sistema); sólo
+    // se cambia lo que decide QAflow.
+    QList<QPair<QString, QString>> fields = form.fields;
+    QStringList applied;
+    for (auto& [name, value] : fields) {
+        if (!ours.contains(name)) continue;
+        value = ours.value(name);
+        applied << name;
+    }
+    for (auto it = ours.cbegin(); it != ours.cend(); ++it)
+        if (!applied.contains(it.key())) fields << qMakePair(it.key(), it.value());
+
+    // El cuerpo se escribe como el del navegador (delimitador sin comillas, campos sin Content-Type y
+    // el acta en el sitio que ocupa en el formulario): el multipart que compone Qt hacía que el
+    // servidor de GESREQ respondiera un 500 sin llegar a leer ningún campo.
+    const FormData body = formData(fields, registration.attachmentPath, gesreq::kControlFileField, form.filePosition);
+    if (!body.ok) {
+        RequirementRegistrationResult result;
+        result.failure = RequirementSourceFailure::Configuration;
+        result.error = QCoreApplication::translate("infrastructure", "No se pudo leer el acta %1").arg(registration.attachmentPath);
+        done(result);
+        return;
+    }
+    QNetworkRequest request = pageRequest(s.resolve(QString::fromLatin1(gesreq::kControlSavePath)));
+    // Como lo envía la propia ventana: por AJAX y esperando el estado en JSON.
+    request.setRawHeader("X-Requested-With", "XMLHttpRequest");
+    request.setRawHeader("Accept", "application/json, text/javascript, */*; q=0.01");
+    const qint64 attachmentSize = QFileInfo(registration.attachmentPath).size();
+    postFormData(request, body, [this, s, attachmentSize, done](const Response& r) {
+        RequirementRegistrationResult result;
+        if (!r.ok) {
+            // Un error del servidor no es «no hubo respuesta»: GESREQ contestó y su página suele decir
+            // qué reventó (el adjunto, un dato que no cabe…). Eso es lo que hay que enseñar.
+            if (r.status >= 500) {
+                const QString reason = gesreq::serverErrorReason(decode(r));
+                result.failure = RequirementSourceFailure::Network;
+                result.error = reason.isEmpty()
+                        ? QCoreApplication::translate("infrastructure", "GESREQ falló al guardar el control (HTTP %1)").arg(r.status)
+                        : QCoreApplication::translate("infrastructure", "GESREQ falló al guardar el control (HTTP %1): %2").arg(r.status).arg(reason);
+                if (attachmentSize > kBigAttachment)
+                    result.error += QCoreApplication::translate("infrastructure", " · el acta pesa %1 MB, prueba a generarla sin capturas")
+                                            .arg(double(attachmentSize) / (1024 * 1024), 0, 'f', 1);
+                // Pudo guardarlo antes de fallar: hay que mirarlo en el sistema antes de repetirlo.
+                result.uncertain = true;
+                done(result);
+                return;
+            }
+            const Failure failure = transportFailure(r);
+            result.failure = failure.kind;
+            result.error = failure.error;
+            // Se cortó con el envío en marcha: GESREQ pudo haberlo guardado antes de perderse la respuesta.
+            result.uncertain = r.retryable;
+            done(result);
+            return;
+        }
+        const QString body = decode(r);
+        if (gesreq::isLoginPage(body)) {
+            if (m_session == sessionKey(s)) m_session.clear();
+            result.failure = RequirementSourceFailure::Credentials;
+            result.error = QCoreApplication::translate("infrastructure", "GESREQ pidió iniciar sesión en vez de registrar el control; vuelve a intentarlo");
+            done(result);
+            return;
+        }
+        // `Anb.form.ajax` acepta las dos formas: el estado suelto o {state, data:{message…}}.
+        QString state;
+        QString message;
+        if (r.json.isObject()) {
+            const QJsonObject object = r.json.object();
+            state = object.value(QStringLiteral("state")).toString();
+            const QJsonValue data = object.value(QStringLiteral("data"));
+            if (data.isObject()) {
+                message = data.toObject().value(QStringLiteral("message")).toString();
+                // El sistema dice con qué estado queda el requerimiento: el issue se actualiza con él
+                // sin volver a consultar la bandeja.
+                result.state = data.toObject().value(QStringLiteral("estado")).toString().simplified();
+            } else {
+                message = data.toString();
+            }
+        }
+        if (state.isEmpty()) {
+            state = body.trimmed();
+            if (state.size() >= 2 && state.startsWith(QLatin1Char('"')) && state.endsWith(QLatin1Char('"'))) state = state.mid(1, state.size() - 2);
+        }
+        if (gesreq::isSavedState(state)) {
+            result.ok = true;
+            done(result);
+            return;
+        }
+        result.failure = RequirementSourceFailure::Rejected;
+        const QString reason = message.isEmpty() ? state : message;
+        result.error = reason.isEmpty()
+                ? QCoreApplication::translate("infrastructure", "GESREQ no confirmó el registro del control")
+                : QCoreApplication::translate("infrastructure", "GESREQ no registró el control: %1").arg(reason.left(300));
         done(result);
     });
 }

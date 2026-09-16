@@ -1,5 +1,6 @@
 #include "RunHistoryStore.h"
 
+#include "application/BugStore.h"
 #include "application/TestCaseStore.h"
 
 #include <algorithm>
@@ -66,7 +67,7 @@ PlanReport RunHistoryStore::report(const QString& planRunId) const {
     return PlanReport::build(*plan, runsForPlan(planRunId), [this](const QString& caseId) {
         const TestCase* c = m_cases.find(caseId);
         return c ? PlanReport::CaseInfo{c->title, c->jiraKey} : PlanReport::CaseInfo{};
-    });
+    }, m_bugs ? m_bugs->issues() : QList<IssueLink>{});
 }
 
 QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseIds, const QString& planId) {

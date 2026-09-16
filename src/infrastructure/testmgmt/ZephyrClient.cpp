@@ -35,8 +35,14 @@ struct ZephyrClient::Job {
     QString locale;            // la del usuario de Jira, para las fechas del ciclo
     int index = 0;             // caso que se está publicando
     QString executionId;       // ejecución del caso en curso
-    /// Resultados de paso que Zephyr creó para esa ejecución, emparejados con lo que se ejecutó.
-    QList<QPair<QString, RunRecordStep>> pendingSteps;
+    /// Un resultado de paso de Zephyr emparejado con el paso que se ejecutó y con su número (1..N),
+    /// que es el que llevan las evidencias y los defectos.
+    struct PendingStep {
+        QString id;
+        RunRecordStep step;
+        int number = 0;
+    };
+    QList<PendingStep> pendingSteps;
     QList<Upload> uploads;     // evidencias del caso, ya resueltas a su destino
 
     const PublishCase& current() const { return request.cases[index]; }
@@ -57,6 +63,19 @@ int ZephyrClient::zephyrStatus(Verdict v) {
         case Verdict::Bloqueado: return 4;
     }
     return -1;
+}
+
+QJsonArray ZephyrClient::defectsOf(const QList<PublishDefect>& defects, int step) {
+    QJsonArray out;
+    QStringList seen;
+    for (const auto& defect : defects) {
+        const QString key = defect.key.trimmed();
+        // Sin paso, los de la ejecución entera son todos: los de cada paso también salieron de ella.
+        if (key.isEmpty() || seen.contains(key) || (step > 0 && defect.step != step)) continue;
+        seen << key;
+        out.append(key);
+    }
+    return out;
 }
 
 int ZephyrClient::zephyrStatus(StepResult r) {
@@ -450,7 +469,9 @@ void ZephyrClient::createExecution(const std::shared_ptr<Job>& job, const QStrin
 
 void ZephyrClient::markExecution(const std::shared_ptr<Job>& job, const QString& issueId) {
     const PublishCase& c = job->current();
-    const QJsonObject status{{"status", QString::number(zephyrStatus(c.verdict))}};
+    QJsonObject status{{"status", QString::number(zephyrStatus(c.verdict))}};
+    // Los bugs que salieron del caso se cuelgan de la ejecución: quien la abra ve qué se reportó.
+    if (const QJsonArray defects = defectsOf(c.defects); !defects.isEmpty()) status[QStringLiteral("defects")] = defects;
     putWithComment(zephyr(job->settings, QStringLiteral("/execution/%1/execute").arg(job->executionId)), status,
                    QCoreApplication::translate("infrastructure", "Publicado por QAflow · %1").arg(formatDuration(c.durationSecs)),
                    [this, job, issueId](const Response& exec) {
@@ -479,7 +500,7 @@ void ZephyrClient::readStepResults(const std::shared_ptr<Job>& job, const QStrin
             for (int i = 0; i < results.size(); ++i) {
                 const QString id = QString::number(results[i].toObject()[QStringLiteral("id")].toInt());
                 stepResultIds << id;
-                if (i < c.steps.size()) job->pendingSteps.append({id, c.steps[i]});
+                if (i < c.steps.size()) job->pendingSteps.append({id, c.steps[i], i + 1});
             }
             // El Test enlazado y el caso se editan por separado y se desincronizan; y en el que se
             // acaba de crear puede haberse quedado fuera algún paso. Los veredictos que sobran no
@@ -529,13 +550,16 @@ void ZephyrClient::dropUploadedEvidence(const std::shared_ptr<Job>& job, QList<Q
 void ZephyrClient::writeNextStep(const std::shared_ptr<Job>& job, const QString& issueId) {
     if (job->pendingSteps.isEmpty()) { uploadNext(job); return; }
     const auto pending = job->pendingSteps.takeFirst();
-    const QJsonObject body{
-        {"id", pending.first.toInt()},
+    QJsonObject body{
+        {"id", pending.id.toInt()},
         {"issueId", issueId},
         {"executionId", job->executionId.toInt()},
-        {"status", QString::number(zephyrStatus(pending.second.result))},
+        {"status", QString::number(zephyrStatus(pending.step.result))},
     };
-    putWithComment(zephyr(job->settings, QStringLiteral("/stepResult/%1").arg(pending.first)), body, pending.second.note,
+    // Y cada bug, del paso en el que se vio: el defecto queda donde falló, no sólo en el caso.
+    if (const QJsonArray defects = defectsOf(job->current().defects, pending.number); !defects.isEmpty())
+        body[QStringLiteral("defects")] = defects;
+    putWithComment(zephyr(job->settings, QStringLiteral("/stepResult/%1").arg(pending.id)), body, pending.step.note,
                    [this, job, issueId](const Response& r) {
                        if (r.ok) ++job->result.steps;
                        else job->skip(QCoreApplication::translate("infrastructure", "%1: no se pudo fijar el veredicto de un paso · %2").arg(job->current().caseId, r.error));

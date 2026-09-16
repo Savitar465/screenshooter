@@ -52,6 +52,9 @@ private:
         QString testTypeId;   // tipo de incidencia de los Tests; vacío si el proyecto no lo tiene
     };
 
+    /// Los defectos que van en una petición: todos los de la ejecución, o sólo los del paso `step`.
+    static QJsonArray defectsOf(const QList<PublishDefect>& defects, int step = 0);
+
     QNetworkRequest jira(const TrackerSettings& s, const QString& path) const;
     QNetworkRequest zephyr(const TrackerSettings& s, const QString& path) const;
     /// Averigua por qué ruta responde la API. Devuelve, además del motivo, si el fallo merece

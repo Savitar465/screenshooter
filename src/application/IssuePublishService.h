@@ -65,6 +65,17 @@ public:
     void publishResult(const QString& issueId, const QString& comment, const QString& documentPath,
                        std::function<void(const Result&)> done);
 
+    /// ¿Se pueden colgar del issue del gestor los bugs y los Tests de sus pruebas? Hace falta que el
+    /// gestor sepa enlazar issues (sólo Jira) y que el issue esté publicado.
+    bool canLinkIssues(const Issue& issue) const;
+    /// Enlaza esos issues del gestor (bugs, Tests de Zephyr…) al issue publicado, uno a uno y sin
+    /// parar en el primero que falle: devuelve cuántos quedaron enlazados y qué no se pudo.
+    struct LinkResult {
+        int linked = 0;
+        QStringList failed;   // "SHOP-143 · motivo"
+    };
+    void linkToIssue(const QString& issueId, const QStringList& keys, std::function<void(const LinkResult&)> done);
+
     /// Tipos de incidencia del proyecto de destino, para elegir con cuál se crea. Se piden una vez por
     /// gestor y proyecto; si no se pueden leer, la lista llega vacía y el tipo se escribe a mano.
     void fetchIssueTypes(std::function<void(const QStringList&)> done);
@@ -74,6 +85,7 @@ public:
 
 private:
     QString metadataKey() const;
+    void linkNext(const QString& key, QStringList pending, LinkResult acc, std::function<void(const LinkResult&)> done);
 
     std::shared_ptr<IIssueTracker> m_tracker;
     IssueStore& m_issues;

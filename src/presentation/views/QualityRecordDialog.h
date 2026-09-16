@@ -5,8 +5,12 @@
 
 #include <QDialog>
 #include <QList>
+#include <QString>
+
+#include <functional>
 
 class QCheckBox;
+class QComboBox;
 class QDateEdit;
 class QLabel;
 class QLineEdit;
@@ -24,13 +28,29 @@ class TextArea;
 class QualityRecordDialog : public QDialog {
     Q_OBJECT
 public:
+    /// Una ejecución de plan entre las que elegir de cuál habla el acta.
+    struct CycleChoice {
+        QString planRunId;   // vacío = todos los ciclos de la revisión
+        QString text;        // "Regresión Sprint 14 · 12/05/2026 · 4 de 4 ejecutados"
+    };
+
     /// `outcome` es el resultado propuesto y `blockers`, por qué se propone (se enseñan arriba).
-    QualityRecordDialog(const QualityRecord& record, QaOutcome outcome, const QStringList& blockers, QWidget* parent = nullptr);
+    /// `cycles` son las ejecuciones de los planes del issue en esta revisión: al cambiar de una a otra
+    /// el acta se rehace con `redraft`, que devuelve la propuesta para ese ciclo.
+    QualityRecordDialog(const QualityRecord& record, QaOutcome outcome, const QStringList& blockers,
+                        const QList<CycleChoice>& cycles = {}, const QString& currentCycle = QString(),
+                        std::function<QualityRecord(const QString& planRunId)> redraft = {}, QWidget* parent = nullptr);
 
     /// El acta con lo que hay ahora en el formulario.
     QualityRecord record() const;
+    /// Ciclo del que habla el acta; vacío si habla de todos los de la revisión.
+    QString planRunId() const;
 
 private:
+    void buildCycles(QVBoxLayout* v, const QList<CycleChoice>& cycles, const QString& currentCycle);
+    /// Rellena el formulario con otra acta (al cambiar de ciclo). Lo que se hubiera escrito a mano en
+    /// los campos que dependen de la ejecución se reemplaza: el acta habla de otro ciclo.
+    void loadRecord(const QualityRecord& record);
     void buildGeneral(QVBoxLayout* v);
     void buildSummary(QVBoxLayout* v);
     void buildDetails(QVBoxLayout* v);
@@ -42,6 +62,9 @@ private:
     void appendImage(const QString& path);
 
     QualityRecord m_record;   // lo que no se edita aquí (greq, proceso) viaja tal cual
+    std::function<QualityRecord(const QString& planRunId)> m_redraft;
+    QComboBox* m_cycles = nullptr;
+    QLabel* m_proposal = nullptr;
 
     QLineEdit* m_system;
     QLineEdit* m_moduleLink;

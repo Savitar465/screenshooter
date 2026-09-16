@@ -15,6 +15,7 @@
 #include "presentation/views/JiraPublishDialog.h"
 #include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/RequirementImportDialog.h"
+#include "presentation/views/RevisionPublishDialog.h"
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/ImageViewer.h"
@@ -71,6 +72,8 @@ struct WindowFixture {
         ctx.requirements = &app.requirements;
         ctx.issues = &app.issues;
         ctx.issuePublish = &app.issuePublish;
+        ctx.records = &app.records;
+        ctx.revisionPublish = &app.revisionPublish;
         window = std::make_unique<MainWindow>(ctx);
         window->show();
         QApplication::setActiveWindow(window.get());
@@ -590,6 +593,42 @@ private slots:
         QCOMPARE(f.window->currentScreen(), Screen::Run);
     }
 
+    // El plan se ejecuta y se le añaden casos desde su propia pantalla, que es donde se compone.
+    void thePlanScreenRunsThePlanAndCreatesItsCases() {
+        WindowFixture f;
+        f.window->navigate(Screen::Plan);
+        auto* run = f.window->findChild<QPushButton*>(QStringLiteral("planRun"));
+        auto* newCase = f.window->findChild<QPushButton*>(QStringLiteral("planNewCase"));
+        QVERIFY(run && newCase);
+        QVERIFY(run->isEnabled());
+
+        // Un caso nuevo nace dentro del plan y se abre para escribir sus pasos.
+        const qsizetype before = f.app.plans.orderedCaseIds().size();
+        newCase->click();
+        const QString caseId = f.app.store.selectedId();
+        QCOMPARE(f.app.plans.orderedCaseIds().size(), before + 1);
+        QCOMPARE(f.app.plans.orderedCaseIds().last(), caseId);
+        QCOMPARE(f.window->currentScreen(), Screen::Casos);
+
+        // Y «Ejecutar plan» arranca su ciclo y lleva a la ejecución.
+        f.window->navigate(Screen::Plan);
+        run->click();
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+        QVERIFY(!f.app.run.planRunId().isEmpty());
+        QCOMPARE(f.app.run.state().caseId, f.app.plans.orderedCaseIds().first());
+
+        // Con una ejecución en curso no se arranca otra.
+        f.window->navigate(Screen::Plan);
+        run->click();
+        QVERIFY(f.window->findChild<Toast*>());
+
+        // Un plan vacío no se puede ejecutar.
+        f.app.run.abandon();
+        const QString empty = f.app.plans.createPlan(QStringLiteral("Vacío"));
+        f.app.plans.setActive(empty);
+        QVERIFY(!run->isEnabled());
+    }
+
     void planCaseSearchPaginatesAndPreservesSelection() {
         AppFixture f;
         QList<TestCase> incoming;
@@ -906,32 +945,39 @@ private slots:
         QCOMPARE(f.app.issues.selectedId(), id);
         auto* title = f.window->findChild<QLineEdit*>(QStringLiteral("issueTitle"));
         QCOMPARE(title->text(), QStringLiteral("Desarrollo complementario del laboratorio"));
+        // El issue importado nace ya en el gestor: sus casos, bugs y resultados tienen dónde colgarse.
+        QCOMPARE(f.app.tracker->publishedIssues.size(), 1);
+        QVERIFY(f.app.issues.find(id)->isPublished());
+        QVERIFY(f.app.tracker->publishedIssues.first().description.contains(QStringLiteral("2025175")));
 
-        // Un caso existente se vincula con el selector; el plan se crea con los casos del issue y se abre.
-        f.window->findChild<QPushButton*>(QStringLiteral("issueLinkCase"))->click();
-        auto* choice = f.window->findChild<ChoiceDialog*>();
-        QVERIFY(choice);
-        QTest::keyClicks(choice->findChild<QLineEdit*>(QStringLiteral("choiceSearch")), "TC-104");
-        choice->findChild<QPushButton*>(QStringLiteral("choiceAccept"))->click();
-        QCOMPARE(f.app.issues.find(id)->caseIds, QStringList{QStringLiteral("TC-104")});
-        QTRY_VERIFY(!f.window->findChild<ChoiceDialog*>());
-
-        f.window->findChild<QPushButton*>(QStringLiteral("issueNewPlan"))->click();
+        // Y con su plan de pruebas listo, que es con lo que se prueba el requerimiento.
         QCOMPARE(f.app.issues.find(id)->planIds.size(), 1);
         const QString planId = f.app.issues.find(id)->planIds.first();
-        QCOMPARE(f.app.plans.find(planId)->caseIds, QStringList{QStringLiteral("TC-104")});
         QCOMPARE(f.app.plans.activeId(), planId);
-        QCOMPARE(f.window->currentScreen(), Screen::Plan);
+        QVERIFY(f.app.plans.find(planId)->name.contains(id));
+        f.app.plans.toggle(QStringLiteral("TC-104"));
+        f.window->navigate(Screen::Issues);
+        // La tarjeta de planes enseña el plan del issue con sus casos dentro.
+        const QString plansHeader = f.window->findChild<QLabel*>(QStringLiteral("issuePlansHeader"))->text();
+        QVERIFY2(!plansHeader.isEmpty(), qPrintable(plansHeader));
+        QVERIFY(!f.window->findChild<QLabel*>(QStringLiteral("issueCasesHeader")));   // ya no hay tarjeta de casos
 
-        // Los resultados de sus casos se ven en el issue.
+        // Una ejecución suelta de ese caso no es un resultado del issue; un ciclo de su plan, sí.
         f.app.run.start(QStringLiteral("TC-104"));
         while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
         f.app.run.finish();
         f.window->navigate(Screen::Issues);
-        const qsizetype runs = IssueStore::runsOf(*f.app.issues.find(id), f.app.history).size();
-        QVERIFY(runs >= 1);
+        QVERIFY(IssueStore::runsOf(*f.app.issues.find(id), f.app.history).isEmpty());
+        QVERIFY2(f.window->findChild<QLabel*>(QStringLiteral("issueResultsHeader"))->text().contains(QStringLiteral("0")),
+                 "sin ciclos del plan no hay resultados del issue");
+
+        f.app.run.startSequence({QStringLiteral("TC-104")}, QStringLiteral("Plan del issue"), planId);
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        f.window->navigate(Screen::Issues);
+        QCOMPARE(IssueStore::runsOf(*f.app.issues.find(id), f.app.history).size(), 1);
         const QString resultsHeader = f.window->findChild<QLabel*>(QStringLiteral("issueResultsHeader"))->text();
-        QVERIFY2(resultsHeader.contains(QString::number(runs)), qPrintable(resultsHeader));
+        QVERIFY2(resultsHeader.contains(QStringLiteral("1")), qPrintable(resultsHeader));
 
         // Lo escrito en QAflow se queda aunque GESREQ cambie; el cambio se avisa hasta revisarlo.
         title->selectAll();
@@ -947,6 +993,7 @@ private slots:
         import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
         QCOMPARE(f.app.issues.issues().size(), 1);
         QCOMPARE(f.app.issues.find(id)->title, QStringLiteral("Mi titulo"));
+        QCOMPARE(f.app.tracker->publishedIssues.size(), 1);   // volver a empezar no crea otro issue
         auto* changes = f.window->findChild<QWidget*>(QStringLiteral("issueChanges"));
         QVERIFY(changes && !changes->isHidden());
         QVERIFY(f.badge(Screen::Issues)->isVisible());
@@ -1223,6 +1270,64 @@ private slots:
     }
 
     // Zephyr se activa en Ajustes y sólo se ofrece con Jira, que es donde vive el plugin.
+    // Terminada la revisión, «Publicar…» lleva de una vez las pruebas a Zephyr, el resultado y el acta al
+    // gestor y el registro a GESREQ.
+    void publishingAFinishedRevisionSendsItToItsThreeDestinations() {
+        WindowFixture f;
+        f.app.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
+        f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) {
+            r.url = QStringLiteral("http://gesreq.test:7401/greq");
+            r.user = QStringLiteral("jmaidana");
+            r.password = QStringLiteral("secreto");
+            r.connected = true;
+        });
+        ExternalRequirement requirement;
+        requirement.id = QStringLiteral("2026997");
+        requirement.systemCode = QStringLiteral("SUMA2");
+        requirement.system = QStringLiteral("SUMA2-INGRESO");
+        requirement.summary = QStringLiteral("Integración de nuevos servicios");
+        requirement.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+        f.app.issues.importRequirements({requirement}, QStringLiteral("http://gesreq.test:7401/greq"));
+        const QString id = f.app.issues.issues().first().id;
+        f.app.issues.updateIssue(id, [](Issue& i) {
+            i.publication.tracker = QStringLiteral("Jira");
+            i.publication.key = QStringLiteral("SHOP-12");
+            i.publication.publishedAt = QDateTime::currentDateTime();
+        });
+        const QString planId = f.app.plans.createPlan(QStringLiteral("Plan GREQ 2026997"));
+        f.app.plans.toggle(QStringLiteral("TC-101"));
+        f.app.issues.linkPlan(id, planId);
+        f.app.issues.openRevision(id);
+        f.app.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Plan GREQ 2026997"), planId);
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+
+        f.window->navigate(Screen::Issues);
+        // Los pasos de la revisión se rehacen en cada refresco: el botón se busca cuando se va a usar.
+        auto publishButton = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issuePublishRevision")); };
+        QVERIFY(!publishButton()->isEnabled());   // la revisión sigue abierta: primero se cierra
+
+        f.app.issues.closeRevision(id, QaOutcome::Conforme);
+        QTRY_VERIFY(publishButton() && publishButton()->isEnabled());
+        publishButton()->click();
+        auto* dialog = f.window->findChild<RevisionPublishDialog*>();
+        QVERIFY(dialog);
+        for (const auto* name : {"revisionPublishZephyr", "revisionPublishTracker", "revisionPublishRequirement"}) {
+            auto* choice = dialog->findChild<QCheckBox*>(QString::fromLatin1(name));
+            QVERIFY2(choice && choice->isChecked(), name);
+        }
+        dialog->findChild<QPushButton*>(QStringLiteral("revisionPublishAccept"))->click();
+
+        QCOMPARE(f.app.zephyr->published.size(), 1);
+        QCOMPARE(f.app.tracker->commentedKeys, QStringList{QStringLiteral("SHOP-12")});
+        QCOMPARE(f.app.requirementSource->registrations.size(), 1);
+        QCOMPARE(f.app.requirementSource->registrations.first().result, QStringLiteral("Conforme"));
+        const IssueRevision& revision = f.app.issues.find(id)->revisions.last();
+        QVERIFY(revision.gesreq.registeredAt.isValid());
+        QVERIFY(!revision.jira.isEmpty());
+        dialog->close();
+    }
+
     void settingsEnableZephyrPublishing() {
         WindowFixture f;
         f.action("actSettings")->trigger();
@@ -1243,6 +1348,120 @@ private slots:
         kind->setCurrentText(toString(TrackerKind::GitHub));
         QVERIFY(!zephyr->isVisible());
         QVERIFY(!f.app.publish.enabled());
+    }
+
+    void theBackButtonUndoesDrillDownsButNotRailNavigation() {
+        WindowFixture f;
+        auto* back = f.window->findChild<QPushButton*>(QStringLiteral("navbarBack"));
+        QVERIFY(back);
+        QVERIFY(!back->isVisible());   // en la raíz de una sección no hay a dónde volver
+
+        f.app.plans.setName(QStringLiteral("Suite de regresión"));
+        f.window->navigate(Screen::Plan);
+        QVERIFY(!back->isVisible());
+
+        // Crear un caso desde el plan lleva a la pantalla de casos, pero con vuelta al plan.
+        f.window->findChild<QPushButton*>(QStringLiteral("planNewCase"))->click();
+        QCOMPARE(f.window->currentScreen(), Screen::Casos);
+        QVERIFY(back->isVisible());
+        QVERIFY2(back->text().contains(QStringLiteral("Suite de regresión")), qPrintable(back->text()));
+        QVERIFY(f.action("actBack")->isEnabled());
+        back->click();
+        QCOMPARE(f.window->currentScreen(), Screen::Plan);
+        QVERIFY(!back->isVisible());
+
+        // El rail es la raíz de cada sección: no deja camino que deshacer.
+        f.window->findChild<QPushButton*>(QStringLiteral("planNewCase"))->click();
+        QVERIFY(back->isVisible());
+        QTest::mouseClick(f.nav(Screen::Historial), Qt::LeftButton);
+        QVERIFY(!back->isVisible());
+        QVERIFY(!f.action("actBack")->isEnabled());
+
+        // Ir y venir entre dos pantallas deshace el camino en vez de alargarlo.
+        f.window->navigateInto(Screen::Casos);
+        f.window->navigateInto(Screen::Historial);
+        QVERIFY(!back->isVisible());
+        QCOMPARE(f.window->currentScreen(), Screen::Historial);
+    }
+
+    void finishingThePlanCycleOfAnIssueReturnsToTheIssue() {
+        WindowFixture f;
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        const QString planId = f.app.plans.activeId();
+        f.app.issues.linkPlan(issueId, planId);
+
+        f.app.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Plan del issue"), planId);
+        const QString planRunId = f.app.run.planRunId();
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.window->navigate(Screen::Run);
+        f.window->finishRun();
+
+        // El ciclo prueba un requerimiento: se termina en su issue, no en el informe del plan.
+        QCOMPARE(f.window->currentScreen(), Screen::Issues);
+        QCOMPARE(f.app.issues.selectedId(), issueId);
+        QVERIFY2(f.toastText().contains(QStringLiteral("Plan terminado")), qPrintable(f.toastText()));
+
+        // Y el informe queda a un clic en el aviso, con vuelta al issue.
+        auto* seeReport = f.toast()->findChild<QPushButton*>();
+        QVERIFY(seeReport);
+        QCOMPARE(seeReport->text(), QStringLiteral("Ver informe"));
+        seeReport->click();
+        QCOMPARE(f.window->currentScreen(), Screen::Historial);
+        auto* back = f.window->findChild<QPushButton*>(QStringLiteral("navbarBack"));
+        QVERIFY(back->isVisible());
+        back->click();
+        QCOMPARE(f.window->currentScreen(), Screen::Issues);
+        QVERIFY(!planRunId.isEmpty());
+    }
+
+    void thePlanReportListsTheBugsReportedDuringTheCycle() {
+        WindowFixture f;
+        auto* history = f.window->findChild<HistoryView*>();
+        f.app.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"), f.app.plans.activeId());
+        const QString planRunId = f.app.run.planRunId();
+
+        // Un bug de antes del ciclo, que no es suyo, y dos reportados mientras corría.
+        const auto bug = [&](const QString& key, const QString& caseId, int step, const QDateTime& at, bool resolved) {
+            IssueLink link;
+            link.key = key; link.caseId = caseId; link.step = step; link.createdAt = at; link.resolved = resolved;
+            link.title = QStringLiteral("Fallo de ") + caseId;
+            link.severity = QStringLiteral("Mayor");
+            link.url = QStringLiteral("https://acme.atlassian.net/browse/") + key;
+            f.app.bugLedger.recordIssue(link);
+        };
+        bug(QStringLiteral("SHOP-90"), QStringLiteral("TC-103"), 1, QDateTime::currentDateTime().addDays(-3), false);
+        bug(QStringLiteral("SHOP-11"), QStringLiteral("TC-103"), 2, QDateTime::currentDateTime(), false);
+        bug(QStringLiteral("SHOP-12"), QStringLiteral("TC-107"), 1, QDateTime::currentDateTime(), true);
+
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Fail);
+        f.app.run.finish();
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.window->finishRun();
+        history->showPlan(planRunId);
+        QTest::qWait(50);
+
+        // El resumen los cuenta y el informe los lista, con el de antes del ciclo fuera.
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-11")));
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-12")));
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-90")));
+        const PlanReport report = f.app.history.report(planRunId);
+        QCOMPARE(report.bugCount(), 2);
+        QCOMPARE(report.openBugCount(), 1);
+
+        // Y abrirlo lleva al gestor.
+        QString opened;
+        connect(history, &HistoryView::openUrlRequested, this, [&opened](const QString& url) { opened = url; });
+        f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-11"))->click();
+        QCOMPARE(opened, QStringLiteral("https://acme.atlassian.net/browse/SHOP-11"));
+    }
+
+    void finishingAPlanCycleWithoutAnIssueStillOpensItsReport() {
+        WindowFixture f;
+        f.app.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Plan suelto"), f.app.plans.activeId());
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.window->finishRun();
+        QCOMPARE(f.window->currentScreen(), Screen::Historial);
+        QVERIFY(f.toastText().contains(QStringLiteral("Plan terminado")));
     }
 };
 

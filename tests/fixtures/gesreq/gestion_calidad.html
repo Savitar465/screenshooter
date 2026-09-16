@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <title>ANB    -  Gestionar Requerimientos</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" type="text/css" href="lib/bootstrap/css/bootstrap.css">
+        <script src="lib/jquery/jquery-2.1.3.min.js"></script>
+    </head>
+    <body>
+        <div id="container">
+<header>
+    <div class="logo" id="logo"><h1>GESREQ</h1></div>
+</header>
+<nav id="sidebar">
+    <div class="navigation">
+        <div class="user-data">
+            <h4 class="user-details pull-left">
+                Tester Uno, Ana<br>
+            </h4>
+        </div>
+        <ul class="list-unstyled">
+            <li><a href="calidadreg.do">Registro Control Calidad</a></li>
+            <li><a href="logout.do"><span class="nav-label">Cerrar sesión</span></a></li>
+        </ul>
+    </div>
+</nav>
+            <div class="container-fluid" id="container-main">
+                <div id="anb-messages" class="anb-messages"></div>
+<script src="lib/tinymce/tinymce.min.js"></script>
+<form name="RequerimientoForm" id="form" method="post" action="/greq/gestionGuardarEdicion.do" class="form-horizontal" enctype="multipart/form-data">
+    <div class="panel panel-primary">
+        <div class="panel-heading" role="tab" id="headingOne">
+            <h4 class="panel-title"><strong>Datos Requerimiento</strong></h4>
+        </div>
+        <div class="panel-body">
+            <input type="hidden" name="gestion" value="2025">
+            <input type="hidden" name="unidad" value="">
+            <input type="hidden" name="corr" value="101">
+            <div class="panel panel-default">
+                <div class="panel-body" id="ta">
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">Requerimiento:</label>
+                        <div class="col-sm-2" style="padding-top: 7px;">
+                            2025101
+                        </div>
+                        <label class="col-sm-2 control-label">Prioridad:</label>
+                        <div class="col-sm-2" style="padding-top: 7px;">
+                            ALTA
+                            <input type="hidden" name="prioridad" value="ALTA">
+                        </div>
+                        <label class="col-sm-1 control-label">Estado:</label>
+                        <div class="col-sm-2" style="padding-top: 7px;">
+                            <span class="label label-danger">
+                            CONTROL DE CALIDAD OBSERVADO
+                            </span><br/>
+                            <span class="label label-default">
+                             CONTROL FUNCIONAL
+                            </span><br/>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">Referencia:</label>
+                        <div class="col-sm-10" style="padding-top: 7px;">
+                            Nuevo formulario de contacto con validación de correo
+                            <input type="hidden" name="referencia" value="Nuevo formulario de contacto con validación de correo">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">Unidad Solicitante:</label>
+                        <div class="col-sm-2" style="padding-top: 7px;">GNTI</div>
+                        <label class="col-sm-2 control-label">Archivo de respaldo:</label>
+                        <div class="col-sm-1 input-group">
+                            <span class="input-group-btn">
+                                <a class="btn btn-primary" href="docDownload.do?doc=2025/2025101REQ20250314183739.pdf">
+                                    <i class="fa fa-file-pdf-o"></i>
+                                </a>
+                            </span>
+                            <input type="hidden" name="ruta_archivo" value="2025/2025101REQ20250314183739.pdf">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-4 control-label"></label>
+                        <div class="col-sm-12">
+                            <table class="table table-striped table-hover" id="main-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nro</th>
+                                        <th>Sistema</th>
+                                        <th>Detalle</th>
+                                        <th>Recurso Desarrollo</th>
+                                        <th>Recurso Control Calidad</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>1</td>
+                                        <td>PORTAL WEB-PORTAL INSTITUCIONAL</td>
+                                        <td>
+                                            <a href="#" data-id="1" data-sistema="PORTAL WEB" onclick="Anb.modal.show('datoscc.do?gestion=2025&corr=101&idItem=1&unidad=&idSistema='+encodeURIComponent('PORTAL WEB')+'&estado=versolicitud','lg');";>
+                                                detalle control de calidad solicitado
+                                            </a>
+                                        </td>
+                                        <td>SOTO MARTÍNEZ LUIS</td>
+                                        <td>TESTER UNO ANA</td>
+                                        <td>
+                                            <button class="btn btn-info btn-sm" type="button"
+                                                onclick="Anb.modal.show('calidadregFuncionalForm.do?gestion=2025&idItem=1&unidad=&corr=101&sis_cod=PORTAL WEB&sistema=PORTAL INSTITUCIONAL&tipo=calidadreg', 'lg')">
+                                                <i class="fa fa-user"></i> Registro Control Calidad
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>2</td>
+                                        <td>PORTAL PAGOS-PASARELA</td>
+                                        <td>
+                                            <a href="#" data-id="2" data-sistema="PORTAL PAGOS" onclick="Anb.modal.show('datoscc.do?gestion=2025&corr=101&idItem=2&unidad=&idSistema='+encodeURIComponent('PORTAL PAGOS')+'&estado=versolicitud','lg');";>
+                                                detalle control de calidad solicitado
+                                            </a>
+                                        </td>
+                                        <td>SOTO MARTÍNEZ LUIS</td>
+                                        <td>TESTER UNO ANA</td>
+                                        <td>
+                                            <button class="btn btn-info btn-sm" type="button"
+                                                onclick="Anb.modal.show('calidadregFuncionalForm.do?gestion=2025&idItem=2&unidad=&corr=101&sis_cod=PORTAL PAGOS&sistema=PASARELA&tipo=calidadreg', 'lg')">
+                                                <i class="fa fa-user"></i> Registro Control Calidad
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+            </div>
+        </div>
+    </body>
+</html>

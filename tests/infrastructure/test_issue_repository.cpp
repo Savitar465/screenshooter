@@ -19,8 +19,7 @@ Issue fullIssue() {
     i.notes = QStringLiteral("Usar el usuario de calidad");
     i.priority = Priority::Alta;
     i.state = IssueState::Preparing;
-    i.caseIds = {QStringLiteral("TC-101"), QStringLiteral("TC-104")};
-    i.planIds = {QStringLiteral("PL-0002")};
+    i.planIds = {QStringLiteral("PL-0002"), QStringLiteral("PL-0003")};
     i.publication.tracker = QStringLiteral("Jira");
     i.publication.baseUrl = QStringLiteral("https://jira.example.test");
     i.publication.project = QStringLiteral("QA");
@@ -128,7 +127,6 @@ private slots:
         QCOMPARE(i.notes, expected.notes);
         QVERIFY(i.priority == Priority::Alta);
         QVERIFY(i.state == IssueState::Preparing);
-        QCOMPARE(i.caseIds, expected.caseIds);
         QCOMPARE(i.planIds, expected.planIds);
         QCOMPARE(i.publication.key, expected.publication.key);
         QCOMPARE(i.publication.url, expected.publication.url);

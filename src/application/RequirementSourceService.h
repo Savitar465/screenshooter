@@ -30,6 +30,9 @@ public:
     /// ¿Puede QAflow registrar el resultado del control de calidad en el sistema? Hace falta que el
     /// conector lo implemente y que la conexión esté configurada.
     bool canRegisterResult() const;
+    /// Por qué el sistema rechazaría ese registro tal y como está (falta el acta, el resultado no cuadra
+    /// con las observaciones…); vacío si no hay nada que objetar. Se pregunta antes de enviar nada.
+    QString registrationProblem(const RequirementRegistration& registration) const;
     /// Registra el resultado de una revisión en el requerimiento. Es la única operación que cambia algo
     /// en GESREQ: sólo se llama cuando alguien lo confirma en la pantalla.
     void registerResult(const RequirementRegistration& registration, std::function<void(const RequirementRegistrationResult&)> done);

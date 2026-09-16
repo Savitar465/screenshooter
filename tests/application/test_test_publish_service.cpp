@@ -57,7 +57,7 @@ private slots:
     void publishingIsOffUntilZephyrIsEnabledForJira() {
         AppFixture f;
         auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
         QVERIFY(!publish.enabled());                       // Zephyr desactivado en los ajustes
 
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
@@ -76,7 +76,7 @@ private slots:
         AppFixture f;
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; s.zephyrVersion = QStringLiteral("2.3.0"); });
         auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
 
         PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado},
                                         {QStringLiteral("TC-102"), Verdict::Fallido}},
@@ -103,7 +103,7 @@ private slots:
     void casesWhoseTestWillBeCreatedAreListedBeforePublishing() {
         AppFixture f;
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
-        TestPublishService publish(std::make_shared<FakeTestManagement>(), f.store, f.history, f.settings);
+        TestPublishService publish(std::make_shared<FakeTestManagement>(), f.store, f.history, f.settings, f.bugLedger);
         PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado},
                                         {QStringLiteral("TC-102"), Verdict::Superado}});
         report.rows[0].run.testKey = QStringLiteral("SHOP-42");   // esta ejecución ya se publicó una vez
@@ -122,7 +122,7 @@ private slots:
         });
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
 
         publish.publish(reportWith({{QStringLiteral("TC-101"), Verdict::Superado}}), [](const PublishResult&) {});
         const PublishCase& sent = zephyr->published[0].cases[0];
@@ -145,7 +145,7 @@ private slots:
         zephyr->resultToReturn.cycleId = QStringLiteral("77");
         zephyr->resultToReturn.testsCreated = 1;
         zephyr->resultToReturn.createdTests.insert(QStringLiteral("TC-103"), QStringLiteral("SHOP-77"));
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
 
         // Dos ciclos del mismo caso, en el historial de verdad.
         f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Ciclo 1"));
@@ -185,7 +185,7 @@ private slots:
         zephyr->resultToReturn.ok = false;
         zephyr->resultToReturn.error = QStringLiteral("500");
         zephyr->resultToReturn.createdTests.insert(QStringLiteral("TC-103"), QStringLiteral("SHOP-78"));
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
         f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Ciclo"));
         const QString planRunId = f.run.planRunId();
         f.run.mark(StepResult::Pass);
@@ -202,7 +202,7 @@ private slots:
         AppFixture f;
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
 
         PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
         PublishResult out;
@@ -224,7 +224,7 @@ private slots:
     void cycleUrlPointsAtTheExecutionsOfThePublishedCycle() {
         AppFixture f;
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; s.url = QStringLiteral("https://jira.acme.com"); s.project = QStringLiteral("SHOP"); });
-        TestPublishService publish(std::make_shared<FakeTestManagement>(), f.store, f.history, f.settings);
+        TestPublishService publish(std::make_shared<FakeTestManagement>(), f.store, f.history, f.settings, f.bugLedger);
         PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
         QVERIFY(publish.cycleUrl(report).isEmpty());   // sin publicar no hay ciclo al que ir
         report.plan.zephyrCycleId = QStringLiteral("77");
@@ -256,7 +256,7 @@ private slots:
         });
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
-        TestPublishService publish(zephyr, f.store, f.history, f.settings);
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
 
         publish.publish(reportWith({{QStringLiteral("TC-101"), Verdict::Superado}}), [](const PublishResult&) {});
         const QList<PublishAttachment> sent = zephyr->published[0].cases[0].attachments;

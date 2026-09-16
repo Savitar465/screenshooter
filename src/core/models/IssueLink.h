@@ -14,6 +14,9 @@ struct IssueLink {
     QString url;
     QString title;
     QString caseId;          // caso desde el que se reportó (puede ya no existir)
+    /// Paso del caso en el que se vio (1..N); 0 = del caso entero. Con él, publicar la ejecución cuelga
+    /// el defecto del paso que falló, y no sólo del caso.
+    int step = 0;
     QString tracker;         // "Jira", "GitHub", …
     QString severity;
     /// Tipo de observación del acta (A–E) con el que se reportó; los bugs guardados antes de que

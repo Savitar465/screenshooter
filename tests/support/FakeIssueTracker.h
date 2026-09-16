@@ -165,6 +165,22 @@ public:
         done(r);
     }
 
+    bool linksIssues = true;                        // como Jira
+    QList<QPair<QString, QString>> links;           // (desde, hasta), en orden
+
+    bool canLinkIssues(const TrackerSettings&) const override { return linksIssues; }
+
+    void linkIssues(const TrackerSettings& s, const QString& from, const QString& to,
+                    std::function<void(const IssueResult&)> done) override {
+        IssueResult r;
+        if (mode == Mode::NetworkDown) { r.error = QStringLiteral("Host not found"); r.retryable = true; done(r); return; }
+        links << qMakePair(from, to);
+        r.ok = true;
+        r.key = from;
+        r.url = s.issueUrl(from);
+        done(r);
+    }
+
     void fetchProjects(const TrackerSettings&, std::function<void(const TrackerProjectList&)> done) override {
         ++projectListCalls;
         if (mode == Mode::NetworkDown) done(TrackerProjectList{false, {}, QStringLiteral("Host not found")});

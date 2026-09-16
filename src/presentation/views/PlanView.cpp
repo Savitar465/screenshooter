@@ -180,6 +180,14 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     nh->addWidget(m_name, 1);
     m_archivedBadge = mutedPill(tr("ARCHIVADO"));
     nh->addWidget(m_archivedBadge);
+    // Ejecutar el plan se hace desde donde se compone, que es donde se está cuando ya está listo.
+    m_runPlan = ui::button(tr("▶ Ejecutar plan"), "primary");
+    m_runPlan->setObjectName(QStringLiteral("planRun"));
+    m_runPlan->setToolTip(tr("Arranca un ciclo del plan con sus casos, en este orden"));
+    connect(m_runPlan, &QPushButton::clicked, this, [this]() {
+        if (!m_plans.activeId().isEmpty()) emit runPlanRequested(m_plans.activeId());
+    });
+    nh->addWidget(m_runPlan);
     auto* more = ui::button(QStringLiteral("⋯"), "outline");
     more->setFixedWidth(40);
     more->setToolTip(tr("Más acciones"));
@@ -272,6 +280,10 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     // Acciones rápidas
     auto* quick = new QWidget;
     auto* qh = ui::hbox(quick, 0, 8);
+    auto* newCase = ui::button(tr("+ Nuevo caso"), "chip-lg");
+    newCase->setObjectName(QStringLiteral("planNewCase"));
+    newCase->setToolTip(tr("Crea un caso, lo añade a este plan y lo abre para escribir sus pasos"));
+    connect(newCase, &QPushButton::clicked, this, &PlanView::newCaseInPlan);
     auto* all = ui::button(tr("Añadir todos"), "chip-lg");
     auto* none = ui::button(tr("Vaciar"), "chip-lg");
     auto* high = ui::button(tr("Solo prioridad alta"), "chip-lg");
@@ -280,6 +292,7 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     connect(none, &QPushButton::clicked, this, [this]() { m_plans.selectNone(); });
     connect(high, &QPushButton::clicked, this, [this]() { m_plans.selectHighPriority(); });
     connect(sort, &QPushButton::clicked, this, [this]() { m_plans.sortByPriority(); });
+    qh->addWidget(newCase);
     qh->addWidget(all);
     qh->addWidget(none);
     qh->addWidget(high);
@@ -319,7 +332,13 @@ void PlanView::refreshEditor() {
                                                                  cycles == 1 ? tr("1 CICLO") : tr("%1 CICLOS").arg(cycles)));
     if (!m_selfEdit && m_name->text() != p->name) { m_name->setText(p->name); m_name->setCursorPosition(0); }
     m_archivedBadge->setVisible(p->archived);
-    m_count->setText(QString::number(m_plans.orderedCaseIds().size()));
+    // Un plan archivado o sin casos no se puede ejecutar: el botón lo dice en vez de fallar al pulsarlo.
+    const int caseCount = int(m_plans.orderedCaseIds().size());
+    m_runPlan->setEnabled(!p->archived && caseCount > 0);
+    m_runPlan->setToolTip(p->archived      ? tr("El plan está archivado")
+                          : caseCount == 0 ? tr("El plan todavía no tiene casos que ejecutar")
+                                           : tr("Arranca un ciclo del plan con sus casos, en este orden"));
+    m_count->setText(QString::number(caseCount));
     m_steps->setText(QString::number(m_plans.totalSteps()));
     m_time->setText(m_plans.estimatedTime());
     m_basis->setText(m_plans.estimateBasis());
@@ -674,6 +693,22 @@ void PlanView::newPlan() {
     emit toast(tr("Plan \"%1\" creado").arg(name), theme::Green);
 }
 
+void PlanView::newCaseInPlan() {
+    const TestPlan* plan = m_plans.active();
+    if (!plan) return;
+    if (plan->archived) {
+        emit toast(tr("El plan está archivado: desarchívalo para añadirle casos"), theme::Amber);
+        return;
+    }
+    // El caso nace dentro del plan: se crea, se añade al final y se abre para escribir sus pasos.
+    // El id se copia antes de tocar los stores: crear el caso rehace la lista de planes y `plan` deja de valer.
+    const QString planId = plan->id;
+    const QString caseId = m_cases.createCase();
+    m_plans.toggle(caseId);
+    emit toast(tr("%1 creado y añadido a %2").arg(caseId, planId), theme::Green);
+    emit openCaseRequested(caseId);
+}
+
 void PlanView::duplicateActive() {
     const TestPlan* p = m_plans.active();
     if (!p) return;
@@ -695,13 +730,15 @@ void PlanView::toggleArchiveActive() {
 void PlanView::removeActive() {
     const TestPlan* p = m_plans.active();
     if (!p) return;
+    // El id se copia antes de abrir el diálogo: mientras está abierto la lista de planes puede rehacerse.
+    const QString planId = p->id;
     QMessageBox box(QMessageBox::Warning, tr("Eliminar plan"), tr("¿Eliminar el plan \"%1\"?").arg(p->name), QMessageBox::NoButton, this);
     box.setInformativeText(tr("Los ciclos ya ejecutados se conservan en el historial. Si quieres guardarlo sin ejecutarlo, archívalo."));
     auto* del = box.addButton(tr("Eliminar"), QMessageBox::DestructiveRole);
     box.addButton(tr("Cancelar"), QMessageBox::RejectRole);
     box.exec();
     if (box.clickedButton() != del) return;
-    m_plans.removePlan(p->id);
+    m_plans.removePlan(planId);
 }
 
 } // namespace qaflow

@@ -41,6 +41,10 @@ bool RequirementSourceService::canRegisterResult() const {
     return m_source && m_source->canRegisterResult() && !settings.baseUrl().isEmpty() && !settings.user.trimmed().isEmpty();
 }
 
+QString RequirementSourceService::registrationProblem(const RequirementRegistration& registration) const {
+    return m_source ? m_source->registrationProblem(registration) : QString();
+}
+
 void RequirementSourceService::registerResult(const RequirementRegistration& registration,
                                               std::function<void(const RequirementRegistrationResult&)> done) {
     if (!canRegisterResult()) {

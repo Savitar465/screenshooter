@@ -1,14 +1,14 @@
 #include "IssuesView.h"
 
 #include "application/AppContext.h"
+#include "core/models/BugReport.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/views/JiraPublishDialog.h"
 #include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/QualityRecordDialog.h"
-#include "presentation/views/RevisionResultDialog.h"
+#include "presentation/views/RevisionPublishDialog.h"
 #include "presentation/views/RequirementImportDialog.h"
 #include "presentation/widgets/ChoiceDialog.h"
-#include "presentation/widgets/TextArea.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QComboBox>
@@ -22,7 +22,6 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QTimer>
 #include <QUrl>
 
 #include <algorithm>
@@ -121,21 +120,16 @@ QPushButton* unlinkButton(const QString& tip) {
 
 IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
     : QWidget(parent), m_issues(*ctx.issues), m_cases(*ctx.cases), m_plans(*ctx.plan), m_history(*ctx.history),
-      m_requirements(ctx.requirements), m_publish(ctx.issuePublish), m_bugs(ctx.bugs), m_records(ctx.records),
+      m_requirements(ctx.requirements), m_publish(ctx.issuePublish), m_revisionPublish(ctx.revisionPublish),
+      m_bugs(ctx.bugs), m_bugLedger(ctx.bugLedger), m_records(ctx.records),
       m_projects(ctx.projects),
       m_projectId(ctx.projectId) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildDetail(root);
 
-    m_notesTimer = new QTimer(this);
-    m_notesTimer->setSingleShot(true);
-    m_notesTimer->setInterval(600);
-    connect(m_notesTimer, &QTimer::timeout, this, &IssuesView::commitNotes);
-
     connect(&m_issues, &IssueStore::issuesChanged, this, [this]() { refreshList(); loadDetail(); });
     connect(&m_issues, &IssueStore::selectionChanged, this, [this]() {
-        commitNotes();   // las notas a medio escribir son del issue anterior
         refreshList();
         loadDetail();
     });
@@ -153,7 +147,7 @@ IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
     loadDetail();
 }
 
-IssuesView::~IssuesView() { commitNotes(); }
+IssuesView::~IssuesView() = default;
 
 void IssuesView::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
@@ -161,10 +155,7 @@ void IssuesView::showEvent(QShowEvent* e) {
     loadDetail();
 }
 
-void IssuesView::hideEvent(QHideEvent* e) {
-    commitNotes();
-    QWidget::hideEvent(e);
-}
+void IssuesView::hideEvent(QHideEvent* e) { QWidget::hideEvent(e); }
 
 const Issue* IssuesView::selected() const { return m_issues.find(m_issues.selectedId()); }
 
@@ -520,96 +511,31 @@ void IssuesView::buildDetail(QHBoxLayout* root) {
     m_jiraInfo->setTextFormat(Qt::RichText);
     m_jiraInfo->setTextInteractionFlags(Qt::TextSelectableByMouse);
     jiraBody->addWidget(m_jiraInfo);
-    v->addWidget(jiraCard);
 
-    // Revisión: el flujo del control de calidad y qué se hace con su resultado
-    QLabel* revisionHeader;
+    // Revisión: el control de calidad paso a paso, que es el trabajo del issue.
     QHBoxLayout* revisionActions;
     QVBoxLayout* revisionBody;
-    auto* revisionCard = sectionCard(theme::Amber, &revisionHeader, &revisionActions, &revisionBody);
+    auto* revisionCard = sectionCard(theme::Amber, &m_revisionHeader, &revisionActions, &revisionBody);
     revisionCard->setObjectName(QStringLiteral("issueRevisionCard"));
     m_revisionCard = revisionCard;
-    revisionHeader->setText(tr("REVISIÓN"));
-    m_recordButton = smallButton(tr("Generar acta…"), "outline",
-                                 tr("Arma el acta de control de calidad (R-213) con lo que hay en el issue y la guarda como .docx"));
-    m_recordButton->setObjectName(QStringLiteral("issueGenerateRecord"));
-    connect(m_recordButton, &QPushButton::clicked, this, &IssuesView::generateRecord);
-    m_sendResultButton = smallButton(tr("Enviar resultado a Jira…"), "outline",
-                                     tr("Comenta en el issue del gestor cómo quedó la revisión y le adjunta el acta"));
-    m_sendResultButton->setObjectName(QStringLiteral("issueSendResult"));
-    connect(m_sendResultButton, &QPushButton::clicked, this, &IssuesView::sendResultToTracker);
-    m_registerButton = smallButton(tr("Registrar en GESREQ…"), "primary",
-                                   tr("Registra el resultado del control de calidad en el requerimiento, con su acta"));
-    m_registerButton->setObjectName(QStringLiteral("issueRegisterGesreq"));
-    connect(m_registerButton, &QPushButton::clicked, this, &IssuesView::registerInGesreq);
-    m_closeRevisionButton = smallButton(tr("Cerrar revisión…"), "outline",
-                                        tr("Deja la revisión cerrada con su resultado: conforme u observado"));
-    m_closeRevisionButton->setObjectName(QStringLiteral("issueCloseRevision"));
-    connect(m_closeRevisionButton, &QPushButton::clicked, this, &IssuesView::closeRevision);
-    m_newRevisionButton = smallButton(tr("Nueva revisión"), "outline",
-                                      tr("El requerimiento vuelve a pruebas: abre la ronda siguiente del acta"));
-    m_newRevisionButton->setObjectName(QStringLiteral("issueNewRevision"));
-    connect(m_newRevisionButton, &QPushButton::clicked, this, &IssuesView::openRevision);
-    for (auto* b : {m_recordButton, m_sendResultButton, m_registerButton, m_closeRevisionButton, m_newRevisionButton})
-        revisionActions->addWidget(b);
-
-    auto* flow = new QWidget;
-    m_revisionFlow = ui::hbox(flow, 0, 6);
-    revisionBody->addWidget(flow);
+    m_revisionHeader->setObjectName(QStringLiteral("issueRevisionHeader"));
     m_revisionProgress = ui::label(QString(), "muted-sm");
     m_revisionProgress->setObjectName(QStringLiteral("issueRevisionProgress"));
     m_revisionProgress->setWordWrap(true);
     revisionBody->addWidget(m_revisionProgress);
-    m_revisionOutcome = ui::label(QString(), "muted-sm");
-    m_revisionOutcome->setObjectName(QStringLiteral("issueRevisionOutcome"));
-    m_revisionOutcome->setWordWrap(true);
-    revisionBody->addWidget(m_revisionOutcome);
-    m_revisionDocument = ui::label(QString(), "muted-sm");
-    m_revisionDocument->setObjectName(QStringLiteral("issueRevisionDocument"));
-    m_revisionDocument->setWordWrap(true);
-    m_revisionDocument->setTextFormat(Qt::RichText);
-    m_revisionDocument->setTextInteractionFlags(Qt::TextBrowserInteraction);
-    // El acta se abre con la aplicación del sistema, como el resto de enlaces de la pantalla.
-    connect(m_revisionDocument, &QLabel::linkActivated, this, [this](const QString& url) { emit openUrlRequested(url); });
-    revisionBody->addWidget(m_revisionDocument);
+    auto* steps = new QWidget;
+    m_revisionSteps = ui::vbox(steps, 0, 2);
+    revisionBody->addWidget(steps);
     auto* revisions = new QWidget;
     m_revisionsList = ui::vbox(revisions, 0, 6);
     revisionBody->addWidget(revisions);
     v->addWidget(revisionCard);
 
-    // Notas de QA
-    QLabel* notesHeader;
-    QHBoxLayout* notesActions;
-    QVBoxLayout* notesBody;
-    v->addWidget(sectionCard(theme::Muted, &notesHeader, &notesActions, &notesBody));
-    notesHeader->setText(tr("NOTAS DE QA"));
-    m_notes = new TextArea(4);
-    m_notes->setObjectName(QStringLiteral("issueNotes"));
-    m_notes->setPlaceholderText(tr("Ambiente, datos de prueba, acuerdos… Son de QAflow: consultar GESREQ no las cambia."));
-    connect(m_notes, &TextArea::edited, this, [this]() {
-        m_notesIssueId = m_issues.selectedId();
-        m_notesTimer->start();
-    });
-    notesBody->addWidget(m_notes);
-
-    // Casos
-    QHBoxLayout* casesActions;
-    v->addWidget(sectionCard(theme::Violet, &m_casesHeader, &casesActions, &m_casesList));
-    m_casesHeader->setObjectName(QStringLiteral("issueCasesHeader"));
-    auto* newCase = smallButton(tr("+ Nuevo caso"), "outline", tr("Crea un caso con el título del issue, lo vincula y lo abre para escribir sus pasos"));
-    newCase->setObjectName(QStringLiteral("issueNewCase"));
-    connect(newCase, &QPushButton::clicked, this, &IssuesView::createCase);
-    auto* linkCase = smallButton(tr("Vincular caso…"), "outline", tr("Un caso puede validar varios issues"));
-    linkCase->setObjectName(QStringLiteral("issueLinkCase"));
-    connect(linkCase, &QPushButton::clicked, this, &IssuesView::pickCase);
-    casesActions->addWidget(newCase);
-    casesActions->addWidget(linkCase);
-
     // Planes
     QHBoxLayout* plansActions;
     v->addWidget(sectionCard(theme::Amber, &m_plansHeader, &plansActions, &m_plansList));
     m_plansHeader->setObjectName(QStringLiteral("issuePlansHeader"));
-    auto* newPlan = smallButton(tr("+ Plan con sus casos"), "outline", tr("Crea un plan con los casos del issue y lo abre para ajustarlo"));
+    auto* newPlan = smallButton(tr("+ Nuevo plan"), "outline", tr("Crea otro plan para este requerimiento y lo abre para componerlo"));
     newPlan->setObjectName(QStringLiteral("issueNewPlan"));
     connect(newPlan, &QPushButton::clicked, this, &IssuesView::createPlan);
     auto* linkPlan = smallButton(tr("Vincular plan…"), "outline");
@@ -622,6 +548,17 @@ void IssuesView::buildDetail(QHBoxLayout* root) {
     QHBoxLayout* resultsActions;
     v->addWidget(sectionCard(theme::Blue, &m_resultsHeader, &resultsActions, &m_resultsList));
     m_resultsHeader->setObjectName(QStringLiteral("issueResultsHeader"));
+
+    // Bugs: lo que salió de esas ejecuciones.
+    QHBoxLayout* bugsActions;
+    m_bugsCard = sectionCard(theme::Red, &m_bugsHeader, &bugsActions, &m_bugsList);
+    m_bugsCard->setObjectName(QStringLiteral("issueBugsCard"));
+    m_bugsHeader->setObjectName(QStringLiteral("issueBugsHeader"));
+    v->addWidget(m_bugsCard);
+
+    // La representación en el gestor va al final: desde que el requerimiento se importa ya está
+    // publicada, así que es contexto, no trabajo.
+    v->addWidget(jiraCard);
 }
 
 void IssuesView::loadDetail() {
@@ -647,16 +584,14 @@ void IssuesView::loadDetail() {
         m_title->setText(issue.title);
         m_state->setCurrentIndex(std::max(0, m_state->findData(static_cast<int>(issue.state))));
         m_priority->setCurrentIndex(std::max(0, m_priority->findData(static_cast<int>(issue.priority))));
-        // Las notas que se están escribiendo de este issue no se pisan con lo guardado.
-        if (m_notesIssueId != issue.id) m_notes->setTextSilently(issue.notes);
         m_loadingDetail = false;
     }
     refreshRequirement(issue);
     refreshJira(issue);
-    refreshCases(issue);
     refreshPlans(issue);
     refreshRevision(issue);
     refreshResults(issue);
+    refreshBugs(issue);
 }
 
 namespace {
@@ -671,66 +606,195 @@ QString outcomeColor(QaOutcome outcome) {
 }
 } // namespace
 
+namespace {
+/// Una fila de la lista de pasos de la revisión: el número (o un visto si ya está hecho), qué es el
+/// paso, cómo va y su acción. Los pasos hechos se apagan y el que toca queda destacado.
+struct StepRow {
+    QWidget* widget = nullptr;
+    QHBoxLayout* actions = nullptr;
+};
+
+StepRow stepRow(int number, bool done, bool current, const QString& title, const QString& detail) {
+    const QString color = done ? theme::Green : (current ? theme::Amber : theme::Muted);
+    auto* row = ui::card(current ? "card" : "card-flat");
+    auto* h = ui::hbox(row, 0, 12);
+    h->setContentsMargins(12, 10, 10, 10);
+
+    auto* badge = ui::label(done ? QStringLiteral("✓") : QString::number(number), "eyebrow");
+    badge->setAlignment(Qt::AlignCenter);
+    badge->setFixedSize(24, 24);
+    badge->setStyleSheet(QStringLiteral("background:%1;color:%2;border-radius:12px;font-weight:700;font-size:12px;")
+                             .arg(theme::tint(color, done || current ? 46 : 22), color));
+    h->addWidget(badge, 0, Qt::AlignTop);
+
+    auto* text = new QWidget;
+    auto* tv = ui::vbox(text, 0, 2);
+    auto* name = ui::label(title);
+    name->setWordWrap(true);
+    if (current) name->setStyleSheet(QStringLiteral("font-weight:700;"));
+    else if (done) name->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Muted));
+    tv->addWidget(name);
+    auto* hint = ui::label(detail, "muted-sm");
+    hint->setWordWrap(true);
+    tv->addWidget(hint);
+    h->addWidget(text, 1);
+
+    StepRow out;
+    out.widget = row;
+    out.actions = h;
+    return out;
+}
+} // namespace
+
 void IssuesView::refreshRevision(const Issue& issue) {
-    ui::clearLayout(m_revisionFlow);
+    ui::clearLayout(m_revisionSteps);
     ui::clearLayout(m_revisionsList);
     // Sin el servicio (tests con un contexto mínimo) la tarjeta no tiene nada que contar.
     m_revisionCard->setVisible(m_records != nullptr);
     if (!m_records) return;
 
-    // El paso del flujo en el que está: los anteriores en su color, los siguientes apagados.
-    for (const auto state : {IssueState::Pending, IssueState::Preparing, IssueState::Testing, IssueState::Done}) {
-        const bool reached = static_cast<int>(state) <= static_cast<int>(issue.state);
-        const QString color = reached ? stateColor(state) : theme::Muted;
-        auto* pill = ui::pill(label(state).toUpper(), theme::tint(color, reached ? 46 : 18), color);
-        m_revisionFlow->addWidget(pill);
-    }
-    m_revisionFlow->addStretch(1);
-
     const IssueProgress progress = m_records->progressFor(issue.id);
     const IssueRevision* open = issue.currentRevision();
-    const int number = issue.revisions.isEmpty() ? 1 : issue.revisions.last().number;
-    const QString counts = tr("%1 de %2 casos ejecutados · %3 superados · %4 fallidos · %5 bloqueados · %6 bugs (%7 abiertos)")
-                               .arg(progress.executed)
-                               .arg(progress.cases)
-                               .arg(progress.passed)
-                               .arg(progress.failed)
-                               .arg(progress.blocked)
-                               .arg(progress.bugs)
-                               .arg(progress.openBugs);
-    m_revisionProgress->setText(issue.revisions.isEmpty() ? tr("Sin revisión abierta · %1").arg(counts)
-                                                          : tr("Revisión %1 · %2").arg(number).arg(counts));
-
-    const bool closed = !open && !issue.revisions.isEmpty();
-    const QaOutcome outcome = closed ? issue.lastOutcome() : progress.suggested;
-    const QString blockers = progress.blockers.isEmpty() ? tr("nada pendiente") : progress.blockers.join(QStringLiteral(" · "));
-    m_revisionOutcome->setText(closed ? tr("Resultado: %1").arg(label(outcome))
-                                      : tr("Resultado propuesto: %1 · %2").arg(label(outcome), blockers));
-    m_revisionOutcome->setStyleSheet(QStringLiteral("color:%1;").arg(outcomeColor(outcome)));
-
     const IssueRevision* last = issue.revisions.isEmpty() ? nullptr : &issue.revisions.last();
-    if (last && last->hasDocument())
-        m_revisionDocument->setText(tr("Acta: <a href=\"%1\">%2</a>")
-                                        .arg(QUrl::fromLocalFile(last->documentPath).toString(), QFileInfo(last->documentPath).fileName()));
-    else
-        m_revisionDocument->setText(tr("Sin acta generada todavía."));
+    const bool closed = !open && last != nullptr;
+    const int number = last ? last->number : 1;
+    const QaOutcome outcome = closed ? issue.lastOutcome() : progress.suggested;
 
-    m_recordButton->setEnabled(!issue.revisions.isEmpty() || progress.executed > 0);
-    m_sendResultButton->setEnabled(!issue.revisions.isEmpty() && m_publish && m_publish->canPublishResult(issue));
-    m_sendResultButton->setToolTip(issue.isPublished()
-                                       ? tr("Comenta en %1 cómo quedó la revisión y le adjunta el acta").arg(issue.publication.key)
-                                       : tr("Publica antes el issue en el gestor para dejar allí el resultado"));
-    const bool canRegister = m_requirements && m_requirements->canRegisterResult();
-    m_registerButton->setVisible(issue.isImported());
-    m_registerButton->setEnabled(canRegister && !issue.revisions.isEmpty());
-    m_registerButton->setToolTip(canRegister
-                                     ? tr("Registra el resultado del control de calidad en GESREQ, con su acta")
-                                     : tr("Esta versión todavía no registra resultados en GESREQ: hazlo en el sistema"));
-    m_closeRevisionButton->setVisible(open != nullptr);
-    // Sin ninguna revisión abierta se puede abrir la primera (o la siguiente, si la anterior se cerró);
-    // arrancar un ciclo del plan del issue la abre solo.
-    m_newRevisionButton->setVisible(open == nullptr);
-    m_newRevisionButton->setText(closed ? tr("Nueva revisión") : tr("Abrir revisión"));
+    m_revisionHeader->setText(issue.revisions.isEmpty() ? tr("REVISIÓN") : tr("REVISIÓN %1 · %2").arg(number).arg(label(issue.state).toUpper()));
+    const QString blockers = progress.blockers.isEmpty() ? tr("nada pendiente") : progress.blockers.join(QStringLiteral(" · "));
+    m_revisionProgress->setText(closed ? tr("Cerrada como %1 · %2 de %3 casos ejecutados · %4 bugs (%5 abiertos)")
+                                             .arg(label(outcome))
+                                             .arg(progress.executed)
+                                             .arg(progress.cases)
+                                             .arg(progress.bugs)
+                                             .arg(progress.openBugs)
+                                       : tr("%1 de %2 casos ejecutados · %3 superados · %4 fallidos · %5 bloqueados · %6 bugs (%7 abiertos) · "
+                                            "resultado propuesto: %8 (%9)")
+                                             .arg(progress.executed)
+                                             .arg(progress.cases)
+                                             .arg(progress.passed)
+                                             .arg(progress.failed)
+                                             .arg(progress.blocked)
+                                             .arg(progress.bugs)
+                                             .arg(progress.openBugs)
+                                             .arg(label(outcome), blockers));
+    m_revisionProgress->setStyleSheet(QStringLiteral("color:%1;").arg(outcomeColor(outcome)));
+
+    // Los pasos del control de calidad, en el orden en que se hacen. El primero sin terminar es el que toca.
+    const QStringList caseIds = IssueStore::caseIdsOf(issue, m_plans);
+    const bool hasPlan = !issue.planIds.isEmpty() && !caseIds.isEmpty();
+    const bool executed = progress.executed > 0;
+    const bool hasRecord = last && last->hasDocument();
+    const bool published = last && (!last->jira.isEmpty() || !last->gesreq.isEmpty());
+    int number_ = 0;
+    bool currentTaken = false;
+    auto step = [&](bool done, const QString& title, const QString& detail) {
+        const bool current = !done && !currentTaken;
+        currentTaken = currentTaken || current;
+        const StepRow row = stepRow(++number_, done, current, title, detail);
+        m_revisionSteps->addWidget(row.widget);
+        return row.actions;
+    };
+
+    // 1 · El plan con el que se prueba el requerimiento.
+    {
+        const QString planName = issue.planIds.isEmpty() ? QString() : [&] {
+            const TestPlan* plan = m_plans.find(issue.planIds.first());
+            return plan ? plan->name : issue.planIds.first();
+        }();
+        auto* actions = step(hasPlan, tr("Preparar el plan de pruebas"),
+                             issue.planIds.isEmpty() ? tr("El requerimiento todavía no tiene plan")
+                                                     : tr("%1 · %2 caso(s)").arg(planName).arg(caseIds.size()));
+        auto* open = smallButton(issue.planIds.isEmpty() ? tr("Crear plan") : tr("Abrir plan"), hasPlan ? "ghost" : "outline");
+        open->setObjectName(QStringLiteral("issueStepPlan"));
+        connect(open, &QPushButton::clicked, this, [this]() {
+            const Issue* issue = selected();
+            if (!issue) return;
+            if (issue->planIds.isEmpty()) createPlan();
+            else emit openPlanRequested(issue->planIds.first());
+        });
+        actions->addWidget(open);
+    }
+
+    // 2 · Ejecutarlo: el ciclo del plan es lo que abre la revisión y da sus resultados.
+    {
+        auto* actions = step(executed, tr("Ejecutar el plan"),
+                             executed ? tr("%1 de %2 casos ejecutados en esta revisión").arg(progress.executed).arg(progress.cases)
+                                      : tr("Arrancar un ciclo del plan abre la revisión y deja el issue en pruebas"));
+        auto* run = smallButton(tr("Ir al plan"), "ghost", tr("Los ciclos se arrancan desde la pantalla del plan"));
+        run->setObjectName(QStringLiteral("issueStepRun"));
+        run->setEnabled(hasPlan);
+        connect(run, &QPushButton::clicked, this, [this]() {
+            const Issue* issue = selected();
+            if (issue && !issue->planIds.isEmpty()) emit openPlanRequested(issue->planIds.first());
+        });
+        actions->addWidget(run);
+    }
+
+    // 3 · El acta del control de calidad.
+    {
+        auto* actions = step(hasRecord, tr("Generar el acta (R-213)"),
+                             hasRecord ? tr("%1 · generada el %2").arg(QFileInfo(last->documentPath).fileName(), when(last->documentAt))
+                                       : tr("Con lo del requerimiento, la ejecución elegida y los bugs de la revisión"));
+        if (hasRecord) {
+            auto* openDoc = smallButton(tr("Abrir acta"), "ghost");
+            connect(openDoc, &QPushButton::clicked, this, [this, path = last->documentPath]() {
+                emit openUrlRequested(QUrl::fromLocalFile(path).toString());
+            });
+            actions->addWidget(openDoc);
+        }
+        auto* record = smallButton(hasRecord ? tr("Regenerar…") : tr("Generar acta…"), hasRecord ? "ghost" : "outline",
+                                   tr("Arma el acta de control de calidad (R-213) con lo que hay en el issue y la guarda como .docx"));
+        record->setObjectName(QStringLiteral("issueGenerateRecord"));
+        record->setEnabled(!issue.revisions.isEmpty() || progress.executed > 0);
+        connect(record, &QPushButton::clicked, this, &IssuesView::generateRecord);
+        actions->addWidget(record);
+    }
+
+    // 4 · Cerrar la revisión con su resultado.
+    {
+        auto* actions = step(closed, tr("Cerrar la revisión"),
+                             closed ? tr("Cerrada el %1 como %2").arg(when(last->closedAt), label(outcome))
+                                    : tr("Se cierra con el resultado del control: conforme u observado"));
+        if (open) {
+            auto* close = smallButton(tr("Cerrar revisión…"), "outline",
+                                      tr("Deja la revisión cerrada con su resultado: conforme u observado"));
+            close->setObjectName(QStringLiteral("issueCloseRevision"));
+            connect(close, &QPushButton::clicked, this, &IssuesView::closeRevision);
+            actions->addWidget(close);
+        }
+    }
+
+    // 5 · Publicar el resultado donde toca.
+    {
+        QStringList where;
+        if (last && !last->jira.isEmpty() && !last->jira.uncertain) where << tr("gestor");
+        if (last && !last->gesreq.isEmpty() && !last->gesreq.uncertain) where << tr("GESREQ");
+        auto* actions = step(published, tr("Publicar el resultado"),
+                             where.isEmpty() ? tr("Los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ")
+                                             : tr("Publicado en %1").arg(where.join(tr(" y "))));
+        auto* publish = smallButton(published ? tr("Publicar…") : tr("Publicar…"), "primary",
+                                    tr("Publica los planes con sus casos en Zephyr, deja el resultado y el acta en el gestor "
+                                       "y registra el control de calidad en GESREQ"));
+        publish->setObjectName(QStringLiteral("issuePublishRevision"));
+        publish->setEnabled(m_revisionPublish != nullptr && closed);
+        if (!closed) publish->setToolTip(tr("Cierra antes la revisión: se publica el resultado de una revisión terminada"));
+        connect(publish, &QPushButton::clicked, this, &IssuesView::publishRevision);
+        actions->addWidget(publish);
+    }
+
+    // Y, cerrada la ronda, la siguiente: un requerimiento observado vuelve a pruebas.
+    if (!open) {
+        auto* actions = step(false, tr("Volver a probar"),
+                             closed && outcome == QaOutcome::Observado
+                                     ? tr("El requerimiento quedó observado: al corregirlo se abre la revisión %1").arg(number + 1)
+                                     : tr("Abre otra ronda de pruebas del requerimiento"));
+        auto* next = smallButton(closed ? tr("Nueva revisión") : tr("Abrir revisión"), "outline",
+                                 tr("El requerimiento vuelve a pruebas: abre la ronda siguiente del acta"));
+        next->setObjectName(QStringLiteral("issueNewRevision"));
+        connect(next, &QPushButton::clicked, this, &IssuesView::openRevision);
+        actions->addWidget(next);
+    }
 
     // Revisiones ya cerradas, de la más reciente a la más antigua.
     for (auto it = issue.revisions.crbegin(); it != issue.revisions.crend(); ++it) {
@@ -742,16 +806,23 @@ void IssuesView::refreshRevision(const Issue& issue) {
         h->addWidget(ui::pill(label(it->outcome).toUpper(), theme::tint(color, 46), color));
         h->addWidget(ui::label(it->closedAt.toString(QStringLiteral("dd/MM/yyyy")), "muted-sm"), 1);
         if (it->hasDocument()) {
-            auto* open = smallButton(tr("Abrir acta"), "ghost");
-            connect(open, &QPushButton::clicked, this, [this, path = it->documentPath]() {
+            auto* openRecord = smallButton(tr("Abrir acta"), "ghost");
+            connect(openRecord, &QPushButton::clicked, this, [this, path = it->documentPath]() {
                 emit openUrlRequested(QUrl::fromLocalFile(path).toString());
             });
-            h->addWidget(open);
+            h->addWidget(openRecord);
         }
         if (!it->gesreq.isEmpty())
-            h->addWidget(ui::label(it->gesreq.uncertain ? tr("GESREQ sin confirmar") : tr("Registrado en GESREQ"), "muted-sm"));
+            h->addWidget(ui::label(it->gesreq.uncertain ? tr("GESREQ sin confirmar")
+                                                        : (it->gesreq.requirementState.isEmpty()
+                                                                   ? tr("Registrado en GESREQ")
+                                                                   : tr("GESREQ: %1").arg(it->gesreq.requirementState)),
+                                   "muted-sm"));
         if (!it->jira.isEmpty())
             h->addWidget(ui::label(it->jira.uncertain ? tr("Jira sin confirmar") : tr("Enviado a Jira"), "muted-sm"));
+        if (!it->planRunId.isEmpty())
+            if (const PlanRun* cycle = m_history.findPlan(it->planRunId))
+                if (cycle->isPublished()) h->addWidget(ui::label(tr("Publicado en Zephyr"), "muted-sm"));
         m_revisionsList->addWidget(row);
     }
 }
@@ -761,13 +832,28 @@ void IssuesView::generateRecord() {
     if (!issue || !m_records) return;
     const QString issueId = issue->id;
     const IssueProgress progress = m_records->progressFor(issueId);
-    QualityRecordDialog dialog(m_records->draftFor(issueId), progress.suggested, progress.blockers, this);
+
+    // Con qué ejecución se levanta el acta: si la revisión tuvo varias, se elige aquí y el acta se
+    // rehace con la que se escoja.
+    QList<QualityRecordDialog::CycleChoice> choices;
+    for (const auto& cycle : m_records->cyclesFor(issueId))
+        choices << QualityRecordDialog::CycleChoice{
+            cycle.plan.id,
+            tr("%1 · %2 · %3 de %4 ejecutados, %5 superados")
+                .arg(cycle.plan.name, when(cycle.plan.startedAt))
+                .arg(cycle.executed)
+                .arg(cycle.total())
+                .arg(cycle.passed)};
+    const QString current = m_records->recordCycleFor(issueId);
+
+    QualityRecordDialog dialog(m_records->draftFor(issueId, current), progress.suggested, progress.blockers, choices, current,
+                               [this, issueId](const QString& planRunId) { return m_records->draftFor(issueId, planRunId); }, this);
     if (dialog.exec() != QDialog::Accepted) return;
 
     const QString path = QFileDialog::getSaveFileName(this, tr("Guardar el acta"), m_records->suggestedFileName(issueId),
                                                       tr("Documentos de Word (*.docx)"));
     if (path.isEmpty()) return;
-    const auto result = m_records->generate(issueId, dialog.record(), path);
+    const auto result = m_records->generate(issueId, dialog.record(), path, dialog.planRunId());
     if (!result.ok) {
         emit toast(tr("No se pudo generar el acta · %1").arg(result.error), theme::Red);
         return;
@@ -776,92 +862,23 @@ void IssuesView::generateRecord() {
     loadDetail();
 }
 
-void IssuesView::sendResultToTracker() {
+void IssuesView::publishRevision() {
     const Issue* issue = selected();
-    if (!issue || !m_records || !m_publish || issue->revisions.isEmpty()) return;
+    if (!issue || !m_records || !m_revisionPublish || issue->revisions.isEmpty()) return;
     const QString issueId = issue->id;
     const IssueRevision& revision = issue->revisions.last();
     const QaOutcome outcome = revision.isOpen() ? m_records->progressFor(issueId).suggested : revision.outcome;
-    const QString comment = m_records->summaryFor(issueId, revision.record, outcome);
+    const QaOutcome proposed = outcome == QaOutcome::Pendiente ? QaOutcome::Observado : outcome;
+    const QString comment = m_records->summaryFor(issueId, revision.record, proposed, revision.planRunId);
 
-    RevisionResultDialog dialog(RevisionResultDialog::Target::Tracker, tr("%1 · %2").arg(issue->publication.tracker.isEmpty()
-                                                                                             ? tr("el gestor")
-                                                                                             : issue->publication.tracker,
-                                                                                         issue->publication.key),
-                                outcome, comment, revision.documentPath, this);
-    if (dialog.exec() != QDialog::Accepted) return;
-
-    m_sendResultButton->setEnabled(false);
-    QPointer<IssuesView> self(this);
-    m_publish->publishResult(issueId, dialog.comment(), dialog.documentPath(), [self](const IssuePublishService::Result& r) {
-        if (!self) return;
-        self->loadDetail();
-        if (r.ok) {
-            emit self->toast(tr("Resultado enviado a %1").arg(r.key), theme::Green);
-            return;
-        }
-        if (r.uncertain) {
-            emit self->toast(tr("El envío se cortó sin respuesta: comprueba el comentario en el gestor antes de repetirlo · %1").arg(r.error),
-                             theme::Amber);
-            return;
-        }
-        emit self->toast(tr("No se pudo enviar el resultado · %1").arg(r.error), theme::Red);
+    auto* dialog = new RevisionPublishDialog(*m_revisionPublish, issueId, proposed, comment, revision.documentPath, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &RevisionPublishDialog::published, this, [this](bool ok) {
+        loadDetail();
+        emit toast(ok ? tr("Resultado publicado") : tr("La publicación terminó con avisos: mira el detalle de cada destino"),
+                   ok ? theme::Green : theme::Amber);
     });
-}
-
-void IssuesView::registerInGesreq() {
-    const Issue* issue = selected();
-    if (!issue || !issue->isImported() || !m_records || !m_requirements || issue->revisions.isEmpty()) return;
-    const QString issueId = issue->id;
-    const QString greq = issue->requirement.data.id;
-    const IssueRevision& revision = issue->revisions.last();
-    const bool wasOpen = revision.isOpen();
-    const QaOutcome proposed = wasOpen ? m_records->progressFor(issueId).suggested : revision.outcome;
-    const QaOutcome preselected = proposed == QaOutcome::Pendiente ? QaOutcome::Observado : proposed;
-
-    RevisionResultDialog dialog(RevisionResultDialog::Target::Requirement, tr("GESREQ · GREQ %1").arg(greq), preselected,
-                                m_records->summaryFor(issueId, revision.record, preselected), revision.documentPath, this);
-    if (dialog.exec() != QDialog::Accepted) return;
-
-    RequirementRegistration registration;
-    registration.requirementId = greq;
-    registration.result = toString(dialog.outcome());
-    registration.comment = dialog.comment();
-    registration.attachmentPath = dialog.documentPath();
-    const QaOutcome outcome = dialog.outcome();
-    const bool withDocument = !registration.attachmentPath.isEmpty();
-
-    m_registerButton->setEnabled(false);
-    QPointer<IssuesView> self(this);
-    const QString comment = registration.comment;
-    m_requirements->registerResult(registration, [self, issueId, outcome, wasOpen, withDocument, comment](const RequirementRegistrationResult& r) {
-        if (!self) return;
-        RevisionRegistration record;
-        record.result = outcome;
-        record.comment = comment;
-        if (r.ok) {
-            record.registeredAt = QDateTime::currentDateTime();
-            record.attachedDocument = withDocument;
-        } else {
-            record.uncertain = r.uncertain;
-            record.lastError = r.error;
-        }
-        self->m_issues.setRevisionRegistration(issueId, record);
-        // Registrado el resultado, la ronda queda cerrada con él: observado, volver a probar abre la siguiente.
-        if (r.ok && wasOpen) self->m_issues.closeRevision(issueId, outcome);
-        self->loadDetail();
-        if (r.ok) {
-            emit self->toast(tr("Resultado registrado en GESREQ como %1").arg(label(outcome)),
-                             outcome == QaOutcome::Conforme ? theme::Green : theme::Amber);
-            return;
-        }
-        if (r.uncertain) {
-            emit self->toast(tr("El registro se cortó sin respuesta: comprueba en GESREQ si quedó antes de repetirlo · %1").arg(r.error),
-                             theme::Amber);
-            return;
-        }
-        emit self->toast(tr("No se pudo registrar en GESREQ · %1").arg(r.error), theme::Red);
-    });
+    dialog->open();
 }
 
 void IssuesView::closeRevision() {
@@ -1104,40 +1121,13 @@ void IssuesView::refreshJiraStatus() {
     });
 }
 
-void IssuesView::refreshCases(const Issue& issue) {
-    ui::clearLayout(m_casesList);
-    m_casesHeader->setText(tr("CASOS DE PRUEBA · %1").arg(issue.caseIds.size()));
-    if (issue.caseIds.isEmpty()) {
-        m_casesList->addWidget(ui::label(tr("Sin casos. Crea uno o vincula los que ya validan este requerimiento."), "muted-sm"));
-        return;
-    }
-    for (const auto& caseId : issue.caseIds) {
-        const TestCase* c = m_cases.find(caseId);
-        QHBoxLayout* h;
-        auto* row = listRow(&h);
-        h->addWidget(ui::label(caseId, "mono-muted"));
-        auto* title = new QLabel(c ? (c->title.isEmpty() ? tr("(sin título)") : c->title) : tr("Ya no existe en los casos del proyecto"));
-        title->setWordWrap(true);
-        h->addWidget(title, 1);
-        if (c) {
-            h->addWidget(ui::label(QStringLiteral("%1 · %2").arg(label(c->status), c->lastRun.label()), "muted-sm"));
-            auto* open = smallButton(tr("Abrir"), "ghost");
-            connect(open, &QPushButton::clicked, this, [this, caseId]() { emit openCaseRequested(caseId); });
-            h->addWidget(open);
-        }
-        auto* unlink = unlinkButton(tr("Desvincular el caso del issue (el caso no se borra)"));
-        unlink->setObjectName(QStringLiteral("issueUnlinkCase-%1").arg(caseId));
-        connect(unlink, &QPushButton::clicked, this, [this, issueId = issue.id, caseId]() { m_issues.unlinkCase(issueId, caseId); });
-        h->addWidget(unlink);
-        m_casesList->addWidget(row);
-    }
-}
-
 void IssuesView::refreshPlans(const Issue& issue) {
     ui::clearLayout(m_plansList);
-    m_plansHeader->setText(tr("PLANES · %1").arg(issue.planIds.size()));
+    m_plansHeader->setText(issue.planIds.size() == 1 ? tr("PLAN DE PRUEBAS") : tr("PLANES DE PRUEBAS · %1").arg(issue.planIds.size()));
     if (issue.planIds.isEmpty()) {
-        m_plansList->addWidget(ui::label(tr("Sin planes. Crea uno con los casos del issue o vincula uno existente."), "muted-sm"));
+        m_plansList->addWidget(ui::label(tr("Sin plan todavía. Crea el plan con el que se prueba el requerimiento: sus casos son los "
+                                            "casos del issue y sus ejecuciones, sus resultados."),
+                                         "muted-sm"));
         return;
     }
     for (const auto& planId : issue.planIds) {
@@ -1145,15 +1135,17 @@ void IssuesView::refreshPlans(const Issue& issue) {
         QHBoxLayout* h;
         auto* row = listRow(&h);
         h->addWidget(ui::label(planId, "mono-muted"));
-        auto* name = new QLabel(plan ? (plan->archived ? tr("%1 (archivado)").arg(plan->name) : plan->name) : tr("Ya no existe en los planes del proyecto"));
+        auto* name = new QLabel(plan ? (plan->archived ? tr("%1 (archivado)").arg(plan->name) : plan->name)
+                                     : tr("Ya no existe en los planes del proyecto"));
         name->setWordWrap(true);
         h->addWidget(name, 1);
+        const QStringList caseIds = plan ? m_plans.orderedCaseIds(planId) : QStringList{};
         if (plan) {
-            QString summary = tr("%1 casos").arg(m_plans.orderedCaseIds(planId).size());
-            if (const auto cycle = m_plans.latestCycle(planId))
-                summary += tr(" · último ciclo: %1 de %2 ejecutados, %3 superados").arg(cycle->executed).arg(cycle->total()).arg(cycle->passed);
+            QString summary = tr("%1 casos").arg(caseIds.size());
+            const int cycles = m_plans.cycleCount(planId);
+            if (cycles > 0) summary += tr(" · %1 ejecución(es)").arg(cycles);
             h->addWidget(ui::label(summary, "muted-sm"));
-            auto* open = smallButton(tr("Abrir"), "ghost");
+            auto* open = smallButton(tr("Abrir plan"), "ghost");
             connect(open, &QPushButton::clicked, this, [this, planId]() { emit openPlanRequested(planId); });
             h->addWidget(open);
         }
@@ -1161,39 +1153,144 @@ void IssuesView::refreshPlans(const Issue& issue) {
         connect(unlink, &QPushButton::clicked, this, [this, issueId = issue.id, planId]() { m_issues.unlinkPlan(issueId, planId); });
         h->addWidget(unlink);
         m_plansList->addWidget(row);
+
+        // Los casos del plan son los casos del issue: se ven aquí, con lo que dio su última ejecución.
+        if (caseIds.isEmpty()) {
+            if (plan) m_plansList->addWidget(ui::label(tr("    El plan todavía no tiene casos: ábrelo y añádeselos."), "muted-sm"));
+            continue;
+        }
+        for (const auto& caseId : caseIds) {
+            const TestCase* c = m_cases.find(caseId);
+            QHBoxLayout* ch;
+            auto* line = listRow(&ch);
+            ch->setContentsMargins(28, 5, 8, 5);
+            ch->addWidget(ui::label(caseId, "mono-muted"));
+            auto* title = new QLabel(c ? (c->title.isEmpty() ? tr("(sin título)") : c->title)
+                                       : tr("Ya no existe en los casos del proyecto"));
+            title->setWordWrap(true);
+            ch->addWidget(title, 1);
+            if (c) {
+                ch->addWidget(ui::label(QStringLiteral("%1 · %2").arg(label(c->status), c->lastRun.label()), "muted-sm"));
+                auto* open = smallButton(tr("Abrir"), "ghost");
+                connect(open, &QPushButton::clicked, this, [this, caseId]() { emit openCaseRequested(caseId); });
+                ch->addWidget(open);
+            }
+            m_plansList->addWidget(line);
+        }
     }
 }
 
 void IssuesView::refreshResults(const Issue& issue) {
     ui::clearLayout(m_resultsList);
-    const QList<RunRecord> runs = IssueStore::runsOf(issue, m_history);
-    m_resultsHeader->setText(tr("RESULTADOS · %1 EJECUCIONES").arg(runs.size()));
-    if (runs.isEmpty()) {
-        m_resultsList->addWidget(ui::label(tr("Todavía no se ha ejecutado ningún caso del issue."), "muted-sm"));
+    // Lo que se enseña son las ejecuciones de los planes del issue, no todas las de sus casos: un caso
+    // puede estar en otros planes y esas ejecuciones no son resultados de este requerimiento.
+    const QList<PlanRun> cycles = IssueStore::cyclesOf(issue, m_history);
+    m_resultsHeader->setText(tr("RESULTADOS · %1 EJECUCIÓN(ES) DE SUS PLANES").arg(cycles.size()));
+    if (cycles.isEmpty()) {
+        m_resultsList->addWidget(ui::label(issue.planIds.isEmpty()
+                                               ? tr("Sin planes: los resultados del issue son los de los ciclos de sus planes.")
+                                               : tr("Todavía no se ha ejecutado ningún plan del issue."),
+                                           "muted-sm"));
         return;
     }
-    const qsizetype shown = std::min<qsizetype>(runs.size(), kMaxResults);
-    for (qsizetype i = 0; i < shown; ++i) {
-        const RunRecord& run = runs[i];
+    const QDateTime revisionStart = issue.revisions.isEmpty() ? QDateTime() : issue.revisions.last().startedAt;
+    int shownRuns = 0;
+    for (const auto& cycle : cycles) {
+        const PlanReport report = m_history.report(cycle.id);
+        QHBoxLayout* ch;
+        auto* head = listRow(&ch);
+        const QString color = verdictColor(report.verdict());
+        ch->addWidget(ui::pill(label(report.verdict()).toUpper(), theme::tint(color, 46), color));
+        auto* name = new QLabel(cycle.name);
+        name->setWordWrap(true);
+        ch->addWidget(name, 1);
+        if (revisionStart.isValid() && cycle.startedAt >= revisionStart)
+            ch->addWidget(ui::pill(tr("REVISIÓN EN CURSO"), theme::tint(theme::Blue, 30), theme::Blue));
+        ch->addWidget(ui::label(tr("%1 de %2 ejecutados · %3 superados · %4 fallidos · %5 bloqueados")
+                                    .arg(report.executed)
+                                    .arg(report.total())
+                                    .arg(report.passed)
+                                    .arg(report.failed)
+                                    .arg(report.blocked),
+                                "muted-sm"));
+        ch->addWidget(ui::label(when(cycle.startedAt), "muted-sm"));
+        if (cycle.isPublished()) ch->addWidget(ui::pill(tr("EN ZEPHYR"), theme::tint(theme::Green, 30), theme::Green));
+        auto* openPlan = smallButton(tr("Ver plan"), "ghost", tr("Abrir el plan de esta ejecución"));
+        const QString planId = cycle.planId;
+        openPlan->setEnabled(!planId.isEmpty());
+        connect(openPlan, &QPushButton::clicked, this, [this, planId]() { emit openPlanRequested(planId); });
+        ch->addWidget(openPlan);
+        m_resultsList->addWidget(head);
+
+        // Los casos de ese ciclo, hasta donde cabe sin convertir la tarjeta en el historial entero.
+        for (const auto& row : report.rows) {
+            if (!row.executed) continue;
+            if (shownRuns >= kMaxResults) break;
+            ++shownRuns;
+            QHBoxLayout* h;
+            auto* line = listRow(&h);
+            h->setContentsMargins(28, 5, 8, 5);
+            const QString runColor = verdictColor(row.run.verdict);
+            h->addWidget(ui::pill(label(row.run.verdict).toUpper(), theme::tint(runColor, 46), runColor));
+            h->addWidget(ui::label(row.caseId, "mono-muted"));
+            auto* title = new QLabel(row.title);
+            title->setWordWrap(true);
+            h->addWidget(title, 1);
+            if (!row.testKey.isEmpty()) h->addWidget(ui::label(row.testKey, "mono-muted"));
+            h->addWidget(ui::label(when(row.run.finishedAt), "muted-sm"));
+            auto* open = smallButton(tr("Ver"), "ghost", tr("Abrir la ejecución en el historial"));
+            connect(open, &QPushButton::clicked, this, [this, runId = row.run.id]() { emit openRunRequested(runId); });
+            h->addWidget(open);
+            m_resultsList->addWidget(line);
+        }
+        if (shownRuns >= kMaxResults) {
+            m_resultsList->addWidget(ui::label(tr("…el resto de las ejecuciones está en el historial"), "muted-sm"));
+            break;
+        }
+    }
+}
+
+void IssuesView::refreshBugs(const Issue& issue) {
+    ui::clearLayout(m_bugsList);
+    m_bugsCard->setVisible(m_bugLedger != nullptr);
+    if (!m_bugLedger) return;
+    // Los bugs del issue son los reportados desde los casos de sus planes, del más reciente al primero.
+    const QStringList caseIds = IssueStore::caseIdsOf(issue, m_plans);
+    QList<IssueLink> bugs;
+    for (const auto& bug : m_bugLedger->issues())
+        if (caseIds.contains(bug.caseId)) bugs << bug;
+    std::sort(bugs.begin(), bugs.end(), [](const IssueLink& a, const IssueLink& b) { return a.createdAt > b.createdAt; });
+    const int open = int(std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
+    m_bugsHeader->setText(tr("BUGS REPORTADOS · %1 (%2 abiertos)").arg(bugs.size()).arg(open));
+    if (bugs.isEmpty()) {
+        m_bugsList->addWidget(ui::label(tr("Sin bugs reportados desde los casos del issue. Los que se reporten en sus ejecuciones "
+                                           "salen aquí, cuentan en el acta y se enlazan al publicar."),
+                                        "muted-sm"));
+        return;
+    }
+    const QDateTime since = issue.revisions.isEmpty() ? QDateTime() : issue.revisions.last().startedAt;
+    for (const auto& bug : bugs) {
         QHBoxLayout* h;
         auto* row = listRow(&h);
-        const QString color = verdictColor(run.verdict);
-        h->addWidget(ui::pill(label(run.verdict).toUpper(), theme::tint(color, 46), color));
-        h->addWidget(ui::label(run.caseId, "mono-muted"));
-        auto* title = new QLabel(run.caseTitle);
+        const QString color = bug.resolved ? theme::Green : theme::Red;
+        h->addWidget(ui::pill(bug.classification.toUpper(), theme::tint(color, 46), color));
+        h->addWidget(ui::label(bug.key, "mono-muted"));
+        auto* title = new QLabel(bug.title.isEmpty() ? tr("(sin título)") : bug.title);
         title->setWordWrap(true);
         h->addWidget(title, 1);
-        const PlanRun* plan = m_history.findPlan(run.planRunId);
-        QString where = plan ? tr("%1 · ciclo del %2").arg(plan->name, plan->startedAt.toString(QStringLiteral("dd/MM/yyyy"))) : tr("Ejecución suelta");
-        if (plan && issue.planIds.contains(plan->planId)) where += tr(" · plan del issue");
-        h->addWidget(ui::label(where, "muted-sm"));
-        h->addWidget(ui::label(when(run.finishedAt), "muted-sm"));
-        auto* open = smallButton(tr("Ver"), "ghost", tr("Abrir la ejecución en el historial"));
-        connect(open, &QPushButton::clicked, this, [this, runId = run.id]() { emit openRunRequested(runId); });
-        h->addWidget(open);
-        m_resultsList->addWidget(row);
+        // De dónde salió: su caso y, si se sabe, el paso que falló.
+        h->addWidget(ui::label(bug.step > 0 ? tr("%1 · paso %2").arg(bug.caseId).arg(bug.step) : bug.caseId, "muted-sm"));
+        if (since.isValid() && bug.createdAt.isValid() && bug.createdAt >= since)
+            h->addWidget(ui::pill(tr("ESTA REVISIÓN"), theme::tint(theme::Blue, 30), theme::Blue));
+        h->addWidget(ui::label(bug.status.isEmpty() ? BugReport::severityLabel(bug.severity) : bug.status, "muted-sm"));
+        h->addWidget(ui::label(when(bug.createdAt), "muted-sm"));
+        if (!bug.url.isEmpty()) {
+            auto* open = smallButton(tr("Abrir"), "ghost", tr("Abrir el bug en el gestor"));
+            connect(open, &QPushButton::clicked, this, [this, url = bug.url]() { emit openUrlRequested(url); });
+            h->addWidget(open);
+        }
+        m_bugsList->addWidget(row);
     }
-    if (runs.size() > shown) m_resultsList->addWidget(ui::label(tr("y %1 más en el historial").arg(runs.size() - shown), "muted-sm"));
 }
 
 // ---- Acciones ------------------------------------------------------------------------------------
@@ -1203,18 +1300,6 @@ void IssuesView::editSelected(const std::function<void(Issue&)>& mutate) {
     if (id.isEmpty()) return;
     m_selfEdit = true;
     m_issues.updateIssue(id, mutate);
-    m_selfEdit = false;
-}
-
-void IssuesView::commitNotes() {
-    if (m_notesIssueId.isEmpty()) return;
-    m_notesTimer->stop();
-    const QString id = std::exchange(m_notesIssueId, QString());
-    const Issue* issue = m_issues.find(id);
-    const QString text = m_notes->toPlainText();
-    if (!issue || issue->notes == text) return;
-    m_selfEdit = true;
-    m_issues.updateIssue(id, [&text](Issue& i) { i.notes = text; });
     m_selfEdit = false;
 }
 
@@ -1309,50 +1394,62 @@ void IssuesView::askForProject(const ExternalRequirement& requirement, const QSt
 void IssuesView::openRequirement(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt) {
     const QString id = m_issues.openForRequirement(requirement, connection, fetchedAt);
     if (id.isEmpty()) return;
-    emit toast(tr("%1 · pruebas del requerimiento %2").arg(id, requirement.id), theme::Green);
+    // El requerimiento llega con lo suyo listo: su issue en el gestor y el plan con el que se prueba.
+    const QString planId = ensurePlan(id);
+    emit toast(planId.isEmpty() ? tr("%1 · pruebas del requerimiento %2").arg(id, requirement.id)
+                                : tr("%1 · pruebas del requerimiento %2 · plan %3 listo").arg(id, requirement.id, planId),
+               theme::Green);
+    publishImported(id);
 }
 
-void IssuesView::createCase() {
-    const Issue* issue = selected();
-    if (!issue) return;
-    const QString issueId = issue->id;
-    const QString title = issue->title;
-    const QString caseId = m_cases.createCase();
-    m_cases.updateCase(caseId, [&title](TestCase& c) { c.title = title; });
-    m_issues.linkCase(issueId, caseId);
-    emit toast(tr("%1 creado y vinculado a %2").arg(caseId, issueId), theme::Green);
-    emit openCaseRequested(caseId);
+QString IssuesView::ensurePlan(const QString& issueId) {
+    const Issue* issue = m_issues.find(issueId);
+    if (!issue) return {};
+    // Un plan que ya esté vinculado (y siga existiendo) es el suyo: no se crea otro.
+    for (const auto& planId : issue->planIds)
+        if (m_plans.find(planId)) return {};
+    const QString planId = m_plans.createPlan(QStringLiteral("%1 · %2").arg(issueId, issue->title));
+    m_issues.linkPlan(issueId, planId);
+    return planId;
 }
 
-void IssuesView::pickCase() {
-    const Issue* issue = selected();
-    if (!issue) return;
-    const QString issueId = issue->id;
-    QList<Choice> choices;
-    for (const auto& c : m_cases.cases())
-        if (!issue->caseIds.contains(c.id)) choices << Choice{c.id, c.title, c.suite};
-    auto* dialog = new ChoiceDialog(tr("Vincular caso a %1").arg(issueId), QString(),
-                                    [choices](const ChoiceDialog::Loaded& done) { done(choices, {}); }, QString(), this);
-    dialog->setAttribute(Qt::WA_DeleteOnClose);
-    connect(dialog, &ChoiceDialog::chosen, this, [this, issueId](const QString& caseId) { m_issues.linkCase(issueId, caseId); });
-    dialog->open();
+void IssuesView::publishImported(const QString& issueId) {
+    const Issue* issue = m_issues.find(issueId);
+    if (!issue || issue->isPublished() || !m_publish || !m_publish->canPublish()) return;
+    // Un envío anterior sin confirmar no se repite solo: puede haber creado ya el issue en el gestor.
+    if (issue->publication.uncertain) return;
+    QPointer<IssuesView> self(this);
+    // El tipo de incidencia sale del proyecto de destino; si no se puede leer, se usa el de siempre.
+    m_publish->fetchIssueTypes([self, issueId](const QStringList&) {
+        if (!self) return;
+        const Issue* issue = self->m_issues.find(issueId);
+        if (!issue || issue->isPublished()) return;
+        self->m_publish->publish(issueId, self->m_publish->draftFor(*issue), [self, issueId](const IssuePublishService::Result& r) {
+            if (!self) return;
+            self->loadDetail();
+            if (r.ok) {
+                emit self->toast(tr("%1 creado en el gestor para %2").arg(r.key, issueId), theme::Green);
+                return;
+            }
+            if (r.uncertain) {
+                emit self->toast(tr("El envío al gestor se cortó sin respuesta: comprueba si %1 se creó antes de publicarlo otra vez · %2")
+                                     .arg(issueId, r.error),
+                                 theme::Amber);
+                return;
+            }
+            emit self->toast(tr("%1 no se pudo crear en el gestor · %2 · publícalo desde la tarjeta del issue").arg(issueId, r.error),
+                             theme::Amber);
+        });
+    });
 }
 
 void IssuesView::createPlan() {
     const Issue* issue = selected();
     if (!issue) return;
     const QString issueId = issue->id;
-    const QStringList caseIds = issue->caseIds;
     const QString planId = m_plans.createPlan(QStringLiteral("%1 · %2").arg(issueId, issue->title));
-    // El plan recién creado queda como activo: los casos se añaden a él, sin los que ya no existen.
-    int added = 0;
-    for (const auto& caseId : caseIds) {
-        if (!m_cases.find(caseId)) continue;
-        m_plans.toggle(caseId);
-        ++added;
-    }
     m_issues.linkPlan(issueId, planId);
-    emit toast(tr("%1 creado con %2 casos de %3").arg(planId).arg(added).arg(issueId), theme::Green);
+    emit toast(tr("%1 creado y vinculado a %2: añádele sus casos").arg(planId, issueId), theme::Green);
     emit openPlanRequested(planId);
 }
 

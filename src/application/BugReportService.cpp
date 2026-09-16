@@ -37,6 +37,8 @@ BugReport BugReportService::draftFromCurrentContext() const {
     const RunState& r = m_run.state();
     const int failIdx = r.caseId == c->id ? r.firstFailIndex() : -1;
     if (failIdx >= 0 && failIdx < c->steps.size()) {
+        // El paso que falló es el que se enlaza en Zephyr al publicar la ejecución.
+        b.linkedStep = failIdx + 1;
         const TestStep& failed = c->steps[failIdx];
         b.title = tr("[%1] Falla en paso %2: %3").arg(c->suite).arg(failIdx + 1).arg(failed.action);
         b.expected = failed.expected;
@@ -53,6 +55,7 @@ IssueLink BugReportService::linkFor(const BugReport& bug, const IssueResult& r) 
     l.url = r.url;
     l.title = bug.title.trimmed();
     l.caseId = bug.linkedCaseId;
+    l.step = bug.linkedStep;
     l.tracker = toString(m_settings.tracker().kind);
     l.severity = bug.severity;
     l.classification = bug.classification;

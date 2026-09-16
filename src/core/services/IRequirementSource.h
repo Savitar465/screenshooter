@@ -29,6 +29,14 @@ public:
     /// ¿Sabe este conector registrar el resultado del control de calidad? Es la única operación que
     /// cambia algo en el sistema, así que se pregunta antes de ofrecerla.
     virtual bool canRegisterResult() const { return false; }
+    /// Por qué el sistema rechazaría este registro tal y como está (falta el acta, el resultado no
+    /// cuadra con las observaciones…); vacío si no hay nada que objetar. Son las reglas del sistema,
+    /// así que se preguntan **antes** de enviar: fallar a mitad del registro deja el control a medias
+    /// entre los dos sistemas y no explica qué hay que corregir.
+    virtual QString registrationProblem(const RequirementRegistration& registration) const {
+        Q_UNUSED(registration);
+        return {};
+    }
     /// Registra el resultado de la revisión en el requerimiento. Nunca se llama sola: siempre la pide
     /// quien cierra la revisión, después de confirmarlo.
     virtual void registerResult(const RequirementSourceSettings& s, const RequirementRegistration& registration,

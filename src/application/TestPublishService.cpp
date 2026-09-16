@@ -1,5 +1,6 @@
 #include "TestPublishService.h"
 
+#include "application/BugStore.h"
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
@@ -9,8 +10,20 @@
 namespace qaflow {
 
 TestPublishService::TestPublishService(std::shared_ptr<ITestManagement> zephyr, TestCaseStore& cases, RunHistoryStore& history,
-                                       SettingsStore& settings, QObject* parent)
-    : QObject(parent), m_zephyr(std::move(zephyr)), m_cases(cases), m_history(history), m_settings(settings) {}
+                                       SettingsStore& settings, BugStore& bugs, QObject* parent)
+    : QObject(parent), m_zephyr(std::move(zephyr)), m_cases(cases), m_history(history), m_settings(settings), m_bugs(bugs) {}
+
+QList<PublishDefect> TestPublishService::defectsOf(const PlanReport& report, const QString& caseId) const {
+    // Los bugs de ese caso reportados mientras corría el ciclo, con la misma regla con la que el
+    // informe los enseña (`PlanReport::reportedDuring`): lo que se ve en la pantalla es lo que se sube.
+    QList<PublishDefect> defects;
+    for (const auto& bug : m_bugs.issues()) {
+        if (bug.caseId != caseId || bug.key.trimmed().isEmpty()) continue;
+        if (!PlanReport::reportedDuring(report.plan, bug)) continue;
+        defects << PublishDefect{bug.key.trimmed(), bug.step};
+    }
+    return defects;
+}
 
 bool TestPublishService::enabled() const {
     const TrackerSettings& t = m_settings.tracker();
@@ -45,6 +58,7 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report, bool upd
         pc.title = row.title;
         pc.verdict = row.run.verdict;
         pc.steps = row.run.steps;
+        pc.defects = defectsOf(report, row.caseId);
         pc.durationSecs = row.run.durationSecs;
         if (const TestCase* c = m_cases.find(row.caseId)) {
             // Con lo que el caso dice hoy se crea el Test de la ejecución.

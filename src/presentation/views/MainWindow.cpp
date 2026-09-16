@@ -34,12 +34,15 @@
 #include <QFileInfo>
 #include <QMenu>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStackedWidget>
 #include <QSystemTrayIcon>
 #include <QTimer>
 #include <QUrl>
+
+#include <algorithm>
 
 namespace qaflow {
 
@@ -155,10 +158,17 @@ QWidget* MainWindow::buildNavbar() {
     });
     m_projectMenu->setMenu(menu);
     h->addWidget(m_projectMenu);
+    // Vuelta al estilo de iOS: sólo aparece cuando se ha entrado en profundidad, y dice a dónde vuelve.
+    m_navBack = ui::button(QString(), "back");
+    m_navBack->setObjectName(QStringLiteral("navbarBack"));
+    m_navBack->setCursor(Qt::PointingHandCursor);
+    m_navBack->hide();
+    connect(m_navBack, &QPushButton::clicked, this, &MainWindow::goBack);
+    h->addWidget(m_navBack);
     h->addStretch(1);
     m_navStatus = ui::button(QString(), "chip");
     m_navStatus->setObjectName(QStringLiteral("navbarRunStatus"));
-    connect(m_navStatus, &QPushButton::clicked, this, [this]() { navigate(Screen::Run); });
+    connect(m_navStatus, &QPushButton::clicked, this, [this]() { navigateInto(Screen::Run); });
     h->addWidget(m_navStatus);
     m_runTarget = new QComboBox;
     m_runTarget->setObjectName(QStringLiteral("runTargetSelector"));
@@ -251,6 +261,26 @@ void MainWindow::selectContextTarget() {
     if (index >= 0) { m_runTarget->setCurrentIndex(index); m_runTarget->lineEdit()->setCursorPosition(0); }
 }
 
+void MainWindow::startPlanRun(const QString& planId) {
+    if (!m_ctx.run->state().caseId.isEmpty()) {
+        showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
+        return;
+    }
+    if (m_ctx.evidence->isRecording() || m_ctx.evidence->isCountingDown() || m_ctx.evidence->isBusy()) {
+        showToast(tr("Espera a que termine la captura"), theme::Amber);
+        return;
+    }
+    const TestPlan* plan = m_ctx.plan->find(planId);
+    const QStringList ids = m_ctx.plan->orderedCaseIds(planId);
+    if (!plan || plan->archived || ids.isEmpty()) {
+        showToast(tr("El plan no tiene casos que ejecutar"), theme::Amber);
+        return;
+    }
+    m_ctx.plan->setActive(planId);
+    m_ctx.run->startSequence(ids, plan->name, planId);
+    navigateInto(Screen::Run);
+}
+
 void MainWindow::runSelectedTarget() {
     if (!m_ctx.run->state().caseId.isEmpty() || m_ctx.evidence->isRecording() || m_ctx.evidence->isCountingDown() || m_ctx.evidence->isBusy()) return;
     if (m_runTarget->currentIndex() < 0 || m_runTarget->currentText() != m_runTarget->itemText(m_runTarget->currentIndex())) {
@@ -271,7 +301,7 @@ void MainWindow::runSelectedTarget() {
         if (!c || c->status == CaseStatus::Obsoleto) return;
         m_ctx.run->start(id);
     } else return;
-    navigate(Screen::Run);
+    navigateInto(Screen::Run);
 }
 
 // ---- Menú y atajos ---------------------------------------------------------------------------
@@ -317,6 +347,10 @@ void MainWindow::buildMenus() {
 
     // Ver
     QMenu* view = bar->addMenu(tr("&Ver"));
+    m_actBack = view->addAction(tr("&Atrás"), QKeySequence(Qt::ALT | Qt::Key_Left), this, &MainWindow::goBack);
+    m_actBack->setObjectName(QStringLiteral("actBack"));
+    m_actBack->setEnabled(false);
+    view->addSeparator();
     // Issues va primero, como en el rail, pero conserva Ctrl+6: los atajos de las demás pantallas no cambian.
     const struct { Screen screen; QString label; Qt::Key key; } screens[] = {
         {Screen::Issues, tr("I&ssues"), Qt::Key_6}, {Screen::Casos, tr("&Casos de prueba"), Qt::Key_1},
@@ -364,7 +398,7 @@ void MainWindow::buildMenus() {
         m_ctx.evidence->attachFiles(evidence::pickFiles(this));
     });
     m_actAttach->setObjectName(QStringLiteral("actAttach"));
-    m_actReportBug = runMenu->addAction(tr("&Reportar bug"), QKeySequence(Qt::CTRL | Qt::Key_B), this, [this]() { navigate(Screen::Bug); });
+    m_actReportBug = runMenu->addAction(tr("&Reportar bug"), QKeySequence(Qt::CTRL | Qt::Key_B), this, [this]() { navigateInto(Screen::Bug); });
     runMenu->addSeparator();
     // Avanzar de paso sin volver a la ventana: son atajos de ámbito aplicación y, además,
     // main.cpp los registra en el sistema para que funcionen desde la aplicación que se prueba.
@@ -510,9 +544,9 @@ void MainWindow::wireSignals() {
     connect(m_issuesView, &IssuesView::toast, this, &MainWindow::showToast);
 
     // Casos
-    connect(m_cases, &CasesView::historyRequested, this, [this](const QString& id) { m_history->showCase(id); navigate(Screen::Historial); });
+    connect(m_cases, &CasesView::historyRequested, this, [this](const QString& id) { m_history->showCase(id); navigateInto(Screen::Historial); });
     connect(m_cases, &CasesView::openRunRequested, this, [this](const QString& runId) {
-        navigate(Screen::Historial);
+        navigateInto(Screen::Historial);
         m_history->showRun(runId);
     });
     connect(m_cases, &CasesView::openJiraRequested, this, [this](const QString& key) {
@@ -540,10 +574,10 @@ void MainWindow::wireSignals() {
     });
 
     // Issues: sus casos, planes y ejecuciones se abren en sus pantallas.
-    connect(m_issuesView, &IssuesView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigate(Screen::Casos); });
-    connect(m_issuesView, &IssuesView::openPlanRequested, this, [this](const QString& id) { m_ctx.plan->setActive(id); navigate(Screen::Plan); });
+    connect(m_issuesView, &IssuesView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
+    connect(m_issuesView, &IssuesView::openPlanRequested, this, [this](const QString& id) { m_ctx.plan->setActive(id); navigateInto(Screen::Plan); });
     connect(m_issuesView, &IssuesView::openRunRequested, this, [this](const QString& runId) {
-        navigate(Screen::Historial);
+        navigateInto(Screen::Historial);
         m_history->showRun(runId);
     });
     connect(m_issuesView, &IssuesView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
@@ -557,10 +591,15 @@ void MainWindow::wireSignals() {
         QTimer::singleShot(0, this, [this]() { showToast(tr("No se pudieron leer los issues del proyecto: no se guardarán cambios en ellos para no perderlos"), theme::Red); });
 
     // Plan
-    connect(m_plan, &PlanView::cycleReportRequested, this, [this](const QString& planRunId) { m_history->showPlan(planRunId); navigate(Screen::Historial); });
+    connect(m_plan, &PlanView::runPlanRequested, this, &MainWindow::startPlanRun);
+    connect(m_plan, &PlanView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
+    connect(m_plan, &PlanView::cycleReportRequested, this, [this](const QString& planRunId) { m_history->showPlan(planRunId); navigateInto(Screen::Historial); });
     // Activar o desactivar Zephyr en los ajustes cambia qué botones ofrecen los ciclos.
     connect(m_ctx.settings, &SettingsStore::trackerChanged, m_plan, &PlanView::refresh);
     connect(m_ctx.settings, &SettingsStore::trackerChanged, m_history, &HistoryView::refresh);
+    // El informe del ciclo enseña los bugs que se reportaron mientras corría: reportar uno, o saber
+    // que el gestor ya lo cerró, cambia lo que hay que pintar.
+    connect(m_ctx.bugLedger, &BugStore::bugsChanged, m_history, &HistoryView::refresh);
     connect(m_plan, &PlanView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
     connect(m_history, &HistoryView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
     connect(m_plan, &PlanView::openJiraRequested, this, [this](const QString& key) {
@@ -571,11 +610,11 @@ void MainWindow::wireSignals() {
 
     // Ejecución
     connect(m_run, &RunView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
-    connect(m_run, &RunView::reportBugRequested, this, [this]() { navigate(Screen::Bug); });
+    connect(m_run, &RunView::reportBugRequested, this, [this]() { navigateInto(Screen::Bug); });
     connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
 
     // Historial
-    connect(m_history, &HistoryView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigate(Screen::Casos); });
+    connect(m_history, &HistoryView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
     connect(m_history, &HistoryView::openJiraRequested, this, [this](const QString& key) {
         const TrackerSettings& t = m_ctx.settings->tracker();
         if (t.baseUrl().isEmpty()) { showToast(tr("Configura la URL del gestor en Ajustes"), theme::Amber); return; }
@@ -584,8 +623,11 @@ void MainWindow::wireSignals() {
 
     // Bug
     connect(m_bug, &BugView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
-    connect(m_bug, &BugView::cancelled, this, [this]() { navigate(Screen::Casos); });
-    connect(m_bug, &BugView::submitted, this, [this](const QString&) { navigate(Screen::Casos); });
+    // Terminar (o dejar) el parte devuelve a donde se pidió —la ejecución, casi siempre—; sin camino
+    // que deshacer, a los casos.
+    const auto leaveBug = [this]() { if (m_back.isEmpty()) navigate(Screen::Casos); else goBack(); };
+    connect(m_bug, &BugView::cancelled, this, leaveBug);
+    connect(m_bug, &BugView::submitted, this, [leaveBug](const QString&) { leaveBug(); });
     // Cola offline: al arrancar con conexión configurada y bugs pendientes, se reintenta en silencio.
     if (!m_ctx.bugLedger->pending().isEmpty() && m_ctx.settings->tracker().connected) {
         QTimer::singleShot(1500, this, [this]() {
@@ -647,17 +689,44 @@ void MainWindow::showSaveError(const QString& what, const std::function<bool()>&
 }
 
 void MainWindow::finishRun() {
-    const QString planId = m_ctx.run->planRunId();
+    const QString planRunId = m_ctx.run->planRunId();
     if (m_ctx.run->finish()) {
         showToast(tr("Siguiente caso del plan · quedan %1").arg(m_ctx.run->queuedCount() + 1), theme::Green);
         return;
     }
-    if (planId.isEmpty()) { navigate(Screen::Casos); return; }
-    const PlanReport report = m_ctx.history->report(planId);
-    m_history->showPlan(planId);
-    navigate(Screen::Historial);
+    if (planRunId.isEmpty()) { navigate(Screen::Casos); return; }
+    const PlanReport report = m_ctx.history->report(planRunId);
     const QString color = report.blocked ? theme::Amber : report.failed ? theme::Red : theme::Green;
-    showToast(tr("Plan terminado · %1 superados · %2 fallidos · %3 bloqueados").arg(report.passed).arg(report.failed).arg(report.blocked), color);
+    const QString summary = tr("Plan terminado · %1 superados · %2 fallidos · %3 bloqueados")
+                                .arg(report.passed).arg(report.failed).arg(report.blocked);
+
+    // Un ciclo que prueba un requerimiento termina en su issue, no en el informe: lo que toca después
+    // es el paso siguiente de la revisión (levantar el acta), y allí se ve además lo que salió. El
+    // informe completo queda a un clic en el aviso, para quien lo quiera mirar ahora.
+    const QString issueId = issueOfPlanRun(planRunId);
+    if (!issueId.isEmpty()) {
+        m_ctx.issues->select(issueId);
+        navigate(Screen::Issues);
+        m_toast->show(summary, color, tr("Ver informe"), [this, planRunId]() {
+            m_history->showPlan(planRunId);
+            navigateInto(Screen::Historial);
+        });
+        return;
+    }
+    m_history->showPlan(planRunId);
+    navigate(Screen::Historial);
+    showToast(summary, color);
+}
+
+QString MainWindow::issueOfPlanRun(const QString& planRunId) const {
+    const PlanRun* cycle = m_ctx.history->findPlan(planRunId);
+    if (!cycle || cycle->planId.isEmpty()) return QString();
+    const QList<Issue> issues = m_ctx.issues->issuesForPlan(cycle->planId);
+    if (issues.isEmpty()) return QString();
+    // Un plan puede probar varios requerimientos: gana aquel en el que se estaba trabajando.
+    for (const auto& issue : issues)
+        if (issue.id == m_ctx.issues->selectedId()) return issue.id;
+    return issues.first().id;
 }
 
 void MainWindow::updateShortcuts() {
@@ -702,12 +771,80 @@ void MainWindow::attachFiles(const QList<QUrl>& urls) {
 }
 
 void MainWindow::navigate(Screen s) {
+    m_back.clear();
+    showScreen(s);
+}
+
+void MainWindow::navigateInto(Screen s) {
+    // Entrar en la pantalla en la que ya se está no es entrar en ninguna parte.
+    if (s != m_current) {
+        // Volver a una pantalla por la que ya se pasó no alarga el camino: lo deshace hasta ella, para
+        // que ir y venir entre el issue y su plan no deje una pila que tarde diez clics en vaciarse.
+        const auto seen = std::find_if(m_back.cbegin(), m_back.cend(), [s](const BackStep& b) { return b.screen == s; });
+        if (seen != m_back.cend()) m_back.erase(seen, m_back.cend());
+        else {
+            m_back.append({m_current, screenLabel(m_current)});
+            constexpr int kMaxBack = 12;
+            while (m_back.size() > kMaxBack) m_back.removeFirst();
+        }
+    }
+    showScreen(s);
+}
+
+void MainWindow::goBack() {
+    if (m_back.isEmpty()) return;
+    showScreen(m_back.takeLast().screen);
+}
+
+void MainWindow::showScreen(Screen s) {
     if (s == Screen::Bug) m_bug->loadDraft();
     m_current = s;
     selectContextTarget();
     m_stack->setCurrentIndex(static_cast<int>(s));
     m_sidebar->setActive(s);
     if (auto* a = m_screenActions.value(s)) a->setChecked(true);
+    refreshBackButton();
+}
+
+void MainWindow::refreshBackButton() {
+    const bool deep = !m_back.isEmpty();
+    m_navBack->setVisible(deep);
+    if (m_actBack) m_actBack->setEnabled(deep);
+    if (!deep) {
+        if (m_actBack) m_actBack->setText(tr("&Atrás"));
+        return;
+    }
+    const QString name = m_back.last().label;
+    m_navBack->setText(QStringLiteral("‹  ") + ui::elide(name, 26));
+    m_navBack->setToolTip(tr("Volver a %1 (Alt+←)").arg(name));
+    m_navBack->setAccessibleName(tr("Volver a %1").arg(name));
+    if (m_actBack) m_actBack->setText(tr("&Atrás · %1").arg(name));
+}
+
+QString MainWindow::screenLabel(Screen s) const {
+    switch (s) {
+    case Screen::Casos: {
+        const TestCase* c = m_ctx.cases->find(m_ctx.cases->selectedId());
+        return c ? tr("Caso %1").arg(c->id) : tr("Casos de prueba");
+    }
+    case Screen::Plan: {
+        const TestPlan* p = m_ctx.plan->find(m_ctx.plan->activeId());
+        return p && !p->name.isEmpty() ? p->name : tr("Plan de pruebas");
+    }
+    case Screen::Run: return tr("Ejecución");
+    case Screen::Historial: return tr("Historial");
+    case Screen::Bug: return tr("Reportar bug");
+    case Screen::Issues: {
+        const Issue* i = m_ctx.issues->find(m_ctx.issues->selectedId());
+        return i ? tr("Issue %1").arg(i->id) : tr("Issues");
+    }
+    }
+    return tr("Atrás");
+}
+
+void MainWindow::mousePressEvent(QMouseEvent* e) {
+    if (e->button() == Qt::BackButton && !m_back.isEmpty()) { goBack(); e->accept(); return; }
+    QMainWindow::mousePressEvent(e);
 }
 
 void MainWindow::showToast(const QString& message, const QString& color) { m_toast->show(message, color); }

@@ -158,6 +158,17 @@ public:
         Q_UNUSED(s); Q_UNUSED(key); Q_UNUSED(body); Q_UNUSED(attachments);
         done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no admite comentarios desde QAflow"), false, 0});
     }
+
+    /// ¿Sabe este gestor enlazar dos issues entre sí? Es lo que hace falta para que el issue del
+    /// requerimiento tenga colgados sus bugs y sus Tests. Sólo Jira, por ahora.
+    virtual bool canLinkIssues(const TrackerSettings& s) const { Q_UNUSED(s); return false; }
+    /// Enlaza dos issues del gestor («relacionado con»). Enlazar dos veces el mismo par no crea dos
+    /// enlaces, así que repetir la publicación es inofensivo.
+    virtual void linkIssues(const TrackerSettings& s, const QString& from, const QString& to,
+                            std::function<void(const IssueResult&)> done) {
+        Q_UNUSED(s); Q_UNUSED(from); Q_UNUSED(to);
+        done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no enlaza issues desde QAflow"), false, 0});
+    }
 };
 
 } // namespace qaflow

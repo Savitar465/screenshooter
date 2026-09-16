@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QInputDialog>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
@@ -728,14 +729,33 @@ void IssuesView::refreshRevision(const Issue& issue) {
                                   : tr("Arrancar un ciclo del plan abre la revisión y deja el issue en pruebas");
         if (!environments.isEmpty()) detail += tr(" · ambiente: %1").arg(environments.join(tr(", ")));
         auto* actions = step(executed, tr("Ejecutar el plan"), detail);
-        auto* run = smallButton(tr("Ir al plan"), "ghost", tr("Los ciclos se arrancan desde la pantalla del plan"));
-        run->setObjectName(QStringLiteral("issueStepRun"));
-        run->setEnabled(hasPlan);
-        connect(run, &QPushButton::clicked, this, [this]() {
+        auto* open = smallButton(tr("Ir al plan"), "ghost", tr("Abrir el plan para componerlo antes de ejecutarlo"));
+        open->setObjectName(QStringLiteral("issueStepOpenPlan"));
+        open->setEnabled(hasPlan);
+        connect(open, &QPushButton::clicked, this, [this]() {
             const Issue* issue = selected();
             if (issue && !issue->planIds.isEmpty()) emit openPlanRequested(issue->planIds.first());
         });
+        actions->addWidget(open);
+        // El ciclo se arranca desde aquí: es el paso siguiente del issue y no hay por qué salir a buscarlo.
+        auto* run = smallButton(tr("Ejecutar plan…"), executed ? "ghost" : "outline",
+                                tr("Arranca un ciclo del plan: pregunta el ambiente y lleva a la ejecución"));
+        run->setObjectName(QStringLiteral("issueStepRun"));
+        run->setEnabled(!runnablePlans(issue).isEmpty());
+        connect(run, &QPushButton::clicked, this, [this, run]() { runPlan(run); });
         actions->addWidget(run);
+        // Lo que quedó roto no obliga a repetir el plan entero: se continúa la ronda por donde se quedó.
+        if (const QString pending = continuableCycle(issue, number); !pending.isEmpty()) {
+            const PlanReport report = m_history.report(pending);
+            auto* proceed = smallButton(tr("Continuar lo fallado…"), "outline",
+                                        tr("Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) del ciclo %2, "
+                                           "cada uno desde el paso que se rompió")
+                                            .arg(report.brokenCaseIds().size())
+                                            .arg(pending));
+            proceed->setObjectName(QStringLiteral("issueStepContinue"));
+            connect(proceed, &QPushButton::clicked, this, [this, pending]() { emit continueCycleRequested(pending); });
+            actions->addWidget(proceed);
+        }
     }
 
     // 3 · El acta del control de calidad.
@@ -1155,6 +1175,11 @@ void IssuesView::refreshPlans(const Issue& issue) {
             auto* open = smallButton(tr("Abrir plan"), "ghost");
             connect(open, &QPushButton::clicked, this, [this, planId]() { emit openPlanRequested(planId); });
             h->addWidget(open);
+            auto* run = smallButton(tr("Ejecutar"), "ghost", tr("Arrancar un ciclo de este plan"));
+            run->setObjectName(QStringLiteral("issuePlanRun-%1").arg(planId));
+            run->setEnabled(!plan->archived && !caseIds.isEmpty());
+            connect(run, &QPushButton::clicked, this, [this, planId]() { emit runPlanRequested(planId); });
+            h->addWidget(run);
         }
         auto* unlink = unlinkButton(tr("Desvincular el plan del issue (el plan no se borra)"));
         connect(unlink, &QPushButton::clicked, this, [this, issueId = issue.id, planId]() { m_issues.unlinkPlan(issueId, planId); });
@@ -1230,7 +1255,17 @@ void IssuesView::refreshResults(const Issue& issue) {
                                     .arg(report.blocked),
                                 "muted-sm"));
         ch->addWidget(ui::label(when(cycle.startedAt), "muted-sm"));
+        if (cycle.isContinuation())
+            ch->addWidget(ui::pill(tr("CONTINÚA %1").arg(cycle.continuesCycleId), theme::tint(theme::Amber, 30), theme::Amber));
         if (cycle.isPublished()) ch->addWidget(ui::pill(tr("EN ZEPHYR"), theme::tint(theme::Green, 30), theme::Green));
+        if (report.canContinue()) {
+            auto* proceed = smallButton(tr("Continuar"), "ghost",
+                                        tr("Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo")
+                                            .arg(report.brokenCaseIds().size()));
+            proceed->setObjectName(QStringLiteral("issueCycleContinue-%1").arg(cycle.id));
+            connect(proceed, &QPushButton::clicked, this, [this, id = cycle.id]() { emit continueCycleRequested(id); });
+            ch->addWidget(proceed);
+        }
         auto* openPlan = smallButton(tr("Ver plan"), "ghost", tr("Abrir el plan de esta ejecución"));
         const QString planId = cycle.planId;
         openPlan->setEnabled(!planId.isEmpty());
@@ -1467,6 +1502,45 @@ void IssuesView::createPlan() {
     m_issues.linkPlan(issueId, planId);
     emit toast(tr("%1 creado y vinculado a %2: añádele sus casos").arg(planId, issueId), theme::Green);
     emit openPlanRequested(planId);
+}
+
+QStringList IssuesView::runnablePlans(const Issue& issue) const {
+    QStringList out;
+    for (const auto& planId : issue.planIds) {
+        const TestPlan* plan = m_plans.find(planId);
+        if (plan && !plan->archived && !m_plans.orderedCaseIds(planId).isEmpty()) out << planId;
+    }
+    return out;
+}
+
+QString IssuesView::continuableCycle(const Issue& issue, int revision) const {
+    // Los de la ronda vienen del más reciente al primero: el que se continúa es el último que dejó
+    // casos rotos, porque es donde se quedaron las pruebas.
+    for (const auto& cycle : IssueStore::cyclesOfRevision(issue, m_history, revision))
+        if (m_history.report(cycle.id).canContinue()) return cycle.id;
+    return {};
+}
+
+void IssuesView::runPlan(QWidget* anchor) {
+    const Issue* issue = selected();
+    if (!issue) return;
+    const QStringList runnable = runnablePlans(*issue);
+    if (runnable.isEmpty()) {
+        emit toast(issue->planIds.isEmpty() ? tr("El issue todavía no tiene plan: créalo antes de probar")
+                                            : tr("El plan del issue no tiene casos que ejecutar: ábrelo y añádeselos"),
+                   theme::Amber);
+        return;
+    }
+    if (runnable.size() == 1) { emit runPlanRequested(runnable.first()); return; }
+    // Con varios planes no se adivina cuál toca: se elige, con los casos que tiene cada uno a la vista.
+    auto* menu = new QMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    for (const auto& planId : runnable) {
+        const TestPlan* plan = m_plans.find(planId);
+        menu->addAction(tr("%1 · %2 caso(s)").arg(plan->name).arg(m_plans.orderedCaseIds(planId).size()), this,
+                        [this, planId]() { emit runPlanRequested(planId); });
+    }
+    menu->popup(anchor ? anchor->mapToGlobal(QPoint(0, anchor->height())) : QCursor::pos());
 }
 
 void IssuesView::pickPlan() {

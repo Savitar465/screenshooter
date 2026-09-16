@@ -20,8 +20,10 @@ class CycleStartDialog : public QDialog {
 public:
     /// `planName`: el plan que se va a ejecutar. `context`: a qué issue y revisión pertenecerá el ciclo
     /// ("GREQ 2026997 · revisión 2"); vacío en un ciclo que no prueba ningún requerimiento.
-    /// `environment`: el que se propone (el último usado en el proyecto).
-    CycleStartDialog(const QString& planName, const QString& context, const QString& environment, QWidget* parent = nullptr);
+    /// `environment`: el que se propone (el último usado en el proyecto). `continuation`: qué ciclo se
+    /// continúa y con qué casos; vacío = ciclo nuevo con todo el plan.
+    CycleStartDialog(const QString& planName, const QString& context, const QString& environment,
+                     const QString& continuation = QString(), QWidget* parent = nullptr);
 
     /// Ambiente elegido, ya limpio; vacío si no se indicó ninguno.
     QString environment() const;

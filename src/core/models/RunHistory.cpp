@@ -68,6 +68,12 @@ int RunRecord::count(StepResult r) const {
     return n;
 }
 
+int RunRecord::brokenStepIndex() const {
+    for (int i = 0; i < steps.size(); ++i)
+        if (steps[i].result == StepResult::Fail || steps[i].result == StepResult::Block) return i;
+    return -1;
+}
+
 bool RunRecord::hasNotes() const {
     for (const auto& s : steps) if (!s.note.trimmed().isEmpty()) return true;
     return false;

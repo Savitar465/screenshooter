@@ -63,12 +63,19 @@ struct Fixture {
 class IssuePublishServiceTest : public QObject {
     Q_OBJECT
 private slots:
+    void aManualIssueKeepsItsTitle() {
+        Fixture f;
+        Issue issue;
+        issue.title = QStringLiteral("Pruebas manuales");
+        QCOMPARE(f.service.draftFor(issue).summary, QStringLiteral("Pruebas manuales"));
+    }
+
     void theDraftCarriesTheRequirementAndTheQaNotes() {
         Fixture f;
         QVERIFY(f.service.canPublish());
         QCOMPARE(f.service.destination(), QStringLiteral("Jira · SHOP"));
         const IssueDraft draft = f.service.draftFor(f.issue());
-        QCOMPARE(draft.summary, f.issue().title);
+        QCOMPARE(draft.summary, QStringLiteral("QA - 2025175 - Desarrollo complementario del laboratorio"));
         QVERIFY2(draft.description.contains(QStringLiteral("GESREQ 2025175")), qPrintable(draft.description));
         QVERIFY(draft.description.contains(QStringLiteral("SUMA TRANSITO")));
         QVERIFY(draft.description.contains(QStringLiteral("CONTROL CALIDAD ASIGNADO")));
@@ -88,6 +95,8 @@ private slots:
         f.service.publish(f.id, f.service.draftFor(f.issue()), [&](const IssuePublishService::Result& r) { out = r; });
         QVERIFY2(out.ok, qPrintable(out.error));
         QCOMPARE(f.tracker->publishedIssues.size(), 1);
+        QCOMPARE(f.tracker->publishedIssues.first().summary,
+                 QStringLiteral("QA - 2025175 - Desarrollo complementario del laboratorio"));
         QCOMPARE(f.tracker->publishedIssues.first().issueType, QStringLiteral("Tarea"));
 
         const IssuePublication& p = f.issue().publication;
@@ -100,7 +109,7 @@ private slots:
         QVERIFY(p.publishedAt.isValid());
         QVERIFY(!p.linked);
         QVERIFY(!p.uncertain);
-        QCOMPARE(p.publishedTitle, f.issue().title);
+        QCOMPARE(p.publishedTitle, QStringLiteral("QA - 2025175 - Desarrollo complementario del laboratorio"));
         QVERIFY(!f.service.needsUpdate(f.issue()));   // recién publicado: nada pendiente
     }
 
@@ -118,8 +127,8 @@ private slots:
         f.service.update(f.id, f.service.draftFor(f.issue()), [&](const IssuePublishService::Result& r) { out = r; });
         QVERIFY2(out.ok, qPrintable(out.error));
         QCOMPARE(f.tracker->updatedKeys, QStringList{key});
-        QCOMPARE(f.tracker->updatedIssues.first().summary, QStringLiteral("Pruebas del laboratorio"));
-        QCOMPARE(f.issue().publication.publishedTitle, QStringLiteral("Pruebas del laboratorio"));
+        QCOMPARE(f.tracker->updatedIssues.first().summary, QStringLiteral("QA - 2025175 - Pruebas del laboratorio"));
+        QCOMPARE(f.issue().publication.publishedTitle, QStringLiteral("QA - 2025175 - Pruebas del laboratorio"));
         QVERIFY(!f.service.needsUpdate(f.issue()));
         QCOMPARE(f.issue().publication.key, key);   // sigue siendo el mismo issue del gestor
     }

@@ -11,6 +11,81 @@ using qaflow::testing::AppFixture;
 class RunControllerTest : public QObject {
     Q_OBJECT
 private slots:
+    // ---- Continuar un ciclo -------------------------------------------------------------
+
+    // Continuar repite sólo lo que se rompió, y cada caso se retoma en su paso: lo anterior se
+    // conserva (marcado como heredado) y no hay que volver a probarlo.
+    void continuingACycleRepeatsOnlyTheBrokenCasesFromTheirBrokenStep() {
+        AppFixture f;
+        // Un ciclo con tres casos: uno pasa, uno falla en su segundo paso y otro queda bloqueado.
+        f.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-102"), QStringLiteral("TC-103")},
+                            QStringLiteral("Regresión"), QStringLiteral("PL-0001"), QStringLiteral("QA"));
+        const QString first = f.run.planRunId();
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);   // TC-101 (3 pasos)
+        f.run.finish();
+        f.run.mark(StepResult::Pass);                                   // TC-102, paso 1
+        f.run.setNote(QStringLiteral("el cupón no descuenta"));
+        f.run.mark(StepResult::Fail);                                   // TC-102, paso 2
+        f.run.finish();
+        f.run.mark(StepResult::Block);                                  // TC-103 (1 paso)
+        f.run.finish();
+        QVERIFY(f.history.findPlan(first)->isFinished());
+        QCOMPARE(f.history.report(first).brokenCaseIds(), (QStringList{QStringLiteral("TC-102"), QStringLiteral("TC-103")}));
+
+        QVERIFY(f.run.continueCycle(first, QStringLiteral("Staging")));
+        const PlanRun* second = f.history.findPlan(f.run.planRunId());
+        QVERIFY(second);
+        QCOMPARE(second->continuesCycleId, first);
+        QCOMPARE(second->caseIds, (QStringList{QStringLiteral("TC-102"), QStringLiteral("TC-103")}));
+        QCOMPARE(second->environment, QStringLiteral("Staging"));
+
+        // TC-102 se retoma en el paso 2: el 1 viene de la ejecución anterior y ya está marcado.
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-102"));
+        QCOMPARE(f.run.state().idx, 1);
+        QVERIFY(f.run.state().isMarked(0));
+        QVERIFY(f.run.state().results[0].inherited);
+        QCOMPARE(static_cast<int>(f.run.state().results[0].result), static_cast<int>(StepResult::Pass));
+        QVERIFY(!f.run.state().isMarked(1));
+        QVERIFY(!f.run.continuesRunId().isEmpty());
+
+        // Y al pasar ahora el paso que falló, el caso queda superado con los dos pasos archivados.
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.state().finished);
+        f.run.finish();
+        const RunRecord& resumed = f.history.runs().last();
+        QCOMPARE(resumed.caseId, QStringLiteral("TC-102"));
+        QCOMPARE(static_cast<int>(resumed.verdict), static_cast<int>(Verdict::Superado));
+        QCOMPARE(resumed.steps.size(), 2);
+        QVERIFY(!resumed.continuesRunId.isEmpty());
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-103"));   // sigue con el otro caso roto
+        QCOMPARE(f.run.state().idx, 0);                             // su único paso se rompió: se repite entero
+    }
+
+    void aCycleWithoutBrokenCasesIsNotContinued() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Regresión"), QStringLiteral("PL-0001"));
+        const QString cycle = f.run.planRunId();
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        QVERIFY(!f.run.continueCycle(cycle));             // todo superado: no hay nada que continuar
+        QVERIFY(!f.run.continueCycle(QStringLiteral("PR-9999")));   // y un ciclo que no existe, tampoco
+    }
+
+    // Si el caso cambió desde aquella ejecución, lo de antes no se da por bueno: se prueba entero.
+    void anEditedCaseIsNotResumedFromTheOldResults() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-102")}, QStringLiteral("Regresión"), QStringLiteral("PL-0001"));
+        const QString cycle = f.run.planRunId();
+        f.run.mark(StepResult::Pass);
+        f.run.mark(StepResult::Fail);
+        f.run.finish();
+        f.store.updateCase(QStringLiteral("TC-102"), [](TestCase& c) { c.steps[0].action = QStringLiteral("Otra cosa"); });
+
+        QVERIFY(f.run.continueCycle(cycle));
+        QCOMPARE(f.run.state().idx, 0);
+        QVERIFY(!f.run.state().isMarked(0));
+    }
+
     // ---- Flujo básico ------------------------------------------------------------------
 
     void marksStepsAndRecordsOutcomeOnFinish() {

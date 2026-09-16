@@ -3,10 +3,12 @@
 #include "application/BugStore.h"
 #include "application/EvidenceService.h"
 #include "application/RunController.h"
+#include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
 #include "core/models/RunHistory.h"   // formatDuration
 #include "presentation/theme/Theme.h"
+#include "presentation/views/BugDetailWindow.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/ProgressCells.h"
@@ -25,6 +27,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QShortcut>
+#include <QStackedWidget>
 
 namespace qaflow {
 
@@ -84,9 +87,9 @@ QLabel* statePill(const QString& text, const QString& color) {
 
 } // namespace
 
-RunView::RunView(TestCaseStore& cases, RunController& run, SettingsStore& settings, EvidenceService& evidence,
-                 BugStore& bugs, QWidget* parent)
-    : QWidget(parent), m_cases(cases), m_run(run), m_settings(settings), m_evidence(evidence), m_bugs(bugs) {
+RunView::RunView(TestCaseStore& cases, RunController& run, RunHistoryStore& history, SettingsStore& settings,
+                 EvidenceService& evidence, BugStore& bugs, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_run(run), m_history(history), m_settings(settings), m_evidence(evidence), m_bugs(bugs) {
     auto* root = ui::hbox(this, 0, 0);
     root->addWidget(buildCasePanel());
     root->addWidget(buildStepPanel(), 1);
@@ -137,6 +140,17 @@ QWidget* RunView::buildCasePanel() {
     m_stateText = ui::label(QString(), "eyebrow");
     sh->addWidget(m_stateText, 1);
     v->addWidget(stateRow);
+
+    // De qué va esta ejecución: la ronda del control de calidad y, sobre todo, si se está continuando
+    // una anterior (entonces no se prueba el plan entero, sólo lo que se rompió).
+    m_continuation = ui::card("card-flat");
+    m_continuation->setObjectName(QStringLiteral("runContinuation"));
+    auto* cv = ui::vbox(m_continuation, 0, 2);
+    cv->setContentsMargins(10, 8, 10, 8);
+    m_continuationText = ui::label(QString(), "muted-sm");
+    m_continuationText->setWordWrap(true);
+    cv->addWidget(m_continuationText);
+    v->addWidget(m_continuation);
 
     m_caseTitle = new QLabel;
     m_caseTitle->setWordWrap(true);
@@ -369,16 +383,44 @@ QWidget* RunView::buildFilmPanel() {
     auto* v = ui::vbox(m_filmPanel, 0, 10);
     v->setContentsMargins(16, 18, 16, 16);
 
-    auto* head = new QWidget;
-    auto* hh = ui::hbox(head, 0, 8);
-    m_filmHeader = ui::label(tr("CAPTURAS"), "eyebrow");
-    hh->addWidget(m_filmHeader, 1);
-    m_sortShots = ui::button(tr("Ordenar por paso"), "outline");
-    m_sortShots->setStyleSheet(QStringLiteral("padding:4px 8px;font-size:11px;border-radius:7px;"));
-    connect(m_sortShots, &QPushButton::clicked, this, [this]() { m_cases.sortShotsByStep(m_run.state().caseId); });
-    hh->addWidget(m_sortShots);
-    v->addWidget(head);
+    // Dos pestañas: lo que se ha capturado y lo que se ha reportado. Las dos hablan de los mismos
+    // pasos, así que se ordenan igual: por el paso del que salió cada cosa.
+    auto* tabs = new QWidget;
+    auto* th = ui::hbox(tabs, 0, 6);
+    const auto tab = [this, th](const QString& text, const char* name) {
+        auto* b = ui::button(text, "chip");
+        b->setObjectName(QString::fromLatin1(name));
+        b->setCheckable(true);
+        b->setStyleSheet(QStringLiteral("padding:5px 10px;font-size:11.5px;border-radius:8px;"));
+        th->addWidget(b, 1);
+        return b;
+    };
+    m_shotsTab = tab(tr("CAPTURAS"), "runShotsTab");
+    m_bugsTab = tab(tr("BUGS"), "runBugsTab");
+    m_shotsTab->setChecked(true);
+    ui::setFlag(m_shotsTab, "active", true);
+    connect(m_shotsTab, &QPushButton::clicked, this, [this]() { showTab(0); });
+    connect(m_bugsTab, &QPushButton::clicked, this, [this]() { showTab(1); });
+    v->addWidget(tabs);
 
+    // «Ordenar por paso» va debajo y sólo cuando sirve de algo: en la fila de las pestañas no cabe sin
+    // comerse sus nombres, que es lo que hay que leer.
+    auto* sortRow = new QWidget;
+    auto* sh = ui::hbox(sortRow, 0, 0);
+    sh->addStretch(1);
+    m_sortShots = ui::button(tr("Ordenar por paso"), "outline");
+    m_sortShots->setStyleSheet(QStringLiteral("padding:3px 8px;font-size:11px;border-radius:7px;"));
+    m_sortShots->setToolTip(tr("Ordena las evidencias del caso por el paso al que están asignadas"));
+    connect(m_sortShots, &QPushButton::clicked, this, [this]() { m_cases.sortShotsByStep(m_run.state().caseId); });
+    sh->addWidget(m_sortShots);
+    v->addWidget(sortRow);
+
+    m_filmStack = new QStackedWidget;
+    v->addWidget(m_filmStack, 1);
+
+    // Pestaña de capturas: las evidencias de la ejecución, bajo la cabecera de su paso.
+    auto* shotsPage = new QWidget;
+    auto* sv = ui::vbox(shotsPage, 0, 10);
     QWidget* list;
     QVBoxLayout* listLayout;
     m_filmScroll = ui::scrollArea(&list, &listLayout);
@@ -386,13 +428,14 @@ QWidget* RunView::buildFilmPanel() {
     m_shotsLayout = listLayout;
     m_shotsLayout->setSpacing(10);
     m_shotsLayout->addStretch(1);
-    v->addWidget(m_filmScroll, 1);
+    sv->addWidget(m_filmScroll, 1);
 
+    m_shotsActions = new QWidget;
+    auto* av = ui::vbox(m_shotsActions, 0, 8);
     auto* capture = ui::button(tr("+ Capturar"), "dashed");
     capture->setStyleSheet(QStringLiteral("padding:12px;font-size:12.5px;"));
     connect(capture, &QPushButton::clicked, this, &RunView::captureRequested);
-    v->addWidget(capture);
-
+    av->addWidget(capture);
     auto* more = new QWidget;
     auto* mh = ui::hbox(more, 0, 8);
     m_record = ui::button(tr("● GIF"), "dashed");
@@ -407,8 +450,55 @@ QWidget* RunView::buildFilmPanel() {
     attach->setToolTip(tr("Adjunta logs, vídeos o imágenes existentes"));
     connect(attach, &QPushButton::clicked, this, [this]() { m_evidence.attachFiles(evidence::pickFiles(this)); });
     mh->addWidget(attach, 1);
-    v->addWidget(more);
+    av->addWidget(more);
+    sv->addWidget(m_shotsActions);
+    m_filmStack->addWidget(shotsPage);
+
+    // Pestaña de bugs: los partes que han salido de este caso, también por paso. La ficha de cada uno
+    // se abre en su propia ventana, para mirarla sin perder la prueba de vista.
+    auto* bugsPage = new QWidget;
+    auto* bv = ui::vbox(bugsPage, 0, 10);
+    QWidget* bugsList;
+    QVBoxLayout* bugsLayout;
+    auto* bugsScroll = ui::scrollArea(&bugsList, &bugsLayout);
+    bugsScroll->setObjectName(QStringLiteral("bugsScroll"));
+    m_bugsLayout = bugsLayout;
+    m_bugsLayout->setSpacing(8);
+    m_bugsEmpty = ui::label(tr("Todavía no se ha reportado ningún bug de este caso.\nAl reportar uno queda aquí, con el paso del que salió."), "muted-sm");
+    m_bugsEmpty->setWordWrap(true);
+    m_bugsLayout->addWidget(m_bugsEmpty);
+    m_bugsLayout->addStretch(1);
+    bv->addWidget(bugsScroll, 1);
+    auto* report = ui::button(tr("+ Reportar bug"), "dashed");
+    report->setObjectName(QStringLiteral("runTabReportBug"));
+    report->setStyleSheet(QStringLiteral("padding:12px;font-size:12.5px;"));
+    report->setToolTip(tr("Abre el parte con el paso del que salió el fallo ya puesto"));
+    connect(report, &QPushButton::clicked, this, [this]() { emit reportBugRequested(bugStepIndex()); });
+    bv->addWidget(report);
+    m_filmStack->addWidget(bugsPage);
+
     return m_filmPanel;
+}
+
+void RunView::showTab(int index) {
+    m_filmStack->setCurrentIndex(index);
+    m_shotsTab->setChecked(index == 0);
+    m_bugsTab->setChecked(index == 1);
+    // La pestaña activa se ve porque el QSS pinta los chips con `active`; `checked` a secas no cambia nada.
+    ui::setFlag(m_shotsTab, "active", index == 0);
+    ui::setFlag(m_bugsTab, "active", index == 1);
+    m_sortShots->setVisible(index == 0 && m_groupedShots);
+}
+
+QWidget* RunView::stepGroupHeader(int step, const TestCase& c) const {
+    const QString text = step <= 0
+                             ? tr("SIN PASO")
+                             : (step <= c.steps.size()
+                                    ? tr("PASO %1 · %2").arg(step, 2, 10, QLatin1Char('0')).arg(ui::elide(c.steps[step - 1].action, 26))
+                                    : tr("PASO %1").arg(step, 2, 10, QLatin1Char('0')));
+    auto* header = ui::label(text, "eyebrow");
+    header->setWordWrap(true);
+    return header;
 }
 
 // ---- Refresco --------------------------------------------------------------------------------
@@ -440,14 +530,39 @@ void RunView::refresh() {
     m_capture->setVisible(hasRun);
     m_doneActions->setVisible(hasRun && r.finished);
     m_bugRow->setVisible(hasRun);
+    m_continuation->setVisible(false);
     if (!hasRun) {
         m_clock.stop();
         ui::clearLayout(m_stepsLayout);
         ui::clearLayout(m_shotsLayout);
+        ui::clearLayout(m_bugsLayout);
         m_selectedShot = 0;
         m_maxShotId = 0;
         m_preview->setShot(Screenshot{});
         return;
+    }
+
+    // De qué ronda es esta ejecución y si continúa otra: lo primero que hay que saber al llegar aquí,
+    // porque cambia lo que se espera de ella (no se prueba el plan entero, sino lo que se rompió).
+    if (const PlanRun* cycle = m_run.planRunId().isEmpty() ? nullptr : m_history.findPlan(m_run.planRunId())) {
+        QStringList parts;
+        if (cycle->revision > 0) parts << tr("revisión %1").arg(cycle->revision);
+        if (!cycle->environment.trimmed().isEmpty()) parts << cycle->environment.trimmed();
+        QString text;
+        if (cycle->isContinuation()) {
+            text = tr("<b>CONTINUANDO LA %1</b> · se repiten sólo los casos que fallaron o quedaron bloqueados en el ciclo %2")
+                       .arg(parts.isEmpty() ? tr("ronda de pruebas") : tr("REVISIÓN %1").arg(cycle->revision), cycle->continuesCycleId);
+            if (!cycle->environment.trimmed().isEmpty()) text += tr(" · ambiente %1").arg(cycle->environment.trimmed());
+            if (!m_run.continuesRunId().isEmpty())
+                text += tr("<br>Este caso se retoma en el paso que se rompió; los anteriores vienen de la ejecución %1.")
+                            .arg(m_run.continuesRunId());
+        } else if (!parts.isEmpty()) {
+            text = tr("Ciclo %1 · %2").arg(cycle->id, parts.join(QStringLiteral(" · ")));
+        }
+        m_continuationText->setText(text);
+        m_continuationText->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;")
+                                              .arg(cycle->isContinuation() ? theme::Amber : theme::Muted));
+        m_continuation->setVisible(!text.isEmpty());
     }
 
     if (!m_clock.isActive()) m_clock.start();
@@ -516,6 +631,7 @@ void RunView::refresh() {
     tick();
     refreshSteps();
     refreshShots();
+    refreshBugs();
 }
 
 int RunView::bugStepIndex() const {
@@ -563,6 +679,12 @@ QWidget* RunView::stepCard(int index, const TestCase& c, const RunState& r) {
         // El veredicto se puede corregir desde su propia pastilla.
         const StepResult res = r.results[index].result;
         if (current) hh->addWidget(statePill(tr("ACTIVO"), theme::Blue));
+        // Lo que viene de la ejecución que se retoma no se ha vuelto a probar: conviene que se note.
+        if (r.results[index].inherited) {
+            auto* pill = statePill(tr("ANTERIOR"), theme::Muted);
+            pill->setToolTip(tr("Viene de la ejecución que se está continuando: este paso no se ha repetido"));
+            hh->addWidget(pill);
+        }
         auto* badge = ui::button(resultLabel(res), "chip");
         badge->setStyleSheet(QStringLiteral("padding:1px 7px;font-size:10px;font-weight:800;background:%1;color:%2;border-color:%1;")
                                  .arg(resultColor(res), res == StepResult::Fail ? QStringLiteral("#ffffff") : theme::Bg));
@@ -613,8 +735,7 @@ void RunView::refreshShots() {
     if (!c) return;
     // Sólo las de esta ejecución: las de las anteriores están en su ficha del historial.
     const QList<Screenshot> shots = c->shotsOfRun(QString());
-    m_filmHeader->setText(tr("CAPTURAS · %1").arg(shots.size()));
-    m_sortShots->setVisible(shots.size() > 1);
+    m_shotsTab->setText(shots.isEmpty() ? tr("CAPTURAS") : tr("CAPTURAS · %1").arg(shots.size()));
 
     // La captura recién hecha se abre sola en el visor; si la elegida ya no está, la última.
     int maxId = 0;
@@ -629,17 +750,32 @@ void RunView::refreshShots() {
 
     const QString id = c->id;
     QWidget* selectedCard = nullptr;
-    for (const auto& s : shots) {
-        auto* card = new ShotCard(s, c->steps, ShotCard::Layout::Film);
-        card->setSelected(s.id == m_selectedShot);
-        if (s.id == m_selectedShot) selectedCard = card;
-        connect(card, &ShotCard::selectRequested, this, [this](int shotId) { selectShot(shotId); });
-        connect(card, &ShotCard::moveRequested, this, [this, id](int shotId, int delta) { m_cases.moveShot(id, shotId, delta); });
-        connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_cases.removeShot(id, shotId); });
-        evidence::wireCard(card, this, m_cases, m_evidence, id);
-        m_shotsLayout->addWidget(card);
+    // Agrupadas por el paso al que pertenecen, en el orden de los pasos: la columna se lee igual que
+    // la lista de la izquierda, y de un vistazo se ve qué paso quedó sin evidencia. Las que no están
+    // asignadas van al final, que es donde hay que ir a asignarlas.
+    QList<int> groups;
+    for (const auto& shot : shots) {
+        const int step = shot.step > 0 ? shot.step : 0;
+        if (!groups.contains(step)) groups << step;
+    }
+    std::sort(groups.begin(), groups.end(), [](int a, int b) { return a != 0 && (b == 0 || a < b); });
+    for (int step : groups) {
+        m_shotsLayout->addWidget(stepGroupHeader(step, *c));
+        for (const auto& shot : shots) {
+            if ((shot.step > 0 ? shot.step : 0) != step) continue;
+            auto* card = new ShotCard(shot, c->steps, ShotCard::Layout::Film);
+            card->setSelected(shot.id == m_selectedShot);
+            if (shot.id == m_selectedShot) selectedCard = card;
+            connect(card, &ShotCard::selectRequested, this, [this](int shotId) { selectShot(shotId); });
+            connect(card, &ShotCard::moveRequested, this, [this, id](int shotId, int delta) { m_cases.moveShot(id, shotId, delta); });
+            connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_cases.removeShot(id, shotId); });
+            evidence::wireCard(card, this, m_cases, m_evidence, id);
+            m_shotsLayout->addWidget(card);
+        }
     }
     m_shotsLayout->addStretch(1);
+    m_groupedShots = groups.size() > 1;
+    m_sortShots->setVisible(m_filmStack->currentIndex() == 0 && m_groupedShots);
     // Una captura nueva se añade al final de la lista, fuera de la parte visible: hay que traerla a
     // la vista. En diferido y forzando la colocación, porque las tarjetas acaban de crearse: hasta
     // que el layout no se activa y el contenido no toma su tamaño, el área ni siquiera tiene rango.
@@ -665,6 +801,82 @@ void RunView::refreshShots() {
         m_assign->addItem(tr("Paso %1 · %2").arg(i + 1).arg(ui::elide(c->steps[i].action, 24)), i + 1);
     m_assign->setCurrentIndex(std::max(0, m_assign->findData(shot->step)));
     m_selfEdit = false;
+}
+
+void RunView::refreshBugs() {
+    ui::clearLayout(m_bugsLayout);
+    const TestCase* c = m_cases.find(m_run.state().caseId);
+    if (!c) {
+        m_bugsTab->setText(tr("BUGS"));
+        return;
+    }
+    // Los bugs del caso, del más reciente al primero (`issuesForCase`), agrupados por su paso.
+    const QList<IssueLink> bugs = m_bugs.issuesForCase(c->id);
+    const int open = std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; });
+    m_bugsTab->setText(bugs.isEmpty() ? tr("BUGS") : tr("BUGS · %1").arg(bugs.size()));
+    m_bugsTab->setToolTip(bugs.isEmpty() ? tr("Los bugs reportados desde este caso, con el paso del que salieron")
+                                         : tr("%1 bug(s) de este caso · %2 sin cerrar").arg(bugs.size()).arg(open));
+    if (bugs.isEmpty()) {
+        m_bugsEmpty = ui::label(tr("Todavía no se ha reportado ningún bug de este caso.\nAl reportar uno queda aquí, con el paso del que salió."), "muted-sm");
+        m_bugsEmpty->setWordWrap(true);
+        m_bugsLayout->addWidget(m_bugsEmpty);
+        m_bugsLayout->addStretch(1);
+        return;
+    }
+
+    QList<int> groups;
+    for (const auto& bug : bugs) {
+        const int step = bug.step > 0 ? bug.step : 0;
+        if (!groups.contains(step)) groups << step;
+    }
+    std::sort(groups.begin(), groups.end(), [](int a, int b) { return a != 0 && (b == 0 || a < b); });
+    for (int step : groups) {
+        m_bugsLayout->addWidget(stepGroupHeader(step, *c));
+        for (const auto& bug : bugs) {
+            if ((bug.step > 0 ? bug.step : 0) != step) continue;
+            auto* card = ui::button(QString(), "row");
+            card->setObjectName(QStringLiteral("runBug-%1").arg(bug.key));
+            card->setToolTip(tr("Abrir la ficha del bug en otra ventana"));
+            auto* bvl = ui::vbox(card, 0, 4);
+            bvl->setContentsMargins(10, 8, 10, 8);
+            auto* top = new QWidget;
+            auto* tph = ui::hbox(top, 0, 6);
+            tph->addWidget(ui::label(bug.key, "mono-muted"));
+            const QString color = bug.resolved ? theme::Green : theme::Amber;
+            tph->addWidget(ui::pill(bug.resolved ? tr("CERRADO") : tr("ABIERTO"), theme::tint(color, 34), color));
+            tph->addStretch(1);
+            tph->addWidget(ui::label(BugReport::classificationLabel(bug.classification), "muted-sm"));
+            bvl->addWidget(top);
+            auto* title = new QLabel(bug.title.isEmpty() ? tr("(sin título)") : bug.title);
+            title->setWordWrap(true);
+            title->setStyleSheet(QStringLiteral("font-size:12.5px;color:%1;").arg(theme::Text));
+            bvl->addWidget(title);
+            for (auto* child : card->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+            connect(card, &QPushButton::clicked, this, [this, key = bug.key]() { openBug(key); });
+            m_bugsLayout->addWidget(card);
+        }
+    }
+    m_bugsLayout->addStretch(1);
+}
+
+void RunView::openBug(const QString& key) {
+    // Una ventana por bug: volver a pulsarlo trae la que ya está abierta en vez de apilar copias.
+    if (auto* open = m_bugWindows.value(key).data()) {
+        if (const IssueLink* bug = m_bugs.findIssue(key)) open->setBug(*bug);
+        open->show();
+        open->raise();
+        open->activateWindow();
+        return;
+    }
+    const IssueLink* bug = m_bugs.findIssue(key);
+    if (!bug) return;
+    const TestCase* c = m_cases.find(bug->caseId);
+    const QString stepAction = c && bug->step > 0 && bug->step <= c->steps.size() ? c->steps[bug->step - 1].action : QString();
+    auto* window = new BugDetailWindow(*bug, c ? c->title : QString(), stepAction, this);
+    window->setAttribute(Qt::WA_DeleteOnClose);
+    connect(window, &BugDetailWindow::openUrlRequested, this, &RunView::openUrlRequested);
+    m_bugWindows.insert(key, window);
+    window->show();
 }
 
 const Screenshot* RunView::selectedShot() const {

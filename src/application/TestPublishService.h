@@ -65,6 +65,8 @@ private:
     /// Bugs reportados desde ese caso durante ese ciclo, con el paso del que salieron. Se enlazan a la
     /// ejecución y a su paso en Zephyr, que es donde se buscan los defectos de una prueba.
     QList<PublishDefect> defectsOf(const PlanReport& report, const QString& caseId) const;
+    /// Cuántas continuaciones lleva encadenadas el ciclo (0 = no es una continuación).
+    int continuationDepth(const PlanRun& plan) const;
 
     std::shared_ptr<ITestManagement> m_zephyr;
     const IssueStore* m_issues = nullptr;

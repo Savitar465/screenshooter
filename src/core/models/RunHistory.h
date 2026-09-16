@@ -46,6 +46,14 @@ struct RunRecord {
     /// Test de Zephyr creado para esta ejecución al publicar su informe (SHOP-77). Cada ejecución
     /// tiene el suyo: dos ciclos del mismo caso son dos Tests distintos. Vacío hasta publicarla.
     QString testKey;
+    /// Ejecución fallada o bloqueada que ésta retoma: los pasos anteriores al que se rompió vienen de
+    /// ella y aquí se siguió. Vacío = se ejecutó el caso desde el principio.
+    QString continuesRunId;
+
+    /// Primer paso que se rompió (0-based): el primer fallo o bloqueo. -1 si no hubo ninguno.
+    int brokenStepIndex() const;
+    /// La ejecución se puede retomar: terminó en fallo o bloqueo.
+    bool isBroken() const { return verdict != Verdict::Superado; }
 
     int count(StepResult r) const;
     bool hasNotes() const;
@@ -68,6 +76,9 @@ struct PlanRun {
     /// Ambiente en el que se ejecutó ("QA", "Staging", "Producción"…; ver `BugReport::environments`).
     /// Vacío = no se indicó. Viaja al ciclo de Zephyr, en su nombre y en su campo «environment».
     QString environment;
+    /// Ciclo al que continúa: éste sólo repite sus casos fallados y bloqueados, en la misma revisión.
+    /// Vacío = ciclo normal, con todos los casos del plan.
+    QString continuesCycleId;
     /// Dónde quedaron estos resultados en la herramienta de gestión de pruebas: el ciclo de Zephyr
     /// que se creó al publicarlos y cuándo se hizo. Vacío mientras no se haya publicado.
     QString zephyrCycleId;
@@ -75,6 +86,7 @@ struct PlanRun {
 
     bool isFinished() const { return finishedAt.isValid(); }
     bool isPublished() const { return !zephyrCycleId.isEmpty(); }
+    bool isContinuation() const { return !continuesCycleId.isEmpty(); }
 };
 
 /// Todo el historial. Un único agregado para que la persistencia sea trivial.

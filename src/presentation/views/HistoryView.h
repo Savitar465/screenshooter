@@ -49,6 +49,8 @@ signals:
     void openJiraRequested(const QString& key);
     /// Abrir en el navegador una URL ya construida (el ciclo de Zephyr en Jira).
     void openUrlRequested(const QString& url);
+    /// Continuar ese ciclo con sus casos fallados y bloqueados; lo arranca quien coordina la ejecución.
+    void continueCycleRequested(const QString& planRunId);
     void toast(const QString& message, const QString& color);
 
 private:

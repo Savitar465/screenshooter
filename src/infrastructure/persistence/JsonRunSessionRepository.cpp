@@ -35,17 +35,19 @@ std::optional<RunSession> JsonRunSessionRepository::loadSession() {
         const auto r = v.toObject();
         // Las sesiones anteriores sólo guardaban los pasos ya ejecutados: sin "marked", todos lo están.
         s.run.results.append(StepRecord{stepResultFromString(r["result"].toString()), r["note"].toString(),
-                                        r["durationSecs"].toInt(), r["marked"].toBool(true)});
+                                        r["durationSecs"].toInt(), r["marked"].toBool(true), r["inherited"].toBool()});
     }
     for (const auto& v : o["queue"].toArray()) s.queue << v.toString();
     s.planRunId = o["planRunId"].toString();
+    s.continuesRunId = o["continuesRunId"].toString();
     return s;
 }
 
 bool JsonRunSessionRepository::saveSession(const RunSession& s) {
     QJsonArray results;
     for (const auto& r : s.run.results)
-        results.append(QJsonObject{{"result", toString(r.result)}, {"note", r.note}, {"durationSecs", r.durationSecs}, {"marked", r.marked}});
+        results.append(QJsonObject{{"result", toString(r.result)}, {"note", r.note}, {"durationSecs", r.durationSecs},
+                                   {"marked", r.marked}, {"inherited", r.inherited}});
     const QJsonObject run{
         {"caseId", s.run.caseId}, {"idx", s.run.idx}, {"note", s.run.note},
         {"startedAt", s.run.startedAt.isValid() ? s.run.startedAt.toString(Qt::ISODate) : QString()},
@@ -54,7 +56,9 @@ bool JsonRunSessionRepository::saveSession(const RunSession& s) {
     QDir().mkpath(QFileInfo(m_path).absolutePath());
     QSaveFile f(m_path);
     if (!f.open(QIODevice::WriteOnly)) return false;
-    f.write(QJsonDocument(QJsonObject{{"run", run}, {"queue", QJsonArray::fromStringList(s.queue)}, {"planRunId", s.planRunId}}).toJson(QJsonDocument::Indented));
+    f.write(QJsonDocument(QJsonObject{{"run", run}, {"queue", QJsonArray::fromStringList(s.queue)}, {"planRunId", s.planRunId},
+                                      {"continuesRunId", s.continuesRunId}})
+                .toJson(QJsonDocument::Indented));
     return f.commit();
 }
 

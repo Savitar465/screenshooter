@@ -287,7 +287,8 @@ los casos de ejemplo.
 ## Ejecución paso a paso
 
 `RunState` guarda el caso, el índice del paso en pantalla, un `StepRecord` **por paso del caso**
-(resultado, nota, segundos que estuvo en pantalla y si ya está `marked`) y el cronómetro del paso
+(resultado, nota, segundos que estuvo en pantalla, si ya está `marked` y si es `inherited` —viene de la
+ejecución que se está continuando—) y el cronómetro del paso
 actual. Resultados: `Pass`, `Fail`, `Block` y `Skip` (N/A: no cuenta para el veredicto). Ninguno
 corta la ejecución: un bloqueo se queda en su paso y se sigue navegando por el resto.
 
@@ -302,7 +303,8 @@ corta la ejecución: un bloqueo se queda en su paso y se sigue navegando por el 
   están marcados. Nada se archiva hasta que se cierra, así que estas correcciones no dejan rastro
   en el historial.
 * **Persistencia de la sesión.** Tras cada cambio (`changed()`) el controlador guarda un
-  `RunSession` (estado, cola del plan, id del plan) mediante `IRunSessionRepository`. Al arrancar,
+  `RunSession` (estado, cola del plan, id del plan y la ejecución que se retoma) mediante
+  `IRunSessionRepository`. Al arrancar,
   `load()` la restaura si el caso sigue existiendo, ajusta la lista de resultados si el caso ganó o
   perdió pasos y
   reinicia el cronómetro del paso actual: el tiempo con la aplicación cerrada no cuenta, pero lo
@@ -315,14 +317,52 @@ corta la ejecución: un bloqueo se queda en su paso y se sigue navegando por el 
   en la tarjeta va a ese paso—, los
   botones de navegación y «Cerrar ejecución»), `buildStepPanel()` (el paso en pantalla, sus
   veredictos, «Reportar bug» —que sale en cualquier momento de la ejecución, no sólo al final—, el
-  visor grande de la evidencia elegida con la barra «Asignar a» y las observaciones del paso) y `buildFilmPanel()` (la columna «Capturas», con todas las evidencias del caso).
+  visor grande de la evidencia elegida con la barra «Asignar a» y las observaciones del paso) y
+  `buildFilmPanel()` (la columna de la derecha, con sus dos pestañas).
   El visor es `EvidencePreview`, que dibuja la imagen ajustada al hueco con la etiqueta del paso y
   el nombre del fichero; las tarjetas de la columna de capturas son `ShotCard` con `Layout::Film`,
   que en vez de abrir el visor a tamaño completo emiten `selectRequested` para elegir qué se ve en
   grande. Una captura nueva se abre sola y la lista se desplaza hasta ella.
+* **La columna de la derecha son dos pestañas, las dos por paso.** «Capturas» agrupa las evidencias
+  de la ejecución bajo la cabecera del paso al que están asignadas (`stepGroupHeader`), en el orden de
+  los pasos y con las que no tienen ninguno al final; así se ve de un vistazo qué paso quedó sin
+  evidencia. «Bugs» lista los partes del caso con la misma agrupación, con su clave, si el gestor los
+  da por cerrados y su clasificación, y un botón para reportar otro con el paso ya puesto. Pulsar uno
+  abre su ficha en **otra ventana** (`BugDetailWindow`, no modal: se mira el bug sin perder la prueba
+  de vista), con lo que QAflow sabe de él y un salto al gestor; una ventana por bug, y volver a
+  pulsarlo trae la que ya está abierta.
 * **Estimación del plan.** `PlanStore::estimatedSecs()` usa la media real por paso de cada caso
   según su historial; para los casos sin historial, la media global; sin datos, 3 min por paso.
   `estimateBasis()` explica en la vista de qué datos sale.
+
+### Continuar un ciclo por lo que se rompió
+
+Un requerimiento se corrige y se vuelve a probar, y repetir el plan entero es tiempo tirado: lo que
+hay que volver a ver es **lo que falló o quedó bloqueado**. `RunController::continueCycle(planRunId)`
+abre un ciclo nuevo con sólo esos casos (`PlanReport::brokenCaseIds()`, en el orden del plan y sin los
+que ya no están en el catálogo) que **cuelga del anterior** (`PlanRun::continuesCycleId`) y hereda su
+issue y su revisión: continuar es seguir con la misma ronda, no abrir otra.
+
+Cada caso, además, **se retoma en el paso que se rompió**: `resumeFrom()` copia los veredictos y las
+notas de los pasos anteriores al primer fallo o bloqueo (`RunRecord::brokenStepIndex()`) y deja
+pendiente ese paso y todo lo que venga detrás. Lo heredado se marca (`StepRecord::inherited`) y la
+lista de pasos lo enseña con la pastilla «ANTERIOR», porque es lo único que no se ha vuelto a probar;
+volver a darle veredicto lo hace de esta ejecución. Si el caso se editó desde entonces no se hereda
+nada a partir del primer paso que ya no diga lo mismo: lo que cambió hay que probarlo. El cronómetro
+siempre empieza de cero —el tiempo es el de ahora— y la ejecución archivada recuerda a cuál retoma
+(`RunRecord::continuesRunId`).
+
+La pantalla de ejecución lo dice en la columna del caso: «CONTINUANDO LA REVISIÓN 2 · se repiten sólo
+los casos que fallaron o quedaron bloqueados en el ciclo PR-0003», con el ambiente y, en el caso en
+curso, de qué ejecución vienen sus pasos heredados. Un ciclo normal enseña ahí su ronda y su ambiente.
+
+Se ofrece desde los tres sitios donde se ven los ciclos —el informe del historial, el «Historial de
+ciclos» del plan y la pantalla del issue (paso 2 de la revisión y cada ciclo de «Resultados»)—, todos
+con la misma señal `continueCycleRequested(planRunId)` que atiende `MainWindow::continueCycleRun`:
+comprueba que no hay nada en curso y que el ciclo dejó algo roto (`PlanReport::canContinue()`),
+pregunta el ambiente con el `CycleStartDialog` (que dice qué se va a repetir) y arranca. En Zephyr, la
+continuación lleva `Cont. N` en el nombre del ciclo —si no, se llamaría igual que aquel al que
+continúa: mismo plan, misma revisión, mismo día y mismo ambiente— y lo dice en su descripción.
 
 ## Historial de ejecuciones e informes de plan
 
@@ -715,7 +755,7 @@ marcan con un visto y se apagan.
 | Paso | Hecho cuando | Su acción |
 |------|--------------|-----------|
 | 1 · Preparar el plan de pruebas | el issue tiene un plan y el plan, casos | crear el plan o abrirlo |
-| 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | ir al plan, que es donde se arrancan los ciclos |
+| 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | **«Ejecutar plan…»**, que arranca el ciclo desde aquí, «Continuar lo fallado…» si la ronda dejó casos rotos, y «Ir al plan» para componerlo antes |
 | 3 · Generar el acta (R-213) | la revisión tiene su .docx | generar (o regenerar) el acta, y abrir la que hay |
 | 4 · Cerrar la revisión | la revisión está cerrada con su resultado | cerrarla, eligiendo conforme u observado |
 | 5 · Publicar el resultado | se publicó en el gestor o en GESREQ | «Publicar…», sólo con la revisión cerrada |
@@ -723,6 +763,13 @@ marcan con un visto y se apagan.
 
 No hay tarjeta de casos ni notas de QA: los casos del issue son los del plan y se ven dentro de él, y lo
 que hay que contar del control de calidad va en el acta y en el comentario del resultado.
+
+**El ciclo se arranca desde el issue.** El paso 2 y cada plan de la tarjeta «Planes de pruebas» tienen su
+botón de ejecutar: la vista no arranca nada por su cuenta —emite `runPlanRequested(planId)` y lo atiende
+`MainWindow::startPlanRun`, que es quien sabe si hay una ejecución o una captura en curso, pregunta el
+ambiente y lleva a la pantalla de ejecución—. El paso 2 ejecuta el único plan que se pueda ejecutar
+(`IssuesView::runnablePlans`: existe, no está archivado y tiene casos) y, si hay varios, despliega un menú
+para elegir cuál; sin ninguno avisa de qué falta. «Ir al plan» se queda para componerlo antes.
 
 **Iniciar pruebas (entre proyectos).** La bandeja de GESREQ es del usuario, no del proyecto: el diálogo de
 importación enseña también los requerimientos de los demás sistemas, cada uno con el proyecto que los
@@ -758,7 +805,8 @@ acta es el de la ronda.
 
 | Momento | Qué pasa |
 |---------|----------|
-| Arranca un ciclo del plan del issue | Se abre la revisión (la primera, o la siguiente si la anterior está cerrada) y el issue pasa a «En pruebas» |
+| Arranca un ciclo del plan del issue (desde el issue o desde el plan) | Se abre la revisión (la primera, o la siguiente si la anterior está cerrada) y el issue pasa a «En pruebas» |
+| Se continúa un ciclo con lo que quedó roto | El ciclo nuevo hereda el issue y la revisión de aquél: es la misma ronda, y sus resultados sustituyen a los de los casos que repite |
 | Durante la ronda | `issueProgress()` (core, función pura) cuenta la **última ejecución de cada caso dentro de la revisión** y los bugs del issue: de ahí salen los contadores y el resultado que se propone |
 | Se genera el acta | `QualityRecordService` la arma con el **ciclo de plan** que se elija (`cyclesFor`), la escribe y la guarda en la revisión, con lo escrito en ella y con cuál fue ese ciclo (`IssueRevision::planRunId`) |
 | Se cierra la revisión | Queda con su resultado (Conforme u Observado) y el issue, Finalizado. Volver a probar abre la siguiente |

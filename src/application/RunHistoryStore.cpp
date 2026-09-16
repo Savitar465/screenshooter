@@ -71,7 +71,7 @@ PlanReport RunHistoryStore::report(const QString& planRunId) const {
 }
 
 QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseIds, const QString& planId,
-                                  const QString& environment) {
+                                  const QString& environment, const QString& continuesCycleId) {
     if (caseIds.isEmpty()) return {};
     PlanRun p;
     p.id = nextId(m_history.plans, QStringLiteral("PR-"));
@@ -79,6 +79,13 @@ QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseI
     p.name = name;
     p.caseIds = caseIds;
     p.environment = environment.trimmed();
+    // Continuar es seguir con la misma ronda: el ciclo nace con el issue y la revisión del que continúa
+    // (si el issue tiene otra ronda abierta, `noteCycleRevision` la corrige después).
+    if (const PlanRun* previous = continuesCycleId.isEmpty() ? nullptr : findPlan(continuesCycleId)) {
+        p.continuesCycleId = previous->id;
+        p.issueId = previous->issueId;
+        p.revision = previous->revision;
+    }
     p.startedAt = QDateTime::currentDateTime();
     m_history.plans.append(p);
     persist();

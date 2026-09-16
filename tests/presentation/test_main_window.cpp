@@ -9,6 +9,7 @@
 #include "application/AppContext.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
+#include "presentation/views/BugDetailWindow.h"
 #include "presentation/views/CycleStartDialog.h"
 #include "presentation/views/HistoryView.h"
 #include "presentation/views/MainWindow.h"
@@ -1499,6 +1500,33 @@ private slots:
         QCOMPARE(f.window->currentScreen(), Screen::Historial);
     }
 
+    // El ciclo se arranca desde el propio issue: es el paso siguiente del control de calidad y no hay
+    // que salir a la pantalla del plan a buscarlo.
+    void theIssueScreenStartsTheCycleOfItsPlan() {
+        WindowFixture f;
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        const QString planId = f.app.plans.activeId();
+        f.app.issues.linkPlan(issueId, planId);
+        f.app.issues.select(issueId);
+        f.window->navigate(Screen::Issues);
+
+        // Los pasos de la revisión se rehacen en cada refresco: el botón se busca cuando se va a usar.
+        auto runButton = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issueStepRun")); };
+        QTRY_VERIFY(runButton() && runButton()->isEnabled());
+        runButton()->click();
+        QVERIFY(f.answerCycleDialog(QStringLiteral("Staging")));
+
+        // Arrancó el ciclo del plan del issue y la ventana lleva a la ejecución.
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+        const QString planRunId = f.app.run.planRunId();
+        QVERIFY(!planRunId.isEmpty());
+        const PlanRun* cycle = f.app.history.findPlan(planRunId);
+        QVERIFY(cycle);
+        QCOMPARE(cycle->planId, planId);
+        QCOMPARE(cycle->environment, QStringLiteral("Staging"));
+        QCOMPARE(f.app.run.state().caseId, f.app.plans.orderedCaseIds(planId).first());
+    }
+
     void finishingThePlanCycleOfAnIssueReturnsToTheIssue() {
         WindowFixture f;
         const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
@@ -1568,6 +1596,89 @@ private slots:
         connect(history, &HistoryView::openUrlRequested, this, [&opened](const QString& url) { opened = url; });
         f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-11"))->click();
         QCOMPARE(opened, QStringLiteral("https://acme.atlassian.net/browse/SHOP-11"));
+    }
+
+    // Lo que falló o quedó bloqueado se retoma desde el informe: el ciclo nuevo repite sólo esos casos,
+    // cuelga del anterior y la pantalla de ejecución dice que se está continuando la revisión.
+    void theReportContinuesTheCycleWithItsBrokenCases() {
+        WindowFixture f;
+        auto* history = f.window->findChild<HistoryView*>();
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        const QString planId = f.app.plans.activeId();
+        f.app.issues.linkPlan(issueId, planId);
+        f.app.issues.openRevision(issueId);
+
+        f.app.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-102")}, QStringLiteral("Regresión"), planId,
+                                QStringLiteral("QA"));
+        const QString planRunId = f.app.run.planRunId();
+        f.app.history.noteCycleRevision(planRunId, issueId, 1);
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);   // TC-101 entero
+        f.app.run.finish();
+        f.app.run.mark(StepResult::Pass);                                       // TC-102, paso 1
+        f.app.run.mark(StepResult::Fail);                                       // TC-102, paso 2
+        f.window->finishRun();
+        history->showPlan(planRunId);
+        QTest::qWait(50);
+
+        auto* proceed = f.window->findChild<QPushButton*>(QStringLiteral("continueCycle"));
+        QVERIFY(proceed);
+        proceed->click();
+        QVERIFY(f.answerCycleDialog(QStringLiteral("QA")));
+
+        // Arrancó la continuación: mismo issue y misma revisión, sólo con el caso roto.
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+        const PlanRun* cycle = f.app.history.findPlan(f.app.run.planRunId());
+        QVERIFY(cycle);
+        QCOMPARE(cycle->continuesCycleId, planRunId);
+        QCOMPARE(cycle->caseIds, QStringList{QStringLiteral("TC-102")});
+        QCOMPARE(cycle->revision, 1);
+        QCOMPARE(cycle->issueId, issueId);
+
+        // Y la ejecución lo dice, con el caso retomado en el paso que se rompió.
+        auto* banner = f.window->findChild<QWidget*>(QStringLiteral("runContinuation"));
+        QVERIFY(banner);
+        QVERIFY(banner->isVisible());
+        const QString text = banner->findChild<QLabel*>()->text();
+        QVERIFY2(text.contains(QStringLiteral("CONTINUANDO")) && text.contains(planRunId), qPrintable(text));
+        QCOMPARE(f.app.run.state().idx, 1);
+        QVERIFY(f.app.run.state().results[0].inherited);
+    }
+
+    // La columna de la derecha tiene dos pestañas: las capturas y los bugs del caso, los dos por paso.
+    // La ficha de un bug se abre en su propia ventana.
+    void theRunListsItsBugsByStepAndOpensEachOneInItsOwnWindow() {
+        WindowFixture f;
+        IssueLink link;
+        link.key = QStringLiteral("SHOP-77");
+        link.caseId = QStringLiteral("TC-102");
+        link.step = 2;
+        link.title = QStringLiteral("El cupón no descuenta");
+        link.severity = QStringLiteral("Mayor");
+        link.classification = QStringLiteral("A");
+        link.url = QStringLiteral("https://acme.atlassian.net/browse/SHOP-77");
+        link.createdAt = QDateTime::currentDateTime();
+        f.app.bugLedger.recordIssue(link);
+
+        f.app.run.start(QStringLiteral("TC-102"));
+        f.window->navigate(Screen::Run);
+        auto* bugsTab = f.window->findChild<QPushButton*>(QStringLiteral("runBugsTab"));
+        QVERIFY(bugsTab);
+        QCOMPARE(bugsTab->text(), QStringLiteral("BUGS · 1"));
+        bugsTab->click();
+
+        auto* card = f.window->findChild<QPushButton*>(QStringLiteral("runBug-SHOP-77"));
+        QVERIFY(card);
+        card->click();
+        auto* window = f.window->findChild<BugDetailWindow*>();
+        QVERIFY(window);
+        QCOMPARE(window->bugKey(), QStringLiteral("SHOP-77"));
+        QVERIFY(window->windowTitle().contains(QStringLiteral("SHOP-77")));
+
+        // Y desde la ficha se va al gestor.
+        QString opened;
+        connect(window, &BugDetailWindow::openUrlRequested, this, [&opened](const QString& url) { opened = url; });
+        window->findChild<QPushButton*>(QStringLiteral("bugDetailOpen"))->click();
+        QCOMPARE(opened, QStringLiteral("https://acme.atlassian.net/browse/SHOP-77"));
     }
 
     void finishingAPlanCycleWithoutAnIssueStillOpensItsReport() {

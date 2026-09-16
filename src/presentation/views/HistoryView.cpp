@@ -359,6 +359,16 @@ void HistoryView::renderPlan(const PlanReport& report) {
     connect(copyBtn, &QPushButton::clicked, this, [this, report]() { copyMarkdown(report); });
     ah->addWidget(exportBtn);
     ah->addWidget(copyBtn);
+    // Lo que quedó roto se retoma desde aquí: es lo siguiente que se hace con un informe con fallos.
+    if (report.canContinue()) {
+        auto* continueBtn = ui::button(tr("Continuar ciclo…"), "primary");
+        continueBtn->setObjectName(QStringLiteral("continueCycle"));
+        continueBtn->setToolTip(tr("Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s), cada uno desde el paso "
+                                   "que se rompió, en la misma revisión")
+                                    .arg(report.brokenCaseIds().size()));
+        connect(continueBtn, &QPushButton::clicked, this, [this, id = plan.id]() { emit continueCycleRequested(id); });
+        ah->addWidget(continueBtn);
+    }
     // Sólo cuando el ciclo ha terminado: publicar uno a medias dejaría el ciclo incompleto en Zephyr.
     if (m_publish && m_publish->enabled() && plan.isFinished() && report.executed > 0) {
         // Ya publicado: lo normal es actualizar aquel ciclo; crear otro queda como opción secundaria.

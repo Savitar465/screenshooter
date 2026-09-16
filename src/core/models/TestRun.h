@@ -16,6 +16,9 @@ struct StepRecord {
     QString note;
     int durationSecs = 0;   // tiempo que el paso estuvo en pantalla (acumulado si se vuelve a él)
     bool marked = false;    // false: el paso todavía no tiene veredicto
+    /// El veredicto no se dio en esta ejecución: viene de la que se retoma (una continuación empieza
+    /// en el paso que se rompió y hereda lo de antes). Se enseña, para saber qué no se ha vuelto a probar.
+    bool inherited = false;
 };
 
 enum class Verdict { Superado, Fallido, Bloqueado };
@@ -104,6 +107,7 @@ struct RunSession {
     RunState run;
     QStringList queue;     // casos del plan pendientes
     QString planRunId;     // ejecución de plan abierta en el historial (vacío si es suelta)
+    QString continuesRunId;   // ejecución que se está retomando (vacío si el caso se ejecuta entero)
 };
 
 } // namespace qaflow

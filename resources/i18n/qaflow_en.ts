@@ -1314,6 +1314,69 @@
     </message>
 </context>
 <context>
+    <name>qaflow::BugDetailWindow</name>
+    <message>
+        <source>Copiar clave</source>
+        <translation>Copy key</translation>
+    </message>
+    <message>
+        <source>Cerrar</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <source>Abrir en el gestor</source>
+        <translation>Open in the tracker</translation>
+    </message>
+    <message>
+        <source>Bug</source>
+        <translation>Bug</translation>
+    </message>
+    <message>
+        <source>Bug %1</source>
+        <translation>Bug %1</translation>
+    </message>
+    <message>
+        <source>CERRADO</source>
+        <translation>CLOSED</translation>
+    </message>
+    <message>
+        <source>ABIERTO</source>
+        <translation>OPEN</translation>
+    </message>
+    <message>
+        <source>(sin título)</source>
+        <translation>(untitled)</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>paso %1</source>
+        <translation>step %1</translation>
+    </message>
+    <message>
+        <source>paso %1 · %2</source>
+        <translation>step %1 · %2</translation>
+    </message>
+    <message>
+        <source>del caso entero</source>
+        <translation>of the whole case</translation>
+    </message>
+    <message>
+        <source>Estado en el gestor: sin consultar</source>
+        <translation>Status in the tracker: never checked</translation>
+    </message>
+    <message>
+        <source>Estado en el gestor: %1 · consultado el %2</source>
+        <translation>Status in the tracker: %1 · checked on %2</translation>
+    </message>
+    <message>
+        <source>Reportado el %1</source>
+        <translation>Reported on %1</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::BugReportService</name>
     <message>
         <source>[%1] Falla en paso %2: %3</source>
@@ -2049,6 +2112,14 @@
         <source>Arrancar</source>
         <translation>Start</translation>
     </message>
+    <message>
+        <source>Continuar ciclo</source>
+        <translation>Continue cycle</translation>
+    </message>
+    <message>
+        <source>Continuar</source>
+        <translation>Continue</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::EvidencePreview</name>
@@ -2517,6 +2588,14 @@
     <message>
         <source> · REVISIÓN %1</source>
         <translation> · REVISION %1</translation>
+    </message>
+    <message>
+        <source>Continuar ciclo…</source>
+        <translation>Continue cycle…</translation>
+    </message>
+    <message>
+        <source>Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s), cada uno desde el paso que se rompió, en la misma revisión</source>
+        <translation>Runs the %1 failed or blocked case(s) again, each from the step that broke, in the same revision</translation>
     </message>
 </context>
 <context>
@@ -3339,10 +3418,6 @@ Create another one anyway?</translation>
         <translation>Go to the plan</translation>
     </message>
     <message>
-        <source>Los ciclos se arrancan desde la pantalla del plan</source>
-        <translation>Cycles are started from the plan screen</translation>
-    </message>
-    <message>
         <source>Generar el acta (R-213)</source>
         <translation>Generate the record (R-213)</translation>
     </message>
@@ -3457,6 +3532,54 @@ Create another one anyway?</translation>
     <message>
         <source>, </source>
         <translation>, </translation>
+    </message>
+    <message>
+        <source>Abrir el plan para componerlo antes de ejecutarlo</source>
+        <translation>Open the plan to compose it before running it</translation>
+    </message>
+    <message>
+        <source>Ejecutar plan…</source>
+        <translation>Run plan…</translation>
+    </message>
+    <message>
+        <source>Arranca un ciclo del plan: pregunta el ambiente y lleva a la ejecución</source>
+        <translation>Starts a cycle of the plan: asks for the environment and takes you to the run</translation>
+    </message>
+    <message>
+        <source>Ejecutar</source>
+        <translation>Run</translation>
+    </message>
+    <message>
+        <source>Arrancar un ciclo de este plan</source>
+        <translation>Start a cycle of this plan</translation>
+    </message>
+    <message>
+        <source>El issue todavía no tiene plan: créalo antes de probar</source>
+        <translation>The issue has no plan yet: create it before testing</translation>
+    </message>
+    <message>
+        <source>El plan del issue no tiene casos que ejecutar: ábrelo y añádeselos</source>
+        <translation>The issue&apos;s plan has no cases to run: open it and add some</translation>
+    </message>
+    <message>
+        <source>Continuar lo fallado…</source>
+        <translation>Continue what failed…</translation>
+    </message>
+    <message>
+        <source>Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) del ciclo %2, cada uno desde el paso que se rompió</source>
+        <translation>Runs the %1 failed or blocked case(s) of cycle %2 again, each from the step that broke</translation>
+    </message>
+    <message>
+        <source>CONTINÚA %1</source>
+        <translation>CONTINUES %1</translation>
+    </message>
+    <message>
+        <source>Continuar</source>
+        <translation>Continue</translation>
+    </message>
+    <message>
+        <source>Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo</source>
+        <translation>Run the %1 failed or blocked case(s) of this cycle again</translation>
     </message>
 </context>
 <context>
@@ -3968,6 +4091,18 @@ Create another one anyway?</translation>
         <source>%1 · revisión %2</source>
         <translation>%1 · revision %2</translation>
     </message>
+    <message>
+        <source>Ese ciclo no dejó ningún caso fallado ni bloqueado que continuar</source>
+        <translation>That cycle left no failed or blocked case to continue</translation>
+    </message>
+    <message>
+        <source>Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o bloqueado(s), cada uno desde el paso que se rompió.</source>
+        <translation>Continues cycle %1: its %2 failed or blocked case(s) run again, each from the step that broke.</translation>
+    </message>
+    <message>
+        <source>No se pudo continuar el ciclo: sus casos fallados ya no están en el proyecto</source>
+        <translation>The cycle could not be continued: its failed cases are no longer in the project</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::PlanStore</name>
@@ -4369,6 +4504,14 @@ Create another one anyway?</translation>
     <message>
         <source>%1 creado y añadido a %2</source>
         <translation>%1 created and added to %2</translation>
+    </message>
+    <message>
+        <source>Continuar</source>
+        <translation>Continue</translation>
+    </message>
+    <message>
+        <source>Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo</source>
+        <translation>Run the %1 failed or blocked case(s) of this cycle again</translation>
     </message>
 </context>
 <context>
@@ -5403,6 +5546,100 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <source>Bugs reportados en este paso</source>
         <translation>Bugs reported on this step</translation>
     </message>
+    <message>
+        <source>BUGS</source>
+        <translation>BUGS</translation>
+    </message>
+    <message>
+        <source>Ordena las evidencias del caso por el paso al que están asignadas</source>
+        <translation>Sorts the case's evidence by the step it is assigned to</translation>
+    </message>
+    <message>
+        <source>Todavía no se ha reportado ningún bug de este caso.
+Al reportar uno queda aquí, con el paso del que salió.</source>
+        <translation>No bug has been reported from this case yet.
+When you report one it stays here, with the step it came from.</translation>
+    </message>
+    <message>
+        <source>+ Reportar bug</source>
+        <translation>+ Report bug</translation>
+    </message>
+    <message>
+        <source>Abre el parte con el paso del que salió el fallo ya puesto</source>
+        <translation>Opens the bug report with the step the failure came from already filled in</translation>
+    </message>
+    <message>
+        <source>SIN PASO</source>
+        <translation>NO STEP</translation>
+    </message>
+    <message>
+        <source>PASO %1 · %2</source>
+        <translation>STEP %1 · %2</translation>
+    </message>
+    <message>
+        <source>revisión %1</source>
+        <translation>revision %1</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;CONTINUANDO LA %1&lt;/b&gt; · se repiten sólo los casos que fallaron o quedaron bloqueados en el ciclo %2</source>
+        <translation>&lt;b&gt;CONTINUING %1&lt;/b&gt; · only the cases that failed or were blocked in cycle %2 are run again</translation>
+    </message>
+    <message>
+        <source>ronda de pruebas</source>
+        <translation>test round</translation>
+    </message>
+    <message>
+        <source>REVISIÓN %1</source>
+        <translation>REVISION %1</translation>
+    </message>
+    <message>
+        <source> · ambiente %1</source>
+        <translation> · environment %1</translation>
+    </message>
+    <message>
+        <source>&lt;br&gt;Este caso se retoma en el paso que se rompió; los anteriores vienen de la ejecución %1.</source>
+        <translation>&lt;br&gt;This case resumes at the step that broke; the previous ones come from run %1.</translation>
+    </message>
+    <message>
+        <source>Ciclo %1 · %2</source>
+        <translation>Cycle %1 · %2</translation>
+    </message>
+    <message>
+        <source>ANTERIOR</source>
+        <translation>PREVIOUS</translation>
+    </message>
+    <message>
+        <source>Viene de la ejecución que se está continuando: este paso no se ha repetido</source>
+        <translation>It comes from the run being continued: this step has not been repeated</translation>
+    </message>
+    <message>
+        <source>BUGS · %1</source>
+        <translation>BUGS · %1</translation>
+    </message>
+    <message>
+        <source>Los bugs reportados desde este caso, con el paso del que salieron</source>
+        <translation>The bugs reported from this case, with the step they came from</translation>
+    </message>
+    <message>
+        <source>%1 bug(s) de este caso · %2 sin cerrar</source>
+        <translation>%1 bug(s) of this case · %2 still open</translation>
+    </message>
+    <message>
+        <source>Abrir la ficha del bug en otra ventana</source>
+        <translation>Open the bug's details in another window</translation>
+    </message>
+    <message>
+        <source>CERRADO</source>
+        <translation>CLOSED</translation>
+    </message>
+    <message>
+        <source>ABIERTO</source>
+        <translation>OPEN</translation>
+    </message>
+    <message>
+        <source>(sin título)</source>
+        <translation>(untitled)</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::SettingsDialog</name>
@@ -6080,6 +6317,16 @@ Quality control revision %1</translation>
 Ambiente: %1</source>
         <translation>
 Environment: %1</translation>
+    </message>
+    <message>
+        <source>Cont. %1</source>
+        <translation>Cont. %1</translation>
+    </message>
+    <message>
+        <source>
+Continúa el ciclo %1: sólo sus casos fallados y bloqueados</source>
+        <translation>
+Continues cycle %1: only its failed and blocked cases</translation>
     </message>
 </context>
 <context>

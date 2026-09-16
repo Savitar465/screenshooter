@@ -57,6 +57,11 @@ signals:
     void toast(const QString& message, const QString& color);
     void openCaseRequested(const QString& caseId);
     void openPlanRequested(const QString& planId);
+    /// Arrancar un ciclo de ese plan desde el issue: lo hace quien coordina la ejecución, que es quien
+    /// sabe si hay algo en curso que lo impida y lleva luego a la pantalla de ejecución.
+    void runPlanRequested(const QString& planId);
+    /// Continuar ese ciclo con lo que quedó fallado o bloqueado, dentro de la misma revisión.
+    void continueCycleRequested(const QString& planRunId);
     void openRunRequested(const QString& runId);
     void openUrlRequested(const QString& url);
     /// Falta configurar algo (el sistema de GESREQ del proyecto): hay que abrir los ajustes.
@@ -87,6 +92,14 @@ private:
     /// Aplica un cambio al issue seleccionado sin que el refresco pise lo que se está escribiendo.
     void editSelected(const std::function<void(Issue&)>& mutate);
     void createPlan();
+    /// Arranca un ciclo del plan del issue sin salir de esta pantalla; si tiene varios planes que se
+    /// puedan ejecutar, pregunta cuál (menú anclado a `anchor`).
+    void runPlan(QWidget* anchor);
+    /// Planes del issue que se pueden ejecutar ahora: existen, no están archivados y tienen casos.
+    QStringList runnablePlans(const Issue& issue) const;
+    /// Ciclo de la revisión en curso que se puede continuar (el más reciente que dejó casos rotos);
+    /// vacío si no hay ninguno.
+    QString continuableCycle(const Issue& issue, int revision) const;
     /// Deja listo el plan con el que se prueba el requerimiento recién importado, si no tiene ninguno.
     QString ensurePlan(const QString& issueId);
     void pickPlan();

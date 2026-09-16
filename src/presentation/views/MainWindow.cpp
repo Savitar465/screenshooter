@@ -68,7 +68,7 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     m_stack = new QStackedWidget;
     m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence);
     m_plan = new PlanView(*ctx.cases, *ctx.plan, ctx.publish);
-    m_run = new RunView(*ctx.cases, *ctx.run, *ctx.settings, *ctx.evidence, *ctx.bugLedger);
+    m_run = new RunView(*ctx.cases, *ctx.run, *ctx.history, *ctx.settings, *ctx.evidence, *ctx.bugLedger);
     m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish, ctx.evidence, ctx.run);
     m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger, *ctx.evidence);
     m_issuesView = new IssuesView(ctx);
@@ -294,7 +294,7 @@ QString MainWindow::cycleContext(const QString& planId) const {
 void MainWindow::askCycleEnvironment(const QString& planId, const QString& planName) {
     // El ambiente se pregunta al arrancar porque es de este ciclo, no del plan: el mismo plan se prueba
     // en QA y luego en producción, y cada ejecución tiene que decir de dónde salieron sus resultados.
-    auto* dialog = new CycleStartDialog(planName, cycleContext(planId), m_ctx.history->lastEnvironment(), this);
+    auto* dialog = new CycleStartDialog(planName, cycleContext(planId), m_ctx.history->lastEnvironment(), QString(), this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, planId, dialog]() { beginPlanRun(planId, dialog->environment()); });
     dialog->open();
@@ -314,6 +314,49 @@ void MainWindow::beginPlanRun(const QString& planId, const QString& environment)
     }
     m_ctx.plan->setActive(planId);
     m_ctx.run->startSequence(ids, plan->name, planId, environment);
+    navigateInto(Screen::Run);
+}
+
+void MainWindow::continueCycleRun(const QString& planRunId) {
+    if (!m_ctx.run->state().caseId.isEmpty()) {
+        showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
+        return;
+    }
+    if (m_ctx.evidence->isRecording() || m_ctx.evidence->isCountingDown() || m_ctx.evidence->isBusy()) {
+        showToast(tr("Espera a que termine la captura"), theme::Amber);
+        return;
+    }
+    const PlanReport report = m_ctx.history->report(planRunId);
+    if (!report.canContinue()) {
+        showToast(tr("Ese ciclo no dejó ningún caso fallado ni bloqueado que continuar"), theme::Amber);
+        return;
+    }
+    // El ambiente de partida es el de aquel ciclo: lo normal es continuar donde se estaba probando.
+    const QString environment = report.plan.environment.trimmed().isEmpty() ? m_ctx.history->lastEnvironment()
+                                                                            : report.plan.environment.trimmed();
+    auto* dialog = new CycleStartDialog(report.plan.name, cycleContext(report.plan.planId), environment,
+                                        tr("Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o "
+                                           "bloqueado(s), cada uno desde el paso que se rompió.")
+                                            .arg(planRunId)
+                                            .arg(report.brokenCaseIds().size()),
+                                        this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &QDialog::accepted, this, [this, planRunId, dialog]() { beginContinuation(planRunId, dialog->environment()); });
+    dialog->open();
+}
+
+void MainWindow::beginContinuation(const QString& planRunId, const QString& environment) {
+    // Como al arrancar: entre la pregunta y la respuesta puede haber empezado otra ejecución.
+    if (!m_ctx.run->state().caseId.isEmpty()) {
+        showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
+        return;
+    }
+    if (!m_ctx.run->continueCycle(planRunId, environment)) {
+        showToast(tr("No se pudo continuar el ciclo: sus casos fallados ya no están en el proyecto"), theme::Amber);
+        return;
+    }
+    if (const PlanRun* cycle = m_ctx.history->findPlan(m_ctx.run->planRunId()); cycle && !cycle->planId.isEmpty())
+        m_ctx.plan->setActive(cycle->planId);
     navigateInto(Screen::Run);
 }
 
@@ -614,11 +657,18 @@ void MainWindow::wireSignals() {
     // Issues: sus casos, planes y ejecuciones se abren en sus pantallas.
     connect(m_issuesView, &IssuesView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
     connect(m_issuesView, &IssuesView::openPlanRequested, this, [this](const QString& id) { m_ctx.plan->setActive(id); navigateInto(Screen::Plan); });
+    // El ciclo también se arranca desde el issue, que es donde está el paso que lo pide.
+    connect(m_issuesView, &IssuesView::runPlanRequested, this, &MainWindow::startPlanRun);
+    // Continuar lo que quedó roto se pide desde donde se ven los ciclos: el issue, su informe y el plan.
+    connect(m_issuesView, &IssuesView::continueCycleRequested, this, &MainWindow::continueCycleRun);
+    connect(m_history, &HistoryView::continueCycleRequested, this, &MainWindow::continueCycleRun);
+    connect(m_plan, &PlanView::continueCycleRequested, this, &MainWindow::continueCycleRun);
     connect(m_issuesView, &IssuesView::openRunRequested, this, [this](const QString& runId) {
         navigateInto(Screen::Historial);
         m_history->showRun(runId);
     });
     connect(m_issuesView, &IssuesView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_run, &RunView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
     connect(m_issuesView, &IssuesView::settingsRequested, this, &MainWindow::openSettings);
     // Iniciar las pruebas de un requerimiento de otro proyecto: lo resuelve quien coordina las sesiones.
     connect(m_issuesView, &IssuesView::startTestingRequested, this, &MainWindow::startTestingRequested);

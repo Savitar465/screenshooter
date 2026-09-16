@@ -113,6 +113,10 @@ private:
     void askCycleEnvironment(const QString& planId, const QString& planName);
     /// Arranca el ciclo del plan en ese ambiente y lleva a la ejecución.
     void beginPlanRun(const QString& planId, const QString& environment);
+    /// Continúa un ciclo terminado con sus casos fallados y bloqueados: comprueba que se puede,
+    /// pregunta el ambiente y arranca la continuación.
+    void continueCycleRun(const QString& planRunId);
+    void beginContinuation(const QString& planRunId, const QString& environment);
     void runSelectedTarget();
     /// Arranca un ciclo de ese plan y lleva a la ejecución; avisa si hay algo en curso que lo impida.
     void startPlanRun(const QString& planId);

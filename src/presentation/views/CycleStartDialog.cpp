@@ -1,6 +1,7 @@
 #include "CycleStartDialog.h"
 
 #include "core/models/BugReport.h"
+#include "presentation/theme/Theme.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QComboBox>
@@ -10,10 +11,12 @@
 
 namespace qaflow {
 
-CycleStartDialog::CycleStartDialog(const QString& planName, const QString& context, const QString& environment, QWidget* parent)
+CycleStartDialog::CycleStartDialog(const QString& planName, const QString& context, const QString& environment,
+                                   const QString& continuation, QWidget* parent)
     : QDialog(parent) {
+    const bool continuing = !continuation.trimmed().isEmpty();
     setObjectName(QStringLiteral("cycleStartDialog"));
-    setWindowTitle(tr("Arrancar ciclo"));
+    setWindowTitle(continuing ? tr("Continuar ciclo") : tr("Arrancar ciclo"));
     setWindowIcon(ui::appIcon());
     setMinimumWidth(460);
 
@@ -25,6 +28,15 @@ CycleStartDialog::CycleStartDialog(const QString& planName, const QString& conte
                                "muted-sm");
     subtitle->setWordWrap(true);
     v->addWidget(subtitle);
+
+    // Continuar no repite el plan entero: conviene ver qué se va a ejecutar antes de arrancar.
+    if (continuing) {
+        auto* note = ui::label(continuation.trimmed(), "muted-sm");
+        note->setObjectName(QStringLiteral("cycleStartContinuation"));
+        note->setWordWrap(true);
+        note->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Amber));
+        v->addWidget(note);
+    }
 
     auto* field = new QWidget;
     auto* fv = ui::vbox(field, 0, 6);
@@ -46,7 +58,7 @@ CycleStartDialog::CycleStartDialog(const QString& planName, const QString& conte
     auto* bh = ui::hbox(buttons, 0, 8);
     bh->addStretch(1);
     auto* cancel = ui::button(tr("Cancelar"), "outline");
-    auto* accept = ui::button(tr("Arrancar"), "primary");
+    auto* accept = ui::button(continuing ? tr("Continuar") : tr("Arrancar"), "primary");
     accept->setObjectName(QStringLiteral("cycleStartAccept"));
     accept->setDefault(true);
     bh->addWidget(cancel);

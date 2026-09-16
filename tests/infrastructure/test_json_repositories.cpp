@@ -112,6 +112,7 @@ private slots:
         r.id = QStringLiteral("R-0001"); r.caseId = QStringLiteral("TC-104"); r.caseTitle = QStringLiteral("Pago"); r.suite = QStringLiteral("Checkout");
         r.planRunId = QStringLiteral("PR-0001"); r.startedAt = QDateTime(QDate(2026, 3, 1), QTime(10, 0)); r.finishedAt = r.startedAt.addSecs(90);
         r.verdict = Verdict::Bloqueado; r.plannedSteps = 3; r.durationSecs = 90; r.testKey = QStringLiteral("SHOP-42");
+        r.continuesRunId = QStringLiteral("R-0000");
         r.steps = {RunRecordStep{QStringLiteral("a"), QStringLiteral("e"), StepResult::Pass, QString(), 30}, RunRecordStep{QStringLiteral("b"), QStringLiteral("f"), StepResult::Block, QStringLiteral("caído"), 60}};
         h.runs << r;
         PlanRun p;
@@ -119,6 +120,7 @@ private slots:
         p.startedAt = r.startedAt; p.finishedAt = r.finishedAt;
         p.zephyrCycleId = QStringLiteral("77"); p.publishedAt = r.finishedAt.addSecs(600);
         p.issueId = QStringLiteral("IS-0003"); p.revision = 2; p.environment = QStringLiteral("QA");
+        p.continuesCycleId = QStringLiteral("PR-0000");
         h.plans << p;
         QVERIFY(repo.saveHistory(h));
         const auto loaded = repo.loadHistory();
@@ -142,6 +144,10 @@ private slots:
         QCOMPARE(loaded->plans[0].issueId, QStringLiteral("IS-0003"));
         QCOMPARE(loaded->plans[0].revision, 2);
         QCOMPARE(loaded->plans[0].environment, QStringLiteral("QA"));
+        // Y a quién continúan el ciclo y la ejecución, que es lo que las ata a lo que se rompió.
+        QCOMPARE(loaded->plans[0].continuesCycleId, QStringLiteral("PR-0000"));
+        QVERIFY(loaded->plans[0].isContinuation());
+        QCOMPARE(loaded->runs[0].continuesRunId, QStringLiteral("R-0000"));
     }
 
     void sessionIsSavedAndCleared() {

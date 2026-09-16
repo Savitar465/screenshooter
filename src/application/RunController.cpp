@@ -30,6 +30,7 @@ void RunController::load() {
     m_run = saved->run;
     m_queue = saved->queue;
     m_planRunId = saved->planRunId;
+    m_continuesRunId = saved->continuesRunId;
     // La lista siempre tiene un registro por paso: se recorta si el caso perdió pasos entre
     // sesiones y se completa con pendientes si ganó alguno.
     m_run.results.resize(totalSteps());
@@ -77,13 +78,46 @@ void RunController::begin(const QString& caseId) {
     m_run.results = QList<StepRecord>(totalSteps());
     m_run.finished = m_run.results.isEmpty();
     m_run.stepStartedAt = QDateTime::currentDateTime();
+    m_continuesRunId.clear();
+    // Si este caso viene de una continuación, se retoma donde se rompió en vez de empezar de cero. La
+    // entrada se consume: repetir el caso desde la pantalla («Repetir») lo ejecuta entero otra vez.
+    if (const auto it = m_resume.constFind(caseId); it != m_resume.constEnd()) {
+        const RunRecord previous = *it;
+        m_resume.erase(m_resume.find(caseId));
+        if (const TestCase* c = m_store.find(caseId)) resumeFrom(previous, *c);
+    }
     m_store.select(caseId);
+}
+
+void RunController::resumeFrom(const RunRecord& previous, const TestCase& c) {
+    const int broken = previous.brokenStepIndex();
+    if (broken < 0) return;
+    m_continuesRunId = previous.id;
+    // Lo anterior al paso roto se hereda mientras el caso no haya cambiado: un paso que hoy dice otra
+    // cosa no se puede dar por superado con lo que se probó entonces.
+    for (int i = 0; i < broken && i < m_run.results.size() && i < previous.steps.size(); ++i) {
+        if (c.steps[i].action != previous.steps[i].action || c.steps[i].expected != previous.steps[i].expected) break;
+        m_run.results[i].result = previous.steps[i].result;
+        m_run.results[i].note = previous.steps[i].note;
+        m_run.results[i].marked = true;   // el cronómetro empieza de nuevo: el tiempo es el de ahora
+        m_run.results[i].inherited = true;
+    }
+    // Y se arranca en el primer paso pendiente, que es el que se rompió (o el primero del caso si no
+    // se pudo heredar nada). El reloj de ese paso empieza ahora; no se pasa por `enterStep` porque
+    // guardaría encima del paso heredado la nota vacía del estado recién creado.
+    const int pending = m_run.nextPending(0);
+    m_run.idx = std::clamp(pending < 0 ? broken : pending, 0, std::max(0, static_cast<int>(m_run.results.size()) - 1));
+    m_run.note = m_run.results[m_run.idx].note;
+    m_run.stepElapsedSecs = 0;
+    m_run.stepStartedAt = QDateTime::currentDateTime();
+    recomputeFinished();
 }
 
 void RunController::start(const QString& caseId) {
     commitRun(false);
     closePlan();
     m_queue.clear();
+    m_resume.clear();
     begin(caseId);
     changed();
 }
@@ -93,11 +127,37 @@ void RunController::startSequence(const QStringList& caseIds, const QString& pla
     if (caseIds.isEmpty()) return;
     commitRun(false);
     closePlan();
+    m_resume.clear();   // un ciclo normal ejecuta sus casos enteros
     m_planRunId = m_history.startPlan(planName, caseIds, planId, environment);
     m_queue = caseIds.mid(1);
     begin(caseIds.first());
     changed();
     emit planStarted(m_planRunId, planId);
+}
+
+bool RunController::continueCycle(const QString& planRunId, const QString& environment) {
+    const PlanRun* cycle = m_history.findPlan(planRunId);
+    if (!cycle || !cycle->isFinished()) return false;
+    const PlanReport report = m_history.report(planRunId);
+    // Sólo lo que quedó roto, en el orden del plan y saltando los casos que ya no están en el catálogo.
+    QStringList caseIds;
+    QHash<QString, RunRecord> resume;
+    for (const auto& row : report.rows) {
+        if (!row.executed || !row.run.isBroken() || !m_store.find(row.caseId)) continue;
+        caseIds << row.caseId;
+        resume.insert(row.caseId, row.run);
+    }
+    if (caseIds.isEmpty()) return false;
+
+    commitRun(false);
+    closePlan();
+    m_resume = resume;
+    m_planRunId = m_history.startPlan(cycle->name, caseIds, cycle->planId, environment, cycle->id);
+    m_queue = caseIds.mid(1);
+    begin(caseIds.first());
+    changed();
+    emit planStarted(m_planRunId, cycle->planId);
+    return true;
 }
 
 void RunController::restart() {
@@ -121,6 +181,7 @@ void RunController::mark(StepResult result) {
     rec.note = m_run.note;
     rec.durationSecs = m_run.currentStepSecs();
     rec.marked = true;
+    rec.inherited = false;   // volver a darle veredicto lo hace de esta ejecución
     // Avanza al siguiente paso pendiente; si no queda ninguno, se queda donde está y la
     // ejecución pasa a "terminada". Un fallo o un bloqueo ya no la cortan: se sigue navegando.
     const int pending = m_run.nextPending(current + 1);
@@ -149,6 +210,7 @@ void RunController::setResult(int index, StepResult result) {
     if (m_run.results[index].marked && m_run.results[index].result == result) return;
     m_run.results[index].result = result;
     m_run.results[index].marked = true;
+    m_run.results[index].inherited = false;
     recomputeFinished();
     changed();
 }
@@ -167,6 +229,7 @@ void RunController::commitRun(bool evenIfPending) {
     rec.caseTitle = c->title;
     rec.suite = c->suite;
     rec.planRunId = m_planRunId;
+    rec.continuesRunId = m_continuesRunId;
     rec.startedAt = m_run.startedAt;
     rec.finishedAt = QDateTime::currentDateTime();
     rec.verdict = m_run.verdict();
@@ -192,6 +255,7 @@ void RunController::commitRun(bool evenIfPending) {
     // Un caso sin pasos "termina" al arrancar; no vuelve a archivarse.
     m_run.finished = false;
     m_run.results = QList<StepRecord>(m_run.results.size());
+    m_continuesRunId.clear();
 }
 
 void RunController::closePlan() {
@@ -234,7 +298,7 @@ bool RunController::persistSession() {
     m_saveTimer.stop();
     if (!m_session) return false;
     if (m_run.caseId.isEmpty()) { m_session->clearSession(); return true; }
-    RunSession s{m_run, m_queue, m_planRunId};
+    RunSession s{m_run, m_queue, m_planRunId, m_continuesRunId};
     // Lo transcurrido en este paso se consolida para que al restaurar siga desde aquí.
     s.run.stepElapsedSecs = m_run.currentStepSecs();
     if (s.run.idx >= 0 && s.run.idx < s.run.results.size()) {

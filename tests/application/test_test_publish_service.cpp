@@ -132,6 +132,17 @@ private slots:
         // Un ciclo suelto se queda con el nombre de siempre: no se inventa lo que no hay.
         PlanReport loose = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
         QCOMPARE(publish.cycleName(loose), QStringLiteral("Regresión Sprint 14 · 12/05/2026"));
+
+        // Y una continuación no puede llamarse igual que el ciclo al que continúa: lleva por dónde va.
+        const QString cycleId = f.history.startPlan(QStringLiteral("Regresión Sprint 14"), {QStringLiteral("TC-101")},
+                                                    QStringLiteral("PL-0001"), QStringLiteral("QA"));
+        PlanReport continued = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
+        continued.plan.issueId = issueId;
+        continued.plan.revision = 2;
+        continued.plan.environment = QStringLiteral("QA");
+        continued.plan.continuesCycleId = cycleId;
+        QCOMPARE(publish.cycleName(continued),
+                 QStringLiteral("GREQ 2026997 · Rev. 2 · Regresión Sprint 14 · Cont. 1 · 12/05/2026 · QA"));
     }
 
     void casesWhoseTestWillBeCreatedAreListedBeforePublishing() {

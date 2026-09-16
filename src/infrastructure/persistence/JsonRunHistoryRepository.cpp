@@ -22,7 +22,7 @@ QJsonObject toJson(const RunRecord& r) {
         {"id", r.id}, {"caseId", r.caseId}, {"caseTitle", r.caseTitle}, {"suite", r.suite},
         {"planRunId", r.planRunId}, {"startedAt", isoOrEmpty(r.startedAt)}, {"finishedAt", isoOrEmpty(r.finishedAt)},
         {"verdict", toString(r.verdict)}, {"plannedSteps", r.plannedSteps}, {"durationSecs", r.durationSecs}, {"steps", steps},
-        {"testKey", r.testKey},
+        {"testKey", r.testKey}, {"continuesRunId", r.continuesRunId},
     };
 }
 
@@ -38,6 +38,7 @@ RunRecord runFromJson(const QJsonObject& o) {
     r.verdict = verdictFromString(o["verdict"].toString());
     r.plannedSteps = o["plannedSteps"].toInt();
     r.testKey = o["testKey"].toString();
+    r.continuesRunId = o["continuesRunId"].toString();
     for (const auto& v : o["steps"].toArray()) {
         const auto s = v.toObject();
         r.steps.append(RunRecordStep{s["action"].toString(), s["expected"].toString(), stepResultFromString(s["result"].toString()), s["note"].toString(), s["durationSecs"].toInt()});
@@ -53,6 +54,7 @@ QJsonObject toJson(const PlanRun& p) {
         {"id", p.id}, {"planId", p.planId}, {"name", p.name}, {"caseIds", QJsonArray::fromStringList(p.caseIds)},
         {"startedAt", isoOrEmpty(p.startedAt)}, {"finishedAt", isoOrEmpty(p.finishedAt)},
         {"issueId", p.issueId}, {"revision", p.revision}, {"environment", p.environment},
+        {"continuesCycleId", p.continuesCycleId},
         {"zephyrCycleId", p.zephyrCycleId}, {"publishedAt", isoOrEmpty(p.publishedAt)},
     };
 }
@@ -68,6 +70,7 @@ PlanRun planFromJson(const QJsonObject& o) {
     p.issueId = o["issueId"].toString();
     p.revision = o["revision"].toInt();
     p.environment = o["environment"].toString();
+    p.continuesCycleId = o["continuesCycleId"].toString();
     p.zephyrCycleId = o["zephyrCycleId"].toString();
     p.publishedAt = QDateTime::fromString(o["publishedAt"].toString(), Qt::ISODate);
     return p;

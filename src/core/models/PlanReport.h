@@ -5,6 +5,7 @@
 
 #include <QList>
 #include <QString>
+#include <QStringList>
 #include <functional>
 
 namespace qaflow {
@@ -39,6 +40,12 @@ struct PlanReport {
     /// Porcentaje de superados sobre ejecutados (0 si no se ejecutó nada).
     int successRate() const { return executed ? passed * 100 / executed : 0; }
     Verdict verdict() const;
+
+    /// Casos que quedaron rotos: los ejecutados con veredicto fallado o bloqueado, en el orden del
+    /// plan. Son los que repite una continuación del ciclo.
+    QStringList brokenCaseIds() const;
+    /// El ciclo se puede continuar: terminó y dejó algún caso roto.
+    bool canContinue() const { return plan.isFinished() && !brokenCaseIds().isEmpty(); }
 
     /// Los bugs del ciclo, caso por caso y en el orden del plan.
     QList<IssueLink> bugs() const;

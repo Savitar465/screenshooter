@@ -1,8 +1,11 @@
 #pragma once
 
+#include "core/models/RunHistory.h"
+#include "core/models/TestCase.h"
 #include "core/models/TestRun.h"
 #include "core/services/IRunSessionRepository.h"
 
+#include <QHash>
 #include <QObject>
 #include <QStringList>
 #include <QTimer>
@@ -34,6 +37,10 @@ public:
     int queuedCount() const { return m_queue.size(); }
     /// Id de la ejecución de plan en curso (vacío si el caso se ejecuta suelto).
     QString planRunId() const { return m_planRunId; }
+    /// Ejecución fallada o bloqueada que retoma la que está en curso; vacío si el caso se ejecuta entero.
+    QString continuesRunId() const { return m_continuesRunId; }
+    /// Casos de la continuación que todavía no se han retomado (los que siguen en la cola).
+    int pendingResumes() const { return static_cast<int>(m_resume.size()); }
     bool canGoBack() const { return !m_run.caseId.isEmpty() && (m_run.finished || m_run.idx > 0); }
     bool canGoNext() const { return !m_run.caseId.isEmpty() && m_run.idx + 1 < m_run.results.size(); }
 
@@ -42,6 +49,11 @@ public:
     /// ambiente en el que se prueba el ciclo, que queda anotado en él.
     void startSequence(const QStringList& caseIds, const QString& planName = QString(), const QString& planId = QString(),
                        const QString& environment = QString());
+    /// Continúa un ciclo terminado: vuelve a ejecutar **sólo sus casos fallados y bloqueados**, cada uno
+    /// retomado en el paso que se rompió (los anteriores conservan su veredicto y su nota). Es la misma
+    /// ronda de pruebas, no otra: el ciclo nuevo cuelga del anterior (`PlanRun::continuesCycleId`).
+    /// Falso si el ciclo no existe, no terminó, no dejó nada roto o ninguno de sus casos sigue estando.
+    bool continueCycle(const QString& planRunId, const QString& environment = QString());
     void restart();
     /// La nota se guarda en disco con retardo; `persistSessionNow()` fuerza la escritura.
     void setNote(const QString& note);
@@ -71,6 +83,10 @@ signals:
 
 private:
     void begin(const QString& caseId);
+    /// Deja el estado como lo dejó la ejecución que se retoma: lo anterior al paso roto se conserva
+    /// marcado y la ejecución empieza en ese paso. Si el caso se editó desde entonces, sólo se hereda
+    /// el tramo cuyos pasos siguen siendo los mismos.
+    void resumeFrom(const RunRecord& previous, const TestCase& c);
     /// Vuelca al registro del paso en pantalla su nota y lo que lleva corriendo su cronómetro.
     void holdStep();
     /// Pone en pantalla el paso `index`: guarda lo del anterior y retoma la nota y el reloj del nuevo.
@@ -90,6 +106,10 @@ private:
     RunState m_run;
     QStringList m_queue;
     QString m_planRunId;
+    /// Ejecuciones que retoman los casos de una continuación, por caso. Se consumen al arrancar cada uno.
+    QHash<QString, RunRecord> m_resume;
+    /// Ejecución que retoma la que está en curso; se archiva con ella.
+    QString m_continuesRunId;
     QTimer m_saveTimer;
 };
 

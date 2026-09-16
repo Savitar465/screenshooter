@@ -411,6 +411,16 @@ void PlanView::refreshCycles() {
         report->setToolTip(tr("Abrir el informe completo en el historial"));
         connect(report, &QPushButton::clicked, this, [this, id = r.plan.id]() { emit cycleReportRequested(id); });
         th->addWidget(report);
+        // Lo que quedó roto se vuelve a probar sin repetir el plan entero.
+        if (r.canContinue()) {
+            auto* proceed = ui::button(tr("Continuar"), "outline");
+            proceed->setObjectName(QStringLiteral("cycleContinue-%1").arg(r.plan.id));
+            proceed->setStyleSheet(QStringLiteral("padding:3px 8px;font-size:11.5px;border-radius:7px;"));
+            proceed->setToolTip(tr("Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo")
+                                    .arg(r.brokenCaseIds().size()));
+            connect(proceed, &QPushButton::clicked, this, [this, id = r.plan.id]() { emit continueCycleRequested(id); });
+            th->addWidget(proceed);
+        }
         bv->addWidget(top);
 
         // Resumen numérico y, si hay un ciclo anterior terminado, cómo cambió la tasa de éxito

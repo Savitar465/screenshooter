@@ -38,6 +38,19 @@ QStringList TestPublishService::casesNeedingTest(const PlanReport& report) const
     return out;
 }
 
+int TestPublishService::continuationDepth(const PlanRun& plan) const {
+    int depth = 0;
+    QString id = plan.continuesCycleId;
+    // La cadena es finita (cada ciclo continúa a uno anterior), pero se acota por si un history.json
+    // editado a mano la cerrara en círculo.
+    while (!id.isEmpty() && depth < 100) {
+        ++depth;
+        const PlanRun* previous = m_history.findPlan(id);
+        id = previous ? previous->continuesCycleId : QString();
+    }
+    return depth;
+}
+
 QString TestPublishService::cycleName(const PlanReport& report) const {
     const PlanRun& plan = report.plan;
     QStringList parts;
@@ -47,6 +60,9 @@ QString TestPublishService::cycleName(const PlanReport& report) const {
     if (plan.revision > 0) parts << tr("Rev. %1").arg(plan.revision);
     // Y el plan, que es lo que distingue los ciclos de una misma ronda entre sí.
     if (!plan.name.trimmed().isEmpty()) parts << plan.name.trimmed();
+    // Una continuación repite plan, revisión y, casi siempre, día y ambiente: sin decir por dónde va la
+    // cadena, su ciclo se llamaría igual que aquel al que continúa.
+    if (const int depth = continuationDepth(plan); depth > 0) parts << tr("Cont. %1").arg(depth);
     if (plan.startedAt.isValid()) parts << plan.startedAt.toString(QStringLiteral("dd/MM/yyyy"));
     if (!plan.environment.trimmed().isEmpty()) parts << plan.environment.trimmed();
     return parts.isEmpty() ? plan.name : parts.join(QStringLiteral(" · "));
@@ -70,6 +86,8 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report, bool upd
         if (report.plan.revision > 0) req.description += tr("\nRevisión %1 del control de calidad").arg(report.plan.revision);
     }
     if (!req.environment.isEmpty()) req.description += tr("\nAmbiente: %1").arg(req.environment);
+    if (report.plan.isContinuation())
+        req.description += tr("\nContinúa el ciclo %1: sólo sus casos fallados y bloqueados").arg(report.plan.continuesCycleId);
 
     for (const auto& row : report.rows) {
         if (!row.executed) continue;   // los pendientes no se publican: en Zephyr quedarían sin ejecutar

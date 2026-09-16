@@ -43,6 +43,8 @@ QString IssuePublishService::defaultIssueType(const QStringList& types) {
 IssueDraft IssuePublishService::draftFor(const Issue& issue) const {
     IssueDraft draft;
     draft.summary = issue.title.trimmed();
+    if (issue.isImported())
+        draft.summary = QStringLiteral("QA - %1 - %2").arg(issue.requirement.data.id.trimmed(), draft.summary);
     draft.issueType = issue.publication.issueType.isEmpty() ? defaultIssueType(m_issueTypes) : issue.publication.issueType;
     draft.labels = labelsFor(issue);
 

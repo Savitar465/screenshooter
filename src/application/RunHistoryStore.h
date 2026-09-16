@@ -39,8 +39,10 @@ public:
 
     /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos). `environment` es el
     /// ambiente en el que se va a probar ("QA", "Staging"…), que acompaña al ciclo hasta Zephyr.
+    /// `continuesCycleId` lo marca como continuación de ese ciclo: hereda su issue y su revisión,
+    /// porque continuar es seguir con la misma ronda de pruebas, no empezar otra.
     QString startPlan(const QString& name, const QStringList& caseIds, const QString& planId = QString(),
-                      const QString& environment = QString());
+                      const QString& environment = QString(), const QString& continuesCycleId = QString());
     void finishPlan(const QString& planRunId);
     /// Anota de qué control de calidad es el ciclo: el issue del requerimiento y la revisión que
     /// estaba abierta al arrancarlo. Lo llama quien coordina el arranque, en cuanto el issue abre su

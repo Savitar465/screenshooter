@@ -37,6 +37,8 @@ public:
 signals:
     /// Ejecutar ese plan: arrancar su ciclo es cosa de quien maneja la ejecución, no de la pantalla.
     void runPlanRequested(const QString& planId);
+    /// Continuar ese ciclo con sus casos fallados y bloqueados; lo arranca quien coordina la ejecución.
+    void continueCycleRequested(const QString& planRunId);
     /// Abrir un caso en la pantalla de casos (el que se acaba de crear para el plan).
     void openCaseRequested(const QString& caseId);
     /// Abrir en el historial el informe de un ciclo.

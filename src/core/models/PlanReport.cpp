@@ -13,6 +13,13 @@ Verdict PlanReport::verdict() const {
     return Verdict::Superado;
 }
 
+QStringList PlanReport::brokenCaseIds() const {
+    QStringList out;
+    for (const auto& row : rows)
+        if (row.executed && row.run.isBroken()) out << row.caseId;
+    return out;
+}
+
 QList<IssueLink> PlanReport::bugs() const {
     QList<IssueLink> out;
     for (const auto& row : rows) out += row.bugs;

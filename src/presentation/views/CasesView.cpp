@@ -592,6 +592,8 @@ void CasesView::refreshBugs() {
         auto* title = new QLabel(i.title);
         title->setWordWrap(true);
         h->addWidget(title, 1);
+        // Cada bug sale de un paso concreto del caso; los antiguos, sin paso, son del caso entero.
+        if (i.step > 0) h->addWidget(ui::label(tr("paso %1").arg(i.step), "mono-muted"));
         h->addWidget(ui::label(i.createdAt.toString(QStringLiteral("dd/MM/yyyy")), "muted-sm"));
         const QString status = i.status.isEmpty() ? tr("SIN CONSULTAR") : i.status.toUpper();
         h->addWidget(ui::pill(status, i.status.isEmpty() ? theme::tint(theme::Muted, 38) : i.resolved ? theme::Green : theme::tint(theme::Blue, 38),

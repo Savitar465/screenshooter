@@ -276,7 +276,8 @@ void ZephyrClient::createCycle(const std::shared_ptr<Job>& job, bool withDates) 
         {"startDate", withDates ? cycleDate(job->request.startedAt, job->locale) : QString()},
         {"endDate", withDates ? cycleDate(job->request.finishedAt, job->locale) : QString()},
         {"build", QString()},
-        {"environment", QString()},
+        // Dónde se probó: Zephyr lo enseña en la cabecera del ciclo y se puede filtrar por él.
+        {"environment", job->request.environment},
     };
     postJson(zephyr(job->settings, QStringLiteral("/cycle")), QJsonDocument(body), [this, job, withDates](const Response& r) {
         if (!r.ok) {

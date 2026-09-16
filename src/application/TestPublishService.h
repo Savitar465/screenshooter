@@ -9,6 +9,7 @@
 namespace qaflow {
 
 class BugStore;
+class IssueStore;
 class TestCaseStore;
 class RunHistoryStore;
 class SettingsStore;
@@ -25,8 +26,18 @@ public:
     TestPublishService(std::shared_ptr<ITestManagement> zephyr, TestCaseStore& cases, RunHistoryStore& history,
                        SettingsStore& settings, BugStore& bugs, QObject* parent = nullptr);
 
+    /// Los issues del proyecto: con ellos el ciclo se publica con el número de requerimiento de su
+    /// control de calidad. Se pone aparte porque el libro de issues se crea después que esto; sin él
+    /// el ciclo sale con el nombre del plan, como antes de que los ciclos tuvieran issue.
+    void setIssues(const IssueStore* issues) { m_issues = issues; }
+
     /// ¿Está configurada la publicación? (gestor Jira, conectado y Zephyr activado en Ajustes).
     bool enabled() const;
+
+    /// Nombre con el que el ciclo se crea en Zephyr: el requerimiento, la revisión del control de
+    /// calidad, el plan, la fecha y el ambiente («GREQ 2026997 · Rev. 2 · Regresión · 12/05/2026 · QA»).
+    /// Lo que el ciclo no diga, no sale; un ciclo suelto se queda con el plan y la fecha de siempre.
+    QString cycleName(const PlanReport& report) const;
     /// Casos ejecutados del informe a cuya ejecución habrá que crearle el Test (los que no se
     /// publicaron nunca; una republicación reutiliza los Tests que ya tiene).
     QStringList casesNeedingTest(const PlanReport& report) const;
@@ -56,6 +67,7 @@ private:
     QList<PublishDefect> defectsOf(const PlanReport& report, const QString& caseId) const;
 
     std::shared_ptr<ITestManagement> m_zephyr;
+    const IssueStore* m_issues = nullptr;
     TestCaseStore& m_cases;
     RunHistoryStore& m_history;
     SettingsStore& m_settings;

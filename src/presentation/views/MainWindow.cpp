@@ -8,6 +8,7 @@
 #include "presentation/views/HistoryView.h"
 #include "presentation/views/IssuesView.h"
 #include "presentation/views/PlanView.h"
+#include "presentation/views/CycleStartDialog.h"
 #include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/RunView.h"
 #include "presentation/views/SettingsDialog.h"
@@ -276,8 +277,43 @@ void MainWindow::startPlanRun(const QString& planId) {
         showToast(tr("El plan no tiene casos que ejecutar"), theme::Amber);
         return;
     }
+    askCycleEnvironment(planId, plan->name);
+}
+
+QString MainWindow::cycleContext(const QString& planId) const {
+    const QList<Issue> issues = m_ctx.issues->issuesForPlan(planId);
+    if (issues.isEmpty()) return {};
+    // El ciclo se anota en el primer issue que agrupa el plan, igual que hace IssueStore al arrancarlo.
+    const Issue& issue = issues.first();
+    const IssueRevision* open = issue.currentRevision();
+    const int revision = open ? open->number : (issue.revisions.isEmpty() ? 1 : issue.revisions.last().number + 1);
+    const QString what = issue.isImported() ? tr("GREQ %1").arg(issue.requirement.data.id) : issue.id;
+    return tr("%1 · revisión %2").arg(what).arg(revision);
+}
+
+void MainWindow::askCycleEnvironment(const QString& planId, const QString& planName) {
+    // El ambiente se pregunta al arrancar porque es de este ciclo, no del plan: el mismo plan se prueba
+    // en QA y luego en producción, y cada ejecución tiene que decir de dónde salieron sus resultados.
+    auto* dialog = new CycleStartDialog(planName, cycleContext(planId), m_ctx.history->lastEnvironment(), this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &QDialog::accepted, this, [this, planId, dialog]() { beginPlanRun(planId, dialog->environment()); });
+    dialog->open();
+}
+
+void MainWindow::beginPlanRun(const QString& planId, const QString& environment) {
+    // Se vuelve a comprobar todo: entre la pregunta y la respuesta puede haber arrancado otra cosa.
+    if (!m_ctx.run->state().caseId.isEmpty()) {
+        showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
+        return;
+    }
+    const TestPlan* plan = m_ctx.plan->find(planId);
+    const QStringList ids = m_ctx.plan->orderedCaseIds(planId);
+    if (!plan || plan->archived || ids.isEmpty()) {
+        showToast(tr("El plan no tiene casos que ejecutar"), theme::Amber);
+        return;
+    }
     m_ctx.plan->setActive(planId);
-    m_ctx.run->startSequence(ids, plan->name, planId);
+    m_ctx.run->startSequence(ids, plan->name, planId, environment);
     navigateInto(Screen::Run);
 }
 
@@ -289,13 +325,11 @@ void MainWindow::runSelectedTarget() {
     }
     const QString target = m_runTarget->currentData().toString();
     if (target.startsWith(QStringLiteral("plan:"))) {
-        const QString id = target.mid(5);
-        const auto* p = m_ctx.plan->find(id);
-        const auto ids = m_ctx.plan->orderedCaseIds(id);
-        if (!p || p->archived || ids.isEmpty()) return;
-        m_ctx.plan->setActive(id);
-        m_ctx.run->startSequence(ids, p->name, id);
-    } else if (target.startsWith(QStringLiteral("case:"))) {
+        // El ciclo lo arranca `startPlanRun`, que antes pregunta el ambiente y lleva a la ejecución.
+        startPlanRun(target.mid(5));
+        return;
+    }
+    if (target.startsWith(QStringLiteral("case:"))) {
         const QString id = target.mid(5);
         const auto* c = m_ctx.cases->find(id);
         if (!c || c->status == CaseStatus::Obsoleto) return;
@@ -727,7 +761,10 @@ void MainWindow::finishRun() {
 
 QString MainWindow::issueOfPlanRun(const QString& planRunId) const {
     const PlanRun* cycle = m_ctx.history->findPlan(planRunId);
-    if (!cycle || cycle->planId.isEmpty()) return QString();
+    if (!cycle) return QString();
+    // El ciclo dice de qué issue es desde que se arranca; los anteriores, por su plan.
+    if (!cycle->issueId.isEmpty() && m_ctx.issues->find(cycle->issueId)) return cycle->issueId;
+    if (cycle->planId.isEmpty()) return QString();
     const QList<Issue> issues = m_ctx.issues->issuesForPlan(cycle->planId);
     if (issues.isEmpty()) return QString();
     // Un plan puede probar varios requerimientos: gana aquel en el que se estaba trabajando.

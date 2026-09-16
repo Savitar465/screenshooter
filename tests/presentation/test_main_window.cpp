@@ -9,6 +9,7 @@
 #include "application/AppContext.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
+#include "presentation/views/CycleStartDialog.h"
 #include "presentation/views/HistoryView.h"
 #include "presentation/views/MainWindow.h"
 #include "presentation/views/PlanView.h"
@@ -96,6 +97,18 @@ struct WindowFixture {
         for (auto* b : window->findChildren<QPushButton*>())
             if (b->property("role").toString() == QStringLiteral("row") && b->isVisible() && b->window() == window.get()) ++n;
         return n;
+    }
+    /// Arrancar un ciclo pregunta antes en qué ambiente se prueba: responde al diálogo y acepta.
+    /// Falso si no hay ninguno abierto (el ciclo no llegó a ofrecerse).
+    bool answerCycleDialog(const QString& environment = QStringLiteral("QA")) const {
+        auto* dialog = window->findChild<CycleStartDialog*>();
+        if (!dialog) return false;
+        auto* combo = dialog->findChild<QComboBox*>(QStringLiteral("cycleStartEnvironment"));
+        auto* accept = dialog->findChild<QPushButton*>(QStringLiteral("cycleStartAccept"));
+        if (!combo || !accept) return false;
+        combo->setCurrentText(environment);
+        accept->click();
+        return true;
     }
     Toast* toast() const { return window->findChild<Toast*>(); }
     QString toastText() const {
@@ -684,7 +697,11 @@ private slots:
         f.window->navigate(Screen::Plan);
         QCOMPARE(targets->currentData().toString(), QStringLiteral("plan:") + f.app.plans.activeId());
         run->click();
+        // El ciclo no arranca hasta decir en qué ambiente se prueba, que es dato suyo.
+        QVERIFY(f.app.run.planRunId().isEmpty());
+        QVERIFY(f.answerCycleDialog(QStringLiteral("Staging")));
         QVERIFY(!f.app.run.planRunId().isEmpty());
+        QCOMPARE(f.app.history.findPlan(f.app.run.planRunId())->environment, QStringLiteral("Staging"));
         QCOMPARE(f.app.run.state().caseId, f.app.plans.orderedCaseIds().first());
         QCOMPARE(f.app.run.queuedCount(), f.app.plans.orderedCaseIds().size() - 1);
         QCOMPARE(f.window->currentScreen(), Screen::Run);
@@ -707,9 +724,10 @@ private slots:
         QCOMPARE(f.app.plans.orderedCaseIds().last(), caseId);
         QCOMPARE(f.window->currentScreen(), Screen::Casos);
 
-        // Y «Ejecutar plan» arranca su ciclo y lleva a la ejecución.
+        // Y «Ejecutar plan» arranca su ciclo (tras decir el ambiente) y lleva a la ejecución.
         f.window->navigate(Screen::Plan);
         run->click();
+        QVERIFY(f.answerCycleDialog());
         QCOMPARE(f.window->currentScreen(), Screen::Run);
         QVERIFY(!f.app.run.planRunId().isEmpty());
         QCOMPARE(f.app.run.state().caseId, f.app.plans.orderedCaseIds().first());

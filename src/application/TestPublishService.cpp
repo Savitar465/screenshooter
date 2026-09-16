@@ -1,6 +1,7 @@
 #include "TestPublishService.h"
 
 #include "application/BugStore.h"
+#include "application/IssueStore.h"
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
@@ -37,16 +38,38 @@ QStringList TestPublishService::casesNeedingTest(const PlanReport& report) const
     return out;
 }
 
+QString TestPublishService::cycleName(const PlanReport& report) const {
+    const PlanRun& plan = report.plan;
+    QStringList parts;
+    // El requerimiento primero: en Zephyr los ciclos de un mismo control de calidad se buscan por él.
+    if (const Issue* issue = m_issues && !plan.issueId.isEmpty() ? m_issues->find(plan.issueId) : nullptr)
+        if (issue->isImported()) parts << tr("GREQ %1").arg(issue->requirement.data.id);
+    if (plan.revision > 0) parts << tr("Rev. %1").arg(plan.revision);
+    // Y el plan, que es lo que distingue los ciclos de una misma ronda entre sí.
+    if (!plan.name.trimmed().isEmpty()) parts << plan.name.trimmed();
+    if (plan.startedAt.isValid()) parts << plan.startedAt.toString(QStringLiteral("dd/MM/yyyy"));
+    if (!plan.environment.trimmed().isEmpty()) parts << plan.environment.trimmed();
+    return parts.isEmpty() ? plan.name : parts.join(QStringLiteral(" · "));
+}
+
 PublishRequest TestPublishService::requestFor(const PlanReport& report, bool update) const {
     PublishRequest req;
     if (update) req.cycleId = report.plan.zephyrCycleId.trimmed();
-    const QString started = report.plan.startedAt.toString(QStringLiteral("dd/MM/yyyy"));
-    req.cycleName = started.isEmpty() ? report.plan.name : QStringLiteral("%1 · %2").arg(report.plan.name, started);
+    req.cycleName = cycleName(report);
     req.versionName = m_settings.tracker().zephyrVersion;
+    req.environment = report.plan.environment.trimmed();
     req.startedAt = report.plan.startedAt;
     req.finishedAt = report.plan.finishedAt;
     req.description = QObject::tr("Publicado desde QAflow · %1 de %2 casos ejecutados · %3 % de éxito")
                           .arg(report.executed).arg(report.total()).arg(report.successRate());
+    // De qué control de calidad son estos resultados y dónde se obtuvieron: quien abra el ciclo en
+    // Zephyr lo ve sin tener que volver a QAflow.
+    if (const Issue* issue = m_issues && !report.plan.issueId.isEmpty() ? m_issues->find(report.plan.issueId) : nullptr) {
+        if (issue->isImported())
+            req.description += tr("\nRequerimiento GREQ %1 · %2").arg(issue->requirement.data.id, issue->title);
+        if (report.plan.revision > 0) req.description += tr("\nRevisión %1 del control de calidad").arg(report.plan.revision);
+    }
+    if (!req.environment.isEmpty()) req.description += tr("\nAmbiente: %1").arg(req.environment);
 
     for (const auto& row : report.rows) {
         if (!row.executed) continue;   // los pendientes no se publican: en Zephyr quedarían sin ejecutar

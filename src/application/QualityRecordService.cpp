@@ -26,8 +26,13 @@ QDateTime QualityRecordService::revisionStart(const Issue& issue) const {
 
 QStringList QualityRecordService::caseIdsOf(const Issue& issue) const { return IssueStore::caseIdsOf(issue, m_plans); }
 
+int QualityRecordService::revisionNumber(const Issue& issue) const {
+    if (const IssueRevision* open = issue.currentRevision()) return open->number;
+    return issue.revisions.isEmpty() ? 0 : issue.revisions.last().number;
+}
+
 QList<RunRecord> QualityRecordService::revisionRuns(const Issue& issue) const {
-    return IssueStore::runsOf(issue, m_history, revisionStart(issue));
+    return IssueStore::runsOfRevision(issue, m_history, revisionNumber(issue));
 }
 
 QList<IssueLink> QualityRecordService::revisionBugs(const Issue& issue) const {
@@ -51,7 +56,7 @@ IssueProgress QualityRecordService::progressFor(const QString& issueId) const {
 QList<PlanReport> QualityRecordService::cyclesFor(const QString& issueId) const {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) return {};
-    QList<PlanRun> cycles = IssueStore::cyclesOf(*issue, m_history, revisionStart(*issue));
+    QList<PlanRun> cycles = IssueStore::cyclesOfRevision(*issue, m_history, revisionNumber(*issue));
     // Una revisión abierta a mano (o abierta después de ejecutar) puede no tener ciclos suyos: entonces
     // se ofrecen todos los del issue en vez de dejar el acta sin ejecución de la que hablar.
     if (cycles.isEmpty()) cycles = IssueStore::cyclesOf(*issue, m_history);

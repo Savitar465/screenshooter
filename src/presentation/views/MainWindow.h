@@ -106,6 +106,13 @@ private:
     QString screenLabel(Screen s) const;
     /// Issue que se prueba con ese ciclo de plan; vacío si el plan no prueba ningún requerimiento.
     QString issueOfPlanRun(const QString& planRunId) const;
+    /// A qué requerimiento y a qué ronda va a pertenecer un ciclo de ese plan («GREQ 2026997 · revisión 2»);
+    /// vacío si el plan no prueba ningún issue.
+    QString cycleContext(const QString& planId) const;
+    /// Pregunta en qué ambiente se va a probar y, si se acepta, arranca el ciclo (`beginPlanRun`).
+    void askCycleEnvironment(const QString& planId, const QString& planName);
+    /// Arranca el ciclo del plan en ese ambiente y lleva a la ejecución.
+    void beginPlanRun(const QString& planId, const QString& environment);
     void runSelectedTarget();
     /// Arranca un ciclo de ese plan y lleva a la ejecución; avisa si hay algo en curso que lo impida.
     void startPlanRun(const QString& planId);

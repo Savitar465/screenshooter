@@ -37,9 +37,18 @@ public:
     /// y los bugs, contra el libro de `setBugs()`.
     PlanReport report(const QString& planRunId) const;
 
-    /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos).
-    QString startPlan(const QString& name, const QStringList& caseIds, const QString& planId = QString());
+    /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos). `environment` es el
+    /// ambiente en el que se va a probar ("QA", "Staging"…), que acompaña al ciclo hasta Zephyr.
+    QString startPlan(const QString& name, const QStringList& caseIds, const QString& planId = QString(),
+                      const QString& environment = QString());
     void finishPlan(const QString& planRunId);
+    /// Anota de qué control de calidad es el ciclo: el issue del requerimiento y la revisión que
+    /// estaba abierta al arrancarlo. Lo llama quien coordina el arranque, en cuanto el issue abre su
+    /// ronda; sin issue (ciclo suelto) no hay nada que anotar.
+    void noteCycleRevision(const QString& planRunId, const QString& issueId, int revision);
+    /// Último ambiente en el que se probó en este proyecto (el del ciclo más reciente que lo indique);
+    /// vacío si todavía no se anotó ninguno. Es lo que se propone al arrancar el ciclo siguiente.
+    QString lastEnvironment() const;
     /// Anota en el ciclo de plan el ciclo de Zephyr en el que se publicaron sus resultados.
     void markPublished(const QString& planRunId, const QString& zephyrCycleId);
     /// Guarda en cada ejecución (R-0007 → SHOP-77) el Test de Zephyr que se creó para ella al

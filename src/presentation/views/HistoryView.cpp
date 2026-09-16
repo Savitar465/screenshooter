@@ -203,7 +203,11 @@ void HistoryView::refreshList() {
             if (rep.plan.isFinished()) th->addWidget(verdictPill(rep.verdict()));
             else th->addWidget(ui::pill(tr("EN CURSO"), theme::tint(theme::Muted, 38), theme::Muted));
             title->setText(rep.plan.name.isEmpty() ? tr("(plan sin nombre)") : rep.plan.name);
-            bottom->setText(tr("%1 · %2/%3 casos · %4 %").arg(when(rep.plan.startedAt)).arg(rep.executed).arg(rep.total()).arg(rep.successRate()));
+            QString info = tr("%1 · %2/%3 casos · %4 %").arg(when(rep.plan.startedAt)).arg(rep.executed).arg(rep.total()).arg(rep.successRate());
+            // Dos ciclos del mismo plan se distinguen por su ronda y su ambiente, no sólo por la fecha.
+            if (rep.plan.revision > 0) info += tr(" · revisión %1").arg(rep.plan.revision);
+            if (!rep.plan.environment.trimmed().isEmpty()) info += QStringLiteral(" · ") + rep.plan.environment.trimmed();
+            bottom->setText(info);
             ui::setFlag(row, "active", e.id == m_selectedPlan);
             connect(row, &QPushButton::clicked, this, [this, id = e.id]() { showPlan(id); });
         } else {
@@ -304,7 +308,12 @@ void HistoryView::renderPlan(const PlanReport& report) {
     auto* ah = new FlowLayout(actions, 0, 8, 8);
     auto* titleBlock = new QWidget;
     auto* tv = ui::vbox(titleBlock, 0, 2);
-    tv->addWidget(ui::label(tr("INFORME DE PLAN · %1 · %2").arg(plan.id, when(plan.startedAt)), "eyebrow"));
+    QString eyebrow = tr("INFORME DE PLAN · %1 · %2").arg(plan.id, when(plan.startedAt));
+    // De qué ronda del control de calidad son estos resultados y dónde se obtuvieron: lo mismo que
+    // viaja con el ciclo a Zephyr.
+    if (plan.revision > 0) eyebrow += tr(" · REVISIÓN %1").arg(plan.revision);
+    if (!plan.environment.trimmed().isEmpty()) eyebrow += QStringLiteral(" · ") + plan.environment.trimmed().toUpper();
+    tv->addWidget(ui::label(eyebrow, "eyebrow"));
     auto* title = ui::label(plan.name.isEmpty() ? tr("(plan sin nombre)") : plan.name, "h1");
     title->setWordWrap(true);
     tv->addWidget(title);

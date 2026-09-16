@@ -220,9 +220,20 @@ private slots:
         QVERIFY2(page.error.contains(QStringLiteral("2025101")) && page.error.contains(QStringLiteral("2025999")), qPrintable(page.error));
     }
 
+    void aDetailWithoutItsStateIsUnexpected_data() {
+        QTest::addColumn<QString>("newline");
+        QTest::newRow("LF") << QStringLiteral("\n");
+        QTest::newRow("CRLF") << QStringLiteral("\r\n");
+    }
+
     void aDetailWithoutItsStateIsUnexpected() {
+        QFETCH(QString, newline);
         QString html = fixture("detalle.html");
-        html.replace(QStringLiteral("<th>Estado:</th>\n                    <td class=\"observado\">"), QStringLiteral("<th>Situación:</th>\n                    <td class=\"observado\">"));
+        html.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
+        html.replace(QStringLiteral("\n"), newline);
+        const QString stateHeader = QStringLiteral("<th>Estado:</th>");
+        QVERIFY(html.contains(stateHeader));
+        html.replace(stateHeader, QStringLiteral("<th>Situación:</th>"));
         const gesreq::DetailPage page = gesreq::parseDetail(html, QStringLiteral("2025101"), settings());
         QVERIFY(page.kind == gesreq::DetailPage::Kind::Unexpected);
         QVERIFY2(page.error.contains(QStringLiteral("Estado")), qPrintable(page.error));

@@ -96,7 +96,10 @@ private slots:
     }
 
     void aZipThatCouldNotBeCreatedSaysSo() {
-        ZipWriter zip(QStringLiteral("/no/existe/ni/se/puede/crear.zip"));
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        // Un directorio existente no puede abrirse como archivo, en ninguna plataforma.
+        ZipWriter zip(dir.path());
         QVERIFY(!zip.isOpen());
         QVERIFY(!zip.error().isEmpty());
         QVERIFY(!zip.add(QStringLiteral("x"), QByteArrayLiteral("y")));
@@ -248,8 +251,10 @@ private slots:
     }
 
     void theRecordSaysWhereItCouldNotBeWritten() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
         QualityRecordDocx writer;
-        const QualityRecordWriteResult result = writer.write(sampleRecord(), QStringLiteral("/no/existe/acta.docx"));
+        const QualityRecordWriteResult result = writer.write(sampleRecord(), dir.path());
         QVERIFY(!result.ok);
         QVERIFY(!result.error.isEmpty());
     }

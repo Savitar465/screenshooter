@@ -51,10 +51,18 @@ public:
     void unlinkPlan(const QString& issueId, const QString& planId);
 
     // ---- Flujo de la revisión ------------------------------------------------------------------
+    /// El issue y la ronda a los que pertenece un ciclo de plan. Vacío = el ciclo no prueba ningún issue.
+    struct RevisionRef {
+        QString issueId;
+        int revision = 0;
+
+        bool isEmpty() const { return issueId.trimmed().isEmpty(); }
+    };
     /// Empezó un ciclo de ese plan: los issues que lo agrupan pasan a «En pruebas» y, si no tenían
     /// ninguna revisión abierta, abren la siguiente (un requerimiento observado que vuelve a probarse
     /// es la revisión N+1 del acta). El avance automático nunca retrocede de estado por su cuenta.
-    void notePlanStarted(const QString& planId);
+    /// Devuelve el issue y la revisión a los que queda asociado el ciclo (el primero que agrupa el plan).
+    RevisionRef notePlanStarted(const QString& planId);
     /// Abre la ronda siguiente (la primera si no hay ninguna) y deja el issue «En pruebas».
     /// Devuelve su número, o 0 si el issue no existe.
     int openRevision(const QString& issueId);
@@ -116,9 +124,17 @@ public:
     /// Ciclos ejecutados de los planes del issue, el más reciente primero. Con `since`, sólo los que
     /// empezaron a partir de ese momento (los de la revisión en curso).
     static QList<PlanRun> cyclesOf(const Issue& issue, const RunHistoryStore& history, const QDateTime& since = QDateTime());
+    /// Ciclos de una ronda concreta: los que se anotaron con ese número de revisión al arrancar y, para
+    /// los anteriores a que se anotara, los que empezaron mientras esa ronda estaba abierta. Con
+    /// `revision` 0 son todos los del issue.
+    static QList<PlanRun> cyclesOfRevision(const Issue& issue, const RunHistoryStore& history, int revision);
+    /// Ejecuciones de los ciclos de esa ronda, la más reciente primero.
+    static QList<RunRecord> runsOfRevision(const Issue& issue, const RunHistoryStore& history, int revision);
     /// Ejecuciones de los ciclos de los planes del issue, la más reciente primero. Una ejecución
     /// suelta del mismo caso, o dentro de un plan que no es del issue, no es un resultado suyo.
     static QList<RunRecord> runsOf(const Issue& issue, const RunHistoryStore& history, const QDateTime& since = QDateTime());
+    /// Ejecuciones de esos ciclos, la más reciente primero.
+    static QList<RunRecord> runsOfCycles(const QList<PlanRun>& cycles, const RunHistoryStore& history);
 
 signals:
     void issuesChanged();

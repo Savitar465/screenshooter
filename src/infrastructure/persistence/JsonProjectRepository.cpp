@@ -35,6 +35,9 @@ std::optional<ProjectCollection> JsonProjectRepository::load() {
     if (!file.open(QIODevice::ReadOnly)) return std::nullopt;
     QJsonParseError error;
     const auto doc = QJsonDocument::fromJson(file.readAll(), &error);
+    // La actualización de suites puede reemplazar el catálogo mediante QSaveFile.
+    // En Windows hay que cerrar antes el archivo abierto para lectura.
+    file.close();
     if (error.error != QJsonParseError::NoError || !doc.isObject()) return std::nullopt;
     const auto object = doc.object();
     if (object["version"].toInt() != 1 || !object["projects"].isArray()) return std::nullopt;

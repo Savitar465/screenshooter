@@ -163,6 +163,46 @@ private slots:
         QCOMPARE(b.issues->issues().first().requirement.connection, connection);
     }
 
+    // La sesión ata cada ciclo a la revisión del issue que se está probando: al arrancarlo, el ciclo
+    // queda anotado con el issue, con el número de la ronda que abre y con el ambiente elegido, que es
+    // lo que después lo identifica en la pantalla del issue y en Zephyr.
+    void startingAPlanCycleStampsTheIssueAndItsRevisionOnIt() {
+        QTemporaryDir dir;
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir.path());
+        QCoreApplication::setOrganizationName(QStringLiteral("QAflowCycleTest"));
+        QCoreApplication::setApplicationName(QStringLiteral("QAflowCycleTest"));
+        ProjectStore projects(std::make_shared<JsonProjectRepository>(dir.path()));
+        QVERIFY(projects.load());
+        const QString id = projects.create(QStringLiteral("Tránsito"));
+        ProjectSession session(projects, id, std::make_shared<testing::MemorySecretStore>());
+
+        const QString caseId = session.cases->createCase();
+        session.cases->updateCase(caseId, [](TestCase& c) { c.steps = {{QStringLiteral("Paso"), QStringLiteral("Resultado")}}; });
+        const QString planId = session.plan->createPlan(QStringLiteral("Regresión"));
+        const QString issueId = session.issues->createIssue(QStringLiteral("Requerimiento"));
+        session.issues->linkPlan(issueId, planId);
+
+        session.run->startSequence({caseId}, QStringLiteral("Regresión"), planId, QStringLiteral("QA"));
+        const PlanRun* cycle = session.history->findPlan(session.run->planRunId());
+        QVERIFY(cycle);
+        QCOMPARE(cycle->issueId, issueId);
+        QCOMPARE(cycle->revision, 1);
+        QCOMPARE(cycle->environment, QStringLiteral("QA"));
+
+        // La ronda siguiente del mismo plan es otra revisión, y su ciclo lo dice.
+        session.run->mark(StepResult::Pass);
+        session.run->finish();
+        session.issues->closeRevision(issueId, QaOutcome::Observado);
+        session.run->startSequence({caseId}, QStringLiteral("Regresión"), planId, QStringLiteral("Producción"));
+        const PlanRun* second = session.history->findPlan(session.run->planRunId());
+        QVERIFY(second);
+        QCOMPARE(second->revision, 2);
+        QCOMPARE(second->environment, QStringLiteral("Producción"));
+        QCOMPARE(IssueStore::cyclesOfRevision(*session.issues->find(issueId), *session.history, 1).size(), 1);
+        QCOMPARE(IssueStore::cyclesOfRevision(*session.issues->find(issueId), *session.history, 2).size(), 1);
+    }
+
     void projectsKeepDataAndJiraCodesSeparateButShareSettingsAndSuites() {
         QTemporaryDir dir;
         QSettings::setDefaultFormat(QSettings::IniFormat);

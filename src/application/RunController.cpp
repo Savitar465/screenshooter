@@ -88,11 +88,12 @@ void RunController::start(const QString& caseId) {
     changed();
 }
 
-void RunController::startSequence(const QStringList& caseIds, const QString& planName, const QString& planId) {
+void RunController::startSequence(const QStringList& caseIds, const QString& planName, const QString& planId,
+                                  const QString& environment) {
     if (caseIds.isEmpty()) return;
     commitRun(false);
     closePlan();
-    m_planRunId = m_history.startPlan(planName, caseIds, planId);
+    m_planRunId = m_history.startPlan(planName, caseIds, planId, environment);
     m_queue = caseIds.mid(1);
     begin(caseIds.first());
     changed();

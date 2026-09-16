@@ -51,8 +51,11 @@ struct PublishRequest {
     /// ejecuciones, se fijan los veredictos de nuevo y se suben sólo las evidencias que falten.
     /// Vacío = crear un ciclo nuevo.
     QString cycleId;
-    QString cycleName;       // "Regresión Sprint 14 · 12/05/2026"
+    QString cycleName;       // "GREQ 2026997 · Rev. 2 · Regresión Sprint 14 · 12/05/2026 · QA"
     QString versionName;     // versión del proyecto; vacío = sin programar
+    /// Ambiente en el que se ejecutó el ciclo ("QA", "Staging"…): va al campo «environment» del ciclo
+    /// de Zephyr, además de al nombre. Vacío = no se indicó.
+    QString environment;
     QString description;
     QDateTime startedAt;
     QDateTime finishedAt;

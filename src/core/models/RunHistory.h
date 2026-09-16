@@ -59,6 +59,15 @@ struct PlanRun {
     QStringList caseIds;      // composición del plan al arrancar, en orden de ejecución
     QDateTime startedAt;
     QDateTime finishedAt;     // inválida mientras el plan sigue en curso
+    /// De qué control de calidad son estos resultados: el issue del requerimiento y el número de la
+    /// revisión que estaba abierta al arrancar el ciclo. Un issue prueba varios planes y vuelve a
+    /// probarlos en cada ronda, así que sin esto no se sabe a qué revisión pertenece cada ejecución.
+    /// Vacío / 0 en un ciclo suelto (o en los registros anteriores a que se anotara).
+    QString issueId;
+    int revision = 0;
+    /// Ambiente en el que se ejecutó ("QA", "Staging", "Producción"…; ver `BugReport::environments`).
+    /// Vacío = no se indicó. Viaja al ciclo de Zephyr, en su nombre y en su campo «environment».
+    QString environment;
     /// Dónde quedaron estos resultados en la herramienta de gestión de pruebas: el ciclo de Zephyr
     /// que se creó al publicarlos y cuándo se hizo. Vacío mientras no se haya publicado.
     QString zephyrCycleId;

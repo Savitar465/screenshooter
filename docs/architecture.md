@@ -262,7 +262,18 @@ plan y lo abre para escribir sus pasos. Son los dos pasos que la pantalla de iss
 así que están donde se llega desde ella.
 
 Un **ciclo** es una ejecución del plan: `RunController::startSequence()` abre un `PlanRun` en el
-historial con el `planId` del plan. `PlanStore::latestCycle(planId)` devuelve el `PlanReport` del
+historial con el `planId` del plan.
+
+**Cada ciclo dice de qué ronda es y dónde se probó.** Un issue prueba varios planes y vuelve a
+probarlos en cada revisión, así que el ciclo no se identifica por su plan y su fecha: el `PlanRun`
+guarda además `issueId` y `revision` —el requerimiento cuyo control de calidad se está haciendo y la
+ronda que estaba abierta al arrancar— y `environment`, el ambiente en el que se prueba. El ambiente se
+pregunta al arrancar (`CycleStartDialog`, con el último usado en el proyecto ya propuesto y el issue y
+la revisión a los que va a pertenecer a la vista); el issue y la revisión los pone `ProjectSession` al
+recibir `RunController::planStarted`, con lo que devuelve `IssueStore::notePlanStarted()`. Los tres
+viajan a Zephyr con el ciclo (ver «Publicar en Zephyr») y se ven en el historial y en la pantalla del
+issue. Los ciclos anteriores a esto no los tienen: `IssueStore::cyclesOfRevision()` los reparte por la
+ventana de fechas de cada ronda, como se hacía antes. `PlanStore::latestCycle(planId)` devuelve el `PlanReport` del
 ciclo más reciente (terminado o en curso), que es lo que muestran la pantalla de planes y el
 bloque «Plan» de la barra de estado como progreso; `cycles(planId)` devuelve todos los ciclos del
 plan, del más reciente al más antiguo, con los que `PlanView` pinta el «Historial de ciclos»: una
@@ -532,12 +543,21 @@ El cliente encadena entonces, por cada caso:
 | Paso | Petición |
 |------|----------|
 | Resolver los ids | `GET /rest/api/2/project/{clave}` (Zephyr trabaja con ids numéricos, no con claves): el del proyecto, el de la versión y el del tipo de incidencia de los Tests; y `GET /rest/api/2/issue/{testKey}?fields=id` para la ejecución que ya tiene Test (republicación) |
-| Crear el ciclo | `POST {api}/cycle` con `projectId`, `versionId` y las fechas en el formato de Zephyr (`12/May/26`) |
+| Crear el ciclo | `POST {api}/cycle` con `projectId`, `versionId`, el `environment` del ciclo y las fechas en el formato de Zephyr (`12/May/26`) |
 | Crear el Test que falta | `POST /rest/api/2/issue` (tipo Test, título y precondiciones del caso) y un `POST {api}/teststep/{issueId}` por paso |
 | Añadir el caso | `POST {api}/execution` → la respuesta viene indexada por el id de la ejecución creada |
 | Veredicto del caso | `PUT {api}/execution/{id}/execute` con 1 PASS · 2 FAIL · 4 BLOCKED |
 | Veredicto por paso | `GET {api}/stepResult?executionId=` y `PUT {api}/stepResult/{id}` (N/A queda sin ejecutar, -1) |
 | Evidencias | `POST {api}/attachment?entityId=&entityType=` — `TESTSTEPRESULT` las de un paso, `EXECUTION` las demás |
+
+**El nombre del ciclo dice de qué control de calidad es.** `TestPublishService::cycleName()` lo arma
+con lo que el `PlanRun` sabe: el requerimiento (`GREQ 2026997`, resuelto por `issueId` contra el
+`IssueStore` que le pasa `setIssues()`), la revisión (`Rev. 2`), el nombre del plan —lo que distingue
+entre sí los ciclos de una misma ronda—, la fecha y el ambiente:
+`GREQ 2026997 · Rev. 2 · Regresión · 12/05/2026 · QA`. Lo que el ciclo no diga no sale, así que una
+ejecución suelta se queda con el plan y la fecha de siempre y los ciclos publicados antes de que esto
+existiera conservan su nombre (y con él su enlace). Lo mismo va en la descripción del ciclo
+(requerimiento, revisión y ambiente) y el ambiente, además, en el campo `environment` de Zephyr.
 
 **Cada ejecución, su Test.** Cada informe de plan es único, y un caso de QAflow se ejecuta en muchos
 ciclos: si todos compartieran un Test, publicar el último ciclo cambiaría lo que enlazan los informes

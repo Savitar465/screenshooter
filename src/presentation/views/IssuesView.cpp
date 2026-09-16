@@ -718,9 +718,16 @@ void IssuesView::refreshRevision(const Issue& issue) {
 
     // 2 · Ejecutarlo: el ciclo del plan es lo que abre la revisión y da sus resultados.
     {
-        auto* actions = step(executed, tr("Ejecutar el plan"),
-                             executed ? tr("%1 de %2 casos ejecutados en esta revisión").arg(progress.executed).arg(progress.cases)
-                                      : tr("Arrancar un ciclo del plan abre la revisión y deja el issue en pruebas"));
+        // En qué ambientes se ha probado esta ronda: cada ciclo lo dice desde que se arranca, y es
+        // parte de la identidad de sus resultados (va con ellos a Zephyr).
+        QStringList environments;
+        for (const auto& cycle : IssueStore::cyclesOfRevision(issue, m_history, number))
+            if (const QString env = cycle.environment.trimmed(); !env.isEmpty() && !environments.contains(env))
+                environments << env;
+        QString detail = executed ? tr("%1 de %2 casos ejecutados en esta revisión").arg(progress.executed).arg(progress.cases)
+                                  : tr("Arrancar un ciclo del plan abre la revisión y deja el issue en pruebas");
+        if (!environments.isEmpty()) detail += tr(" · ambiente: %1").arg(environments.join(tr(", ")));
+        auto* actions = step(executed, tr("Ejecutar el plan"), detail);
         auto* run = smallButton(tr("Ir al plan"), "ghost", tr("Los ciclos se arrancan desde la pantalla del plan"));
         run->setObjectName(QStringLiteral("issueStepRun"));
         run->setEnabled(hasPlan);
@@ -1194,6 +1201,7 @@ void IssuesView::refreshResults(const Issue& issue) {
         return;
     }
     const QDateTime revisionStart = issue.revisions.isEmpty() ? QDateTime() : issue.revisions.last().startedAt;
+    const int currentRevision = issue.revisions.isEmpty() ? 0 : issue.revisions.last().number;
     int shownRuns = 0;
     for (const auto& cycle : cycles) {
         const PlanReport report = m_history.report(cycle.id);
@@ -1204,8 +1212,16 @@ void IssuesView::refreshResults(const Issue& issue) {
         auto* name = new QLabel(cycle.name);
         name->setWordWrap(true);
         ch->addWidget(name, 1);
-        if (revisionStart.isValid() && cycle.startedAt >= revisionStart)
-            ch->addWidget(ui::pill(tr("REVISIÓN EN CURSO"), theme::tint(theme::Blue, 30), theme::Blue));
+        // De qué ronda es el ciclo y dónde se probó: es lo que lo distingue de los demás ciclos del
+        // mismo requerimiento, y es lo que viaja con él a Zephyr.
+        if (cycle.revision > 0)
+            ch->addWidget(ui::pill(tr("REV %1").arg(cycle.revision), theme::tint(theme::Muted, 30), theme::Muted));
+        if (!cycle.environment.trimmed().isEmpty())
+            ch->addWidget(ui::pill(cycle.environment.trimmed().toUpper(), theme::tint(theme::Blue, 26), theme::Blue));
+        // Los ciclos dicen de qué ronda son; los anteriores a eso, por cuándo empezaron.
+        const bool ofThisRound = cycle.revision > 0 ? cycle.revision == currentRevision
+                                                    : (revisionStart.isValid() && cycle.startedAt >= revisionStart);
+        if (ofThisRound) ch->addWidget(ui::pill(tr("REVISIÓN EN CURSO"), theme::tint(theme::Blue, 30), theme::Blue));
         ch->addWidget(ui::label(tr("%1 de %2 ejecutados · %3 superados · %4 fallidos · %5 bloqueados")
                                     .arg(report.executed)
                                     .arg(report.total())

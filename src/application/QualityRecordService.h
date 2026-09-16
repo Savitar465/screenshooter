@@ -83,6 +83,9 @@ private:
     QualityRecord previousRecord(const QString& issueId) const;
     /// Cuándo empezó la revisión que se está mirando; inválida si el issue no tiene ninguna.
     QDateTime revisionStart(const Issue& issue) const;
+    /// Número de la ronda de la que se habla: la abierta o, si no hay ninguna, la última cerrada (0 si
+    /// el issue todavía no tiene revisiones).
+    int revisionNumber(const Issue& issue) const;
     /// Los informes de los ciclos con los que se levanta el acta: el elegido, o todos los de la revisión.
     QList<PlanReport> cyclesForRecord(const Issue& issue, const QString& planRunId) const;
     /// Enlaces a los ciclos de Zephyr en los que se publicaron esos ciclos.

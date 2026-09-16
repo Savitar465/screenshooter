@@ -100,6 +100,40 @@ private slots:
         QCOMPARE(req.startedAt, report.plan.startedAt);
     }
 
+    // El ciclo tiene que decir en Zephyr de qué requerimiento y de qué ronda es, y dónde se probó:
+    // varios planes del mismo issue se distinguen por eso, no por el nombre del plan.
+    void theCycleCarriesTheRequirementTheRevisionAndTheEnvironment() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
+        publish.setIssues(&f.issues);
+
+        ExternalRequirement requirement;
+        requirement.id = QStringLiteral("2026997");
+        requirement.summary = QStringLiteral("Cupones de descuento");
+        const QString issueId = f.issues.openForRequirement(requirement, QStringLiteral("http://servidor:7401/greq"));
+        QVERIFY(!issueId.isEmpty());
+
+        PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
+        report.plan.issueId = issueId;
+        report.plan.revision = 2;
+        report.plan.environment = QStringLiteral("QA");
+        QCOMPARE(publish.cycleName(report),
+                 QStringLiteral("GREQ 2026997 · Rev. 2 · Regresión Sprint 14 · 12/05/2026 · QA"));
+
+        publish.publish(report, [](const PublishResult&) {});
+        const PublishRequest& sent = zephyr->published[0];
+        QCOMPARE(sent.environment, QStringLiteral("QA"));   // y en el campo «environment» del ciclo
+        QVERIFY(sent.description.contains(QStringLiteral("GREQ 2026997")));
+        QVERIFY(sent.description.contains(QStringLiteral("Revisión 2")));
+        QVERIFY(sent.description.contains(QStringLiteral("Ambiente: QA")));
+
+        // Un ciclo suelto se queda con el nombre de siempre: no se inventa lo que no hay.
+        PlanReport loose = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
+        QCOMPARE(publish.cycleName(loose), QStringLiteral("Regresión Sprint 14 · 12/05/2026"));
+    }
+
     void casesWhoseTestWillBeCreatedAreListedBeforePublishing() {
         AppFixture f;
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });

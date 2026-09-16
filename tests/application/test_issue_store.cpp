@@ -361,6 +361,41 @@ private slots:
         QVERIFY(IssueStore::runsOf(*f.issues.find(id), f.history, QDateTime::currentDateTime().addSecs(60)).isEmpty());
     }
 
+    // Cada ciclo dice de qué ronda es desde que se arranca, así que los resultados de una revisión no
+    // se mezclan con los de la siguiente aunque las dos prueben los mismos planes.
+    void eachCycleBelongsToTheRevisionItWasStartedIn() {
+        AppFixture f;
+        const QString id = f.issues.createIssue(QStringLiteral("Checkout"));
+        f.issues.linkPlan(id, QStringLiteral("PL-0001"));
+
+        // Ronda 1: el ciclo la abre y queda anotado en ella (como hace la sesión al arrancarlo).
+        const IssueStore::RevisionRef first = f.issues.notePlanStarted(QStringLiteral("PL-0001"));
+        QCOMPARE(first.issueId, id);
+        QCOMPARE(first.revision, 1);
+        const QString cycle1 = f.history.startPlan(QStringLiteral("Regresión"), {QStringLiteral("TC-101")},
+                                                   QStringLiteral("PL-0001"), QStringLiteral("QA"));
+        f.history.noteCycleRevision(cycle1, first.issueId, first.revision);
+        f.issues.closeRevision(id, QaOutcome::Observado);
+
+        // Ronda 2: otro ciclo del mismo plan, en otro ambiente.
+        const IssueStore::RevisionRef second = f.issues.notePlanStarted(QStringLiteral("PL-0001"));
+        QCOMPARE(second.revision, 2);
+        const QString cycle2 = f.history.startPlan(QStringLiteral("Regresión"), {QStringLiteral("TC-101")},
+                                                   QStringLiteral("PL-0001"), QStringLiteral("Staging"));
+        f.history.noteCycleRevision(cycle2, second.issueId, second.revision);
+
+        const Issue* issue = f.issues.find(id);
+        QCOMPARE(IssueStore::cyclesOf(*issue, f.history).size(), 2);
+        const QList<PlanRun> round1 = IssueStore::cyclesOfRevision(*issue, f.history, 1);
+        QCOMPARE(round1.size(), 1);
+        QCOMPARE(round1.first().id, cycle1);
+        QCOMPARE(round1.first().environment, QStringLiteral("QA"));
+        const QList<PlanRun> round2 = IssueStore::cyclesOfRevision(*issue, f.history, 2);
+        QCOMPARE(round2.size(), 1);
+        QCOMPARE(round2.first().id, cycle2);
+        QCOMPARE(round2.first().environment, QStringLiteral("Staging"));
+    }
+
     // ---- Datos que no se pueden leer ------------------------------------------------------------
     void unreadableIssuesAreNeverOverwritten() {
         auto repo = std::make_shared<MemoryIssueRepository>();

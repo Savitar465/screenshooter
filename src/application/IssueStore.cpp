@@ -150,8 +150,9 @@ IssueRevision& IssueStore::revisionFor(Issue& issue) {
     return issue.revisions.last();
 }
 
-void IssueStore::notePlanStarted(const QString& planId) {
-    if (planId.isEmpty()) return;
+IssueStore::RevisionRef IssueStore::notePlanStarted(const QString& planId) {
+    RevisionRef started;
+    if (planId.isEmpty()) return started;
     QStringList changed;
     for (auto& issue : m_issues) {
         if (!issue.planIds.contains(planId)) continue;
@@ -164,13 +165,20 @@ void IssueStore::notePlanStarted(const QString& planId) {
             issue.revisions << next;
         }
         issue.state = IssueState::Testing;
+        // El ciclo se anota en el primer issue que lo agrupa: es el requerimiento cuyo control de
+        // calidad se está haciendo, y su ronda abierta es la revisión a la que pertenece el ciclo.
+        if (started.issueId.isEmpty()) {
+            started.issueId = issue.id;
+            started.revision = issue.revisions.last().number;
+        }
         if (wasTesting && hadOpenRevision) continue;   // ya estaba probando esta misma ronda
         issue.updatedAt = QDateTime::currentDateTime();
         changed << issue.id;
     }
-    if (changed.isEmpty()) return;
+    if (changed.isEmpty()) return started;
     persist();
     for (const auto& id : changed) emit issueChanged(id);
+    return started;
 }
 
 int IssueStore::openRevision(const QString& issueId) {
@@ -361,11 +369,16 @@ QStringList IssueStore::caseIdsOf(const Issue& issue, const PlanStore& plans) {
     return out;
 }
 
-QList<PlanRun> IssueStore::cyclesOf(const Issue& issue, const RunHistoryStore& history, const QDateTime& since) {
+namespace {
+/// Los ciclos del issue, del más reciente al primero, quedándose con los que `keep` acepte.
+QList<PlanRun> cyclesWhere(const Issue& issue, const RunHistoryStore& history,
+                           const std::function<bool(const PlanRun&)>& keep) {
     QList<PlanRun> cycles;
     for (const auto& cycle : history.plans()) {
-        if (!issue.planIds.contains(cycle.planId)) continue;
-        if (since.isValid() && cycle.startedAt.isValid() && cycle.startedAt < since) continue;
+        // El ciclo dice de qué issue es desde que se arranca; los anteriores a eso, y los de un plan
+        // que prueba varios requerimientos, se reconocen por el plan.
+        if (!issue.planIds.contains(cycle.planId) && cycle.issueId != issue.id) continue;
+        if (keep && !keep(cycle)) continue;
         cycles << cycle;
     }
     std::sort(cycles.begin(), cycles.end(), [](const PlanRun& a, const PlanRun& b) {
@@ -373,10 +386,42 @@ QList<PlanRun> IssueStore::cyclesOf(const Issue& issue, const RunHistoryStore& h
     });
     return cycles;
 }
+} // namespace
+
+QList<PlanRun> IssueStore::cyclesOf(const Issue& issue, const RunHistoryStore& history, const QDateTime& since) {
+    return cyclesWhere(issue, history, [&since](const PlanRun& cycle) {
+        return !since.isValid() || !cycle.startedAt.isValid() || cycle.startedAt >= since;
+    });
+}
+
+QList<PlanRun> IssueStore::cyclesOfRevision(const Issue& issue, const RunHistoryStore& history, int revision) {
+    if (revision <= 0) return cyclesOf(issue, history);
+    // La ventana de la ronda: desde que se abrió hasta que se abrió la siguiente. Sólo hace falta para
+    // los ciclos anteriores a que cada uno anotara su revisión al arrancar.
+    QDateTime from, until;
+    for (const auto& round : issue.revisions) {
+        if (round.number == revision) from = round.startedAt;
+        else if (round.number == revision + 1) until = round.startedAt;
+    }
+    return cyclesWhere(issue, history, [&](const PlanRun& cycle) {
+        if (cycle.revision > 0) return cycle.revision == revision;
+        if (!cycle.startedAt.isValid()) return true;
+        if (from.isValid() && cycle.startedAt < from) return false;
+        return !until.isValid() || cycle.startedAt < until;
+    });
+}
+
+QList<RunRecord> IssueStore::runsOfRevision(const Issue& issue, const RunHistoryStore& history, int revision) {
+    return runsOfCycles(cyclesOfRevision(issue, history, revision), history);
+}
 
 QList<RunRecord> IssueStore::runsOf(const Issue& issue, const RunHistoryStore& history, const QDateTime& since) {
+    return runsOfCycles(cyclesOf(issue, history, since), history);
+}
+
+QList<RunRecord> IssueStore::runsOfCycles(const QList<PlanRun>& cycles, const RunHistoryStore& history) {
     QList<RunRecord> runs;
-    for (const auto& cycle : cyclesOf(issue, history, since)) runs += history.runsForPlan(cycle.id);
+    for (const auto& cycle : cycles) runs += history.runsForPlan(cycle.id);
     std::sort(runs.begin(), runs.end(), [](const RunRecord& a, const RunRecord& b) {
         const QDateTime ta = a.finishedAt.isValid() ? a.finishedAt : a.startedAt;
         const QDateTime tb = b.finishedAt.isValid() ? b.finishedAt : b.startedAt;

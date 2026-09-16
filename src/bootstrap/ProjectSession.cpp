@@ -35,6 +35,8 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     transfer = std::make_unique<CaseTransferService>(*cases);
     issues = std::make_unique<IssueStore>(std::make_shared<JsonIssueRepository>(dir));
     issuePublish = std::make_unique<IssuePublishService>(std::make_shared<TrackerRouter>(), *issues, *settings);
+    // Los ciclos se publican con el requerimiento y la revisión de su control de calidad en el nombre.
+    publish->setIssues(issues.get());
     records = std::make_unique<QualityRecordService>(*issues, *cases, *plan, *history, *bugLedger, *settings,
                                                      std::make_shared<QualityRecordDocx>(), publish.get());
     requirements = std::make_unique<RequirementSourceService>(requirementSource ? requirementSource : std::make_shared<GesreqClient>(), *settings);
@@ -42,9 +44,13 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
                                                                requirements.get());
     // El issue sigue a sus pruebas: arrancar un ciclo de uno de sus planes lo pasa a «En pruebas» y
     // abre su revisión (la primera, o la siguiente si la anterior ya se cerró).
-    QObject::connect(run.get(), &RunController::planStarted, issues.get(), [store = issues.get()](const QString&, const QString& planId) {
-        store->notePlanStarted(planId);
-    });
+    QObject::connect(run.get(), &RunController::planStarted, issues.get(),
+                     [store = issues.get(), log = history.get()](const QString& planRunId, const QString& planId) {
+                         // Y el ciclo se queda con el issue y la revisión que abre: así cada ejecución
+                         // dice de qué ronda del control de calidad es, hoy y al publicarla en Zephyr.
+                         const IssueStore::RevisionRef started = store->notePlanStarted(planId);
+                         if (!started.isEmpty()) log->noteCycleRevision(planRunId, started.issueId, started.revision);
+                     });
     QObject::connect(settings.get(), &SettingsStore::saved, &projects, [&projects, source = settings.get()]() {
         emit projects.settingsChanged(source);
     });

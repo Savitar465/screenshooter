@@ -118,6 +118,7 @@ private slots:
         p.id = QStringLiteral("PR-0001"); p.planId = QStringLiteral("PL-0001"); p.name = QStringLiteral("Regresión"); p.caseIds = {QStringLiteral("TC-104")};
         p.startedAt = r.startedAt; p.finishedAt = r.finishedAt;
         p.zephyrCycleId = QStringLiteral("77"); p.publishedAt = r.finishedAt.addSecs(600);
+        p.issueId = QStringLiteral("IS-0003"); p.revision = 2; p.environment = QStringLiteral("QA");
         h.plans << p;
         QVERIFY(repo.saveHistory(h));
         const auto loaded = repo.loadHistory();
@@ -137,6 +138,10 @@ private slots:
         QVERIFY(loaded->plans[0].isPublished());
         QCOMPARE(loaded->plans[0].zephyrCycleId, QStringLiteral("77"));
         QCOMPARE(loaded->plans[0].publishedAt, p.publishedAt);
+        // Y de qué control de calidad son y dónde se obtuvieron, también.
+        QCOMPARE(loaded->plans[0].issueId, QStringLiteral("IS-0003"));
+        QCOMPARE(loaded->plans[0].revision, 2);
+        QCOMPARE(loaded->plans[0].environment, QStringLiteral("QA"));
     }
 
     void sessionIsSavedAndCleared() {

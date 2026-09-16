@@ -2016,6 +2016,41 @@
     </message>
 </context>
 <context>
+    <name>qaflow::CycleStartDialog</name>
+    <message>
+        <source>Arrancar ciclo</source>
+        <translation>Start cycle</translation>
+    </message>
+    <message>
+        <source>Arrancar el ciclo</source>
+        <translation>Start the cycle</translation>
+    </message>
+    <message>
+        <source>Este ciclo no prueba ningún requerimiento: es una ejecución suelta del plan.</source>
+        <translation>This cycle does not test any requirement: it is a standalone run of the plan.</translation>
+    </message>
+    <message>
+        <source>El ciclo quedará anotado en %1.</source>
+        <translation>The cycle will be recorded under %1.</translation>
+    </message>
+    <message>
+        <source>AMBIENTE</source>
+        <translation>ENVIRONMENT</translation>
+    </message>
+    <message>
+        <source>Va con el ciclo a Zephyr: en el nombre del ciclo y en su campo «environment», para saber dónde se obtuvieron estos resultados.</source>
+        <translation>It goes to Zephyr with the cycle: in the cycle name and in its «environment» field, so you know where these results came from.</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Arrancar</source>
+        <translation>Start</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::EvidencePreview</name>
     <message>
         <source>%1 · clic para abrirla a tamaño completo</source>
@@ -2474,6 +2509,14 @@
     <message>
         <source>Abrir el bug en el gestor</source>
         <translation>Open the bug in the tracker</translation>
+    </message>
+    <message>
+        <source> · revisión %1</source>
+        <translation> · revision %1</translation>
+    </message>
+    <message>
+        <source> · REVISIÓN %1</source>
+        <translation> · REVISION %1</translation>
     </message>
 </context>
 <context>
@@ -3407,6 +3450,14 @@ Create another one anyway?</translation>
         <source>Abrir el bug en el gestor</source>
         <translation>Open the bug in the tracker</translation>
     </message>
+    <message>
+        <source> · ambiente: %1</source>
+        <translation> · environment: %1</translation>
+    </message>
+    <message>
+        <source>, </source>
+        <translation>, </translation>
+    </message>
 </context>
 <context>
     <name>qaflow::JiraPublishDialog</name>
@@ -3908,6 +3959,14 @@ Create another one anyway?</translation>
     <message>
         <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Iniciar o detener la grabación de GIF&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Adjuntar archivos como evidencia (o arrástralos a la ventana)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en una miniatura&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Falla el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vuelve al paso anterior, sin tocar su veredicto (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa al siguiente sin darle veredicto a este (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir los ajustes&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso · Alt+← · Alt+→&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Moverse por los pasos de la ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en un paso de la lista&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ir a ese paso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
         <translation>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicate case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take a screenshot (system-wide when the system allows it; press again to cancel the countdown)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Start or stop the GIF recording&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Attach files as evidence (or drag them onto the window)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a thumbnail&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the evidence at full size (← → navigate, Ctrl+E annotates, Ctrl+C copies)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pass the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Fail the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go back to the previous step, leaving its verdict alone (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Move to the next step without giving this one a verdict (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the settings&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict of the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace · Alt+← · Alt+→&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Move through the steps of the run&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a step in the list&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to that step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
+    </message>
+    <message>
+        <source>GREQ %1</source>
+        <translation>GREQ %1</translation>
+    </message>
+    <message>
+        <source>%1 · revisión %2</source>
+        <translation>%1 · revision %2</translation>
     </message>
 </context>
 <context>
@@ -5995,6 +6054,32 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     <message>
         <source>Este informe no está publicado en Zephyr: publícalo primero</source>
         <translation>This report is not published to Zephyr: publish it first</translation>
+    </message>
+    <message>
+        <source>GREQ %1</source>
+        <translation>GREQ %1</translation>
+    </message>
+    <message>
+        <source>Rev. %1</source>
+        <translation>Rev. %1</translation>
+    </message>
+    <message>
+        <source>
+Requerimiento GREQ %1 · %2</source>
+        <translation>
+Requirement GREQ %1 · %2</translation>
+    </message>
+    <message>
+        <source>
+Revisión %1 del control de calidad</source>
+        <translation>
+Quality control revision %1</translation>
+    </message>
+    <message>
+        <source>
+Ambiente: %1</source>
+        <translation>
+Environment: %1</translation>
     </message>
 </context>
 <context>

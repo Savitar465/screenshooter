@@ -11,6 +11,30 @@ using qaflow::testing::AppFixture;
 class RunHistoryStoreTest : public QObject {
     Q_OBJECT
 private slots:
+    // El ciclo se queda con el ambiente en el que se prueba y con la ronda del control de calidad de
+    // la que es: sin eso, dos ejecuciones del mismo plan son indistinguibles.
+    void aPlanCycleRemembersItsEnvironmentAndItsRevision() {
+        AppFixture f;
+        QVERIFY(f.history.lastEnvironment().isEmpty());
+        const QString id = f.history.startPlan(QStringLiteral("Regresión"), {QStringLiteral("TC-103")},
+                                               QStringLiteral("PL-0001"), QStringLiteral("  QA  "));
+        QVERIFY(!id.isEmpty());
+        QCOMPARE(f.history.findPlan(id)->environment, QStringLiteral("QA"));   // sin espacios de sobra
+        QCOMPARE(f.history.lastEnvironment(), QStringLiteral("QA"));
+        QCOMPARE(f.history.findPlan(id)->revision, 0);
+
+        f.history.noteCycleRevision(id, QStringLiteral("IS-0001"), 2);
+        QCOMPARE(f.history.findPlan(id)->issueId, QStringLiteral("IS-0001"));
+        QCOMPARE(f.history.findPlan(id)->revision, 2);
+
+        // Sin issue no hay nada que anotar: un ciclo suelto se queda como estaba.
+        const QString loose = f.history.startPlan(QStringLiteral("Suelto"), {QStringLiteral("TC-103")});
+        f.history.noteCycleRevision(loose, QString(), 3);
+        QVERIFY(f.history.findPlan(loose)->issueId.isEmpty());
+        QCOMPARE(f.history.findPlan(loose)->revision, 0);
+        QCOMPARE(f.history.lastEnvironment(), QStringLiteral("QA"));   // el suelto no dijo ambiente
+    }
+
     void addRunAssignsSequentialIdsAndPersists() {
         AppFixture f;
         RunRecord r;

@@ -156,7 +156,7 @@ void run(MainWindow& window, AppContext& ctx) {
         }},
         {"07-historial-plan", [&] {
             ctx.run->finish();   // archiva TC-104 como ejecución suelta
-            ctx.run->startSequence({QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión Sprint 14"), ctx.plan->activeId());
+            ctx.run->startSequence({QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión Sprint 14"), ctx.plan->activeId(), QStringLiteral("QA"));
             ctx.run->mark(StepResult::Pass);
             ctx.run->setNote(QStringLiteral("El descuento no se refleja en el resumen"));
             ctx.run->mark(StepResult::Fail);
@@ -175,7 +175,7 @@ void run(MainWindow& window, AppContext& ctx) {
         {"08-historial-caso", [&] { window.navigate(Screen::Casos); ctx.cases->select(QStringLiteral("TC-102")); }},
         {"10-metricas", [&] {
             // Segundo ciclo del mismo plan, mejor que el primero, para que haya evolución.
-            ctx.run->startSequence({QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión Sprint 14"), ctx.plan->activeId());
+            ctx.run->startSequence({QStringLiteral("TC-102"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión Sprint 14"), ctx.plan->activeId(), QStringLiteral("QA"));
             ctx.run->mark(StepResult::Pass); ctx.run->mark(StepResult::Pass); ctx.run->finish();
             ctx.run->mark(StepResult::Pass); ctx.run->finish();
             ctx.run->mark(StepResult::Pass);

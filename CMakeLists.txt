@@ -262,6 +262,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/RequirementImportDialog.cpp
         src/presentation/views/ProjectSetupDialog.h
         src/presentation/views/ProjectSetupDialog.cpp
+        src/presentation/views/CycleStartDialog.h
+        src/presentation/views/CycleStartDialog.cpp
         src/presentation/views/PlanView.h
         src/presentation/views/PlanView.cpp
         src/presentation/views/SettingsView.h

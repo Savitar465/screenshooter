@@ -38,8 +38,10 @@ public:
     bool canGoNext() const { return !m_run.caseId.isEmpty() && m_run.idx + 1 < m_run.results.size(); }
 
     void start(const QString& caseId);
-    /// Ejecuta los casos en orden; `finish()` pasa al siguiente automáticamente.
-    void startSequence(const QStringList& caseIds, const QString& planName = QString(), const QString& planId = QString());
+    /// Ejecuta los casos en orden; `finish()` pasa al siguiente automáticamente. `environment` es el
+    /// ambiente en el que se prueba el ciclo, que queda anotado en él.
+    void startSequence(const QStringList& caseIds, const QString& planName = QString(), const QString& planId = QString(),
+                       const QString& environment = QString());
     void restart();
     /// La nota se guarda en disco con retardo; `persistSessionNow()` fuerza la escritura.
     void setNote(const QString& note);

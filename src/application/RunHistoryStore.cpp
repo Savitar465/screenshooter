@@ -70,17 +70,39 @@ PlanReport RunHistoryStore::report(const QString& planRunId) const {
     }, m_bugs ? m_bugs->issues() : QList<IssueLink>{});
 }
 
-QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseIds, const QString& planId) {
+QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseIds, const QString& planId,
+                                  const QString& environment) {
     if (caseIds.isEmpty()) return {};
     PlanRun p;
     p.id = nextId(m_history.plans, QStringLiteral("PR-"));
     p.planId = planId;
     p.name = name;
     p.caseIds = caseIds;
+    p.environment = environment.trimmed();
     p.startedAt = QDateTime::currentDateTime();
     m_history.plans.append(p);
     persist();
     return p.id;
+}
+
+void RunHistoryStore::noteCycleRevision(const QString& planRunId, const QString& issueId, int revision) {
+    if (issueId.trimmed().isEmpty()) return;
+    for (auto& p : m_history.plans) {
+        if (p.id != planRunId) continue;
+        if (p.issueId == issueId && p.revision == revision) return;
+        p.issueId = issueId;
+        p.revision = revision;
+        persist();
+        return;
+    }
+}
+
+QString RunHistoryStore::lastEnvironment() const {
+    // De atrás hacia delante: los ciclos se añaden en orden, así que el último que lo indique es el
+    // más reciente.
+    for (auto it = m_history.plans.crbegin(); it != m_history.plans.crend(); ++it)
+        if (!it->environment.trimmed().isEmpty()) return it->environment.trimmed();
+    return {};
 }
 
 void RunHistoryStore::finishPlan(const QString& planRunId) {

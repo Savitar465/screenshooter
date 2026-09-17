@@ -1,10 +1,17 @@
 #include "IssuePublishService.h"
 
+#include "core/Text.h"
+
 #include <QDateTime>
 
 namespace qaflow {
 
 namespace {
+/// Largo máximo del título con el que el issue se crea en el gestor. Las descripciones cortas de GESREQ
+/// suelen ser un párrafo entero: en el gestor el título se lee en tableros y listas, así que lo que no
+/// cabe se acorta con «…» y el texto completo queda en la descripción (y entero en el issue de QAflow).
+constexpr int kMaxSummary = 120;
+
 /// Etiquetas con las que el issue publicado se encuentra en el gestor: la de QAflow, la del issue local y,
 /// si vino de GESREQ, la del requerimiento. Sirven también para buscarlo cuando un envío queda sin confirmar.
 QStringList labelsFor(const Issue& issue) {
@@ -42,9 +49,9 @@ QString IssuePublishService::defaultIssueType(const QStringList& types) {
 
 IssueDraft IssuePublishService::draftFor(const Issue& issue) const {
     IssueDraft draft;
-    draft.summary = issue.title.trimmed();
-    if (issue.isImported())
-        draft.summary = QStringLiteral("QA - %1 - %2").arg(issue.requirement.data.id.trimmed(), draft.summary);
+    // El prefijo del requerimiento no se acorta nunca: es con lo que el issue se reconoce en el gestor.
+    const QString prefix = issue.isImported() ? QStringLiteral("QA - %1 - ").arg(issue.requirement.data.id.trimmed()) : QString();
+    draft.summary = prefix + elideTitle(issue.title, kMaxSummary - int(prefix.size()));
     draft.issueType = issue.publication.issueType.isEmpty() ? defaultIssueType(m_issueTypes) : issue.publication.issueType;
     draft.labels = labelsFor(issue);
 
@@ -83,7 +90,7 @@ bool IssuePublishService::canPublishResult(const Issue& issue) const {
 }
 
 void IssuePublishService::publishResult(const QString& issueId, const QString& comment, const QString& documentPath,
-                                        std::function<void(const Result&)> done) {
+                                        std::function<void(const Result&)> done, int revision) {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) { done(Result{false, {}, {}, tr("El issue ya no existe"), false, false}); return; }
     if (!canPublishResult(*issue)) {
@@ -93,7 +100,8 @@ void IssuePublishService::publishResult(const QString& issueId, const QString& c
     const QString key = issue->publication.key;
     QStringList attachments;
     if (!documentPath.trimmed().isEmpty()) attachments << documentPath;
-    m_tracker->commentIssue(m_settings.tracker(), key, comment, attachments, [this, issueId, key, done](const IssueResult& r) {
+    m_tracker->commentIssue(m_settings.tracker(), key, comment, attachments,
+                            [this, issueId, key, revision, done](const IssueResult& r) {
         Result out;
         out.error = r.error;
         out.retryable = r.retryable;
@@ -105,7 +113,7 @@ void IssuePublishService::publishResult(const QString& issueId, const QString& c
             out.uncertain = r.retryable;
             publication.uncertain = out.uncertain;
             publication.lastError = r.error;
-            m_issues.setRevisionPublication(issueId, publication);
+            m_issues.setRevisionPublication(issueId, publication, revision);
             done(out);
             return;
         }
@@ -113,7 +121,7 @@ void IssuePublishService::publishResult(const QString& issueId, const QString& c
         out.url = r.url;
         publication.publishedAt = QDateTime::currentDateTime();
         publication.attachedDocument = r.attachmentsUploaded > 0;
-        m_issues.setRevisionPublication(issueId, publication);
+        m_issues.setRevisionPublication(issueId, publication, revision);
         done(out);
     });
 }

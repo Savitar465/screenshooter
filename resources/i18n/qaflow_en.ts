@@ -30,6 +30,14 @@
         <source>Finaliza o detén la ejecución y las capturas antes de cambiar de proyecto</source>
         <translation>Finish or stop the run and captures before switching projects</translation>
     </message>
+    <message>
+        <source>Abriendo «%1»…</source>
+        <translation>Opening “%1”…</translation>
+    </message>
+    <message>
+        <source>Preparando sus casos, planes e issues</source>
+        <translation>Getting its cases, plans and issues ready</translation>
+    </message>
 </context>
 <context>
     <name>RecorderOverlay</name>
@@ -3026,10 +3034,6 @@
         <translation>Delete %1? Its cases, plans and results are not deleted.</translation>
     </message>
     <message>
-        <source>PUBLICACIÓN EN EL GESTOR</source>
-        <translation>PUBLICATION IN THE TRACKER</translation>
-    </message>
-    <message>
         <source>Publicar…</source>
         <translation>Publish…</translation>
     </message>
@@ -3044,10 +3048,6 @@
     <message>
         <source>Enlaza uno que ya existe en el gestor en vez de crear otro</source>
         <translation>Links one that already exists in the tracker instead of creating another</translation>
-    </message>
-    <message>
-        <source>Abrir el issue del gestor en el navegador</source>
-        <translation>Open the tracker issue in the browser</translation>
     </message>
     <message>
         <source>Actualizar estado</source>
@@ -3218,22 +3218,6 @@ Create another one anyway?</translation>
         <translation>Open record</translation>
     </message>
     <message>
-        <source>GESREQ sin confirmar</source>
-        <translation>GESREQ unconfirmed</translation>
-    </message>
-    <message>
-        <source>Registrado en GESREQ</source>
-        <translation>Registered in GESREQ</translation>
-    </message>
-    <message>
-        <source>Jira sin confirmar</source>
-        <translation>Jira unconfirmed</translation>
-    </message>
-    <message>
-        <source>Enviado a Jira</source>
-        <translation>Sent to Jira</translation>
-    </message>
-    <message>
         <source>Guardar el acta</source>
         <translation>Save the record</translation>
     </message>
@@ -3290,14 +3274,6 @@ Create another one anyway?</translation>
         <translation>Publishes the plans with their cases in Zephyr, leaves the result and the record in the tracker and registers the quality control in GESREQ</translation>
     </message>
     <message>
-        <source>+ Nuevo plan</source>
-        <translation>+ New plan</translation>
-    </message>
-    <message>
-        <source>Publicado en Zephyr</source>
-        <translation>Published in Zephyr</translation>
-    </message>
-    <message>
         <source>%1 · %2 · %3 de %4 ejecutados, %5 superados</source>
         <translation>%1 · %2 · %3 of %4 executed, %5 passed</translation>
     </message>
@@ -3314,10 +3290,6 @@ Create another one anyway?</translation>
         <translation> · %1 run(s)</translation>
     </message>
     <message>
-        <source>RESULTADOS · %1 EJECUCIÓN(ES) DE SUS PLANES</source>
-        <translation>RESULTS · %1 RUN(S) OF ITS PLANS</translation>
-    </message>
-    <message>
         <source>Sin planes: los resultados del issue son los de los ciclos de sus planes.</source>
         <translation>No plans: the issue results are those of its plan cycles.</translation>
     </message>
@@ -3328,10 +3300,6 @@ Create another one anyway?</translation>
     <message>
         <source>REVISIÓN EN CURSO</source>
         <translation>CURRENT REVISION</translation>
-    </message>
-    <message>
-        <source>%1 de %2 ejecutados · %3 superados · %4 fallidos · %5 bloqueados</source>
-        <translation>%1 of %2 executed · %3 passed · %4 failed · %5 blocked</translation>
     </message>
     <message>
         <source>EN ZEPHYR</source>
@@ -3406,14 +3374,6 @@ Create another one anyway?</translation>
         <translation>Run the plan</translation>
     </message>
     <message>
-        <source>%1 de %2 casos ejecutados en esta revisión</source>
-        <translation>%1 of %2 cases executed in this revision</translation>
-    </message>
-    <message>
-        <source>Arrancar un ciclo del plan abre la revisión y deja el issue en pruebas</source>
-        <translation>Starting a plan cycle opens the revision and puts the issue in testing</translation>
-    </message>
-    <message>
         <source>Ir al plan</source>
         <translation>Go to the plan</translation>
     </message>
@@ -3482,18 +3442,6 @@ Create another one anyway?</translation>
         <translation>Opens another testing round of the requirement</translation>
     </message>
     <message>
-        <source>GESREQ: %1</source>
-        <translation>GESREQ: %1</translation>
-    </message>
-    <message>
-        <source>PLAN DE PRUEBAS</source>
-        <translation>TEST PLAN</translation>
-    </message>
-    <message>
-        <source>PLANES DE PRUEBAS · %1</source>
-        <translation>TEST PLANS · %1</translation>
-    </message>
-    <message>
         <source>Sin plan todavía. Crea el plan con el que se prueba el requerimiento: sus casos son los casos del issue y sus ejecuciones, sus resultados.</source>
         <translation>No plan yet. Create the plan the requirement is tested with: its cases are the issue cases and its runs, its results.</translation>
     </message>
@@ -3504,14 +3452,6 @@ Create another one anyway?</translation>
     <message>
         <source>%1 · pruebas del requerimiento %2 · plan %3 listo</source>
         <translation>%1 · tests of requirement %2 · plan %3 ready</translation>
-    </message>
-    <message>
-        <source>BUGS REPORTADOS · %1 (%2 abiertos)</source>
-        <translation>REPORTED BUGS · %1 (%2 open)</translation>
-    </message>
-    <message>
-        <source>Sin bugs reportados desde los casos del issue. Los que se reporten en sus ejecuciones salen aquí, cuentan en el acta y se enlazan al publicar.</source>
-        <translation>No bugs reported from the issue cases. The ones reported in its runs show up here, count in the record and are linked when publishing.</translation>
     </message>
     <message>
         <source>%1 · paso %2</source>
@@ -3580,6 +3520,66 @@ Create another one anyway?</translation>
     <message>
         <source>Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo</source>
         <translation>Run the %1 failed or blocked case(s) of this cycle again</translation>
+    </message>
+    <message>
+        <source>REVISIONES ANTERIORES</source>
+        <translation>PREVIOUS REVIEWS</translation>
+    </message>
+    <message>
+        <source>+ Otro plan</source>
+        <translation>+ Another plan</translation>
+    </message>
+    <message>
+        <source>Enlaza al issue un plan que ya existe en el proyecto</source>
+        <translation>Link a plan that already exists in the project to the issue</translation>
+    </message>
+    <message>
+        <source>%1 ejecución(es) de sus planes</source>
+        <translation>%1 run(s) of its plans</translation>
+    </message>
+    <message>
+        <source> · %1 de %2 casos ejecutados en esta revisión</source>
+        <translation> · %1 of %2 cases run in this review</translation>
+    </message>
+    <message>
+        <source> · arrancar un ciclo del plan abre la revisión y deja el issue en pruebas</source>
+        <translation> · starting a cycle of the plan opens the review and moves the issue to testing</translation>
+    </message>
+    <message>
+        <source>Revisar los bugs reportados</source>
+        <translation>Review the reported bugs</translation>
+    </message>
+    <message>
+        <source>Los que se reporten en sus ejecuciones salen aquí, cuentan en el acta y se enlazan al publicar</source>
+        <translation>The ones reported in its runs show up here, count in the record and are linked when publishing</translation>
+    </message>
+    <message>
+        <source>%1 bug(s) · %2 abierto(s)</source>
+        <translation>%1 bug(s) · %2 open</translation>
+    </message>
+    <message>
+        <source>Publicar en el gestor…</source>
+        <translation>Publish in the tracker…</translation>
+    </message>
+    <message>
+        <source>Abrir en el gestor</source>
+        <translation>Open in the tracker</translation>
+    </message>
+    <message>
+        <source>Levanta el acta de la revisión %1 con lo que se probó en ella</source>
+        <translation>Raises the record of review %1 with what was tested in it</translation>
+    </message>
+    <message>
+        <source>Completar publicación…</source>
+        <translation>Finish publishing…</translation>
+    </message>
+    <message>
+        <source>Falta publicar el resultado de la revisión %1 en %2</source>
+        <translation>The result of review %1 has not been published in %2 yet</translation>
+    </message>
+    <message>
+        <source>%1 de %2 ejecutados · %3 superados · %4 fallidos · %5 bloqueados · %6</source>
+        <translation>%1 of %2 run · %3 passed · %4 failed · %5 blocked · %6</translation>
     </message>
 </context>
 <context>
@@ -4102,6 +4102,14 @@ Create another one anyway?</translation>
     <message>
         <source>No se pudo continuar el ciclo: sus casos fallados ya no están en el proyecto</source>
         <translation>The cycle could not be continued: its failed cases are no longer in the project</translation>
+    </message>
+    <message>
+        <source>Abriendo…</source>
+        <translation>Opening…</translation>
+    </message>
+    <message>
+        <source>Se está abriendo otro proyecto</source>
+        <translation>Another project is being opened</translation>
     </message>
 </context>
 <context>
@@ -5076,6 +5084,10 @@ Status: %4
         <source>Cerrar</source>
         <translation>Close</translation>
     </message>
+    <message>
+        <source>Publicar el resultado de la revisión %1</source>
+        <translation>Publish the result of review %1</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::RevisionPublishService</name>
@@ -5238,6 +5250,10 @@ Status: %4
     <message>
         <source>Sin enlazar: %1</source>
         <translation>Not linked: %1</translation>
+    </message>
+    <message>
+        <source>La revisión %1 ya se registró en GESREQ el %2: lo de esta ronda ya no es lo último que sabe el sistema</source>
+        <translation>Review %1 was already registered in GESREQ on %2: this round is no longer the latest the system knows</translation>
     </message>
 </context>
 <context>
@@ -5552,7 +5568,7 @@ Press “Take screenshot” or drag a file onto the window.</translation>
     </message>
     <message>
         <source>Ordena las evidencias del caso por el paso al que están asignadas</source>
-        <translation>Sorts the case's evidence by the step it is assigned to</translation>
+        <translation>Sorts the case&apos;s evidence by the step it is assigned to</translation>
     </message>
     <message>
         <source>Todavía no se ha reportado ningún bug de este caso.
@@ -5626,7 +5642,7 @@ When you report one it stays here, with the step it came from.</translation>
     </message>
     <message>
         <source>Abrir la ficha del bug en otra ventana</source>
-        <translation>Open the bug's details in another window</translation>
+        <translation>Open the bug&apos;s details in another window</translation>
     </message>
     <message>
         <source>CERRADO</source>

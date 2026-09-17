@@ -28,6 +28,8 @@ target_compile_options(qaflow_warnings INTERFACE $<$<CXX_COMPILER_ID:MSVC>:/utf-
 
 # core: modelos e interfaces. Sólo QtCore (IScreenCapture usa QImage, pero es sólo cabecera).
 add_library(qaflow_core STATIC
+        src/core/Text.h
+        src/core/Text.cpp
         src/core/models/TestCase.h
         src/core/models/TestCase.cpp
         src/core/models/TestRun.h
@@ -215,6 +217,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/FlowLayout.cpp
         src/presentation/widgets/Toast.h
         src/presentation/widgets/Toast.cpp
+        src/presentation/widgets/BusyIndicator.h
+        src/presentation/widgets/BusyIndicator.cpp
         src/presentation/widgets/FlashOverlay.h
         src/presentation/widgets/FlashOverlay.cpp
         src/presentation/widgets/ProgressCells.h

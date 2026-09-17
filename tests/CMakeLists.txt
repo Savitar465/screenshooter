@@ -19,6 +19,7 @@ function(qaflow_add_test layer name)
 endfunction()
 
 # core: modelos y funciones puras
+qaflow_add_test(core test_text LIBS qaflow_core)
 qaflow_add_test(core test_test_case LIBS qaflow_core)
 qaflow_add_test(core test_test_run LIBS qaflow_core)
 qaflow_add_test(core test_bug_report LIBS qaflow_core)

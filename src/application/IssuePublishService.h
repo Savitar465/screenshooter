@@ -61,9 +61,10 @@ public:
     /// (o vinculado) y que el gestor sepa comentar.
     bool canPublishResult(const Issue& issue) const;
     /// Comenta en el issue del gestor el resultado de la revisión y le adjunta el acta, si se pasa.
-    /// Lo guarda en la revisión; un envío cortado la deja «sin confirmar», como la publicación.
+    /// Lo guarda en la ronda `revision` (0 = la última); un envío cortado la deja «sin confirmar», como
+    /// la publicación.
     void publishResult(const QString& issueId, const QString& comment, const QString& documentPath,
-                       std::function<void(const Result&)> done);
+                       std::function<void(const Result&)> done, int revision = 0);
 
     /// ¿Se pueden colgar del issue del gestor los bugs y los Tests de sus pruebas? Hace falta que el
     /// gestor sepa enlazar issues (sólo Jira) y que el issue esté publicado.

@@ -66,14 +66,14 @@ public:
     /// Abre la ronda siguiente (la primera si no hay ninguna) y deja el issue «En pruebas».
     /// Devuelve su número, o 0 si el issue no existe.
     int openRevision(const QString& issueId);
-    /// Guarda en la última revisión lo escrito en el acta, con qué ciclo de plan se levantó y, si se
-    /// generó, dónde quedó el fichero.
+    /// Guarda en una revisión lo escrito en el acta, con qué ciclo de plan se levantó y, si se generó,
+    /// dónde quedó el fichero. `revision` es el número de la ronda; 0 (lo habitual), la última.
     void setRevisionRecord(const QString& issueId, const QualityRecord& record, const QString& documentPath = QString(),
-                           const QString& planRunId = QString());
-    /// Guarda lo que se hizo con el resultado en el gestor.
-    void setRevisionPublication(const QString& issueId, const RevisionPublication& publication);
-    /// Guarda el registro del resultado en GESREQ.
-    void setRevisionRegistration(const QString& issueId, const RevisionRegistration& registration);
+                           const QString& planRunId = QString(), int revision = 0);
+    /// Guarda lo que se hizo con el resultado en el gestor, en esa ronda (0 = la última).
+    void setRevisionPublication(const QString& issueId, const RevisionPublication& publication, int revision = 0);
+    /// Guarda el registro del resultado en GESREQ, en esa ronda (0 = la última).
+    void setRevisionRegistration(const QString& issueId, const RevisionRegistration& registration, int revision = 0);
     /// Cierra la revisión en curso con su resultado y deja el issue en Finalizado. Sin revisión
     /// abierta no hace nada.
     void closeRevision(const QString& issueId, QaOutcome outcome);
@@ -147,7 +147,10 @@ signals:
 private:
     Issue* findMutable(const QString& id);
     /// La última revisión del issue, creando la primera si todavía no hay ninguna.
-    IssueRevision& revisionFor(Issue& issue);
+    /// La ronda de `issue` sobre la que se escribe: la del número que se pida o, con 0, la última (que
+    /// se crea si el issue todavía no tiene ninguna). Una ronda que no existe devuelve la última: nada
+    /// que se guarde puede quedarse sin sitio.
+    IssueRevision& revisionFor(Issue& issue, int number = 0);
     QString nextId() const;
     void persist(const QString& changedId = QString());
 

@@ -1,9 +1,11 @@
 #include "bootstrap/ProjectSession.h"
 #include "presentation/views/WorkspaceWindow.h"
+#include "presentation/widgets/BusyIndicator.h"
 #include "infrastructure/persistence/JsonProjectRepository.h"
 #include "support/MemoryRepositories.h"
 #include <QDir>
 #include <QComboBox>
+#include <QLabel>
 #include <QPushButton>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -73,6 +75,50 @@ private slots:
         frame.close();
         QCOMPARE(events.closes, 1);
         QVERIFY(!frame.isVisible());
+    }
+
+    // Abrir un proyecto no es instantáneo: mientras dura, el armazón dice lo que está haciendo, tapa lo
+    // que hay debajo y **sobrevive al cambio de ventana**, que es lo que se sustituye por el camino.
+    void theWorkspaceSaysWhenItIsOpeningAProject() {
+        QTemporaryDir dir;
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir.path());
+        ProjectStore projects(std::make_shared<JsonProjectRepository>(dir.path()));
+        QVERIFY(projects.load());
+        const QString first = projects.create(QStringLiteral("A"));
+        const QString second = projects.create(QStringLiteral("B"));
+        auto secrets = std::make_shared<testing::MemorySecretStore>();
+        ProjectSession a(projects, first, secrets), b(projects, second, secrets);
+        a.window = std::make_unique<MainWindow>(a.ctx);
+        b.window = std::make_unique<MainWindow>(b.ctx);
+
+        WorkspaceWindow frame;
+        frame.showProject(a.window.get());
+        frame.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&frame));
+        auto* veil = frame.findChild<QWidget*>(QStringLiteral("workspaceBusy"));
+        QVERIFY(veil && veil->isHidden());
+        QVERIFY(!frame.isBusy());
+
+        frame.setBusy(true, QStringLiteral("Abriendo «B»…"), QStringLiteral("Preparando sus casos"));
+        QVERIFY(frame.isBusy());
+        QVERIFY(!veil->isHidden());
+        QCOMPARE(veil->geometry(), frame.rect());   // tapa la ventana entera, menús incluidos
+        QCOMPARE(frame.findChild<QLabel*>(QStringLiteral("workspaceBusyTitle"))->text(), QStringLiteral("Abriendo «B»…"));
+        // El del aviso, no el del selector de la ventana del proyecto, que también es hijo del armazón.
+        auto* spinner = veil->findChild<BusyIndicator*>();
+        QVERIFY(spinner && spinner->isRunning());   // gira mientras el bucle de eventos corra
+
+        // La ventana del proyecto que entra no tapa el aviso: el cambio todavía no ha terminado.
+        frame.showProject(b.window.get());
+        QVERIFY(!veil->isHidden());
+        QVERIFY(frame.isBusy());
+
+        frame.setBusy(false);
+        QVERIFY(!frame.isBusy());
+        QVERIFY(veil->isHidden());
+        QVERIFY(!spinner->isRunning());             // parado: no se repinta lo que no se ve
+        QVERIFY(!QApplication::overrideCursor());   // y el cursor vuelve a ser el de siempre
     }
 
     // Criterio de aceptación del flujo "Iniciar pruebas": desde el proyecto A, empezar las pruebas de un

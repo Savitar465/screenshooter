@@ -16,6 +16,7 @@
 #include "presentation/views/StatusStrip.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlashOverlay.h"
+#include "presentation/widgets/BusyIndicator.h"
 #include "presentation/widgets/Toast.h"
 #include "presentation/widgets/Ui.h"
 
@@ -65,19 +66,8 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     m_sidebar = new Sidebar(*ctx.cases, *ctx.plan, *ctx.run, *ctx.history, *ctx.bugLedger, *ctx.issues);
     h->addWidget(m_sidebar);
 
+    // Las pantallas se construyen al entrar en ellas (`viewFor`): abrir el proyecto sólo paga la primera.
     m_stack = new QStackedWidget;
-    m_cases = new CasesView(*ctx.cases, *ctx.run, *ctx.history, *ctx.transfer, *ctx.bugLedger, *ctx.evidence);
-    m_plan = new PlanView(*ctx.cases, *ctx.plan, ctx.publish);
-    m_run = new RunView(*ctx.cases, *ctx.run, *ctx.history, *ctx.settings, *ctx.evidence, *ctx.bugLedger);
-    m_history = new HistoryView(*ctx.cases, *ctx.history, ctx.publish, ctx.evidence, ctx.run);
-    m_bug = new BugView(*ctx.cases, *ctx.settings, *ctx.bugs, *ctx.bugLedger, *ctx.evidence);
-    m_issuesView = new IssuesView(ctx);
-    m_stack->insertWidget(static_cast<int>(Screen::Casos), m_cases);
-    m_stack->insertWidget(static_cast<int>(Screen::Plan), m_plan);
-    m_stack->insertWidget(static_cast<int>(Screen::Run), m_run);
-    m_stack->insertWidget(static_cast<int>(Screen::Historial), m_history);
-    m_stack->insertWidget(static_cast<int>(Screen::Bug), m_bug);
-    m_stack->insertWidget(static_cast<int>(Screen::Issues), m_issuesView);
     h->addWidget(m_stack, 1);
     m_status = new StatusStrip(*ctx.cases, *ctx.plan, *ctx.run, *ctx.history);
     rows->addWidget(m_status);
@@ -104,7 +94,73 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
 
 void MainWindow::startTesting(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt) {
     navigate(Screen::Issues);
-    m_issuesView->openRequirement(requirement, connection, fetchedAt);
+    issuesView()->openRequirement(requirement, connection, fetchedAt);
+}
+
+QWidget* MainWindow::viewFor(Screen s) {
+    switch (s) {
+        case Screen::Casos: return casesView();
+        case Screen::Plan: return planView();
+        case Screen::Run: return runView();
+        case Screen::Historial: return historyView();
+        case Screen::Bug: return bugView();
+        case Screen::Issues: return issuesView();
+    }
+    return casesView();
+}
+
+CasesView* MainWindow::casesView() {
+    if (m_cases) return m_cases;
+    m_cases = new CasesView(*m_ctx.cases, *m_ctx.run, *m_ctx.history, *m_ctx.transfer, *m_ctx.bugLedger, *m_ctx.evidence);
+    m_stack->addWidget(m_cases);
+    wireCases();
+    return m_cases;
+}
+
+PlanView* MainWindow::planView() {
+    if (m_plan) return m_plan;
+    m_plan = new PlanView(*m_ctx.cases, *m_ctx.plan, m_ctx.publish);
+    m_stack->addWidget(m_plan);
+    wirePlan();
+    return m_plan;
+}
+
+RunView* MainWindow::runView() {
+    if (m_run) return m_run;
+    m_run = new RunView(*m_ctx.cases, *m_ctx.run, *m_ctx.history, *m_ctx.settings, *m_ctx.evidence, *m_ctx.bugLedger);
+    m_stack->addWidget(m_run);
+    wireRun();
+    return m_run;
+}
+
+HistoryView* MainWindow::historyView() {
+    if (m_history) return m_history;
+    m_history = new HistoryView(*m_ctx.cases, *m_ctx.history, m_ctx.publish, m_ctx.evidence, m_ctx.run);
+    m_stack->addWidget(m_history);
+    wireHistory();
+    return m_history;
+}
+
+BugView* MainWindow::bugView() {
+    if (m_bug) return m_bug;
+    m_bug = new BugView(*m_ctx.cases, *m_ctx.settings, *m_ctx.bugs, *m_ctx.bugLedger, *m_ctx.evidence);
+    m_stack->addWidget(m_bug);
+    wireBug();
+    return m_bug;
+}
+
+IssuesView* MainWindow::issuesView() {
+    if (m_issuesView) return m_issuesView;
+    m_issuesView = new IssuesView(m_ctx);
+    m_stack->addWidget(m_issuesView);
+    wireIssues();
+    return m_issuesView;
+}
+
+void MainWindow::setSwitchingProject(bool on) {
+    m_switchingProject = on;
+    if (m_projectBusy) m_projectBusy->setVisible(on);
+    refreshNavbar();
 }
 
 void MainWindow::setProjectActive(bool active) {
@@ -127,6 +183,16 @@ QWidget* MainWindow::buildNavbar() {
     m_projects->setMaximumWidth(260);
     m_projects->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     h->addWidget(m_projects);
+    // Mientras se abre otro proyecto, el selector dice que está trabajando; el aviso grande lo pone el
+    // armazón, que es lo único que no se sustituye al cambiar de ventana.
+    m_projectBusy = new QWidget;
+    m_projectBusy->setObjectName(QStringLiteral("projectLoading"));
+    auto* busy = ui::hbox(m_projectBusy, 0, 6);
+    m_projectSpinner = new BusyIndicator(14);
+    busy->addWidget(m_projectSpinner);
+    busy->addWidget(ui::label(tr("Abriendo…"), "muted-sm"));
+    m_projectBusy->hide();
+    h->addWidget(m_projectBusy);
     connect(m_projects, &QComboBox::activated, this, [this](int index) {
         const QString id = m_projects->itemData(index).toString();
         if (id != m_ctx.projectId) emit projectSwitchRequested(id);
@@ -219,9 +285,12 @@ void MainWindow::refreshNavbar() {
             if (const auto* p = m_ctx.projects->find(m_ctx.projectId)) setWindowTitle(p->name + QStringLiteral(" — QAflow"));
         } else m_projects->addItem(tr("Proyecto principal"));
     }
-    m_projects->setEnabled(m_ctx.projects && !executing && !capturing);
-    m_projects->setToolTip(executing ? tr("Finaliza o detén la ejecución antes de cambiar de proyecto") : tr("Cambiar proyecto"));
-    m_projectMenu->setEnabled(m_ctx.projects && !executing && !capturing);
+    // Con un cambio de proyecto en marcha no se pide otro: el de ahora todavía está a medias.
+    m_projects->setEnabled(m_ctx.projects && !executing && !capturing && !m_switchingProject);
+    m_projects->setToolTip(m_switchingProject ? tr("Se está abriendo otro proyecto")
+                           : executing        ? tr("Finaliza o detén la ejecución antes de cambiar de proyecto")
+                                              : tr("Cambiar proyecto"));
+    m_projectMenu->setEnabled(m_ctx.projects && !executing && !capturing && !m_switchingProject);
     {
         const QSignalBlocker block(m_runTarget);
         const QString previous = m_runTarget->currentData().toString();
@@ -391,11 +460,11 @@ void MainWindow::buildMenus() {
     QMenu* file = bar->addMenu(tr("&Archivo"));
     auto* newCase = file->addAction(tr("&Nuevo caso"), QKeySequence::New, this, [this]() { m_ctx.cases->createCase(); navigate(Screen::Casos); });
     newCase->setObjectName(QStringLiteral("actNewCase"));
-    file->addAction(tr("&Importar casos…"), QKeySequence::Open, this, [this]() { navigate(Screen::Casos); m_cases->importCases(); });
+    file->addAction(tr("&Importar casos…"), QKeySequence::Open, this, [this]() { navigate(Screen::Casos); casesView()->importCases(); });
     QMenu* exportMenu = file->addMenu(tr("&Exportar casos"));
-    exportMenu->addAction(tr("A &JSON…"), this, [this]() { m_cases->exportCases(CaseTransferService::Format::Json); });
-    exportMenu->addAction(tr("A &CSV…"), this, [this]() { m_cases->exportCases(CaseTransferService::Format::Csv); });
-    exportMenu->addAction(tr("A &Markdown…"), this, [this]() { m_cases->exportCases(CaseTransferService::Format::Markdown); });
+    exportMenu->addAction(tr("A &JSON…"), this, [this]() { casesView()->exportCases(CaseTransferService::Format::Json); });
+    exportMenu->addAction(tr("A &CSV…"), this, [this]() { casesView()->exportCases(CaseTransferService::Format::Csv); });
+    exportMenu->addAction(tr("A &Markdown…"), this, [this]() { casesView()->exportCases(CaseTransferService::Format::Markdown); });
     file->addSeparator();
     file->addAction(tr("Abrir carpeta de &datos"), this, [this]() { QDesktopServices::openUrl(QUrl::fromLocalFile(m_ctx.dataDir)); });
     file->addAction(tr("Abrir carpeta de &capturas"), this, [this]() { QDesktopServices::openUrl(QUrl::fromLocalFile(m_ctx.settings->capture().folder)); });
@@ -416,11 +485,11 @@ void MainWindow::buildMenus() {
     });
     m_actUndo->setObjectName(QStringLiteral("actUndo"));
     edit->addSeparator();
-    auto* find = edit->addAction(tr("&Buscar caso"), QKeySequence::Find, this, [this]() { navigate(Screen::Casos); m_cases->focusSearch(); });
+    auto* find = edit->addAction(tr("&Buscar caso"), QKeySequence::Find, this, [this]() { navigate(Screen::Casos); casesView()->focusSearch(); });
     find->setObjectName(QStringLiteral("actFind"));
-    m_actDuplicate = edit->addAction(tr("D&uplicar caso"), QKeySequence(Qt::CTRL | Qt::Key_D), this, [this]() { navigate(Screen::Casos); m_cases->duplicateSelected(); });
+    m_actDuplicate = edit->addAction(tr("D&uplicar caso"), QKeySequence(Qt::CTRL | Qt::Key_D), this, [this]() { navigate(Screen::Casos); casesView()->duplicateSelected(); });
     m_actDuplicate->setObjectName(QStringLiteral("actDuplicate"));
-    m_actDelete = edit->addAction(tr("&Eliminar caso…"), QKeySequence(Qt::CTRL | Qt::Key_Delete), this, [this]() { navigate(Screen::Casos); m_cases->removeSelected(); });
+    m_actDelete = edit->addAction(tr("&Eliminar caso…"), QKeySequence(Qt::CTRL | Qt::Key_Delete), this, [this]() { navigate(Screen::Casos); casesView()->removeSelected(); });
 
     // Ver
     QMenu* view = bar->addMenu(tr("&Ver"));
@@ -610,33 +679,102 @@ void MainWindow::closeEvent(QCloseEvent* e) {
 
 // ---- Señales ---------------------------------------------------------------------------------
 
+void MainWindow::wireCases() {
+    connect(m_cases, &CasesView::toast, this, &MainWindow::showToast);
+    connect(m_cases, &CasesView::historyRequested, this, [this](const QString& id) {
+        historyView()->showCase(id);
+        navigateInto(Screen::Historial);
+    });
+    connect(m_cases, &CasesView::openRunRequested, this, [this](const QString& runId) {
+        navigateInto(Screen::Historial);
+        historyView()->showRun(runId);
+    });
+    connect(m_cases, &CasesView::openJiraRequested, this, &MainWindow::openTrackerIssue);
+    connect(m_cases, &CasesView::openIssueRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+}
+
+void MainWindow::wirePlan() {
+    connect(m_plan, &PlanView::toast, this, &MainWindow::showToast);
+    connect(m_plan, &PlanView::runPlanRequested, this, &MainWindow::startPlanRun);
+    connect(m_plan, &PlanView::continueCycleRequested, this, &MainWindow::continueCycleRun);
+    connect(m_plan, &PlanView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
+    connect(m_plan, &PlanView::cycleReportRequested, this, [this](const QString& planRunId) {
+        historyView()->showPlan(planRunId);
+        navigateInto(Screen::Historial);
+    });
+    // Activar o desactivar Zephyr en los ajustes cambia qué botones ofrecen los ciclos.
+    connect(m_ctx.settings, &SettingsStore::trackerChanged, m_plan, &PlanView::refresh);
+    connect(m_plan, &PlanView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_plan, &PlanView::openJiraRequested, this, &MainWindow::openTrackerIssue);
+}
+
+void MainWindow::wireRun() {
+    connect(m_run, &RunView::toast, this, &MainWindow::showToast);
+    connect(m_run, &RunView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_run, &RunView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
+    connect(m_run, &RunView::reportBugRequested, this, [this](int stepIndex) {
+        bugView()->setDraftStep(stepIndex);
+        navigateInto(Screen::Bug);
+    });
+    connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
+}
+
+void MainWindow::wireHistory() {
+    connect(m_history, &HistoryView::toast, this, &MainWindow::showToast);
+    connect(m_history, &HistoryView::continueCycleRequested, this, &MainWindow::continueCycleRun);
+    connect(m_history, &HistoryView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
+    connect(m_history, &HistoryView::openJiraRequested, this, &MainWindow::openTrackerIssue);
+    connect(m_history, &HistoryView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_ctx.settings, &SettingsStore::trackerChanged, m_history, &HistoryView::refresh);
+    // El informe del ciclo enseña los bugs que se reportaron mientras corría: reportar uno, o saber
+    // que el gestor ya lo cerró, cambia lo que hay que pintar.
+    connect(m_ctx.bugLedger, &BugStore::bugsChanged, m_history, &HistoryView::refresh);
+}
+
+void MainWindow::wireBug() {
+    connect(m_bug, &BugView::toast, this, &MainWindow::showToast);
+    connect(m_bug, &BugView::openIssueRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_bug, &BugView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
+    // Terminar (o dejar) el parte devuelve a donde se pidió —la ejecución, casi siempre—; sin camino
+    // que deshacer, a los casos.
+    const auto leaveBug = [this]() { if (m_back.isEmpty()) navigate(Screen::Casos); else goBack(); };
+    connect(m_bug, &BugView::cancelled, this, leaveBug);
+    connect(m_bug, &BugView::submitted, this, [leaveBug](const QString&) { leaveBug(); });
+}
+
+void MainWindow::wireIssues() {
+    connect(m_issuesView, &IssuesView::toast, this, &MainWindow::showToast);
+    // Issues: sus casos, planes y ejecuciones se abren en sus pantallas.
+    connect(m_issuesView, &IssuesView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
+    connect(m_issuesView, &IssuesView::openPlanRequested, this, [this](const QString& id) { m_ctx.plan->setActive(id); navigateInto(Screen::Plan); });
+    // El ciclo también se arranca desde el issue, que es donde está el paso que lo pide.
+    connect(m_issuesView, &IssuesView::runPlanRequested, this, &MainWindow::startPlanRun);
+    // Continuar lo que quedó roto se pide desde donde se ven los ciclos: el issue, su informe y el plan.
+    connect(m_issuesView, &IssuesView::continueCycleRequested, this, &MainWindow::continueCycleRun);
+    connect(m_issuesView, &IssuesView::openRunRequested, this, [this](const QString& runId) {
+        navigateInto(Screen::Historial);
+        historyView()->showRun(runId);
+    });
+    connect(m_issuesView, &IssuesView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
+    connect(m_issuesView, &IssuesView::settingsRequested, this, &MainWindow::openSettings);
+    // Iniciar las pruebas de un requerimiento de otro proyecto: lo resuelve quien coordina las sesiones.
+    connect(m_issuesView, &IssuesView::startTestingRequested, this, &MainWindow::startTestingRequested);
+    connect(m_issuesView, &IssuesView::projectJiraKeyRequested, this, &MainWindow::projectJiraKeyRequested);
+}
+
+/// Abrir en el navegador un issue del gestor por su clave; sin URL configurada, lo dice.
+void MainWindow::openTrackerIssue(const QString& key) {
+    const TrackerSettings& t = m_ctx.settings->tracker();
+    if (t.baseUrl().isEmpty()) { showToast(tr("Configura la URL del gestor en Ajustes"), theme::Amber); return; }
+    QDesktopServices::openUrl(QUrl(t.issueUrl(key)));
+}
+
 void MainWindow::wireSignals() {
     connect(m_sidebar, &Sidebar::navigate, this, &MainWindow::navigate);
     connect(m_sidebar, &Sidebar::metricsRequested, this, &MainWindow::showMetrics);
     connect(m_status, &StatusStrip::navigate, this, &MainWindow::navigate);
     connect(m_status, &StatusStrip::metricsRequested, this, &MainWindow::showMetrics);
 
-    // Toasts de todas las vistas
-    connect(m_cases, &CasesView::toast, this, &MainWindow::showToast);
-    connect(m_run, &RunView::toast, this, &MainWindow::showToast);
-    connect(m_bug, &BugView::toast, this, &MainWindow::showToast);
-    connect(m_plan, &PlanView::toast, this, &MainWindow::showToast);
-    connect(m_history, &HistoryView::toast, this, &MainWindow::showToast);
-    connect(m_issuesView, &IssuesView::toast, this, &MainWindow::showToast);
-
-    // Casos
-    connect(m_cases, &CasesView::historyRequested, this, [this](const QString& id) { m_history->showCase(id); navigateInto(Screen::Historial); });
-    connect(m_cases, &CasesView::openRunRequested, this, [this](const QString& runId) {
-        navigateInto(Screen::Historial);
-        m_history->showRun(runId);
-    });
-    connect(m_cases, &CasesView::openJiraRequested, this, [this](const QString& key) {
-        const TrackerSettings& t = m_ctx.settings->tracker();
-        if (t.baseUrl().isEmpty()) { showToast(tr("Configura la URL del gestor en Ajustes"), theme::Amber); return; }
-        QDesktopServices::openUrl(QUrl(t.issueUrl(key)));
-    });
-    connect(m_cases, &CasesView::openIssueRequested, this, [this](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
-    connect(m_bug, &BugView::openIssueRequested, this, [this](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
     connect(m_ctx.cases, &TestCaseStore::selectionChanged, this, [this]() { updateActions(); selectContextTarget(); });
     connect(m_ctx.cases, &TestCaseStore::caseChanged, this, &MainWindow::updateActions);
     connect(m_ctx.plan, &PlanStore::planChanged, this, [this]() { updateActions(); if (m_current == Screen::Plan) selectContextTarget(); });
@@ -653,72 +791,10 @@ void MainWindow::wireSignals() {
             if (m_ctx.cases->undo()) showToast(tr("Restaurado"), theme::Green);
         });
     });
-
-    // Issues: sus casos, planes y ejecuciones se abren en sus pantallas.
-    connect(m_issuesView, &IssuesView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
-    connect(m_issuesView, &IssuesView::openPlanRequested, this, [this](const QString& id) { m_ctx.plan->setActive(id); navigateInto(Screen::Plan); });
-    // El ciclo también se arranca desde el issue, que es donde está el paso que lo pide.
-    connect(m_issuesView, &IssuesView::runPlanRequested, this, &MainWindow::startPlanRun);
-    // Continuar lo que quedó roto se pide desde donde se ven los ciclos: el issue, su informe y el plan.
-    connect(m_issuesView, &IssuesView::continueCycleRequested, this, &MainWindow::continueCycleRun);
-    connect(m_history, &HistoryView::continueCycleRequested, this, &MainWindow::continueCycleRun);
-    connect(m_plan, &PlanView::continueCycleRequested, this, &MainWindow::continueCycleRun);
-    connect(m_issuesView, &IssuesView::openRunRequested, this, [this](const QString& runId) {
-        navigateInto(Screen::Historial);
-        m_history->showRun(runId);
-    });
-    connect(m_issuesView, &IssuesView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
-    connect(m_run, &RunView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
-    connect(m_issuesView, &IssuesView::settingsRequested, this, &MainWindow::openSettings);
-    // Iniciar las pruebas de un requerimiento de otro proyecto: lo resuelve quien coordina las sesiones.
-    connect(m_issuesView, &IssuesView::startTestingRequested, this, &MainWindow::startTestingRequested);
-    connect(m_issuesView, &IssuesView::projectJiraKeyRequested, this, &MainWindow::projectJiraKeyRequested);
     connect(m_ctx.issues, &IssueStore::loadFailed, this, [this](const QString& message) { showToast(message, theme::Red); });
     // El store avisa al cargar, antes de que exista la ventana: aquí se repite para que se vea.
     if (m_ctx.issues->isReadOnly())
         QTimer::singleShot(0, this, [this]() { showToast(tr("No se pudieron leer los issues del proyecto: no se guardarán cambios en ellos para no perderlos"), theme::Red); });
-
-    // Plan
-    connect(m_plan, &PlanView::runPlanRequested, this, &MainWindow::startPlanRun);
-    connect(m_plan, &PlanView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
-    connect(m_plan, &PlanView::cycleReportRequested, this, [this](const QString& planRunId) { m_history->showPlan(planRunId); navigateInto(Screen::Historial); });
-    // Activar o desactivar Zephyr en los ajustes cambia qué botones ofrecen los ciclos.
-    connect(m_ctx.settings, &SettingsStore::trackerChanged, m_plan, &PlanView::refresh);
-    connect(m_ctx.settings, &SettingsStore::trackerChanged, m_history, &HistoryView::refresh);
-    // El informe del ciclo enseña los bugs que se reportaron mientras corría: reportar uno, o saber
-    // que el gestor ya lo cerró, cambia lo que hay que pintar.
-    connect(m_ctx.bugLedger, &BugStore::bugsChanged, m_history, &HistoryView::refresh);
-    connect(m_plan, &PlanView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
-    connect(m_history, &HistoryView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
-    connect(m_plan, &PlanView::openJiraRequested, this, [this](const QString& key) {
-        const TrackerSettings& t = m_ctx.settings->tracker();
-        if (t.baseUrl().isEmpty()) { showToast(tr("Configura la URL del gestor en Ajustes"), theme::Amber); return; }
-        QDesktopServices::openUrl(QUrl(t.issueUrl(key)));
-    });
-
-    // Ejecución
-    connect(m_run, &RunView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
-    connect(m_run, &RunView::reportBugRequested, this, [this](int stepIndex) {
-        m_bug->setDraftStep(stepIndex);
-        navigateInto(Screen::Bug);
-    });
-    connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
-
-    // Historial
-    connect(m_history, &HistoryView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
-    connect(m_history, &HistoryView::openJiraRequested, this, [this](const QString& key) {
-        const TrackerSettings& t = m_ctx.settings->tracker();
-        if (t.baseUrl().isEmpty()) { showToast(tr("Configura la URL del gestor en Ajustes"), theme::Amber); return; }
-        QDesktopServices::openUrl(QUrl(t.issueUrl(key)));
-    });
-
-    // Bug
-    connect(m_bug, &BugView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
-    // Terminar (o dejar) el parte devuelve a donde se pidió —la ejecución, casi siempre—; sin camino
-    // que deshacer, a los casos.
-    const auto leaveBug = [this]() { if (m_back.isEmpty()) navigate(Screen::Casos); else goBack(); };
-    connect(m_bug, &BugView::cancelled, this, leaveBug);
-    connect(m_bug, &BugView::submitted, this, [leaveBug](const QString&) { leaveBug(); });
     // Cola offline: al arrancar con conexión configurada y bugs pendientes, se reintenta en silencio.
     if (!m_ctx.bugLedger->pending().isEmpty() && m_ctx.settings->tracker().connected) {
         QTimer::singleShot(1500, this, [this]() {
@@ -799,12 +875,12 @@ void MainWindow::finishRun() {
         m_ctx.issues->select(issueId);
         navigate(Screen::Issues);
         m_toast->show(summary, color, tr("Ver informe"), [this, planRunId]() {
-            m_history->showPlan(planRunId);
+            historyView()->showPlan(planRunId);
             navigateInto(Screen::Historial);
         });
         return;
     }
-    m_history->showPlan(planRunId);
+    historyView()->showPlan(planRunId);
     navigate(Screen::Historial);
     showToast(summary, color);
 }
@@ -892,10 +968,12 @@ void MainWindow::goBack() {
 }
 
 void MainWindow::showScreen(Screen s) {
+    // Entrar en la pantalla es lo que construye su vista, si es la primera vez.
+    QWidget* view = viewFor(s);
     if (s == Screen::Bug) m_bug->loadDraft();
     m_current = s;
     selectContextTarget();
-    m_stack->setCurrentIndex(static_cast<int>(s));
+    m_stack->setCurrentWidget(view);
     m_sidebar->setActive(s);
     if (auto* a = m_screenActions.value(s)) a->setChecked(true);
     refreshBackButton();
@@ -945,7 +1023,7 @@ void MainWindow::mousePressEvent(QMouseEvent* e) {
 void MainWindow::showToast(const QString& message, const QString& color) { m_toast->show(message, color); }
 
 void MainWindow::showMetrics() {
-    m_history->showMetrics();
+    historyView()->showMetrics();
     navigate(Screen::Historial);
 }
 

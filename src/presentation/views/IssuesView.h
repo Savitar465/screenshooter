@@ -1,14 +1,18 @@
 #pragma once
 
 #include "core/models/Issue.h"
+#include "core/models/IssueLink.h"
+#include "core/models/RunHistory.h"
 
 #include <QWidget>
 #include <functional>
 
+class QAction;
 class QComboBox;
 class QHBoxLayout;
 class QLabel;
 class QLineEdit;
+class QMenu;
 class QPushButton;
 class QVBoxLayout;
 
@@ -29,12 +33,16 @@ class ProjectStore;
 
 /// Pantalla "Issues": el punto de entrada para organizar las pruebas de cada requerimiento. A la izquierda,
 /// la lista con búsqueda y filtros (estado, prioridad, publicación en Jira) y la consulta de la bandeja de
-/// GESREQ; a la derecha, el issue: lo importado del requerimiento (con lo que cambió y si sigue en la
-/// bandeja), **la revisión paso a paso**, el plan que lo prueba y los resultados de sus ejecuciones.
+/// GESREQ; a la derecha, el issue en tres bloques: lo importado del requerimiento (con lo que cambió y si
+/// sigue en la bandeja), **la revisión paso a paso** y las rondas ya cerradas.
 ///
 /// La revisión es el corazón del issue, así que se enseña como lo que es: una serie de pasos —preparar
-/// el plan, ejecutarlo, levantar el acta, cerrar la revisión y publicar el resultado—, cada uno con lo
-/// que lleva hecho y su acción.
+/// el plan, ejecutarlo, revisar los bugs, levantar el acta, cerrar la revisión y publicar el resultado—,
+/// cada uno con lo que lleva hecho, su acción y lo que cuelga de él: el plan con sus casos, los ciclos
+/// con sus ejecuciones y los bugs. Así el issue no se lee saltando entre tarjetas sueltas.
+///
+/// La representación en el gestor no es trabajo, es contexto: no tiene tarjeta, es el tag de la cabecera
+/// —clave y estado— y de su menú cuelgan publicar, vincular, abrir, consultar el estado y desvincular.
 ///
 /// Lo que se prueba de un requerimiento son **planes**: el issue no agrupa casos sueltos, sus casos son
 /// los de sus planes y sus resultados, los de los ciclos de esos planes. Así lo que se ve aquí es sólo
@@ -84,11 +92,15 @@ private:
     void refreshList();
     void loadDetail();
     void refreshRequirement(const Issue& issue);
-    void refreshPlans(const Issue& issue);
-    /// Los resultados del issue: los ciclos de sus planes, con lo que salió de cada caso.
-    void refreshResults(const Issue& issue);
-    /// Los bugs reportados en esas ejecuciones, con su clasificación, su estado y el paso del que salieron.
-    void refreshBugs(const Issue& issue);
+    /// Los planes del issue con sus casos, dentro del paso que manda prepararlos.
+    void fillPlans(const Issue& issue, QVBoxLayout* into);
+    /// Los resultados del issue —los ciclos de sus planes, con lo que salió de cada caso—, dentro del
+    /// paso que manda ejecutarlo.
+    void fillResults(const Issue& issue, const QList<PlanRun>& cycles, QVBoxLayout* into);
+    /// Los bugs reportados desde los casos de sus planes, del más reciente al primero.
+    QList<IssueLink> bugsOf(const Issue& issue) const;
+    /// Esos bugs con su clasificación, su estado y el paso del que salieron, dentro de su paso.
+    void fillBugs(const Issue& issue, const QList<IssueLink>& bugs, QVBoxLayout* into);
     /// Aplica un cambio al issue seleccionado sin que el refresco pise lo que se está escribiendo.
     void editSelected(const std::function<void(Issue&)>& mutate);
     void createPlan();
@@ -110,19 +122,24 @@ private:
     void askForProject(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt);
     /// Nombre del proyecto que trabaja ese sistema de GESREQ; vacío si ninguno lo tiene vinculado.
     QString projectNameForSystem(const QString& systemCode) const;
+    /// El menú del tag del gestor: publicar o vincular mientras no hay issue allí; abrirlo, consultar su
+    /// estado o desvincularlo cuando ya lo hay.
+    QMenu* buildJiraMenu();
+    /// El tag del gestor (clave y estado), lo que tenga pendiente y qué ofrece su menú.
     void refreshJira(const Issue& issue);
     /// El issue importado nace ya en el gestor: al traerlo de GESREQ se crea allí su issue, para que los
     /// casos, los bugs y el resultado tengan dónde colgarse desde el principio. Si no se puede (el gestor
     /// sin configurar, sin red), el issue se queda sin publicar y se publica luego desde su tarjeta.
     void publishImported(const QString& issueId);
-    /// La tarjeta «Revisión»: los pasos del control de calidad (plan, ejecución, acta, cierre y
-    /// publicación) con lo que lleva hecho cada uno, y las revisiones ya cerradas con su acta.
+    /// La tarjeta «Revisión»: los pasos del control de calidad (plan, ejecución, bugs, acta, cierre y
+    /// publicación) con lo que lleva hecho cada uno y lo que cuelga de él, y las rondas ya cerradas.
     void refreshRevision(const Issue& issue);
-    /// Abre el acta de la revisión, la genera y la guarda donde diga el usuario.
-    void generateRecord();
-    /// Publica el resultado de la revisión: los planes con sus casos en Zephyr, el resultado y el acta
-    /// en el gestor y el registro en GESREQ. Se ofrece cuando la revisión está terminada.
-    void publishRevision();
+    /// Abre el acta de la ronda (0 = la que está en curso), la genera y la guarda donde diga el usuario.
+    void generateRecord(int revision = 0);
+    /// Publica el resultado de una ronda (0 = la que está en curso): los planes con sus casos en Zephyr,
+    /// el resultado y el acta en el gestor y el registro en GESREQ. Se ofrece cuando la ronda está
+    /// terminada, y desde el historial para acabar de publicar una anterior que se quedó a medias.
+    void publishRevision(int revision = 0);
     /// Cierra la revisión en curso con el resultado que se confirme.
     void closeRevision();
     /// Abre la ronda siguiente de pruebas del requerimiento.
@@ -170,7 +187,7 @@ private:
     QWidget* m_detail;
     QLabel* m_idLabel;
     QLabel* m_sourceChip;
-    QLabel* m_jiraChip;
+    QPushButton* m_jiraChip;   // tag del gestor: clave, estado y, en su menú, lo que se puede hacer
     QLineEdit* m_title;
     QComboBox* m_state;
     QComboBox* m_priority;
@@ -184,30 +201,22 @@ private:
     QPushButton* m_openRequirement;
     QLabel* m_detailInfo;
     QVBoxLayout* m_attachments;
-    QWidget* m_jiraCard;
-    QLabel* m_jiraInfo;
     QWidget* m_jiraPending;
     QLabel* m_jiraPendingText;
     QWidget* m_jiraUncertain;
     QLabel* m_jiraUncertainText;
-    QPushButton* m_publishButton;
-    QPushButton* m_linkJiraButton;
-    QPushButton* m_openJiraButton;
-    QPushButton* m_refreshJiraButton;
     QPushButton* m_updateJiraButton;
-    QPushButton* m_unlinkJiraButton;
-    QLabel* m_plansHeader;
-    QVBoxLayout* m_plansList;
+    QAction* m_publishAction;
+    QAction* m_linkJiraAction;
+    QAction* m_openJiraAction;
+    QAction* m_refreshJiraAction;
+    QAction* m_unlinkJiraAction;
     QWidget* m_revisionCard;
     QLabel* m_revisionHeader;
     QLabel* m_revisionProgress;
     QVBoxLayout* m_revisionSteps;   // los pasos, que se rehacen en cada refresco
+    QWidget* m_historyCard;
     QVBoxLayout* m_revisionsList;
-    QLabel* m_resultsHeader;
-    QVBoxLayout* m_resultsList;
-    QWidget* m_bugsCard;
-    QLabel* m_bugsHeader;
-    QVBoxLayout* m_bugsList;
 };
 
 } // namespace qaflow

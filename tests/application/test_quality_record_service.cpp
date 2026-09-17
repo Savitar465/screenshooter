@@ -224,6 +224,14 @@ private slots:
         QCOMPARE(second.revisionNumber, 2);
         QCOMPARE(second.server, QStringLiteral("10.0.67.131"));
         QCOMPARE(second.moduleLink, QStringLiteral("https://gitlab.test/proyecto"));
+
+        // Y la ronda anterior se sigue pudiendo mirar por su número: su acta, su nombre de fichero y su
+        // resumen son los de entonces, no los de la ronda en curso.
+        const QualityRecord again = f.records.draftFor(t.issueId, QString(), 1);
+        QCOMPARE(again.revisionNumber, 1);
+        QVERIFY(f.records.suggestedFileName(t.issueId, 1).startsWith(QStringLiteral("ControlCalidad_2026997_rev1_")));
+        QVERIFY(f.records.summaryFor(t.issueId, again, QaOutcome::Observado, QString(), 1)
+                    .contains(QStringLiteral("revisión 1: Observado")));
     }
 
     void aRecordThatCouldNotBeWrittenChangesNothing() {
@@ -241,8 +249,9 @@ private slots:
         const Testing t = issueInTesting(f);
         addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), QDateTime::currentDateTime(),
                  {{QStringLiteral("TC-101"), Verdict::Superado}});
+        // La ronda va en el nombre: un requerimiento observado levanta un acta por revisión.
         const QString name = f.records.suggestedFileName(t.issueId);
-        QVERIFY(name.startsWith(QStringLiteral("ControlCalidad_2026997_")));
+        QVERIFY2(name.startsWith(QStringLiteral("ControlCalidad_2026997_rev1_")), qPrintable(name));
         QVERIFY(name.endsWith(QStringLiteral(".docx")));
 
         const QString summary = f.records.summaryFor(t.issueId, f.records.draftFor(t.issueId), QaOutcome::Conforme);

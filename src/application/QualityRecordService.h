@@ -40,21 +40,26 @@ public:
     /// se propone.
     IssueProgress progressFor(const QString& issueId) const;
 
-    /// Ciclos de plan de la revisión (la abierta, o la última cerrada), el más reciente primero; si la
-    /// revisión no tiene ninguno, los del issue. Son las ejecuciones entre las que se elige con cuál
-    /// se levanta el acta.
-    QList<PlanReport> cyclesFor(const QString& issueId) const;
+    /// Todo lo que sigue habla de **una ronda**: `revision` es su número y 0 (lo habitual) significa la
+    /// que está en curso —la abierta o, si ninguna lo está, la última—. Pasando el número se levanta el
+    /// acta o se publica el resultado de una ronda anterior que se quedó a medias.
+
+    /// Ciclos de plan de la ronda, el más reciente primero; si la ronda en curso no tiene ninguno, los
+    /// del issue (una ronda cerrada se queda con los suyos: sus ciclos son los que se probaron
+    /// entonces). Son las ejecuciones entre las que se elige con cuál se levanta el acta.
+    QList<PlanReport> cyclesFor(const QString& issueId, int revision = 0) const;
     /// Ciclo con el que se levanta el acta: el guardado en la revisión si sigue existiendo, o el más
     /// reciente de la revisión. Vacío = el acta habla de todos los ciclos de la revisión.
-    QString recordCycleFor(const QString& issueId) const;
+    QString recordCycleFor(const QString& issueId, int revision = 0) const;
 
     /// El acta propuesta para su revisión: la que ya tuviera guardada, completada con lo que haya
     /// cambiado desde entonces, o una nueva con lo que sabe el proyecto. `planRunId` es el ciclo del
     /// que habla; vacío, todos los de la revisión.
-    QualityRecord draftFor(const QString& issueId, const QString& planRunId = QString()) const;
+    QualityRecord draftFor(const QString& issueId, const QString& planRunId = QString(), int revision = 0) const;
 
-    /// Nombre propuesto del fichero: `ControlCalidad_<GREQ>_<marca de tiempo>.docx`.
-    QString suggestedFileName(const QString& issueId) const;
+    /// Nombre propuesto del fichero: `ControlCalidad_<GREQ>_rev<N>_<marca de tiempo>.docx`. La ronda va
+    /// en el nombre porque un requerimiento observado levanta un acta por ronda.
+    QString suggestedFileName(const QString& issueId, int revision = 0) const;
 
     struct GenerateResult {
         bool ok = false;
@@ -64,32 +69,35 @@ public:
     /// Escribe el acta en `path` y la guarda en la revisión del issue (con lo escrito en ella y el
     /// ciclo del que habla, para la próxima vez). El issue queda como estaba si no se pudo escribir.
     GenerateResult generate(const QString& issueId, const QualityRecord& record, const QString& path,
-                            const QString& planRunId = QString());
+                            const QString& planRunId = QString(), int revision = 0);
 
     /// Resumen del resultado para el comentario de Jira y el registro en GESREQ.
     QString summaryFor(const QString& issueId, const QualityRecord& record, QaOutcome outcome,
-                       const QString& planRunId = QString()) const;
+                       const QString& planRunId = QString(), int revision = 0) const;
 
     /// Casos que prueban el issue: los de sus planes.
     QStringList caseIdsOf(const Issue& issue) const;
-    /// Ejecuciones de la revisión en curso (o de la última cerrada), la más reciente primero.
-    QList<RunRecord> revisionRuns(const Issue& issue) const;
-    /// Bugs reportados desde los casos del issue en esa revisión.
-    QList<IssueLink> revisionBugs(const Issue& issue) const;
+    /// Ejecuciones de la ronda, la más reciente primero.
+    QList<RunRecord> revisionRuns(const Issue& issue, int revision = 0) const;
+    /// Bugs reportados desde los casos del issue durante esa ronda (de cuándo se abrió a cuándo se
+    /// cerró; los de la ronda en curso, hasta ahora).
+    QList<IssueLink> revisionBugs(const Issue& issue, int revision = 0) const;
 
 private:
     /// La última acta escrita en el proyecto (de cualquier issue): de ahí se heredan los datos del
     /// entorno que no cambian entre requerimientos.
     QualityRecord previousRecord(const QString& issueId) const;
-    /// Cuándo empezó la revisión que se está mirando; inválida si el issue no tiene ninguna.
-    QDateTime revisionStart(const Issue& issue) const;
-    /// Número de la ronda de la que se habla: la abierta o, si no hay ninguna, la última cerrada (0 si
-    /// el issue todavía no tiene revisiones).
-    int revisionNumber(const Issue& issue) const;
+    /// Cuándo empezó la ronda; inválida si el issue no la tiene.
+    QDateTime revisionStart(const Issue& issue, int revision = 0) const;
+    /// Cuándo se cerró la ronda; inválida si sigue abierta o si el issue no la tiene.
+    QDateTime revisionEnd(const Issue& issue, int revision = 0) const;
+    /// Número de la ronda de la que se habla: el que se pida o, con 0, la abierta o la última cerrada
+    /// (0 si el issue todavía no tiene revisiones).
+    int revisionNumber(const Issue& issue, int revision = 0) const;
     /// Los informes de los ciclos con los que se levanta el acta: el elegido, o todos los de la revisión.
-    QList<PlanReport> cyclesForRecord(const Issue& issue, const QString& planRunId) const;
+    QList<PlanReport> cyclesForRecord(const Issue& issue, const QString& planRunId, int revision = 0) const;
     /// Enlaces a los ciclos de Zephyr en los que se publicaron esos ciclos.
-    quality::DraftContext contextFor(const Issue& issue, const QList<PlanReport>& cycles) const;
+    quality::DraftContext contextFor(const Issue& issue, const QList<PlanReport>& cycles, int revision = 0) const;
 
     IssueStore& m_issues;
     TestCaseStore& m_cases;

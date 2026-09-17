@@ -16,6 +16,7 @@ namespace qaflow {
 /// shared_ptr porque los pasos son asíncronos y se encadenan unos con otros.
 struct RevisionPublishService::Run {
     QString issueId;
+    int revision = 0;              // ronda que se está publicando (ya resuelta: nunca 0 si el issue tiene rondas)
     Options options;
     std::function<void(const Outcome&)> progress;
     std::function<void(const Result&)> done;
@@ -42,10 +43,12 @@ QString RevisionPublishService::label(Destination destination) {
     return {};
 }
 
-QList<PlanReport> RevisionPublishService::cyclesFor(const QString& issueId) const { return m_records.cyclesFor(issueId); }
+QList<PlanReport> RevisionPublishService::cyclesFor(const QString& issueId, int revision) const {
+    return m_records.cyclesFor(issueId, revision);
+}
 
 RequirementRegistration RevisionPublishService::registrationFor(const QString& issueId, QaOutcome outcome,
-                                                               const QString& documentPath) const {
+                                                               const QString& documentPath, int revision) const {
     const Issue* issue = m_issues.find(issueId);
     RequirementRegistration registration;
     if (!issue || !issue->isImported()) return registration;
@@ -55,40 +58,56 @@ RequirementRegistration RevisionPublishService::registrationFor(const QString& i
     registration.attachmentPath = documentPath;
     // El resumen de observaciones que GESREQ pide es el mismo que cuenta el acta, así que los dos
     // documentos dicen lo mismo.
-    const IssueRevision* revision = issue->revisions.isEmpty() ? nullptr : &issue->revisions.last();
-    registration.observations = revision && !revision->record.isEmpty() ? revision->record.observations
-                                                                        : m_records.draftFor(issueId).observations;
+    const IssueRevision* round = issue->revision(revision);
+    registration.observations = round && !round->record.isEmpty() ? round->record.observations
+                                                                  : m_records.draftFor(issueId, QString(), revision).observations;
     return registration;
 }
 
-QString RevisionPublishService::alreadyRegistered(const Issue& issue) const {
+QString RevisionPublishService::alreadyRegistered(const Issue& issue, int revision) const {
     // Registrar cambia el estado del requerimiento en GESREQ y lo saca de la bandeja de control: una
     // ronda ya registrada no se vuelve a registrar, y un control cerrado como Conforme, tampoco. Volver
     // a registrar sólo tiene sentido cuando la ronda anterior quedó **observada** y se probó otra vez.
+    const IssueRevision* round = issue.revision(revision);
+    const int number = round ? round->number : 0;
+    if (round && round->gesreq.registeredAt.isValid())
+        return tr("El resultado de esta revisión ya se registró en GESREQ el %1 como %2")
+                .arg(round->gesreq.registeredAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")),
+                     qaflow::label(round->gesreq.result));
     const IssueRevision* registered = nullptr;
-    for (const auto& round : issue.revisions)
-        if (round.gesreq.registeredAt.isValid()) registered = &round;
+    for (const auto& other : issue.revisions)
+        if (other.gesreq.registeredAt.isValid()) registered = &other;
     if (!registered) return {};
     const QString when = registered->gesreq.registeredAt.toString(QStringLiteral("dd/MM/yyyy HH:mm"));
-    if (!issue.revisions.isEmpty() && registered->number == issue.revisions.last().number)
-        return tr("El resultado de esta revisión ya se registró en GESREQ el %1 como %2")
-                .arg(when, qaflow::label(registered->gesreq.result));
+    // Una ronda posterior ya dijo la última palabra sobre el requerimiento: registrar ahora la de antes
+    // lo dejaría en un estado que ya no es el suyo.
+    if (registered->number > number)
+        return tr("La revisión %1 ya se registró en GESREQ el %2: lo de esta ronda ya no es lo último que sabe el sistema")
+                .arg(registered->number)
+                .arg(when);
     if (registered->gesreq.result == QaOutcome::Conforme)
         return tr("El control ya se registró como Conforme el %1: el requerimiento salió de tu bandeja").arg(when);
     return {};
 }
 
 QString RevisionPublishService::requirementProblem(const QString& issueId, QaOutcome outcome,
-                                                   const QString& documentPath) const {
+                                                   const QString& documentPath, int revision) const {
     if (!m_requirements) return {};
-    return m_requirements->registrationProblem(registrationFor(issueId, outcome, documentPath));
+    return m_requirements->registrationProblem(registrationFor(issueId, outcome, documentPath, revision));
 }
 
-QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QString& issueId) const {
+QList<RevisionPublishService::Destination> RevisionPublishService::pendingFor(const QString& issueId, int revision) const {
+    QList<Destination> pending;
+    for (const auto& step : stepsFor(issueId, revision))
+        if (!step.done && step.available) pending << step.destination;
+    return pending;
+}
+
+QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QString& issueId, int round) const {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) return {};
-    const IssueRevision* revision = issue->revisions.isEmpty() ? nullptr : &issue->revisions.last();
-    const QList<PlanReport> cycles = cyclesFor(issueId);
+    const IssueRevision* revision = issue->revision(round);
+    const QList<PlanReport> cycles = cyclesFor(issueId, round);
 
     Step zephyr;
     zephyr.destination = Destination::Zephyr;
@@ -129,7 +148,7 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
         requirement.blocked = issue->isImported() ? tr("Esta versión no registra resultados en GESREQ: hazlo en el sistema")
                                                   : tr("Sólo se registra el resultado de un requerimiento importado");
     if (requirement.available)
-        if (const QString done = alreadyRegistered(*issue); !done.isEmpty()) {
+        if (const QString done = alreadyRegistered(*issue, round); !done.isEmpty()) {
             requirement.available = false;
             requirement.blocked = done;
         }
@@ -137,7 +156,7 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
     // que no cuadra con las observaciones del acta.
     if (requirement.available) {
         const QaOutcome proposed = revision && revision->outcome != QaOutcome::Pendiente ? revision->outcome : QaOutcome::Observado;
-        const QString problem = requirementProblem(issueId, proposed, revision ? revision->documentPath : QString());
+        const QString problem = requirementProblem(issueId, proposed, revision ? revision->documentPath : QString(), round);
         if (!problem.isEmpty()) {
             requirement.available = false;
             requirement.blocked = problem;
@@ -158,13 +177,18 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
 
 void RevisionPublishService::publish(const QString& issueId, const Options& options,
                                      std::function<void(const Outcome&)> progress, std::function<void(const Result&)> done) {
+    const Issue* issue = m_issues.find(issueId);
+    const IssueRevision* round = issue ? issue->revision(options.revision) : nullptr;
     auto run = std::make_shared<Run>();
     run->issueId = issueId;
+    // La ronda se resuelve una sola vez, al empezar: los pasos son asíncronos y entre uno y otro puede
+    // abrirse otra (nadie está mirando), y lo que se publica tiene que seguir siendo lo mismo.
+    run->revision = round ? round->number : 0;
     run->options = options;
     run->progress = std::move(progress);
     run->done = std::move(done);
     run->result.ok = true;   // lo baja el primer paso que no salga
-    if (options.zephyr) run->cycles = cyclesFor(issueId);
+    if (options.zephyr) run->cycles = cyclesFor(issueId, run->revision);
     runZephyr(run);
 }
 
@@ -253,18 +277,19 @@ void RevisionPublishService::runTracker(const std::shared_ptr<Run>& run) {
                                                            : tr("No se pudo comentar en el gestor · %1").arg(r.error);
                                  finish(run, outcome);
                                  runRequirement(run);
-                             });
+                             },
+                             run->revision);
 }
 
 void RevisionPublishService::linkEvidence(const std::shared_ptr<Run>& run, const QString& key) {
     const Issue* issue = m_issues.find(run->issueId);
     QStringList bugs;
     if (issue)
-        for (const auto& bug : m_records.revisionBugs(*issue))
+        for (const auto& bug : m_records.revisionBugs(*issue, run->revision))
             if (!bug.key.trimmed().isEmpty()) bugs << bug.key.trimmed();
     // Los Tests salen de los ciclos ya publicados: cada ejecución guarda el suyo al pasar por Zephyr.
     QStringList tests;
-    for (const auto& cycle : cyclesFor(run->issueId))
+    for (const auto& cycle : cyclesFor(run->issueId, run->revision))
         for (const auto& row : cycle.rows)
             if (!row.testKey.trimmed().isEmpty() && !tests.contains(row.testKey.trimmed())) tests << row.testKey.trimmed();
 
@@ -285,7 +310,7 @@ void RevisionPublishService::linkEvidence(const std::shared_ptr<Run>& run, const
 
 void RevisionPublishService::runRequirement(const std::shared_ptr<Run>& run) {
     const Issue* issue = m_issues.find(run->issueId);
-    const QString registeredAlready = issue ? alreadyRegistered(*issue) : QString();
+    const QString registeredAlready = issue ? alreadyRegistered(*issue, run->revision) : QString();
     const bool possible = run->options.requirement && issue && issue->isImported() && m_requirements &&
                           m_requirements->canRegisterResult() && registeredAlready.isEmpty();
     if (!possible) {
@@ -300,9 +325,11 @@ void RevisionPublishService::runRequirement(const std::shared_ptr<Run>& run) {
         return;
     }
 
-    const bool wasOpen = issue->currentRevision() != nullptr;
+    // Sólo se cierra sola la ronda que se está probando: terminar de publicar una anterior no toca su cierre.
+    const IssueRevision* open = issue->currentRevision();
+    const bool wasOpen = open != nullptr && open->number == run->revision;
     const QaOutcome outcome = run->options.outcome;
-    RequirementRegistration registration = registrationFor(run->issueId, outcome, run->options.documentPath);
+    RequirementRegistration registration = registrationFor(run->issueId, outcome, run->options.documentPath, run->revision);
     registration.comment = run->options.comment;
     const bool withDocument = !registration.attachmentPath.isEmpty();
 
@@ -318,7 +345,7 @@ void RevisionPublishService::runRequirement(const std::shared_ptr<Run>& run) {
             registered.uncertain = r.uncertain;
             registered.lastError = r.error;
         }
-        m_issues.setRevisionRegistration(run->issueId, registered);
+        m_issues.setRevisionRegistration(run->issueId, registered, run->revision);
         // Registrado el resultado, la ronda queda cerrada con él: observado, volver a probar abre la siguiente.
         if (r.ok && wasOpen) m_issues.closeRevision(run->issueId, outcome);
         // Y el issue se actualiza con el estado en el que GESREQ deja el requerimiento, que lo dice al

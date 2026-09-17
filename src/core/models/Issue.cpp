@@ -62,6 +62,16 @@ const IssueRevision* Issue::currentRevision() const {
     return last.isOpen() ? &last : nullptr;
 }
 
+const IssueRevision* Issue::revision(int number) const {
+    if (revisions.isEmpty()) return nullptr;
+    if (number <= 0) return &revisions.last();
+    for (const auto& round : revisions)
+        if (round.number == number) return &round;
+    return nullptr;
+}
+
+int Issue::currentRevisionNumber() const { return revisions.isEmpty() ? 0 : revisions.last().number; }
+
 const IssueRevision* Issue::lastClosedRevision() const {
     for (auto it = revisions.crbegin(); it != revisions.crend(); ++it)
         if (!it->isOpen()) return &*it;

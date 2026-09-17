@@ -25,6 +25,7 @@
 
 #include <memory>
 #include <map>
+#include <optional>
 #include <QMessageBox>
 
 namespace {
@@ -98,10 +99,30 @@ int main(int argc, char* argv[]) {
     WorkspaceWindow workspace;
     std::map<QString, std::unique_ptr<ProjectSession>> sessions;
     ProjectSession* current = nullptr;
-    std::function<void(const QString&)> switchProject;
+    // Un cambio de proyecto a la vez: mientras dura, la aplicación está «cargando» y no acepta otro.
+    bool switching = false;
+    // Idioma y tema ya aplicados. Volver a ponerlos reescribe la hoja de estilos y Qt repinta el árbol
+    // entero de las dos ventanas, así que sólo se hace cuando de verdad cambian.
+    std::optional<AppLanguage> appliedLanguage;
+    std::optional<AppTheme> appliedTheme;
+    // Cambiar de proyecto ya no termina cuando la función vuelve (se hace en pasos), así que lo que
+    // tenga que pasar **después** se pide aquí: `then` corre sólo si el cambio llegó a hacerse.
+    std::function<void(const QString&, std::function<void()>)> switchProject;
     std::function<void(ProjectSession&)> buildWindow;
     // Se declara antes porque las ventanas que construye `buildWindow` ya piden la sesión de otro proyecto.
     std::function<ProjectSession&(const QString&)> getSession;
+
+    auto applyLook = [&](ProjectSession& session) {
+        const AppSettings& a = session.settings->app();
+        if (appliedLanguage != a.language) {
+            applyLanguage(app, translators, a.language);
+            appliedLanguage = a.language;
+        }
+        if (appliedTheme != a.theme) {
+            applyTheme(app, a.theme);
+            appliedTheme = a.theme;
+        }
+    };
 
     auto bindHotkeys = [&]() {
         const CaptureSettings& c = current->settings->capture();
@@ -140,7 +161,7 @@ int main(int argc, char* argv[]) {
         }
         QObject::connect(session.window.get(), &MainWindow::projectSwitchRequested, &app, [&, owner = &session](const QString& id) {
             if (owner != current) return;
-            QTimer::singleShot(0, &app, [&, id]() { switchProject(id); });
+            QTimer::singleShot(0, &app, [&, id]() { switchProject(id, {}); });
         });
         // Iniciar las pruebas de un requerimiento de otro proyecto: se guarda el actual, se activa el suyo
         // y allí se abre (o se crea) su issue. Si el cambio no llegó a hacerse, no se inicia nada.
@@ -149,9 +170,10 @@ int main(int argc, char* argv[]) {
                                                const QString& connection, const QDateTime& fetchedAt) {
             if (owner != current) return;
             QTimer::singleShot(0, &app, [&, id, requirement, connection, fetchedAt]() {
-                switchProject(id);
-                if (!current || current->ctx.projectId != id) return;
-                current->window->startTesting(requirement, connection, fetchedAt);
+                switchProject(id, [&, id, requirement, connection, fetchedAt]() {
+                    if (!current || current->ctx.projectId != id) return;
+                    current->window->startTesting(requirement, connection, fetchedAt);
+                });
             });
         });
         // El código Jira de un proyecto vive en sus ajustes, que sólo tiene abiertos su sesión: al crearlo
@@ -191,7 +213,12 @@ int main(int argc, char* argv[]) {
         return *session;
     };
 
-    switchProject = [&](const QString& id) {
+    // Abrir un proyecto por primera vez cuesta lo suyo (sus datos y, sobre todo, construir su ventana) y
+    // todo eso ocurre en el hilo de la interfaz. Así que el cambio se anuncia —la aplicación se pone en
+    // «cargando»— y se hace **en pasos**, volviendo al bucle de eventos entre uno y otro: sin eso el
+    // aviso no llegaría a pintarse y el indicador no se movería.
+    switchProject = [&](const QString& id, std::function<void()> then) {
+        if (switching) return;   // ya hay uno en marcha: el de ahora todavía está a medias
         if (!projects.find(id) || (current && current->ctx.projectId == id)) return;
         if (current) {
             QString reason;
@@ -202,25 +229,53 @@ int main(int argc, char* argv[]) {
             // Si no se pudo guardar, el cambio se cancela: los avisos de los stores dicen qué falló.
             if (!current->save()) return;
         }
-        auto& next = getSession(id);
-        if (!projects.setActive(id)) return;
-        // Recargar los ajustes generales compartidos y el código Jira del proyecto destino.
-        next.settings->load();
-        current = &next;
-        applyLanguage(app, translators, current->settings->app().language);
-        applyTheme(app, current->settings->app().theme);
-        if (!current->window
-            || current->window->property("uiLanguage").toInt() != static_cast<int>(current->settings->app().language)
-            || current->window->property("uiTheme").toInt() != static_cast<int>(current->settings->app().theme)) buildWindow(*current);
-        workspace.showProject(current->window.get());
-        bindHotkeys();
-        app.setQuitOnLastWindowClosed(!current->settings->app().closeToTray);
+        const Project* target = projects.find(id);
+        const QString name = target ? target->name : id;
+        MainWindow* from = current ? current->window.get() : nullptr;
+        switching = true;
+        if (from) from->setSwitchingProject(true);
+        workspace.setBusy(true, QObject::tr("Abriendo «%1»…").arg(name),
+                          QObject::tr("Preparando sus casos, planes e issues"));
+        // Se llama termine como termine el cambio, también si se queda a medias.
+        auto finish = [&, from]() {
+            switching = false;
+            if (from) from->setSwitchingProject(false);
+            workspace.setBusy(false);
+        };
+
+        // Paso 1 · los datos del proyecto: sus casos, planes, historial, bugs e issues.
+        QTimer::singleShot(0, &app, [&, id, finish, then]() {
+            auto& next = getSession(id);
+            if (!projects.setActive(id)) { finish(); return; }
+            // Recargar los ajustes generales compartidos y el código Jira del proyecto destino.
+            next.settings->load();
+            current = &next;
+            applyLook(*current);
+
+            // Paso 2 · su ventana, que es lo caro y sólo se paga la primera vez.
+            QTimer::singleShot(0, &app, [&, finish, then]() {
+                if (!current->window
+                    || current->window->property("uiLanguage").toInt() != static_cast<int>(current->settings->app().language)
+                    || current->window->property("uiTheme").toInt() != static_cast<int>(current->settings->app().theme))
+                    buildWindow(*current);
+
+                // Paso 3 · enseñarla y devolver la aplicación a su estado normal.
+                QTimer::singleShot(0, &app, [&, finish, then]() {
+                    workspace.showProject(current->window.get());
+                    bindHotkeys();
+                    app.setQuitOnLastWindowClosed(!current->settings->app().closeToTray);
+                    finish();
+                    // Hecho el cambio, lo que lo pidió sigue su camino (abrir el issue del requerimiento
+                    // que se iba a probar, por ejemplo), ya con el proyecto destino activo.
+                    if (then) then();
+                });
+            });
+        });
     };
 
     current = &getSession(projects.activeId());
     if (devsnapshot::requested()) devsnapshot::applyRequestedAppSettings(*current->settings);
-    applyLanguage(app, translators, current->settings->app().language);
-    applyTheme(app, current->settings->app().theme);
+    applyLook(*current);
     buildWindow(*current);
     workspace.show();
     bindHotkeys();

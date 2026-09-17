@@ -27,8 +27,11 @@ class TextArea;
 class RevisionPublishDialog : public QDialog {
     Q_OBJECT
 public:
+    /// `revision` es la ronda que se publica; 0, la que está en curso. Publicando una anterior, cada
+    /// destino enseña lo que esa ronda tiene hecho y lo que le falta.
     RevisionPublishDialog(RevisionPublishService& service, const QString& issueId, QaOutcome outcome,
-                          const QString& comment, const QString& documentPath, QWidget* parent = nullptr);
+                          const QString& comment, const QString& documentPath, int revision = 0,
+                          QWidget* parent = nullptr);
 
 signals:
     /// La publicación terminó; `ok` es que todos los pasos elegidos salieron bien.
@@ -48,6 +51,7 @@ private:
 
     RevisionPublishService& m_service;
     QString m_issueId;
+    int m_revision = 0;
     QString m_documentPath;
     QList<RevisionPublishService::Step> m_steps;
     QHash<int, QCheckBox*> m_choices;    // destino → su casilla

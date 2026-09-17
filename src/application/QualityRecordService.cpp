@@ -18,30 +18,38 @@ QualityRecordService::QualityRecordService(IssueStore& issues, TestCaseStore& ca
     : QObject(parent), m_issues(issues), m_cases(cases), m_plans(plans), m_history(history), m_bugs(bugs), m_settings(settings),
       m_writer(std::move(writer)), m_publish(publish) {}
 
-QDateTime QualityRecordService::revisionStart(const Issue& issue) const {
-    if (const IssueRevision* open = issue.currentRevision()) return open->startedAt;
-    if (!issue.revisions.isEmpty()) return issue.revisions.last().startedAt;
-    return {};
+QDateTime QualityRecordService::revisionStart(const Issue& issue, int revision) const {
+    const IssueRevision* round = issue.revision(revision);
+    return round ? round->startedAt : QDateTime();
+}
+
+QDateTime QualityRecordService::revisionEnd(const Issue& issue, int revision) const {
+    const IssueRevision* round = issue.revision(revision);
+    return round ? round->closedAt : QDateTime();
 }
 
 QStringList QualityRecordService::caseIdsOf(const Issue& issue) const { return IssueStore::caseIdsOf(issue, m_plans); }
 
-int QualityRecordService::revisionNumber(const Issue& issue) const {
-    if (const IssueRevision* open = issue.currentRevision()) return open->number;
-    return issue.revisions.isEmpty() ? 0 : issue.revisions.last().number;
+int QualityRecordService::revisionNumber(const Issue& issue, int revision) const {
+    const IssueRevision* round = issue.revision(revision);
+    return round ? round->number : 0;
 }
 
-QList<RunRecord> QualityRecordService::revisionRuns(const Issue& issue) const {
-    return IssueStore::runsOfRevision(issue, m_history, revisionNumber(issue));
+QList<RunRecord> QualityRecordService::revisionRuns(const Issue& issue, int revision) const {
+    return IssueStore::runsOfRevision(issue, m_history, revisionNumber(issue, revision));
 }
 
-QList<IssueLink> QualityRecordService::revisionBugs(const Issue& issue) const {
-    const QDateTime since = revisionStart(issue);
+QList<IssueLink> QualityRecordService::revisionBugs(const Issue& issue, int revision) const {
+    // La ventana de la ronda: de cuándo se abrió a cuándo se cerró. La que sigue abierta no tiene
+    // final, así que cuenta todo lo reportado desde que empezó.
+    const QDateTime since = revisionStart(issue, revision);
+    const QDateTime until = revisionEnd(issue, revision);
     const QStringList caseIds = caseIdsOf(issue);
     QList<IssueLink> out;
     for (const auto& bug : m_bugs.issues()) {
         if (!caseIds.contains(bug.caseId)) continue;
         if (since.isValid() && bug.createdAt.isValid() && bug.createdAt < since) continue;
+        if (until.isValid() && bug.createdAt.isValid() && bug.createdAt > until) continue;
         out << bug;
     }
     return out;
@@ -53,44 +61,49 @@ IssueProgress QualityRecordService::progressFor(const QString& issueId) const {
     return issueProgress(caseIdsOf(*issue), m_cases.cases(), revisionRuns(*issue), m_bugs.issues(), revisionStart(*issue));
 }
 
-QList<PlanReport> QualityRecordService::cyclesFor(const QString& issueId) const {
+QList<PlanReport> QualityRecordService::cyclesFor(const QString& issueId, int revision) const {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) return {};
-    QList<PlanRun> cycles = IssueStore::cyclesOfRevision(*issue, m_history, revisionNumber(*issue));
+    const int number = revisionNumber(*issue, revision);
+    QList<PlanRun> cycles = IssueStore::cyclesOfRevision(*issue, m_history, number);
     // Una revisión abierta a mano (o abierta después de ejecutar) puede no tener ciclos suyos: entonces
-    // se ofrecen todos los del issue en vez de dejar el acta sin ejecución de la que hablar.
-    if (cycles.isEmpty()) cycles = IssueStore::cyclesOf(*issue, m_history);
+    // se ofrecen todos los del issue en vez de dejar el acta sin ejecución de la que hablar. Sólo vale
+    // para la ronda en curso: una ronda anterior se publica con lo que se probó en ella, y coger los
+    // ciclos de otra ronda los mandaría dos veces a Zephyr y al comentario.
+    if (cycles.isEmpty() && number == issue->currentRevisionNumber()) cycles = IssueStore::cyclesOf(*issue, m_history);
     QList<PlanReport> reports;
     for (const auto& cycle : cycles) reports << m_history.report(cycle.id);
     return reports;
 }
 
-QString QualityRecordService::recordCycleFor(const QString& issueId) const {
+QString QualityRecordService::recordCycleFor(const QString& issueId, int revision) const {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) return {};
-    const QList<PlanReport> cycles = cyclesFor(issueId);
-    const QString saved = issue->revisions.isEmpty() ? QString() : issue->revisions.last().planRunId;
+    const QList<PlanReport> cycles = cyclesFor(issueId, revision);
+    const IssueRevision* round = issue->revision(revision);
+    const QString saved = round ? round->planRunId : QString();
     if (!saved.isEmpty() &&
         std::any_of(cycles.cbegin(), cycles.cend(), [&saved](const PlanReport& r) { return r.plan.id == saved; }))
         return saved;
     return cycles.isEmpty() ? QString() : cycles.first().plan.id;
 }
 
-QList<PlanReport> QualityRecordService::cyclesForRecord(const Issue& issue, const QString& planRunId) const {
-    const QList<PlanReport> cycles = cyclesFor(issue.id);
+QList<PlanReport> QualityRecordService::cyclesForRecord(const Issue& issue, const QString& planRunId, int revision) const {
+    const QList<PlanReport> cycles = cyclesFor(issue.id, revision);
     if (planRunId.trimmed().isEmpty()) return cycles;
     for (const auto& cycle : cycles)
         if (cycle.plan.id == planRunId) return {cycle};
     return cycles;
 }
 
-quality::DraftContext QualityRecordService::contextFor(const Issue& issue, const QList<PlanReport>& cycles) const {
+quality::DraftContext QualityRecordService::contextFor(const Issue& issue, const QList<PlanReport>& cycles, int revision) const {
     quality::DraftContext context;
     context.qaResource = m_settings.requirementSource().user;
-    context.revisionNumber = issue.revisions.isEmpty() ? 1 : issue.revisions.last().number;
+    const int number = revisionNumber(issue, revision);
+    context.revisionNumber = number > 0 ? number : 1;
     context.previous = previousRecord(issue.id);
 
-    const QDateTime since = revisionStart(issue);
+    const QDateTime since = revisionStart(issue, revision);
     const QStringList caseIds = caseIdsOf(issue);
     for (const auto& bug : m_bugs.issues())
         if (caseIds.contains(bug.caseId) && since.isValid() && bug.createdAt.isValid() && bug.createdAt < since)
@@ -120,15 +133,16 @@ QualityRecord QualityRecordService::previousRecord(const QString& issueId) const
     return previous;
 }
 
-QualityRecord QualityRecordService::draftFor(const QString& issueId, const QString& planRunId) const {
+QualityRecord QualityRecordService::draftFor(const QString& issueId, const QString& planRunId, int revisionNo) const {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) return {};
 
-    const QList<PlanReport> cycles = cyclesForRecord(*issue, planRunId);
-    QualityRecord draft = quality::draftFor(*issue, m_cases.cases(), cycles, revisionBugs(*issue), contextFor(*issue, cycles));
+    const QList<PlanReport> cycles = cyclesForRecord(*issue, planRunId, revisionNo);
+    QualityRecord draft = quality::draftFor(*issue, m_cases.cases(), cycles, revisionBugs(*issue, revisionNo),
+                                            contextFor(*issue, cycles, revisionNo));
 
     // Lo ya escrito en el acta de esta revisión manda sobre lo propuesto: es lo que corrigió alguien.
-    const IssueRevision* revision = issue->revisions.isEmpty() ? nullptr : &issue->revisions.last();
+    const IssueRevision* revision = issue->revision(revisionNo);
     if (!revision || revision->record.isEmpty()) return draft;
     const QualityRecord& saved = revision->record;
     draft.process = saved.process;
@@ -160,30 +174,36 @@ QualityRecord QualityRecordService::draftFor(const QString& issueId, const QStri
     return draft;
 }
 
-QString QualityRecordService::suggestedFileName(const QString& issueId) const {
+QString QualityRecordService::suggestedFileName(const QString& issueId, int revision) const {
     const Issue* issue = m_issues.find(issueId);
     const QString greq = issue && issue->isImported() ? issue->requirement.data.id : QString();
     const QString name = greq.isEmpty() ? (issue ? issue->id : QStringLiteral("issue")) : greq;
-    return QStringLiteral("ControlCalidad_%1_%2.docx").arg(name).arg(QDateTime::currentMSecsSinceEpoch());
+    // Un requerimiento observado levanta un acta por ronda: el número va en el nombre para que no se
+    // confundan en el disco ni al adjuntarlas.
+    const int number = issue ? revisionNumber(*issue, revision) : 0;
+    const QString round = number > 0 ? QStringLiteral("rev%1_").arg(number) : QString();
+    return QStringLiteral("ControlCalidad_%1_%2%3.docx").arg(name, round).arg(QDateTime::currentMSecsSinceEpoch());
 }
 
 QualityRecordService::GenerateResult QualityRecordService::generate(const QString& issueId, const QualityRecord& record,
-                                                                    const QString& path, const QString& planRunId) {
-    if (!m_issues.find(issueId)) return {false, {}, tr("El issue ya no existe")};
+                                                                    const QString& path, const QString& planRunId,
+                                                                    int revision) {
+    const Issue* issue = m_issues.find(issueId);
+    if (!issue) return {false, {}, tr("El issue ya no existe")};
     if (!m_writer) return {false, {}, tr("No se puede generar el acta en esta versión")};
     const QualityRecordWriteResult written = m_writer->write(record, path);
     if (!written.ok) return {false, {}, written.error};
-    m_issues.setRevisionRecord(issueId, record, path, planRunId);
+    m_issues.setRevisionRecord(issueId, record, path, planRunId, revisionNumber(*issue, revision));
     return {true, path, {}};
 }
 
 QString QualityRecordService::summaryFor(const QString& issueId, const QualityRecord& record, QaOutcome outcome,
-                                         const QString& planRunId) const {
+                                         const QString& planRunId, int revision) const {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) return {};
-    const QString cycle = planRunId.trimmed().isEmpty() ? recordCycleFor(issueId) : planRunId;
-    const QList<PlanReport> cycles = cyclesForRecord(*issue, cycle);
-    return quality::summaryOf(record, outcome, cycles, contextFor(*issue, cycles));
+    const QString cycle = planRunId.trimmed().isEmpty() ? recordCycleFor(issueId, revision) : planRunId;
+    const QList<PlanReport> cycles = cyclesForRecord(*issue, cycle, revision);
+    return quality::summaryOf(record, outcome, cycles, contextFor(*issue, cycles, revision));
 }
 
 } // namespace qaflow

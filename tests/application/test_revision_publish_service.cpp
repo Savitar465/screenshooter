@@ -58,9 +58,10 @@ Finished finishedRevision(AppFixture& f, bool publishedInTracker = true) {
     const QString planId = f.plans.createPlan(QStringLiteral("Plan GREQ 2026997"));
     f.plans.toggle(QStringLiteral("TC-101"));
     f.issues.linkPlan(id, planId);
-    f.issues.notePlanStarted(planId);
-
     const QString planRunId = f.history.startPlan(QStringLiteral("Plan GREQ 2026997"), {QStringLiteral("TC-101")}, planId);
+    // Como en la aplicación: al arrancar, el ciclo anota de qué issue y de qué ronda es.
+    const IssueStore::RevisionRef started = f.issues.notePlanStarted(planId);
+    f.history.noteCycleRevision(planRunId, started.issueId, started.revision);
     RunRecord run;
     run.caseId = QStringLiteral("TC-101");
     run.caseTitle = QStringLiteral("Autenticación");
@@ -72,6 +73,25 @@ Finished finishedRevision(AppFixture& f, bool publishedInTracker = true) {
     f.history.finishPlan(planRunId);
     f.issues.closeRevision(id, QaOutcome::Observado);
     return {id, planId, planRunId};
+}
+
+/// Vuelve a probar el requerimiento: abre la ronda siguiente y ejecuta otro ciclo del mismo plan, que
+/// es lo que pasa cuando un control observado se corrige.
+QString anotherRound(AppFixture& f, const Finished& done) {
+    f.issues.openRevision(done.issueId);
+    const QString planRunId = f.history.startPlan(QStringLiteral("Plan GREQ 2026997"), {QStringLiteral("TC-101")}, done.planId);
+    const IssueStore::RevisionRef started = f.issues.notePlanStarted(done.planId);
+    f.history.noteCycleRevision(planRunId, started.issueId, started.revision);
+    RunRecord run;
+    run.caseId = QStringLiteral("TC-101");
+    run.caseTitle = QStringLiteral("Autenticación");
+    run.planRunId = planRunId;
+    run.verdict = Verdict::Superado;
+    run.startedAt = QDateTime::currentDateTime();
+    run.finishedAt = run.startedAt.addSecs(120);
+    f.history.addRun(run);
+    f.history.finishPlan(planRunId);
+    return planRunId;
 }
 
 RevisionPublishService::Step stepOf(const QList<RevisionPublishService::Step>& steps, Destination destination) {
@@ -223,6 +243,81 @@ private slots:
         step = stepOf(f.revisionPublish.stepsFor(done.issueId), Destination::Requirement);
         QVERIFY(!step.available);
         QVERIFY2(step.blocked.contains(QStringLiteral("Conforme")), qPrintable(step.blocked));
+    }
+
+    // Una ronda que se quedó sin publicar (se volvió a probar antes de mandarla) se publica por su
+    // número: lo suyo va a su revisión y la ronda en curso no se toca.
+    void aRevisionLeftHalfwayIsPublishedByItsNumber() {
+        AppFixture f;
+        const Finished done = finishedRevision(f);
+        const QString secondCycle = anotherRound(f, done);
+        const Issue* issue = f.issues.find(done.issueId);
+        QCOMPARE(issue->revisions.size(), 2);
+        QVERIFY(issue->currentRevision() != nullptr);   // la ronda 2 está abierta
+
+        // Cada ronda habla de sus ciclos: la 1, del suyo; la 2, del nuevo.
+        const QList<PlanReport> first = f.revisionPublish.cyclesFor(done.issueId, 1);
+        QCOMPARE(first.size(), 1);
+        QCOMPARE(first.first().plan.id, done.planRunId);
+        const QList<PlanReport> second = f.revisionPublish.cyclesFor(done.issueId, 2);
+        QCOMPARE(second.size(), 1);
+        QCOMPARE(second.first().plan.id, secondCycle);
+
+        // Y la ronda 1 dice lo que le falta.
+        const QList<Destination> pending = f.revisionPublish.pendingFor(done.issueId, 1);
+        QVERIFY(pending.contains(Destination::Tracker));
+        QVERIFY(pending.contains(Destination::Requirement));
+
+        RevisionPublishService::Options options;
+        options.revision = 1;
+        options.outcome = QaOutcome::Observado;
+        options.comment = QStringLiteral("Control de calidad GREQ 2026997 — revisión 1: Observado");
+        options.documentPath = QStringLiteral("/tmp/acta-rev1.docx");
+        RevisionPublishService::Result result;
+        f.revisionPublish.publish(done.issueId, options, {}, [&result](const RevisionPublishService::Result& r) { result = r; });
+        QVERIFY2(result.ok, qPrintable(result.steps.isEmpty() ? QString() : result.steps.first().message));
+
+        issue = f.issues.find(done.issueId);
+        QCOMPARE(issue->revisions.size(), 2);
+        // Lo publicado es de la ronda 1: su comentario, su registro y su ciclo.
+        QVERIFY(issue->revisions.first().jira.publishedAt.isValid());
+        QVERIFY(issue->revisions.first().gesreq.registeredAt.isValid());
+        QVERIFY(issue->revisions.last().jira.isEmpty());
+        QVERIFY(issue->revisions.last().gesreq.isEmpty());
+        QCOMPARE(f.zephyr->published.size(), 1);
+        QCOMPARE(f.zephyr->published.first().cases.first().caseId, QStringLiteral("TC-101"));
+        QVERIFY(f.history.findPlan(done.planRunId)->isPublished());
+        QVERIFY(!f.history.findPlan(secondCycle)->isPublished());
+        // Y la ronda en curso sigue abierta: publicar lo de antes no la cierra.
+        QVERIFY(issue->currentRevision() != nullptr);
+        QCOMPARE(issue->currentRevision()->number, 2);
+    }
+
+    // Registrada ya una ronda posterior, la anterior no se registra: lo que sabe GESREQ es lo último.
+    void aLaterRegistrationBlocksTheEarlierRound() {
+        AppFixture f;
+        const Finished done = finishedRevision(f);
+        anotherRound(f, done);
+        f.issues.closeRevision(done.issueId, QaOutcome::Conforme);
+
+        RevisionPublishService::Options options;
+        options.zephyr = false;
+        options.tracker = false;
+        options.outcome = QaOutcome::Conforme;
+        f.revisionPublish.publish(done.issueId, options, {}, {});
+        QCOMPARE(f.requirementSource->registrations.size(), 1);
+
+        const auto step = stepOf(f.revisionPublish.stepsFor(done.issueId, 1), Destination::Requirement);
+        QVERIFY(!step.available);
+        QVERIFY2(step.blocked.contains(QStringLiteral("revisión 2")), qPrintable(step.blocked));
+        QVERIFY(!f.revisionPublish.pendingFor(done.issueId, 1).contains(Destination::Requirement));
+
+        options.revision = 1;
+        options.outcome = QaOutcome::Observado;
+        RevisionPublishService::Result result;
+        f.revisionPublish.publish(done.issueId, options, {}, [&result](const RevisionPublishService::Result& r) { result = r; });
+        QVERIFY(!result.ok);
+        QCOMPARE(f.requirementSource->registrations.size(), 1);
     }
 
     // Publicado el resultado, del issue del gestor cuelgan sus bugs y los Tests de sus ejecuciones, y

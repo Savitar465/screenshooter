@@ -70,6 +70,20 @@ private slots:
         QCOMPARE(f.service.draftFor(issue).summary, QStringLiteral("Pruebas manuales"));
     }
 
+    void aLongTitleIsShortenedInTheSummaryButNotInTheIssue() {
+        Fixture f;
+        const QString title = QStringLiteral("Desarrollo complementario del laboratorio de control de calidad para el registro de "
+                                             "ensayos, sus resultados y la emisión de los certificados correspondientes");
+        f.issues.updateIssue(f.id, [&title](Issue& i) { i.title = title; });
+        const IssueDraft draft = f.service.draftFor(f.issue());
+        QVERIFY2(draft.summary.size() <= 120, qPrintable(draft.summary));
+        QVERIFY2(draft.summary.startsWith(QStringLiteral("QA - 2025175 - Desarrollo complementario")), qPrintable(draft.summary));
+        QVERIFY(draft.summary.endsWith(QStringLiteral("…")));
+        // Lo acortado es sólo el título del gestor: el del issue y la descripción corta siguen enteros.
+        QCOMPARE(f.issue().title, title);
+        QVERIFY(draft.description.contains(QStringLiteral("Desarrollo complementario del laboratorio")));
+    }
+
     void theDraftCarriesTheRequirementAndTheQaNotes() {
         Fixture f;
         QVERIFY(f.service.canPublish());

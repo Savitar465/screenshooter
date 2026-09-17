@@ -53,17 +53,26 @@ public:
         /// pantalla vuelve a preguntar (`requirementProblem`) cuando algo de eso cambia.
         bool rule = false;
     };
-    /// Qué se puede publicar de la revisión del issue y cómo está cada destino.
-    QList<Step> stepsFor(const QString& issueId) const;
-    /// Ciclos de la revisión que se publicarían en Zephyr (los del acta), el más reciente primero.
-    QList<PlanReport> cyclesFor(const QString& issueId) const;
+    /// Todo esto habla de **una ronda**: `revision` es su número y 0 (lo habitual) la ronda en curso —la
+    /// abierta o, si ninguna lo está, la última—. Una ronda anterior que se quedó a medias se termina de
+    /// publicar pasando su número, y cada destino mira entonces lo que esa ronda tiene hecho.
+
+    /// Qué se puede publicar de esa ronda del issue y cómo está cada destino.
+    QList<Step> stepsFor(const QString& issueId, int revision = 0) const;
+    /// Ciclos de la ronda que se publicarían en Zephyr (los del acta), el más reciente primero.
+    QList<PlanReport> cyclesFor(const QString& issueId, int revision = 0) const;
     /// El registro que se mandaría a GESREQ con ese resultado y esa acta: lo que se enseña y lo que se
     /// envía salen de aquí, así que dicen lo mismo.
-    RequirementRegistration registrationFor(const QString& issueId, QaOutcome outcome, const QString& documentPath) const;
+    RequirementRegistration registrationFor(const QString& issueId, QaOutcome outcome, const QString& documentPath,
+                                            int revision = 0) const;
     /// Por qué GESREQ rechazaría ese registro (falta el acta, el resultado no cuadra con las
     /// observaciones…); vacío si lo aceptaría. La pantalla lo consulta al cambiar el resultado o el
     /// acta, para avisar antes de enviar nada.
-    QString requirementProblem(const QString& issueId, QaOutcome outcome, const QString& documentPath) const;
+    QString requirementProblem(const QString& issueId, QaOutcome outcome, const QString& documentPath,
+                               int revision = 0) const;
+    /// Lo que le falta a esa ronda para estar publicada del todo, para enseñarlo en su fila del
+    /// historial: los destinos que todavía no están hechos y se podrían hacer.
+    QList<Destination> pendingFor(const QString& issueId, int revision) const;
 
     struct Options {
         bool zephyr = true;
@@ -72,6 +81,7 @@ public:
         QaOutcome outcome = QaOutcome::Conforme;
         QString comment;          // el resumen que va al gestor y a GESREQ
         QString documentPath;     // acta a adjuntar; vacía = sin adjunto
+        int revision = 0;         // ronda que se publica; 0 = la que está en curso
     };
 
     /// Cómo terminó un destino.
@@ -104,10 +114,11 @@ private:
     /// Zephyr de sus ejecuciones. Así, desde el issue del requerimiento se llega a todo.
     void linkEvidence(const std::shared_ptr<Run>& run, const QString& key);
     void runRequirement(const std::shared_ptr<Run>& run);
-    /// Por qué el control ya no se puede registrar en GESREQ (esta ronda ya se registró, o el control se
-    /// cerró como Conforme); vacío si todavía se puede. Registrar cambia el estado del requerimiento en
-    /// el sistema, así que se hace una sola vez por ronda y sólo se repite cuando quedó observado.
-    QString alreadyRegistered(const Issue& issue) const;
+    /// Por qué esa ronda ya no se puede registrar en GESREQ (ella misma ya se registró, una ronda
+    /// posterior se le adelantó, o el control se cerró como Conforme); vacío si todavía se puede.
+    /// Registrar cambia el estado del requerimiento en el sistema, así que se hace una sola vez por
+    /// ronda y sólo se repite cuando la anterior quedó observada.
+    QString alreadyRegistered(const Issue& issue, int revision) const;
     void finish(const std::shared_ptr<Run>& run, const Outcome& outcome);
 
     IssueStore& m_issues;

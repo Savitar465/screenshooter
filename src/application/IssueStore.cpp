@@ -141,12 +141,15 @@ void IssueStore::unlinkPlan(const QString& issueId, const QString& planId) {
 
 // ---- Flujo de la revisión ----------------------------------------------------------------------
 
-IssueRevision& IssueStore::revisionFor(Issue& issue) {
+IssueRevision& IssueStore::revisionFor(Issue& issue, int number) {
     if (issue.revisions.isEmpty()) {
         IssueRevision first;
         first.startedAt = QDateTime::currentDateTime();
         issue.revisions << first;
     }
+    if (number > 0)
+        for (auto& round : issue.revisions)
+            if (round.number == number) return round;
     return issue.revisions.last();
 }
 
@@ -201,10 +204,10 @@ int IssueStore::openRevision(const QString& issueId) {
 }
 
 void IssueStore::setRevisionRecord(const QString& issueId, const QualityRecord& record, const QString& documentPath,
-                                   const QString& planRunId) {
+                                   const QString& planRunId, int number) {
     if (!find(issueId)) return;
     updateIssue(issueId, [&](Issue& i) {
-        IssueRevision& revision = revisionFor(i);
+        IssueRevision& revision = revisionFor(i, number);
         revision.record = record;
         if (!planRunId.trimmed().isEmpty()) revision.planRunId = planRunId;
         if (documentPath.trimmed().isEmpty()) return;
@@ -213,14 +216,14 @@ void IssueStore::setRevisionRecord(const QString& issueId, const QualityRecord& 
     });
 }
 
-void IssueStore::setRevisionPublication(const QString& issueId, const RevisionPublication& publication) {
+void IssueStore::setRevisionPublication(const QString& issueId, const RevisionPublication& publication, int number) {
     if (!find(issueId)) return;
-    updateIssue(issueId, [&](Issue& i) { revisionFor(i).jira = publication; });
+    updateIssue(issueId, [&](Issue& i) { revisionFor(i, number).jira = publication; });
 }
 
-void IssueStore::setRevisionRegistration(const QString& issueId, const RevisionRegistration& registration) {
+void IssueStore::setRevisionRegistration(const QString& issueId, const RevisionRegistration& registration, int number) {
     if (!find(issueId)) return;
-    updateIssue(issueId, [&](Issue& i) { revisionFor(i).gesreq = registration; });
+    updateIssue(issueId, [&](Issue& i) { revisionFor(i, number).gesreq = registration; });
 }
 
 void IssueStore::closeRevision(const QString& issueId, QaOutcome outcome) {

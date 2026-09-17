@@ -47,15 +47,20 @@ QString objectNameFor(RevisionPublishService::Destination destination) {
 } // namespace
 
 RevisionPublishDialog::RevisionPublishDialog(RevisionPublishService& service, const QString& issueId, QaOutcome outcome,
-                                             const QString& comment, const QString& documentPath, QWidget* parent)
-    : QDialog(parent), m_service(service), m_issueId(issueId), m_documentPath(documentPath) {
+                                             const QString& comment, const QString& documentPath, int revision,
+                                             QWidget* parent)
+    : QDialog(parent), m_service(service), m_issueId(issueId), m_revision(revision), m_documentPath(documentPath) {
     setObjectName(QStringLiteral("revisionPublishDialog"));
-    setWindowTitle(tr("Publicar el resultado de la revisión"));
+    // El número de la ronda va en el título: con un requerimiento observado se publica más de una, y
+    // hay que ver cuál se está mandando.
+    const QString heading = revision > 0 ? tr("Publicar el resultado de la revisión %1").arg(revision)
+                                         : tr("Publicar el resultado de la revisión");
+    setWindowTitle(heading);
     setWindowIcon(ui::appIcon());
     setMinimumSize(660, 640);
 
     auto* v = ui::vbox(this, 18, 10);
-    v->addWidget(ui::label(tr("Publicar el resultado de la revisión"), "h2"));
+    v->addWidget(ui::label(heading, "h2"));
     auto* intro = ui::label(tr("Las pruebas van a Zephyr como ciclos con sus casos; el resultado y el acta, al issue del gestor; "
                                "y el control de calidad queda registrado en el requerimiento de GESREQ."),
                             "muted-sm");
@@ -115,7 +120,7 @@ RevisionPublishDialog::RevisionPublishDialog(RevisionPublishService& service, co
 }
 
 void RevisionPublishDialog::buildSteps(QVBoxLayout* v) {
-    m_steps = m_service.stepsFor(m_issueId);
+    m_steps = m_service.stepsFor(m_issueId, m_revision);
     auto* box = new QWidget;
     auto* list = ui::vbox(box, 0, 10);
     for (const auto& step : m_steps) {
@@ -164,7 +169,7 @@ void RevisionPublishDialog::refreshRequirementStep() {
     // Lo que está bloqueado por la configuración (o ya no hace falta) no depende del resultado.
     if (!step.available && !step.rule) return;
 
-    const QString problem = m_service.requirementProblem(m_issueId, outcome(), documentPath());
+    const QString problem = m_service.requirementProblem(m_issueId, outcome(), documentPath(), m_revision);
     choice->setEnabled(problem.isEmpty());
     if (!problem.isEmpty()) choice->setChecked(false);
     else if (!step.done) choice->setChecked(true);
@@ -186,6 +191,7 @@ void RevisionPublishDialog::start() {
     options.outcome = outcome();
     options.comment = m_comment->toPlainText();
     options.documentPath = documentPath();
+    options.revision = m_revision;
 
     m_running = true;
     m_publish->setEnabled(false);

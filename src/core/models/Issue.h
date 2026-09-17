@@ -156,6 +156,12 @@ struct Issue {
     bool isPublished() const { return !publication.isEmpty(); }
     /// La revisión en curso; nullptr si no hay ninguna abierta (o todavía ninguna).
     const IssueRevision* currentRevision() const;
+    /// La ronda con ese número; nullptr si el issue no la tiene. Con `number <= 0`, la ronda de la que
+    /// se habla por defecto: la abierta o, si ninguna lo está, la última. Es lo que deja publicar el
+    /// resultado de una ronda anterior que se quedó a medias.
+    const IssueRevision* revision(int number) const;
+    /// Número de la ronda en curso (la abierta o la última cerrada); 0 si el issue no tiene ninguna.
+    int currentRevisionNumber() const;
     /// La última revisión cerrada; nullptr si ninguna lo está.
     const IssueRevision* lastClosedRevision() const;
     /// Resultado de la última revisión cerrada; Pendiente si no hay ninguna.

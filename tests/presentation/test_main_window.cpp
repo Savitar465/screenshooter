@@ -10,6 +10,8 @@
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
 #include "presentation/views/BugDetailWindow.h"
+#include "presentation/views/CasesView.h"
+#include "presentation/views/IssuesView.h"
 #include "presentation/views/CycleStartDialog.h"
 #include "presentation/views/HistoryView.h"
 #include "presentation/views/MainWindow.h"
@@ -82,6 +84,12 @@ struct WindowFixture {
         QVERIFY(QTest::qWaitForWindowExposed(window.get()));
     }
     QAction* action(const char* name) const { return window->findChild<QAction*>(QString::fromLatin1(name)); }
+    /// Etiqueta viva con ese nombre. Lo que se rehace en cada refresco (los pasos de la revisión) se
+    /// borra con `deleteLater()`, así que primero se despacha lo pendiente y luego se busca.
+    QLabel* liveLabel(const char* name) const {
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        return window->findChild<QLabel*>(QString::fromLatin1(name));
+    }
     QPushButton* nav(Screen s) const { return window->findChild<QPushButton*>(QStringLiteral("nav-%1").arg(static_cast<int>(s))); }
     /// Insignia del botón del rail (progreso de la ejecución, bugs pendientes…).
     QLabel* badge(Screen s) const { return window->findChild<QLabel*>(QStringLiteral("badge-%1").arg(static_cast<int>(s))); }
@@ -281,9 +289,10 @@ private slots:
         while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
         f.app.run.finish();
 
+        // La vista del historial se construye al entrar en ella, así que primero se navega.
+        f.window->navigate(Screen::Historial);
         auto* history = f.window->findChild<HistoryView*>();
         QVERIFY(history);
-        f.window->navigate(Screen::Historial);
         history->showRun(f.app.history.runsForCase(id).first().id);
         // Reportar bug también crea tarjetas (ocultas): hay que esperar a la miniatura visible.
         auto visibleThumb = [&]() -> Thumbnail* {
@@ -612,12 +621,12 @@ private slots:
         f.app.history.finishPlan(planRunId);
         f.app.history.markPublished(planRunId, QStringLiteral("77"));
 
-        auto* history = f.window->findChild<HistoryView*>();
-        QVERIFY(history);
         // A lo ancho de una pantalla normal, no de la máxima: la cabecera del informe lleva tres
         // botones y es donde se apretaba la línea de la publicación.
         f.window->resize(760, 700);
         f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
         history->showPlan(planRunId);
         QTest::qWait(50);
         // La historia del caso (de los datos de ejemplo) y su Test de Zephyr, uno al lado del otro.
@@ -852,9 +861,9 @@ private slots:
 
     void thePlanReportOffersDeletingEveryCycleButTheOneInProgress() {
         WindowFixture f;
+        f.window->navigate(Screen::Historial);
         auto* history = f.window->findChild<HistoryView*>();
         QVERIFY(history);
-        f.window->navigate(Screen::Historial);
 
         // Un ciclo terminado se puede eliminar.
         f.app.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Terminado"));
@@ -1073,10 +1082,11 @@ private slots:
         QVERIFY(f.app.plans.find(planId)->name.contains(id));
         f.app.plans.toggle(QStringLiteral("TC-104"));
         f.window->navigate(Screen::Issues);
-        // La tarjeta de planes enseña el plan del issue con sus casos dentro.
-        const QString plansHeader = f.window->findChild<QLabel*>(QStringLiteral("issuePlansHeader"))->text();
-        QVERIFY2(!plansHeader.isEmpty(), qPrintable(plansHeader));
-        QVERIFY(!f.window->findChild<QLabel*>(QStringLiteral("issueCasesHeader")));   // ya no hay tarjeta de casos
+        // El paso 1 de la revisión enseña el plan del issue con sus casos dentro: no hay tarjeta aparte.
+        const QString planStep = f.liveLabel("issueStepPlanDetail")->text();
+        QVERIFY2(planStep.contains(id) && planStep.contains(QStringLiteral("1 caso")), qPrintable(planStep));
+        QVERIFY(!f.window->findChild<QLabel*>(QStringLiteral("issuePlansHeader")));
+        QVERIFY(!f.window->findChild<QLabel*>(QStringLiteral("issueCasesHeader")));
 
         // Una ejecución suelta de ese caso no es un resultado del issue; un ciclo de su plan, sí.
         f.app.run.start(QStringLiteral("TC-104"));
@@ -1084,7 +1094,7 @@ private slots:
         f.app.run.finish();
         f.window->navigate(Screen::Issues);
         QVERIFY(IssueStore::runsOf(*f.app.issues.find(id), f.app.history).isEmpty());
-        QVERIFY2(f.window->findChild<QLabel*>(QStringLiteral("issueResultsHeader"))->text().contains(QStringLiteral("0")),
+        QVERIFY2(f.liveLabel("issueStepRunDetail")->text().contains(QStringLiteral("0 ejecución")),
                  "sin ciclos del plan no hay resultados del issue");
 
         f.app.run.startSequence({QStringLiteral("TC-104")}, QStringLiteral("Plan del issue"), planId);
@@ -1092,8 +1102,8 @@ private slots:
         f.app.run.finish();
         f.window->navigate(Screen::Issues);
         QCOMPARE(IssueStore::runsOf(*f.app.issues.find(id), f.app.history).size(), 1);
-        const QString resultsHeader = f.window->findChild<QLabel*>(QStringLiteral("issueResultsHeader"))->text();
-        QVERIFY2(resultsHeader.contains(QStringLiteral("1")), qPrintable(resultsHeader));
+        const QString runStep = f.liveLabel("issueStepRunDetail")->text();
+        QVERIFY2(runStep.contains(QStringLiteral("1 ejecución")), qPrintable(runStep));
 
         // Lo escrito en QAflow se queda aunque GESREQ cambie; el cambio se avisa hasta revisarlo.
         title->selectAll();
@@ -1347,12 +1357,14 @@ private slots:
         WindowFixture f;
         const QString id = f.app.issues.createIssue(QStringLiteral("Pruebas del laboratorio"));
         f.window->navigate(Screen::Issues);
-        auto* publish = f.window->findChild<QPushButton*>(QStringLiteral("issuePublish"));
+        // La publicación en el gestor no tiene tarjeta: se hace desde el menú del tag de la cabecera.
+        QVERIFY(!f.window->findChild<QWidget*>(QStringLiteral("issueJiraCard")));
+        auto* publish = f.action("issuePublish");
         QVERIFY(publish);
-        QVERIFY(publish->isEnabled());
+        QVERIFY(publish->isVisible() && publish->isEnabled());
         QVERIFY(f.window->findChild<QWidget*>(QStringLiteral("issueJiraPending"))->isHidden());
 
-        publish->click();
+        publish->trigger();
         auto* dialog = f.window->findChild<JiraPublishDialog*>();
         QVERIFY(dialog);
         QCOMPARE(dialog->findChild<QLineEdit*>(QStringLiteral("jiraSummary"))->text(), QStringLiteral("Pruebas del laboratorio"));
@@ -1365,9 +1377,13 @@ private slots:
         QCOMPARE(f.app.tracker->publishedIssues.size(), 1);
         QCOMPARE(f.app.tracker->publishedIssues.first().summary, QStringLiteral("Pruebas del laboratorio"));
         QVERIFY(f.app.tracker->publishedIssues.first().labels.contains(id));
-        QVERIFY(f.window->findChild<QLabel*>(QStringLiteral("issueJira"))->text().contains(key));
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("issueJira"))->text().contains(key));
         QVERIFY(f.window->findChild<QWidget*>(QStringLiteral("issueJiraPending"))->isHidden());
-        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("issueOpenJira"))->isHidden());
+        // Publicado, el tag ofrece lo que se puede hacer con el issue del gestor y ya no ofrece crearlo.
+        QVERIFY(f.action("issueOpenJira")->isVisible());
+        QVERIFY(f.action("issueRefreshJira")->isVisible());
+        QVERIFY(f.action("issueUnlinkJira")->isVisible());
+        QVERIFY(!f.action("issuePublish")->isVisible());
 
         // Cambiar el título deja el issue pendiente; actualizar reescribe el del gestor.
         auto* title = f.window->findChild<QLineEdit*>(QStringLiteral("issueTitle"));
@@ -1442,6 +1458,97 @@ private slots:
         QVERIFY(revision.gesreq.registeredAt.isValid());
         QVERIFY(!revision.jira.isEmpty());
         dialog->close();
+    }
+
+    // Una ronda que se cerró sin publicar se termina desde su fila del historial: el issue ya está
+    // probando la siguiente y aun así lo de la anterior llega a su sitio.
+    void aPreviousRevisionIsFinishedFromTheHistory() {
+        WindowFixture f;
+        f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) {
+            r.url = QStringLiteral("http://gesreq.test:7401/greq");
+            r.user = QStringLiteral("jmaidana");
+            r.password = QStringLiteral("secreto");
+            r.connected = true;
+        });
+        ExternalRequirement requirement;
+        requirement.id = QStringLiteral("2026997");
+        requirement.systemCode = QStringLiteral("SUMA2");
+        requirement.summary = QStringLiteral("Integración de nuevos servicios");
+        requirement.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+        f.app.issues.importRequirements({requirement}, QStringLiteral("http://gesreq.test:7401/greq"));
+        const QString id = f.app.issues.issues().first().id;
+        f.app.issues.updateIssue(id, [](Issue& i) {
+            i.publication.tracker = QStringLiteral("Jira");
+            i.publication.key = QStringLiteral("SHOP-12");
+            i.publication.publishedAt = QDateTime::currentDateTime();
+        });
+        const QString planId = f.app.plans.createPlan(QStringLiteral("Plan GREQ 2026997"));
+        f.app.plans.toggle(QStringLiteral("TC-101"));
+        f.app.issues.linkPlan(id, planId);
+        f.app.issues.openRevision(id);
+        f.app.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Plan GREQ 2026997"), planId);
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Fail);
+        f.app.run.finish();
+        // La ronda 1 se cierra observada y, sin publicarla, el requerimiento vuelve a pruebas.
+        f.app.issues.closeRevision(id, QaOutcome::Observado);
+        f.app.issues.openRevision(id);
+
+        f.window->navigate(Screen::Issues);
+        auto finish = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issueRevisionPublish-1")); };
+        QTRY_VERIFY(finish());
+        QVERIFY2(finish()->toolTip().contains(QStringLiteral("GESREQ")), qPrintable(finish()->toolTip()));
+        finish()->click();
+
+        auto* dialog = f.window->findChild<RevisionPublishDialog*>();
+        QVERIFY(dialog);
+        QVERIFY2(dialog->windowTitle().contains(QStringLiteral("1")), qPrintable(dialog->windowTitle()));
+        dialog->findChild<QPushButton*>(QStringLiteral("revisionPublishAccept"))->click();
+
+        // Lo publicado es de la ronda 1, y la 2 sigue abierta y sin tocar.
+        const Issue* issue = f.app.issues.find(id);
+        QCOMPARE(issue->revisions.size(), 2);
+        QVERIFY(issue->revisions.first().gesreq.registeredAt.isValid());
+        QVERIFY(!issue->revisions.first().jira.isEmpty());
+        QVERIFY(issue->revisions.last().gesreq.isEmpty());
+        QVERIFY(issue->currentRevision() != nullptr);
+        QCOMPARE(f.app.requirementSource->registrations.first().result, QStringLiteral("Observado"));
+        dialog->close();
+    }
+
+    // Las pantallas se construyen la primera vez que se entra en ellas: abrir un proyecto no paga las
+    // seis vistas, que es lo que hacía que cambiar de proyecto bloqueara la interfaz casi un segundo.
+    void screensAreBuiltTheFirstTimeTheyAreOpened() {
+        WindowFixture f;
+        QVERIFY(f.window->findChild<CasesView*>());        // la pantalla en la que arranca, sí
+        QVERIFY(!f.window->findChild<IssuesView*>());
+        QVERIFY(!f.window->findChild<HistoryView*>());
+
+        f.window->navigate(Screen::Issues);
+        QVERIFY(f.window->findChild<IssuesView*>());
+        QVERIFY(!f.window->findChild<HistoryView*>());     // las que no se han abierto siguen sin construirse
+
+        // Y lo que se abre en profundidad también la construye: nadie tiene que saber si ya existía.
+        f.window->showMetrics();
+        QVERIFY(f.window->findChild<HistoryView*>());
+        QCOMPARE(f.window->currentScreen(), Screen::Historial);
+    }
+
+    // Mientras se abre otro proyecto, el selector lo dice y no acepta otro cambio.
+    void theProjectSelectorSaysWhenAnotherProjectIsOpening() {
+        WindowFixture f;
+        auto* loading = f.window->findChild<QWidget*>(QStringLiteral("projectLoading"));
+        QVERIFY(loading && loading->isHidden());
+        auto* selector = f.window->findChild<QComboBox*>(QStringLiteral("projectSelector"));
+        QVERIFY(selector);
+
+        f.window->setSwitchingProject(true);
+        QVERIFY(!loading->isHidden());
+        QVERIFY(!selector->isEnabled());
+        QVERIFY2(selector->toolTip().contains(QStringLiteral("abriendo")), qPrintable(selector->toolTip()));
+
+        f.window->setSwitchingProject(false);
+        QVERIFY(loading->isHidden());
+        QVERIFY(!selector->toolTip().contains(QStringLiteral("abriendo")));
     }
 
     void settingsEnableZephyrPublishing() {
@@ -1559,7 +1666,6 @@ private slots:
 
     void thePlanReportListsTheBugsReportedDuringTheCycle() {
         WindowFixture f;
-        auto* history = f.window->findChild<HistoryView*>();
         f.app.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"), f.app.plans.activeId());
         const QString planRunId = f.app.run.planRunId();
 
@@ -1580,6 +1686,9 @@ private slots:
         f.app.run.finish();
         while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
         f.window->finishRun();
+        f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
         history->showPlan(planRunId);
         QTest::qWait(50);
 
@@ -1602,7 +1711,6 @@ private slots:
     // cuelga del anterior y la pantalla de ejecución dice que se está continuando la revisión.
     void theReportContinuesTheCycleWithItsBrokenCases() {
         WindowFixture f;
-        auto* history = f.window->findChild<HistoryView*>();
         const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
         const QString planId = f.app.plans.activeId();
         f.app.issues.linkPlan(issueId, planId);
@@ -1617,6 +1725,9 @@ private slots:
         f.app.run.mark(StepResult::Pass);                                       // TC-102, paso 1
         f.app.run.mark(StepResult::Fail);                                       // TC-102, paso 2
         f.window->finishRun();
+        f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
         history->showPlan(planRunId);
         QTest::qWait(50);
 

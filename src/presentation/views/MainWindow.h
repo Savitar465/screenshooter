@@ -32,6 +32,7 @@ class IssuesView;
 class PlanView;
 class SettingsDialog;
 class Toast;
+class BusyIndicator;
 class FlashOverlay;
 
 /// Ventana principal: menú, rail de navegación, pila de pantallas y barra de estado. Coordina la navegación entre vistas,
@@ -52,6 +53,9 @@ public:
     /// Vuelve a la pantalla anterior del camino. No hace nada si no hay ninguna.
     void goBack();
     void setProjectActive(bool active);
+    /// La aplicación está abriendo otro proyecto: el selector se bloquea y enseña que está trabajando.
+    /// Lo pone y lo quita quien coordina el cambio, que es quien sabe cuándo termina.
+    void setSwitchingProject(bool on);
     Screen currentScreen() const { return m_current; }
     /// Acción "Finalizar" de la ejecución: sigue con el plan, muestra su informe o vuelve a los casos.
     void finishRun();
@@ -124,6 +128,25 @@ private:
     void buildMenus();
     void buildTray();
     void wireSignals();
+    /// Las vistas se construyen **la primera vez que se entra en su pantalla**: abrir un proyecto no paga
+    /// las seis (eran ~270 ms de los ~840 que costaba la ventana) y el arranque tampoco. Cada una se
+    /// cablea al crearse (`wire*`), no en `wireSignals()`, que se queda con lo que no es de ninguna.
+    /// Los getters la crean si hace falta, así que quien la usa no tiene que saber si ya existía.
+    QWidget* viewFor(Screen s);
+    CasesView* casesView();
+    PlanView* planView();
+    RunView* runView();
+    HistoryView* historyView();
+    BugView* bugView();
+    IssuesView* issuesView();
+    /// Abrir en el navegador un issue del gestor por su clave.
+    void openTrackerIssue(const QString& key);
+    void wireCases();
+    void wirePlan();
+    void wireRun();
+    void wireHistory();
+    void wireBug();
+    void wireIssues();
     void updateShortcuts();
     void updateActions();
     /// Aviso persistente con «Reintentar» cuando un store no pudo escribir en disco.
@@ -133,12 +156,13 @@ private:
     Sidebar* m_sidebar;
     StatusStrip* m_status;
     QStackedWidget* m_stack;
-    CasesView* m_cases;
-    PlanView* m_plan;
-    RunView* m_run;
-    HistoryView* m_history;
-    BugView* m_bug;
-    IssuesView* m_issuesView;
+    // Nulas hasta que se entra en su pantalla; se piden por su getter, nunca directamente.
+    CasesView* m_cases = nullptr;
+    PlanView* m_plan = nullptr;
+    RunView* m_run = nullptr;
+    HistoryView* m_history = nullptr;
+    BugView* m_bug = nullptr;
+    IssuesView* m_issuesView = nullptr;
     SettingsDialog* m_settings = nullptr;   // se crea al abrirla por primera vez
     Toast* m_toast;
     FlashOverlay* m_flash;
@@ -152,6 +176,9 @@ private:
     QList<BackStep> m_back;
 
     QComboBox* m_projects = nullptr;
+    QWidget* m_projectBusy = nullptr;        // «Abriendo…» junto al selector mientras se cambia de proyecto
+    BusyIndicator* m_projectSpinner = nullptr;
+    bool m_switchingProject = false;
     QPushButton* m_projectMenu = nullptr;
     QPushButton* m_navBack = nullptr;
     QComboBox* m_runTarget = nullptr;

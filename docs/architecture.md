@@ -10,6 +10,7 @@ GitLab o Azure DevOps.
 ```
 src/
 ├── core/            Modelos y contratos. Sin Qt Widgets, sin red, sin disco.
+│   ├── Text.h       elideTitle(): acorta por palabras un título que se deriva del issue (el del gestor, el del plan)
 │   ├── models/      TestCase, TestRun, TestPlan, BugReport, Settings (TrackerSettings, AppSettings), IssueLink,
 │   │                RunHistory (RunRecord, PlanRun), PlanReport (informe calculado + Markdown),
 │   │                Metrics (tasa por suite, evolución entre ciclos), CaseFilter, CaseFormats (JSON / CSV / Markdown),
@@ -62,7 +63,7 @@ src/
 └── presentation/    Widgets Qt. Depende de application; nunca de infrastructure.
     ├── theme/       Paletas oscura y clara (Theme.h); resources/styles/app.qss usa tokens (@bg, @tint(green,30))
     ├── widgets/     Piezas reutilizables: Ui (fábricas, icono), Icons (glifos del rail), LayoutButton, FlowLayout, Toast,
-    │                FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard,
+    │                BusyIndicator (el arco que gira mientras algo está en marcha), FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard,
     │                EvidencePreview (visor de la ejecución), ImageViewer (visor a tamaño completo),
     │                AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
     ├── views/       Una clase por pantalla: IssuesView (+ RequirementImportDialog, JiraPublishDialog,
@@ -133,6 +134,18 @@ Lo que antes eran las tarjetas del sidebar («En ejecución», «Tasa de éxito�
 `StatusStrip`, la barra del pie: los mismos datos en una línea y con los mismos destinos al hacer
 clic. Ambas vistas se refrescan con las señales de los stores, como el resto.
 
+### Las pantallas se construyen al abrirlas
+
+`MainWindow` no crea sus seis vistas en el constructor: cada una nace **la primera vez que se entra en
+su pantalla** (`viewFor(Screen)` y los getters `casesView()`, `issuesView()`…, que la crean, la meten en
+el `QStackedWidget` y la cablean con su `wire*`). `wireSignals()` se queda sólo con lo que no es de
+ninguna vista. Abrir un proyecto pasó así de **~840 ms a ~119 ms** de construcción, más ~30 ms de
+mostrarla: lo que cuesta cada pantalla se paga al abrirla (20–80 ms) y muchas no se abren nunca.
+
+Quien use una vista la pide por su getter y no tiene que saber si ya existía; en los tests, buscarla con
+`findChild<HistoryView*>()` **antes** de navegar a ella devuelve nulo, que es justo lo que se quiere:
+la ventana no la ha construido todavía.
+
 ### Camino de vuelta
 
 Sobre el rail hay una segunda navegación, la de profundidad, al estilo de las aplicaciones del móvil:
@@ -201,6 +214,34 @@ lista cronológica de ciclos terminados (un `CycleMetrics` por `PlanRun` cerrado
 `PlanReport::build`). `metrics::trend()` es la diferencia de tasa entre los dos últimos ciclos. El
 barra de estado muestra la tasa global y la tendencia del plan activo; el panel «Métricas» del historial
 muestra la tabla por suite (`RateBar`) y el gráfico de evolución (`TrendChart`, con un chip por plan).
+
+## Cambiar de proyecto: el estado «cargando»
+
+Abrir un proyecto por primera vez cuesta sus datos (~40 ms) y, sobre todo, construir su ventana, y todo
+eso ocurre en el hilo de la interfaz: mientras corre no hay bucle de eventos, así que un indicador que
+girara ahí se quedaría quieto y parecería que la aplicación se colgó. Por eso el cambio se **anuncia** y
+se hace **en pasos**, volviendo al bucle entre uno y otro (`main.cpp`, `switchProject`):
+
+| Paso | Qué hace |
+|------|----------|
+| 0 | Comprueba `canLeave()` y guarda el proyecto actual. Si algo lo impide, no se entra en «cargando»: se avisa y se queda donde estaba |
+| — | `WorkspaceWindow::setBusy()` pone el aviso y el cursor de espera, y el selector de la ventana que se va enseña «Abriendo…» (`MainWindow::setSwitchingProject`) |
+| 1 | `getSession(id)`: los casos, planes, historial, bugs e issues del destino |
+| 2 | Su ventana, si no la tenía (o si cambió el idioma o el tema) |
+| 3 | `showProject()`, los atajos globales y `setBusy(false)` |
+
+El aviso vive en el **armazón** (`WorkspaceWindow`), no en la navbar de la ventana saliente: por el
+camino esa ventana se sustituye por la del destino, y un aviso que viviera en ella desaparecería a mitad
+de la operación. El velo tapa la ventana entera —menús incluidos— y `showProject()` lo vuelve a subir
+por encima de la que entra.
+
+Mientras dura, la aplicación **no acepta otro cambio** (`switching` en main.cpp y el selector
+deshabilitado), y el estado se quita termine como termine, también si el cambio se queda a medias.
+Volver a un proyecto ya abierto no pasa por nada de esto: su sesión y su ventana siguen en memoria y el
+cambio es un `setCurrentWidget`.
+
+El idioma y el tema **sólo se aplican cuando cambian** (`applyLook`): volver a ponerlos reescribe la hoja
+de estilos de la aplicación y Qt repinta el árbol entero de las dos ventanas.
 
 ## Persistencia
 
@@ -740,31 +781,40 @@ se lee bajo demanda («Cargar ficha», `RequirementSourceService::fetchDetail`) 
 fecha; «Abrir en GESREQ» abre la ficha en el navegador, donde hace falta haber entrado.
 
 **Pantalla.** `IssuesView` sigue el esquema de Casos: lista filtrable (texto sobre `Issue::searchText()`,
-estado, prioridad, publicación en Jira) y el issue a la derecha, en el orden en que se trabaja: el
-requerimiento (cambios, ausencia, datos y ficha), la **revisión**, el **plan de pruebas** con sus casos
-dentro, los **resultados** —los ciclos de sus planes, el más reciente primero, con su veredicto, sus
-contadores, si está publicado en Zephyr y las ejecuciones de cada caso—, los **bugs reportados** en esas
-ejecuciones (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en
-curso) y, al final, la publicación en el gestor, que desde que el requerimiento se importa ya está hecha
-y es contexto.
+estado, prioridad, publicación en Jira) y el issue a la derecha en **tres bloques**: el requerimiento
+(cambios, ausencia, datos y ficha), la **revisión** —con todo lo que se prueba dentro de sus pasos— y las
+**revisiones anteriores**. La publicación en el gestor no es un bloque: está hecha desde que el
+requerimiento se importa, así que es contexto y vive en el **tag de la cabecera** (clave y estado en el
+gestor, en el color que le toca), de cuyo menú cuelgan publicar, vincular, abrir, consultar el estado y
+desvincular. Lo único que pide hacer algo —lo pendiente de actualizar y un envío sin confirmar— se avisa
+debajo del tag, y el resto (instancia, proyecto, tipo y fechas) se lee al pasar por encima.
 
 La **revisión es el corazón del issue**, así que se enseña como lo que es: una serie de pasos, cada uno
-con lo que lleva hecho y su acción. El primero sin terminar es el que toca y se destaca; los hechos se
-marcan con un visto y se apagan.
+con lo que lleva hecho, su acción y **lo que cuelga de él**. El primero sin terminar es el que toca y se
+destaca; los hechos se marcan con un visto y se apagan.
 
-| Paso | Hecho cuando | Su acción |
-|------|--------------|-----------|
-| 1 · Preparar el plan de pruebas | el issue tiene un plan y el plan, casos | crear el plan o abrirlo |
-| 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | **«Ejecutar plan…»**, que arranca el ciclo desde aquí, «Continuar lo fallado…» si la ronda dejó casos rotos, y «Ir al plan» para componerlo antes |
-| 3 · Generar el acta (R-213) | la revisión tiene su .docx | generar (o regenerar) el acta, y abrir la que hay |
-| 4 · Cerrar la revisión | la revisión está cerrada con su resultado | cerrarla, eligiendo conforme u observado |
-| 5 · Publicar el resultado | se publicó en el gestor o en GESREQ | «Publicar…», sólo con la revisión cerrada |
-| 6 · Volver a probar | — | abrir la ronda siguiente (un requerimiento observado vuelve a pruebas) |
+| Paso | Hecho cuando | Su acción | Lo que cuelga de él |
+|------|--------------|-----------|---------------------|
+| 1 · Preparar el plan de pruebas | el issue tiene un plan y el plan, casos | crear el plan o abrirlo, «+ Otro plan» y «Vincular plan…» | sus planes, cada uno con sus casos y lo que dio la última ejecución de cada uno |
+| 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | **«Ejecutar plan…»**, que arranca el ciclo desde aquí, «Continuar lo fallado…» si la ronda dejó casos rotos, y «Ir al plan» para componerlo antes | los ciclos de sus planes, el más reciente primero, con su veredicto, sus cifras, de qué ronda y ambiente son, si están en Zephyr y las ejecuciones de cada caso |
+| 3 · Revisar los bugs reportados | no queda ninguno abierto | — | los bugs reportados desde los casos de sus planes (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en curso) |
+| 4 · Generar el acta (R-213) | la revisión tiene su .docx | generar (o regenerar) el acta, y abrir la que hay | — |
+| 5 · Cerrar la revisión | la revisión está cerrada con su resultado | cerrarla, eligiendo conforme u observado | — |
+| 6 · Publicar el resultado | se publicó en el gestor o en GESREQ | «Publicar…», sólo con la revisión cerrada | — |
+| 7 · Volver a probar | — | abrir la ronda siguiente (un requerimiento observado vuelve a pruebas) | — |
 
-No hay tarjeta de casos ni notas de QA: los casos del issue son los del plan y se ven dentro de él, y lo
-que hay que contar del control de calidad va en el acta y en el comentario del resultado.
+En «Revisiones anteriores» cada ronda cerrada enseña **a dónde llegó su resultado** —un chip por destino
+(`ZEPHYR`/`GESTOR`/`GESREQ`, ✓ hecho, — pendiente, con el detalle en el tooltip; los que ni están hechos ni
+se pueden hacer no se enseñan)— y ofrece lo que le falta: «Generar acta…» si no tiene acta y **«Completar
+publicación…»** si algún destino sigue pendiente. Chips y botón salen de `RevisionPublishService::stepsFor`
+y `pendingFor`, así que el historial y el diálogo dicen lo mismo.
 
-**El ciclo se arranca desde el issue.** El paso 2 y cada plan de la tarjeta «Planes de pruebas» tienen su
+Cada paso son dos filas: la suya (número, qué es, cómo va y sus botones) y, debajo y a lo ancho, lo que
+cuelga de él, así lo de dentro no compite en anchura con los botones del paso. No hay tarjeta de casos ni
+notas de QA: los casos del issue son los del plan y se ven dentro de él, y lo que hay que contar del
+control de calidad va en el acta y en el comentario del resultado.
+
+**El ciclo se arranca desde el issue.** El paso 2 y cada plan del paso 1 tienen su
 botón de ejecutar: la vista no arranca nada por su cuenta —emite `runPlanRequested(planId)` y lo atiende
 `MainWindow::startPlanRun`, que es quien sabe si hay una ejecución o una captura en curso, pregunta el
 ambiente y lleva a la pantalla de ejecución—. El paso 2 ejecuta el único plan que se pueda ejecutar
@@ -777,7 +827,7 @@ trabaja (`ProjectStore::projectForRequirementSystem`). «Iniciar pruebas» resue
 
 | Situación | Qué pasa |
 |-----------|----------|
-| Es el proyecto activo | `IssueStore::openForRequirement()` abre su issue aquí mismo: lo crea la primera vez —y con él, su issue en el gestor y su plan de pruebas (`IssuesView::ensurePlan`), listos para empezar— y luego reutiliza el que hay, con sus planes y lo escrito en QAflow |
+| Es el proyecto activo | `IssueStore::openForRequirement()` abre su issue aquí mismo: lo crea la primera vez —y con él, su issue en el gestor y su plan de pruebas (`IssuesView::ensurePlan`, que lo llama «id del issue · título del issue», acortado éste a 60 con `elideTitle()`), listos para empezar— y luego reutiliza el que hay, con sus planes y lo escrito en QAflow |
 | Es otro proyecto | La vista sólo lo pide (`IssuesView::startTestingRequested` → `MainWindow`); la raíz de composición guarda el actual, activa el destino y allí abre el issue (`MainWindow::startTesting`) |
 | Ningún proyecto tiene ese sistema vinculado | `ProjectSetupDialog` pregunta en cuál se prueban: uno que ya existe (se le vincula el sistema) o uno nuevo, con el sistema ya escrito y su código Jira opcional; hecho eso se sigue por una de las dos filas anteriores |
 | Ejecución o captura en curso | `ProjectSession::canLeave()` no deja salir y dice qué hay que terminar; si el guardado falla, el cambio se cancela y no se inicia nada |
@@ -816,7 +866,8 @@ El **resultado** (`QaOutcome`: Pendiente, Conforme, Observado) es una propuesta 
 confirma: se propone **Observado** si hay casos fallidos o bloqueados o bugs abiertos, **Conforme** si se
 ejecutó todo y no queda ninguno, y Pendiente mientras falte ejecutar. `IssueProgress::blockers` dice por
 qué («2 casos sin ejecutar», «1 bug abierto») en vez de dar sólo un veredicto, y la pantalla lo enseña en
-la tarjeta «Revisión» junto al paso del flujo, los contadores, el acta y las revisiones ya cerradas.
+la tarjeta «Revisión» junto al paso del flujo, los contadores y el acta; las rondas ya cerradas, con su
+resultado y su acta, quedan en «Revisiones anteriores».
 
 **Publicación en el gestor.** `IssuePublishService` (application) crea la representación del issue en Jira,
 o enlaza una que ya existe, y guarda en `Issue::publication` las tres identidades juntas: el requerimiento
@@ -827,11 +878,11 @@ pruebas») se crea allí su issue con el borrador de siempre (`IssuesView::publi
 el plan con el que se prueba (`ensurePlan`, que no crea otro si ya tiene uno), para que los casos, los
 bugs y el resultado tengan dónde colgarse desde el principio. Si el gestor no está configurado, si el
 envío falla o si quedó uno **sin confirmar**, no se insiste solo: el issue se queda sin publicar y se
-publica a mano desde su tarjeta, que es donde además se puede vincular uno que ya existe.
+publica a mano desde el menú de su tag, que es donde además se puede vincular uno que ya existe.
 
 | Acción | Qué hace |
 |--------|----------|
-| Publicar | `draftFor()` arma título y descripción (lo importado de GESREQ, las notas de QA y de qué issue salió) y el diálogo los enseña para corregirlos antes de enviar; se crea con las etiquetas `qaflow`, el id del issue y `GREQ-<número>` |
+| Publicar | `draftFor()` arma título y descripción (lo importado de GESREQ, las notas de QA y de qué issue salió) y el diálogo los enseña para corregirlos antes de enviar; se crea con las etiquetas `qaflow`, el id del issue y `GREQ-<número>`. El título es `QA - <requerimiento> - <título del issue>` acortado a 120 caracteres con `elideTitle()` (core), que corta por palabras enteras y termina en «…»: la descripción corta de GESREQ suele ser un párrafo y en el gestor el título se lee en tableros y listas. El del issue no se toca, y el texto entero sigue en la descripción |
 | Vincular | `fetchIssue()` comprueba que la clave existe y la guarda como `linked`: lo escribió otra persona, así que QAflow no ofrece sobrescribirlo |
 | Actualizar | `needsUpdate()` compara lo de ahora con `publishedTitle`/`publishedDescription` (lo último que salió de QAflow) y avisa; sólo esta acción reescribe el título y la descripción en el gestor, diciendo antes que lo editado allí se pierde |
 | Estado | `refreshStatus()` guarda el estado del gestor, que se enseña aparte del estado de QA |
@@ -845,6 +896,20 @@ incidencia que no existe, por ejemplo) no deja esa duda y no marca nada.
 **Publicar el resultado de una revisión.** Cuando la revisión se cierra, la tarjeta «Revisión» ofrece
 «Publicar…» (`RevisionPublishDialog` sobre `RevisionPublishService`): una sola pantalla con los tres
 destinos, lo que iría a cada uno y lo que ya se hizo, para elegir y ver cómo termina cada paso.
+
+**Todo esto habla de una ronda concreta.** `QualityRecordService` y `RevisionPublishService` reciben el
+número de revisión en cada llamada (`cyclesFor`, `draftFor`, `summaryFor`, `suggestedFileName`, `generate`,
+`stepsFor`, `registrationFor`, `publish` con `Options::revision`), y **0 significa la ronda en curso** —la
+abierta o, si ninguna lo está, la última—, que es lo que usan la tarjeta «Revisión» y todo lo de siempre.
+Pasando el número se termina de publicar **una ronda anterior que se quedó a medias** (se volvió a probar
+el requerimiento antes de mandar su resultado), que antes no había forma de publicar. Las reglas van con
+ella: `Issue::revision(n)` la localiza, `IssueStore::setRevision*` escribe en esa ronda, los bugs se cuentan
+entre su apertura y su cierre (`revisionBugs`), sus ciclos son los suyos —una ronda cerrada no cae al
+respaldo de «todos los ciclos del issue», que sólo vale para la ronda en curso, o mandaría a Zephyr los de
+otra ronda—, publicar una anterior **no cierra** la que está abierta, y `alreadyRegistered(issue, n)` también
+bloquea el registro cuando **una ronda posterior ya se registró**: lo que sabe GESREQ es lo último que se le
+dijo. El acta lleva la ronda en el nombre (`ControlCalidad_<GREQ>_rev<N>_<marca>.docx`) y el comentario del
+gestor ya empezaba por «Control de calidad GREQ X — revisión N».
 
 | Paso | Qué manda | Cuándo se puede |
 |------|-----------|-----------------|

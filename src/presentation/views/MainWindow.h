@@ -5,6 +5,7 @@
 
 #include <QMainWindow>
 #include <QList>
+#include <QPointer>
 #include <QMap>
 #include <QUrl>
 
@@ -28,6 +29,7 @@ class CasesView;
 class RunView;
 class HistoryView;
 class BugView;
+class BugDialog;
 class IssuesView;
 class PlanView;
 class SettingsDialog;
@@ -72,9 +74,15 @@ public:
     void quitApplication();
     /// Abre la ventana de ajustes («Archivo → Ajustes») o la trae al frente si ya estaba abierta.
     void openSettings();
+    /// Abre el parte de bug en su ventana, con el borrador del caso y del paso que se indique
+    /// (-1 = el paso que vio la ejecución). No cambia de pantalla: el parte se escribe encima.
+    void reportBug(int stepIndex = -1);
     /// Ventana de ajustes mientras esté abierta; nullptr si no lo está. La usan la reconstrucción
     /// de la ventana al cambiar de idioma o tema y las capturas de la documentación.
     QWidget* settingsWindow() const;
+    /// Ventana del parte de bug mientras esté abierta; nullptr si no lo está. La usan las capturas
+    /// de la documentación.
+    QWidget* bugWindow() const;
     /// Adjunta ficheros locales (rutas o URLs file://) al caso seleccionado; lo usan el arrastre a
     /// la ventana y el menú.
     void attachFiles(const QList<QUrl>& urls);
@@ -162,6 +170,7 @@ private:
     RunView* m_run = nullptr;
     HistoryView* m_history = nullptr;
     BugView* m_bug = nullptr;
+    QPointer<BugDialog> m_bugDialog;        // el parte abierto, si lo hay: no se abren dos
     IssuesView* m_issuesView = nullptr;
     SettingsDialog* m_settings = nullptr;   // se crea al abrirla por primera vez
     Toast* m_toast;

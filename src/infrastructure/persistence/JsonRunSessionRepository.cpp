@@ -26,6 +26,7 @@ std::optional<RunSession> JsonRunSessionRepository::loadSession() {
     RunSession s;
     const auto run = o["run"].toObject();
     s.run.caseId = run["caseId"].toString();
+    s.run.runId = run["runId"].toString();
     s.run.idx = run["idx"].toInt();
     s.run.note = run["note"].toString();
     s.run.startedAt = QDateTime::fromString(run["startedAt"].toString(), Qt::ISODate);
@@ -49,7 +50,7 @@ bool JsonRunSessionRepository::saveSession(const RunSession& s) {
         results.append(QJsonObject{{"result", toString(r.result)}, {"note", r.note}, {"durationSecs", r.durationSecs},
                                    {"marked", r.marked}, {"inherited", r.inherited}});
     const QJsonObject run{
-        {"caseId", s.run.caseId}, {"idx", s.run.idx}, {"note", s.run.note},
+        {"caseId", s.run.caseId}, {"runId", s.run.runId}, {"idx", s.run.idx}, {"note", s.run.note},
         {"startedAt", s.run.startedAt.isValid() ? s.run.startedAt.toString(Qt::ISODate) : QString()},
         {"finished", s.run.finished}, {"stepElapsedSecs", s.run.stepElapsedSecs}, {"results", results},
     };

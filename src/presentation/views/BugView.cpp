@@ -2,23 +2,17 @@
 
 #include "application/BugReportService.h"
 #include "application/BugStore.h"
-#include "application/EvidenceService.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
 #include "presentation/theme/Theme.h"
-#include "presentation/widgets/EvidenceActions.h"
-#include "presentation/widgets/FlowLayout.h"
-#include "presentation/widgets/ShotCard.h"
-#include "presentation/widgets/TextArea.h"
+#include "presentation/views/BugDetailWindow.h"
 #include "presentation/widgets/Ui.h"
 
-#include <QComboBox>
-#include <QCompleter>
-#include <QGridLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QTimer>
 
 #include <algorithm>
@@ -26,31 +20,6 @@
 namespace qaflow {
 
 namespace {
-QWidget* field(const QString& title, QWidget* w, const QString& titleColor = QString()) {
-    auto* box = new QWidget;
-    auto* v = ui::vbox(box, 0, 6);
-    auto* l = ui::label(title.toUpper(), "eyebrow");
-    if (!titleColor.isEmpty()) l->setStyleSheet(QStringLiteral("color:%1;").arg(titleColor));
-    v->addWidget(l);
-    v->addWidget(w);
-    return box;
-}
-QComboBox* editableCombo(const QString& placeholder) {
-    auto* c = new QComboBox;
-    c->setEditable(true);
-    c->setInsertPolicy(QComboBox::NoInsert);
-    c->lineEdit()->setPlaceholderText(placeholder);
-    return c;
-}
-/// Rellena un combo conservando el texto actual.
-void fill(QComboBox* c, const QStringList& items) {
-    const QString cur = c->currentText();
-    c->blockSignals(true);
-    c->clear();
-    c->addItems(items);
-    c->setCurrentText(cur);
-    c->blockSignals(false);
-}
 QString when(const QDateTime& dt) { return dt.isValid() ? dt.toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QStringLiteral("—"); }
 QPushButton* smallButton(const QString& text, const char* role) {
     auto* b = ui::button(text, role);
@@ -59,190 +28,66 @@ QPushButton* smallButton(const QString& text, const char* role) {
 }
 } // namespace
 
-BugView::BugView(TestCaseStore& cases, SettingsStore& settings, BugReportService& bugs, BugStore& ledger, EvidenceService& evidence, QWidget* parent)
-    : QWidget(parent), m_cases(cases), m_settings(settings), m_bugs(bugs), m_ledger(ledger), m_evidence(evidence) {
+BugView::BugView(TestCaseStore& cases, SettingsStore& settings, BugReportService& bugs, BugStore& ledger, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_settings(settings), m_bugs(bugs), m_ledger(ledger) {
     auto* root = ui::hbox(this, 0, 0);
     QWidget* content;
     QVBoxLayout* outer;
     auto* sa = ui::scrollArea(&content, &outer);
+    m_scroll = sa;
     outer->setContentsMargins(32, 28, 32, 28);
     auto* page = new QWidget;
-    page->setMaximumWidth(860);
+    page->setMaximumWidth(1000);
     auto* v = ui::vbox(page, 0, 18);
     outer->addWidget(page, 0, Qt::AlignTop);
     root->addWidget(sa, 1);
 
-    auto* head = new QWidget;
-    auto* hv = ui::vbox(head, 0, 0);
-    m_eyebrow = ui::label(QString(), "eyebrow");
-    m_eyebrow->setTextFormat(Qt::RichText);
-    hv->addWidget(m_eyebrow);
-    hv->addWidget(ui::label(tr("Reportar bug"), "h1"));
-    v->addWidget(head);
+    buildHeader(v);
+    buildPending(v);
+    buildList(v);
 
-    buildForm(v);
-    buildLists(v);
-
-    connect(&m_cases, &TestCaseStore::caseChanged, this, [this](const QString& id) { if (id == m_cases.selectedId()) refreshShots(); });
-    connect(&m_settings, &SettingsStore::trackerChanged, this, [this]() { refreshHeader(); refreshTrackerFields(); });
-    connect(&m_bugs, &BugReportService::metadataChanged, this, &BugView::refreshTrackerFields);
-    connect(&m_ledger, &BugStore::bugsChanged, this, [this]() { refreshIssues(); refreshPending(); });
+    // Deslizar hasta abajo alarga la lista; con el libro agotado, le pide otra página al gestor.
+    connect(sa->verticalScrollBar(), &QScrollBar::valueChanged, this, [this, sa](int value) {
+        if (value >= sa->verticalScrollBar()->maximum() - 8) loadMore();
+    });
+    connect(&m_settings, &SettingsStore::trackerChanged, this, [this]() { refreshHeader(); refreshIssues(); });
+    connect(&m_ledger, &BugStore::bugsChanged, this, [this]() { refreshHeader(); refreshIssues(); refreshPending(); });
     refreshHeader();
-    refreshTrackerFields();
     refreshIssues();
     refreshPending();
 }
 
-void BugView::buildForm(QVBoxLayout* v) {
-    auto* card = ui::card("card-lg");
-    auto* ch = ui::hbox(card, 0, 0);
-    ch->addWidget(ui::accentBar(theme::Red));
-    auto* body = new QWidget;
-    auto* bv = ui::vbox(body, 0, 16);
-    bv->setContentsMargins(22, 22, 24, 22);
+// ---- Construcción --------------------------------------------------------------------------
 
-    m_title = new QLineEdit;
-    m_title->setObjectName(QStringLiteral("bugTitle"));
-    m_title->setPlaceholderText(tr("Resumen corto: qué falla y dónde"));
-    m_title->setStyleSheet(QStringLiteral("font-size:14px;padding:9px 12px;"));
-    connect(m_title, &QLineEdit::textChanged, this, [this]() { if (m_touched) ui::setFlag(m_title, "invalid", m_title->text().trimmed().isEmpty()); });
-    bv->addWidget(field(tr("Título"), m_title));
+void BugView::buildHeader(QVBoxLayout* v) {
+    auto* head = new QWidget;
+    auto* hh = ui::hbox(head, 0, 10);
+    auto* titles = new QWidget;
+    auto* tv = ui::vbox(titles, 0, 0);
+    m_eyebrow = ui::label(QString(), "eyebrow");
+    m_eyebrow->setTextFormat(Qt::RichText);
+    tv->addWidget(m_eyebrow);
+    tv->addWidget(ui::label(tr("Bugs"), "h1"));
+    hh->addWidget(titles, 1);
 
-    auto* meta = new QWidget;
-    auto* mg = new QGridLayout(meta);
-    mg->setContentsMargins(0, 0, 0, 0);
-    mg->setHorizontalSpacing(12);
-    m_severity = new QComboBox;
-    m_severity->setObjectName(QStringLiteral("bugSeverity"));
-    for (const auto& s : BugReport::severities()) m_severity->addItem(BugReport::severityLabel(s), s);
-    connect(m_severity, &QComboBox::currentIndexChanged, this, [this](int) {
-        // La severidad sugiere la prioridad de Jira mientras el usuario no haya elegido otra.
-        const QString sev = m_severity->currentData().toString();
-        if (m_settings.tracker().kind == TrackerKind::Jira && m_priority->currentText().isEmpty()) m_priority->setCurrentText(BugReport::jiraPriorityFor(sev));
-    });
-    m_classification = new QComboBox;
-    for (const auto& c : BugReport::classifications()) m_classification->addItem(BugReport::classificationLabel(c), c);
-    m_classification->setToolTip(tr("Tipo de observación del acta de control de calidad (R-213)"));
-    m_env = new QComboBox;
-    for (const auto& e : BugReport::environments()) m_env->addItem(BugReport::environmentLabel(e), e);
-    m_linkedCase = new QLabel;
-    m_linkedCase->setStyleSheet(QStringLiteral("background:%1;border:1px solid %2;border-radius:9px;padding:8px 10px;font-family:'Consolas','DejaVu Sans Mono',monospace;color:%3;").arg(theme::Elevated, theme::Border, theme::Muted));
-    // Un bug es de un paso concreto: es lo que hace que al publicar la ejecución el defecto cuelgue
-    // del resultado de ese paso y no del caso entero.
-    m_linkedStep = new QComboBox;
-    m_linkedStep->setObjectName(QStringLiteral("bugStep"));
-    m_linkedStep->setToolTip(tr("Paso en el que se vio el fallo; el defecto se cuelga de él al publicar la ejecución"));
-    mg->addWidget(field(tr("Severidad"), m_severity), 0, 0);
-    mg->addWidget(field(tr("Clasificación"), m_classification), 0, 1);
-    mg->addWidget(field(tr("Entorno"), m_env), 0, 2);
-    mg->addWidget(field(tr("Caso vinculado"), m_linkedCase), 0, 3);
-    mg->addWidget(field(tr("Paso"), m_linkedStep), 0, 4);
-    for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
-    mg->setColumnStretch(4, 2);   // el paso lleva la acción: necesita más sitio que el resto
-    bv->addWidget(meta);
-
-    // Campos del gestor
-    auto* trackerHead = new QWidget;
-    auto* th = ui::hbox(trackerHead, 0, 8);
-    th->addWidget(ui::label(tr("CAMPOS DEL GESTOR"), "eyebrow"));
-    m_metaNote = ui::label(QString(), "muted-sm");
-    m_metaNote->setStyleSheet(QStringLiteral("font-size:11px;"));
-    th->addWidget(m_metaNote, 1);
-    m_loadMeta = smallButton(tr("Cargar valores del proyecto"), "outline");
-    connect(m_loadMeta, &QPushButton::clicked, this, [this]() { loadMetadata(true); });
-    th->addWidget(m_loadMeta);
-    bv->addWidget(trackerHead);
-    auto* tf = new QWidget;
-    auto* tg = new QGridLayout(tf);
-    tg->setContentsMargins(0, 0, 0, 0);
-    tg->setHorizontalSpacing(12);
-    tg->setVerticalSpacing(12);
-    m_issueType = editableCombo(QStringLiteral("Bug"));
-    m_priority = editableCombo(tr("Por defecto"));
-    m_assignee = editableCombo(tr("Sin asignar"));
-    m_assignee->setObjectName(QStringLiteral("bugAssignee"));
-    // Las opciones ya vienen filtradas por el gestor, así que el completador las muestra todas:
-    // buscar "aperez" puede devolver a "Ana Pérez", cuyo nombre no contiene lo escrito.
-    if (QCompleter* completer = m_assignee->completer()) {
-        completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
-        completer->setCaseSensitivity(Qt::CaseInsensitive);
-    }
-    m_assigneeSearch = new QTimer(this);
-    m_assigneeSearch->setSingleShot(true);
-    m_assigneeSearch->setInterval(300);
-    connect(m_assigneeSearch, &QTimer::timeout, this, &BugView::searchAssignees);
-    // `textEdited` (y no `editTextChanged`) para no buscar cuando el formulario se rellena solo.
-    connect(m_assignee->lineEdit(), &QLineEdit::textEdited, this, [this]() { m_assigneeSearch->start(); });
-    m_components = new QLineEdit;
-    m_components->setPlaceholderText(tr("Separados por comas"));
-    m_versions = new QLineEdit;
-    m_versions->setPlaceholderText(tr("Separadas por comas"));
-    m_labels = new QLineEdit;
-    m_labels->setPlaceholderText(tr("Separadas por comas · siempre: qaflow, <caso>"));
-    tg->addWidget(field(tr("Tipo"), m_issueType), 0, 0);
-    tg->addWidget(field(tr("Prioridad"), m_priority), 0, 1);
-    tg->addWidget(field(tr("Asignado a"), m_assignee), 0, 2);
-    tg->addWidget(field(tr("Componentes"), m_components), 1, 0);
-    tg->addWidget(field(tr("Versión afectada"), m_versions), 1, 1);
-    tg->addWidget(field(tr("Etiquetas"), m_labels), 1, 2);
-    for (int i = 0; i < 3; ++i) tg->setColumnStretch(i, 1);
-    bv->addWidget(tf);
-
-    m_steps = new TextArea(5);
-    m_steps->setProperty("role", QStringLiteral("mono"));
-    bv->addWidget(field(tr("Pasos para reproducir"), m_steps));
-
-    auto* results = new QWidget;
-    auto* rg = new QGridLayout(results);
-    rg->setContentsMargins(0, 0, 0, 0);
-    rg->setHorizontalSpacing(12);
-    m_expected = new TextArea(3);
-    m_actual = new TextArea(3);
-    m_actual->setProperty("role", QStringLiteral("danger-soft"));
-    m_actual->setPlaceholderText(tr("Qué ocurrió realmente"));
-    connect(m_actual, &TextArea::edited, this, [this]() { if (m_touched) ui::setFlag(m_actual, "invalid", m_actual->toPlainText().trimmed().isEmpty()); });
-    rg->addWidget(field(tr("Resultado esperado"), m_expected), 0, 0);
-    rg->addWidget(field(tr("Resultado actual"), m_actual, theme::RedSoft), 0, 1);
-    rg->setColumnStretch(0, 1);
-    rg->setColumnStretch(1, 1);
-    bv->addWidget(results);
-
-    auto* shotsBlock = new QWidget;
-    auto* sv = ui::vbox(shotsBlock, 0, 8);
-    auto* shHead = new QWidget;
-    auto* shh = ui::hbox(shHead, 0, 8);
-    m_shotsHeader = ui::label(QString(), "eyebrow");
-    shh->addWidget(m_shotsHeader, 1);
-    auto* capture = ui::button(tr("+ Capturar pantalla"), "dashed");
-    connect(capture, &QPushButton::clicked, this, &BugView::captureRequested);
-    shh->addWidget(capture);
-    auto* attach = ui::button(tr("+ Adjuntar archivo…"), "dashed");
-    attach->setToolTip(tr("Adjunta logs, vídeos o imágenes existentes; se suben al gestor con el bug"));
-    connect(attach, &QPushButton::clicked, this, [this]() { m_evidence.attachFiles(evidence::pickFiles(this)); });
-    shh->addWidget(attach);
-    sv->addWidget(shHead);
-    auto* shots = new QWidget;
-    m_shotsRow = new FlowLayout(shots, 0, 8, 8);
-    sv->addWidget(shots);
-    bv->addWidget(shotsBlock);
-
-    ch->addWidget(body, 1);
-    v->addWidget(card);
-
-    auto* actions = new QWidget;
-    auto* ah = ui::hbox(actions, 0, 10);
-    ah->addStretch(1);
-    auto* cancel = ui::button(tr("Cancelar"), "ghost");
-    connect(cancel, &QPushButton::clicked, this, &BugView::cancelled);
-    m_submit = ui::button(QString(), "primary");
-    m_submit->setObjectName(QStringLiteral("bugSubmit"));
-    connect(m_submit, &QPushButton::clicked, this, &BugView::submit);
-    ah->addWidget(cancel);
-    ah->addWidget(m_submit);
-    v->addWidget(actions);
+    // Traer del gestor es lo que hace que la lista sea la del proyecto y no la de este equipo.
+    m_import = smallButton(tr("Traer de %1").arg(toString(m_settings.tracker().kind)), "outline");
+    m_import->setObjectName(QStringLiteral("bugsImport"));
+    connect(m_import, &QPushButton::clicked, this, [this]() { importFromTracker(0); });
+    hh->addWidget(m_import, 0, Qt::AlignTop);
+    m_refreshStatuses = smallButton(tr("Actualizar estados"), "outline");
+    m_refreshStatuses->setObjectName(QStringLiteral("bugsRefreshStatuses"));
+    connect(m_refreshStatuses, &QPushButton::clicked, this, &BugView::refreshStatuses);
+    hh->addWidget(m_refreshStatuses, 0, Qt::AlignTop);
+    auto* create = ui::button(tr("+ Reportar bug"), "primary");
+    create->setObjectName(QStringLiteral("bugsCreate"));
+    create->setToolTip(tr("Abre el parte en su ventana, con el caso y el paso de la ejecución en curso"));
+    connect(create, &QPushButton::clicked, this, &BugView::createRequested);
+    hh->addWidget(create, 0, Qt::AlignTop);
+    v->addWidget(head);
 }
 
-void BugView::buildLists(QVBoxLayout* v) {
+void BugView::buildPending(QVBoxLayout* v) {
     // Pendientes de envío (sólo visible si hay)
     m_pendingBlock = ui::card("card");
     auto* ph = ui::hbox(m_pendingBlock, 0, 0);
@@ -264,137 +109,166 @@ void BugView::buildLists(QVBoxLayout* v) {
     pv->addWidget(plist);
     ph->addWidget(pbody, 1);
     v->addWidget(m_pendingBlock);
+}
 
-    // Reportados
-    auto* ihead = new QWidget;
-    auto* ih = ui::hbox(ihead, 0, 8);
+void BugView::buildList(QVBoxLayout* v) {
+    auto* filters = new QWidget;
+    auto* fh = ui::hbox(filters, 0, 8);
+    const struct { Filter filter; QString text; const char* name; } chips[] = {
+        {Filter::Todos, tr("Todos"), "bugsFilterAll"},
+        {Filter::Abiertos, tr("Abiertos"), "bugsFilterOpen"},
+        {Filter::Resueltos, tr("Resueltos"), "bugsFilterClosed"},
+    };
+    for (const auto& c : chips) {
+        auto* b = ui::button(c.text, "chip");
+        b->setObjectName(QString::fromLatin1(c.name));
+        b->setCheckable(true);
+        b->setStyleSheet(QStringLiteral("padding:5px 12px;font-size:12px;border-radius:8px;"));
+        connect(b, &QPushButton::clicked, this, [this, f = c.filter]() { setFilter(f); });
+        m_chips.append(b);
+        fh->addWidget(b);
+    }
+    fh->addSpacing(8);
+    m_searchBox = new QLineEdit;
+    m_searchBox->setObjectName(QStringLiteral("bugsSearch"));
+    m_searchBox->setPlaceholderText(tr("Buscar por clave, título o caso…"));
+    m_searchBox->setClearButtonEnabled(true);
+    connect(m_searchBox, &QLineEdit::textChanged, this, [this](const QString& t) { m_search = t.trimmed(); m_shown = kPage; refreshIssues(); });
+    fh->addWidget(m_searchBox, 1);
+    v->addWidget(filters);
+
     m_issuesHeader = ui::label(QString(), "eyebrow");
-    ih->addWidget(m_issuesHeader, 1);
-    m_refreshStatuses = smallButton(tr("Actualizar estados"), "outline");
-    connect(m_refreshStatuses, &QPushButton::clicked, this, &BugView::refreshStatuses);
-    ih->addWidget(m_refreshStatuses);
-    v->addWidget(ihead);
+    v->addWidget(m_issuesHeader);
     auto* ilist = new QWidget;
     m_issuesList = ui::vbox(ilist, 0, 6);
     v->addWidget(ilist);
+    m_more = ui::label(QString(), "muted-sm");
+    m_more->setAlignment(Qt::AlignCenter);
+    m_more->setStyleSheet(QStringLiteral("padding:10px 0;"));
+    v->addWidget(m_more);
+    setFilter(m_filter);   // marca el chip activo; ya con la lista construida, que es lo que refresca
 }
 
 // ---- Refrescos -----------------------------------------------------------------------------
 
 void BugView::refreshHeader() {
     const TrackerSettings& t = m_settings.tracker();
-    m_eyebrow->setText(tr("NUEVO DEFECTO · DESTINO %1 <span style=\"color:%2;font-family:monospace\">%3</span>")
-                           .arg(toString(t.kind).toUpper(), theme::Blue, t.project.isEmpty() ? tr("(sin proyecto)") : t.project));
-    m_submit->setText(tr("Crear en %1").arg(toString(t.kind)));
+    const int total = m_ledger.issues().size();
+    const int open = m_ledger.openIssueCount();
+    m_eyebrow->setText(tr("%1 BUGS · %2 ABIERTOS · %3 <span style=\"color:%4;font-family:monospace\">%5</span>")
+                           .arg(total).arg(open).arg(toString(t.kind).toUpper(), theme::Blue,
+                                                     t.project.isEmpty() ? tr("(sin proyecto)") : t.project));
+    const bool canImport = m_bugs.canImportFromTracker();
+    m_import->setVisible(canImport);
+    m_import->setText(tr("Traer de %1").arg(toString(t.kind)));
+    m_import->setToolTip(tr("Trae del gestor los errores y mejoras que creó QAflow en este proyecto, aunque se reportaran desde otro equipo; el resto llegan al deslizar"));
+    m_refreshStatuses->setVisible(total > 0);
 }
 
-void BugView::refreshTrackerFields() {
-    const TrackerSettings& t = m_settings.tracker();
-    const ProjectMetadata& m = m_bugs.metadata();
-    fill(m_issueType, m.issueTypes);
-    fill(m_priority, m.priorities);
-    setAssigneeOptions(m.assignees);
-    const bool searches = m_bugs.searchesAssigneesOnServer();
-    m_assignee->lineEdit()->setPlaceholderText(searches ? tr("Escribe para buscar en %1").arg(toString(t.kind)) : tr("Sin asignar"));
-    m_assignee->setToolTip(searches ? tr("Las personas se buscan en %1 según escribes; no hace falta cargarlas antes").arg(toString(t.kind))
-                                    : tr("Personas del proyecto cargadas con «Cargar valores del proyecto»"));
-    if (m_issueType->currentText().isEmpty()) m_issueType->setCurrentText(t.kind == TrackerKind::GitLab ? QStringLiteral("issue") : t.kind == TrackerKind::GitHub ? QStringLiteral("Issue") : QStringLiteral("Bug"));
-    m_issueType->setEnabled(t.kind != TrackerKind::GitHub);
-    m_metaNote->setText(m_bugs.hasMetadata()
-                            ? tr("%1 tipos · %2 prioridades · %3 componentes · %4 versiones · %5 asignables")
-                                  .arg(m.issueTypes.size()).arg(m.priorities.size()).arg(m.components.size()).arg(m.versions.size()).arg(m.assignees.size())
-                            : tr("Escribe los valores o cárgalos del proyecto"));
-    switch (t.kind) {
-        case TrackerKind::Jira: m_components->setToolTip(tr("Componentes del proyecto Jira")); m_versions->setToolTip(tr("Versiones afectadas")); break;
-        case TrackerKind::GitHub: case TrackerKind::GitLab: m_components->setToolTip(tr("Se envían como etiquetas")); m_versions->setToolTip(tr("Milestone (sólo informativo)")); break;
-        case TrackerKind::AzureDevOps: m_components->setToolTip(tr("Se envían como tags")); m_versions->setToolTip(tr("Campo Found In")); break;
+QList<IssueLink> BugView::visibleIssues() const {
+    QList<IssueLink> out;
+    const QString needle = m_search.toLower();
+    for (int i = m_ledger.issues().size() - 1; i >= 0; --i) {   // el más reciente primero
+        const IssueLink& l = m_ledger.issues()[i];
+        if (m_filter == Filter::Abiertos && l.resolved) continue;
+        if (m_filter == Filter::Resueltos && !l.resolved) continue;
+        if (!needle.isEmpty()
+            && !l.key.toLower().contains(needle) && !l.title.toLower().contains(needle) && !l.caseId.toLower().contains(needle))
+            continue;
+        out << l;
     }
+    return out;
 }
 
-void BugView::loadDraft() {
-    const BugReport d = m_bugs.draftFromCurrentContext(m_draftStep);
-    m_draftStep = -1;   // sólo vale para este borrador
-    m_touched = false;
-    ui::setFlag(m_title, "invalid", false);
-    ui::setFlag(m_actual, "invalid", false);
-    m_title->setText(d.title);
-    m_severity->setCurrentIndex(std::max(0, m_severity->findData(d.severity)));
-    m_classification->setCurrentIndex(std::max(0, m_classification->findData(d.classification)));
-    m_env->setCurrentIndex(std::max(0, m_env->findData(d.environment)));
-    m_linkedCase->setText(d.linkedCaseId.isEmpty() ? QStringLiteral("—") : d.linkedCaseId);
-    refreshStepOptions(d.linkedStep);
-    m_priority->setCurrentText(m_settings.tracker().kind == TrackerKind::Jira ? d.priority : QString());
-    m_assignee->setCurrentText(QString());
-    m_components->setText(d.components.join(QStringLiteral(", ")));
-    m_versions->clear();
-    m_labels->clear();
-    m_steps->setTextSilently(d.stepsToReproduce);
-    m_expected->setTextSilently(d.expected);
-    m_actual->setTextSilently(d.actual);
-    refreshShots();
-    refreshTrackerFields();
-    if (m_settings.tracker().connected && !m_bugs.hasMetadata()) loadMetadata(false);
-}
-
-void BugView::refreshStepOptions(int step) {
-    const TestCase* c = m_cases.selected();
-    const QSignalBlocker block(m_linkedStep);
-    m_linkedStep->clear();
-    m_linkedStep->addItem(tr("Todo el caso"), 0);
-    if (c)
-        for (int i = 0; i < c->steps.size(); ++i)
-            m_linkedStep->addItem(tr("Paso %1 · %2").arg(i + 1).arg(ui::elide(c->steps[i].action, 34)), i + 1);
-    m_linkedStep->setCurrentIndex(std::max(0, m_linkedStep->findData(step)));
-    m_linkedStep->setEnabled(c && !c->steps.isEmpty());
-}
-
-void BugView::refreshShots() {
-    ui::clearLayout(m_shotsRow);
-    const TestCase* c = m_cases.selected();
-    // El bug sale de una ejecución: se adjunta la evidencia de la más reciente (la que está en
-    // curso si la hay), no todo lo que el caso haya acumulado en su historia.
-    const QList<Screenshot> shots = c ? c->latestEvidence() : QList<Screenshot>{};
-    m_shotsHeader->setText(tr("ADJUNTOS · %1").arg(shots.size()));
-    if (!c) return;
-    const QString id = c->id;
-    for (const auto& s : shots) {
-        auto* card = new ShotCard(s, c->steps, ShotCard::Layout::Compact);
-        connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_cases.removeShot(id, shotId); });
-        evidence::wireCard(card, this, m_cases, m_evidence, id);
-        m_shotsRow->addWidget(card);
+void BugView::setFilter(Filter f) {
+    m_filter = f;
+    m_shown = kPage;   // otro filtro, otra lista: se empieza por arriba
+    for (int i = 0; i < m_chips.size(); ++i) {
+        const bool active = i == static_cast<int>(f);
+        m_chips[i]->setChecked(active);
+        // El chip activo se ve porque la hoja de estilos pinta `active`; `checked` a secas no cambia nada.
+        ui::setFlag(m_chips[i], "active", active);
     }
+    refreshIssues();
 }
 
 void BugView::refreshIssues() {
     ui::clearLayout(m_issuesList);
-    const auto& issues = m_ledger.issues();
-    m_issuesHeader->setText(tr("BUGS REPORTADOS · %1 · %2 ABIERTOS").arg(issues.size()).arg(m_ledger.openIssueCount()));
-    m_refreshStatuses->setVisible(!issues.isEmpty());
-    if (issues.isEmpty()) {
-        m_issuesList->addWidget(ui::label(tr("Todavía no se ha reportado ningún bug desde QAflow."), "muted-sm"));
+    const auto issues = visibleIssues();
+    const int total = m_ledger.issues().size();
+    m_issuesHeader->setText(issues.size() == total ? tr("BUGS REPORTADOS · %1").arg(total)
+                                                   : tr("BUGS REPORTADOS · %1 DE %2").arg(issues.size()).arg(total));
+    m_more->clear();
+    if (total == 0) {
+        m_issuesList->addWidget(ui::label(tr("Todavía no se ha reportado ningún bug en este proyecto. Los que se "
+                                             "reporten durante una ejecución aparecen aquí con su estado."), "muted-sm"));
         return;
     }
-    for (int i = issues.size() - 1; i >= 0; --i) {
+    if (issues.isEmpty()) {
+        m_issuesList->addWidget(ui::label(tr("Ningún bug encaja con el filtro."), "muted-sm"));
+        return;
+    }
+    // Sólo las filas que se han pedido deslizando: una lista larga no se pinta entera de golpe.
+    const int shown = std::min<int>(m_shown, issues.size());
+    for (int i = 0; i < shown; ++i) {
         const IssueLink& l = issues[i];
-        auto* row = ui::card("card-flat");
+        // La fila entera abre la ficha del bug en su ventana; la clave lleva al gestor.
+        auto* row = ui::button(QString(), "row");
+        row->setObjectName(QStringLiteral("bugRow-%1").arg(l.key));
+        row->setToolTip(tr("Ver la ficha de este bug"));
+        connect(row, &QPushButton::clicked, this, [this, key = l.key]() { openDetail(key); });
         auto* h = ui::hbox(row, 0, 10);
-        h->setContentsMargins(12, 8, 10, 8);
-        auto* key = ui::button(l.key, "ghost");
-        key->setToolTip(tr("Abrir en %1").arg(l.tracker));
-        key->setStyleSheet(QStringLiteral("padding:2px 8px;font-size:12px;font-weight:700;font-family:'Consolas','DejaVu Sans Mono',monospace;color:%1;").arg(theme::Blue));
-        connect(key, &QPushButton::clicked, this, [this, url = l.url]() { emit openIssueRequested(url); });
+        h->setContentsMargins(12, 8, 12, 8);
+        auto* key = ui::label(l.key, "mono-muted");
+        key->setStyleSheet(QStringLiteral("font-size:12px;font-weight:700;color:%1;font-family:'Consolas','DejaVu Sans Mono',monospace;").arg(theme::Blue));
         h->addWidget(key);
         auto* title = new QLabel(l.title.isEmpty() ? tr("(sin título)") : l.title);
         title->setWordWrap(true);
         h->addWidget(title, 1);
+        // Lo que se trae del gestor son errores y mejoras: cuál es cada uno se ve de un vistazo.
+        if (!l.issueType.trimmed().isEmpty())
+            h->addWidget(ui::pill(l.issueType.trimmed().toUpper(), theme::tint(theme::Muted, 30), theme::Muted));
+        if (!l.classification.trimmed().isEmpty())
+            h->addWidget(ui::label(l.classification.trimmed().toUpper(), "mono-muted"));
         if (!l.caseId.isEmpty())
             h->addWidget(ui::label(l.step > 0 ? tr("%1 · paso %2").arg(l.caseId).arg(l.step) : l.caseId, "mono-muted"));
         h->addWidget(ui::label(when(l.createdAt), "muted-sm"));
         const QString statusText = l.status.isEmpty() ? tr("SIN CONSULTAR") : l.status.toUpper();
         h->addWidget(ui::pill(statusText, l.status.isEmpty() ? theme::tint(theme::Muted, 38) : l.resolved ? theme::Green : theme::tint(theme::Blue, 38),
                               l.status.isEmpty() ? theme::Muted : l.resolved ? theme::Bg : theme::Blue));
+        // Los hijos no se comen el clic de la fila; el enlace al gestor está en la ficha.
+        for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
         m_issuesList->addWidget(row);
     }
+    // El pie dice por qué la lista se corta aquí: o quedan filas por pintar, o quedan bugs en el gestor.
+    if (shown < issues.size()) m_more->setText(tr("Desliza para ver los %1 restantes").arg(issues.size() - shown));
+    else if (m_busy) m_more->setText(tr("Trayendo más bugs de %1…").arg(toString(m_settings.tracker().kind)));
+    else if (m_trackerNext >= 0) m_more->setText(tr("Desliza para traer más de %1 · %2 de %3")
+                                                     .arg(toString(m_settings.tracker().kind)).arg(m_trackerNext).arg(m_trackerTotal));
+    fillViewport();
+}
+
+void BugView::loadMore(bool mayAskTracker) {
+    if (m_shown < visibleIssues().size()) {
+        m_shown += kPage;
+        refreshIssues();
+        return;
+    }
+    if (!mayAskTracker) return;
+    // El libro se ha acabado: lo que quede está en el gestor, y sólo si ya se trajo una vez (traer
+    // por primera vez es una decisión del usuario, no algo que pase por deslizar).
+    if (m_trackerNext >= 0 && !m_busy) importFromTracker(m_trackerNext);
+}
+
+void BugView::fillViewport() {
+    // Con menos filas que hueco no hay barra que deslizar y la lista se quedaría corta para siempre:
+    // se completa sola en cuanto el layout se asienta. Sin barra que mover no hay bucle: cada vuelta
+    // pinta una página más y se para cuando ya no quedan.
+    if (!m_scroll || m_busy) return;
+    if (m_shown >= visibleIssues().size()) return;
+    QTimer::singleShot(0, this, [this]() {
+        if (!m_scroll->verticalScrollBar()->isVisible() || m_scroll->verticalScrollBar()->maximum() == 0) loadMore(false);
+    });
 }
 
 void BugView::refreshPending() {
@@ -427,99 +301,45 @@ void BugView::refreshPending() {
 
 // ---- Acciones ------------------------------------------------------------------------------
 
-void BugView::loadMetadata(bool force) {
+void BugView::openDetail(const QString& key) {
+    if (auto* open = m_detailWindows.value(key).data()) {
+        if (const IssueLink* bug = m_ledger.findIssue(key)) open->setBug(*bug);
+        open->show();
+        open->raise();
+        open->activateWindow();
+        return;
+    }
+    const IssueLink* bug = m_ledger.findIssue(key);
+    if (!bug) return;
+    const TestCase* c = m_cases.find(bug->caseId);
+    const QString stepAction = c && bug->step > 0 && bug->step <= c->steps.size() ? c->steps[bug->step - 1].action : QString();
+    auto* window = new BugDetailWindow(*bug, c ? c->title : QString(), stepAction, this);
+    window->setAttribute(Qt::WA_DeleteOnClose);
+    connect(window, &BugDetailWindow::openUrlRequested, this, &BugView::openIssueRequested);
+    m_detailWindows.insert(key, window);
+    window->show();
+}
+
+void BugView::importFromTracker(int startAt) {
     if (m_busy) return;
     m_busy = true;
-    m_loadMeta->setEnabled(false);
-    m_metaNote->setText(tr("Cargando…"));
-    m_bugs.loadMetadata(force, [this](const MetadataResult& r) {
+    m_import->setEnabled(false);
+    m_import->setText(tr("Trayendo…"));
+    // Traer de nuevo desde el principio vuelve a recorrer el gestor; una página más sigue donde iba.
+    const bool first = startAt <= 0;
+    if (first) { m_trackerNext = -1; m_trackerTotal = 0; }
+    refreshIssues();
+    m_bugs.importFromTracker(startAt, [this, first](const BugReportService::ImportResult& r) {
         m_busy = false;
-        m_loadMeta->setEnabled(true);
-        refreshTrackerFields();
-        if (!r.ok) emit toast(tr("No se pudieron cargar los valores del proyecto · %1").arg(r.error), theme::Amber);
-    });
-}
-
-void BugView::setAssigneeOptions(const QList<Assignee>& people) {
-    // El combo guarda el id en itemData y muestra el nombre; se conserva lo escrito y el cursor.
-    QLineEdit* edit = m_assignee->lineEdit();
-    const QString typed = edit->text();
-    const int cursor = edit->cursorPosition();
-    m_assignee->blockSignals(true);
-    m_assignee->clear();
-    for (const auto& a : people) m_assignee->addItem(a.name, a.id);
-    edit->setText(typed);
-    edit->setCursorPosition(cursor);
-    m_assignee->blockSignals(false);
-}
-
-void BugView::searchAssignees() {
-    const int seq = ++m_assigneeSeq;
-    m_bugs.searchAssignees(m_assignee->lineEdit()->text(), [this, seq](const AssigneeSearch& r) {
-        if (seq != m_assigneeSeq) return;   // ya se ha escrito otra cosa: esta respuesta no vale
-        setAssigneeOptions(r.assignees);
-        if (!r.ok) { m_metaNote->setText(tr("No se pudieron buscar personas · %1").arg(r.error)); return; }
-        if (m_assignee->lineEdit()->hasFocus() && m_assignee->completer()) m_assignee->completer()->complete();
-    });
-}
-
-BugReport BugView::collect() const {
-    BugReport b;
-    b.title = m_title->text();
-    b.severity = m_severity->currentData().toString();
-    b.classification = m_classification->currentData().toString();
-    b.environment = m_env->currentData().toString();
-    b.linkedCaseId = m_linkedCase->text() == QStringLiteral("—") ? QString() : m_linkedCase->text();
-    b.linkedStep = m_linkedStep->currentData().toInt();
-    if (const TestCase* c = m_cases.selected(); c && c->id == b.linkedCaseId) b.linkedStoryKey = c->jiraKey;
-    b.stepsToReproduce = m_steps->toPlainText();
-    b.expected = m_expected->toPlainText();
-    b.actual = m_actual->toPlainText();
-    b.issueType = m_issueType->currentText().trimmed();
-    b.priority = m_priority->currentText().trimmed();
-    b.assigneeName = m_assignee->currentText().trimmed();
-    // El id (usuario en Jira Server, accountId en Cloud) sale de la persona elegida; si el texto no
-    // corresponde a ninguna, se envía tal cual y que lo valide el gestor.
-    const int ai = m_assignee->findText(b.assigneeName, Qt::MatchFixedString);
-    b.assigneeId = ai >= 0 ? m_assignee->itemData(ai).toString() : b.assigneeName;
-    b.components = parseTags(m_components->text());
-    b.affectsVersions = parseTags(m_versions->text());
-    b.labels = parseTags(m_labels->text());
-    if (const TestCase* c = m_cases.selected()) for (const auto& s : c->latestEvidence()) b.attachmentPaths << s.path;
-    return b;
-}
-
-void BugView::submit() {
-    if (m_sending) return;
-    const BugReport b = collect();
-    if (!b.isValid()) {
-        m_touched = true;
-        ui::setFlag(m_title, "invalid", b.title.trimmed().isEmpty());
-        ui::setFlag(m_actual, "invalid", b.actual.trimmed().isEmpty());
-        emit toast(tr("Completa título y resultado actual"), theme::Red);
-        return;
-    }
-    const QString tracker = toString(m_settings.tracker().kind);
-    if (m_settings.tracker().token.trimmed().isEmpty()) {
-        emit toast(tr("%1 no está configurado · revisa Ajustes").arg(tracker), theme::Amber);
-        return;
-    }
-    m_sending = true;
-    m_submit->setEnabled(false);
-    m_submit->setText(tr("Creando…"));
-    m_bugs.submit(b, [this, tracker](const BugReportService::SubmitResult& r) {
-        m_sending = false;
-        m_submit->setEnabled(true);
-        refreshHeader();
-        if (r.ok) {
-            emit toast(tr("%1 creado en %2 con %3 adjuntos").arg(r.key, tracker).arg(r.attachmentsUploaded), theme::Blue);
-            emit submitted(r.key);
-        } else if (r.queued) {
-            emit toast(tr("Sin conexión con %1 · el bug queda en la cola y se reintentará").arg(tracker), theme::Amber);
-            emit submitted(QString());
-        } else {
-            emit toast(tr("%1 rechazó el bug · %2").arg(tracker, r.error), theme::Red);
-        }
+        m_import->setEnabled(true);
+        refreshHeader();   // vuelve a poner el texto del botón
+        m_trackerNext = r.nextStart;
+        m_trackerTotal = r.total;
+        refreshIssues();   // lo que entró se va viendo según se desliza, como el resto de la lista
+        if (!r.ok) { emit toast(tr("No se pudieron traer los bugs · %1").arg(r.error), theme::Red); return; }
+        if (!first) return;   // las páginas siguientes llegan solas: no hace falta avisar de cada una
+        if (r.imported == 0 && r.updated == 0) { emit toast(tr("El gestor no tiene bugs de QAflow en este proyecto"), theme::Amber); return; }
+        emit toast(tr("%1 bugs nuevos · %2 actualizados").arg(r.imported).arg(r.updated), theme::Green);
     });
 }
 

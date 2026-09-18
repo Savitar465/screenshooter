@@ -195,7 +195,7 @@ private slots:
         RunRecord r;   // TC-104 (4 pasos) tardó 2 min → 30 s/paso
         r.caseId = QStringLiteral("TC-104");
         r.durationSecs = 120;
-        for (int i = 0; i < 4; ++i) r.steps.append(RunRecordStep{{}, {}, StepResult::Pass, {}, 30});
+        for (int i = 0; i < 4; ++i) r.steps.append(RunRecordStep{{}, {}, {}, StepResult::Pass, {}, 30});
         f.history.addRun(r);
         // TC-104 por su propia media (120 s); los otros 7 pasos por la media global (30 s) = 210 s.
         QCOMPARE(f.plans.estimatedSecs(), 330);

@@ -252,6 +252,9 @@ void HistoryView::showMetrics() {
 }
 
 void HistoryView::showRun(const QString& runId) {
+    // Igual que con un plan: si la pantalla está en métricas (o listando sólo planes), lo que se pide
+    // es ver esa ejecución, así que se vuelve a la lista donde cabe.
+    if (m_mode == Mode::Metrics || m_mode == Mode::Plans) { m_mode = Mode::All; refreshFilters(); }
     m_selectedRun = runId;
     m_selectedPlan.clear();
     refreshList();
@@ -473,11 +476,20 @@ QWidget* HistoryView::bugsCard(const PlanReport& report) {
     auto* head = new QWidget;
     auto* hh = ui::hbox(head, 0, 10);
     hh->addWidget(ui::label(tr("BUGS ENCONTRADOS · %1").arg(bugs.size()), "eyebrow"));
+    // Probando salen las dos cosas: errores y mejoras. El informe dice cuántos de cada uno en vez de
+    // meterlos a todos en el mismo saco.
+    for (const auto& [type, count] : report.bugCountsByType()) {
+        const QString name = type.isEmpty() ? tr("SIN TIPO") : type.toUpper();
+        const QString color = type.isEmpty() ? theme::Muted : BugReport::isImprovement(type) ? theme::Blue : theme::Red;
+        auto* pill = ui::pill(tr("%1 · %2").arg(name).arg(count), theme::tint(color, 34), color);
+        pill->setObjectName(QStringLiteral("bugType-%1").arg(type.isEmpty() ? QStringLiteral("sin-tipo") : type));
+        hh->addWidget(pill);
+    }
     hh->addWidget(open > 0 ? ui::pill(tr("%1 ABIERTOS").arg(open), theme::tint(theme::Red, 38), theme::Red)
                            : ui::pill(tr("TODOS CERRADOS"), theme::tint(theme::Green, 38), theme::Green));
     hh->addStretch(1);
     v->addWidget(head);
-    v->addWidget(ui::label(tr("Reportados mientras corría el ciclo, desde los casos que estaba ejecutando."), "muted-sm"));
+    v->addWidget(ui::label(tr("Errores y mejoras encontrados ejecutando este ciclo, en los casos que estaba probando."), "muted-sm"));
     for (const auto& bug : bugs) v->addWidget(bugRow(bug, true));
     return card;
 }
@@ -491,6 +503,9 @@ QWidget* HistoryView::bugRow(const IssueLink& bug, bool withCase) {
     auto* key = ui::label(bug.key, "mono-muted");
     key->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Blue));
     h->addWidget(key);
+    // Error o mejora: lo que se trae del gestor son las dos cosas y cuál es cada una se ve aquí.
+    if (const QString type = bug.issueType.trimmed(); !type.isEmpty())
+        h->addWidget(ui::pill(type.toUpper(), theme::tint(theme::Muted, 30), theme::Muted));
     auto* title = new QLabel(bug.title.isEmpty() ? tr("(sin título)") : bug.title);
     title->setWordWrap(true);
     h->addWidget(title, 1);
@@ -667,6 +682,25 @@ void HistoryView::renderRun(const RunRecord& run) {
     sg->addStretch(1);
     m_detailLayout->addWidget(stats);
 
+    // Lo que salió de estas pruebas: los bugs se encuentran ejecutando, y es aquí donde se ven los
+    // de esta ejecución (los de otra son de otra, aunque sean del mismo caso).
+    if (const QList<IssueLink> bugs = m_history.bugsOfRun(run); !bugs.isEmpty()) {
+        auto* box = ui::card("card");
+        box->setObjectName(QStringLiteral("runBugs"));
+        auto* bv = ui::vbox(box, 0, 8);
+        bv->setContentsMargins(16, 14, 16, 14);
+        const int open = int(std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
+        auto* head2 = new QWidget;
+        auto* h2 = ui::hbox(head2, 0, 10);
+        h2->addWidget(ui::label(tr("BUGS DE ESTA EJECUCIÓN · %1").arg(bugs.size()), "eyebrow"));
+        h2->addWidget(open > 0 ? ui::pill(tr("%1 ABIERTOS").arg(open), theme::tint(theme::Red, 38), theme::Red)
+                               : ui::pill(tr("TODOS CERRADOS"), theme::tint(theme::Green, 38), theme::Green));
+        h2->addStretch(1);
+        bv->addWidget(head2);
+        for (const auto& bug : bugs) bv->addWidget(bugRow(bug, false));
+        m_detailLayout->addWidget(box);
+    }
+
     auto* card = ui::card("card");
     auto* cv = ui::vbox(card, 0, 10);
     cv->setContentsMargins(16, 14, 16, 14);
@@ -755,11 +789,18 @@ QWidget* HistoryView::stepsList(const RunRecord& run) const {
         secs->setStyleSheet(QStringLiteral("font-size:11px;"));
         g->addWidget(secs, 0, 2, Qt::AlignTop);
         g->addWidget(ui::pill(label(s.result).toUpper(), resultColor(s.result), s.result == StepResult::Fail ? QStringLiteral("#ffffff") : theme::Bg), 0, 3, Qt::AlignTop);
+        // Con qué datos se probó el paso, tal y como decía el caso entonces.
+        if (!s.data.trimmed().isEmpty()) {
+            auto* data = new QLabel(tr("Datos: %1").arg(s.data.trimmed()));
+            data->setWordWrap(true);
+            data->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;").arg(theme::Muted));
+            g->addWidget(data, 1, 1, 1, 3);
+        }
         if (!s.note.trimmed().isEmpty()) {
             auto* note = new QLabel(s.note.trimmed());
             note->setWordWrap(true);
             note->setStyleSheet(QStringLiteral("font-style:italic;color:%1;").arg(theme::Muted));
-            g->addWidget(note, 1, 1, 1, 3);
+            g->addWidget(note, 2, 1, 1, 3);
         }
         g->setColumnStretch(1, 1);
         lv->addWidget(row);

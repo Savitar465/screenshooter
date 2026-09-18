@@ -62,7 +62,7 @@ PublishCase caseOf(const QString& id, const QString& testKey, Verdict verdict, c
         s.result = r;
         s.note = r == StepResult::Fail ? QStringLiteral("El cupón no descuenta") : QString();
         c.steps << s;
-        c.design << TestStep{s.action, s.expected};
+        c.design << TestStep{s.action, s.data, s.expected};
     }
     return c;
 }
@@ -403,8 +403,8 @@ private slots:
 
         PublishCase c = caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {StepResult::Pass, StepResult::Pass});
         c.title = QStringLiteral("Comprar con cupón");
-        c.design = {TestStep{QStringLiteral("Abrir carrito"), QStringLiteral("Se abre")},
-                    TestStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Descuenta")}};
+        c.design = {TestStep{QStringLiteral("Abrir carrito"), {}, QStringLiteral("Se abre")},
+                    TestStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Cupón QA10"), QStringLiteral("Descuenta")}};
 
         ZephyrClient client;
         PublishResult out;
@@ -435,10 +435,15 @@ private slots:
         QVERIFY(labels.contains(QJsonValue(QStringLiteral("qaflow"))));
         QVERIFY(labels.contains(QJsonValue(QStringLiteral("TC-103"))));
         // Y los pasos del caso son los pasos del Test, en su orden.
-        QStringList stepActions;
+        QStringList stepActions, stepData;
         for (const auto& r : server.requests)
-            if (r.method == "POST" && r.path == "/rest/zapi/latest/teststep/10700") stepActions << bodyOf(r)[QStringLiteral("step")].toString();
+            if (r.method == "POST" && r.path == "/rest/zapi/latest/teststep/10700") {
+                stepActions << bodyOf(r)[QStringLiteral("step")].toString();
+                stepData << bodyOf(r)[QStringLiteral("data")].toString();
+            }
         QCOMPARE(stepActions, QStringList({QStringLiteral("Abrir carrito"), QStringLiteral("Aplicar cupón")}));
+        // Los datos de la prueba de cada paso son el campo «data» del paso de Zephyr.
+        QCOMPARE(stepData, QStringList({QString(), QStringLiteral("Cupón QA10")}));
         QCOMPARE(bodyOf(find("POST", "/rest/zapi/latest/teststep/10700"))[QStringLiteral("result")].toString(), QStringLiteral("Se abre"));
         // La ejecución va con el id del Test recién creado.
         QCOMPARE(bodyOf(find("POST", "/rest/zapi/latest/execution"))[QStringLiteral("issueId")].toString(), QStringLiteral("10700"));

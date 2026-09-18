@@ -27,6 +27,8 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <QSet>
+
 #include <utility>
 
 namespace qaflow {
@@ -1387,12 +1389,18 @@ void IssuesView::fillResults(const Issue& issue, const QList<PlanRun>& cycles, Q
 }
 
 QList<IssueLink> IssuesView::bugsOf(const Issue& issue) const {
-    // Los bugs del issue son los reportados desde los casos de sus planes, del más reciente al primero.
+    // Los bugs del issue son los que se encontraron ejecutando sus ciclos, del más reciente al
+    // primero. Los reportados antes de que el bug anotara su ejecución no lo saben: de ésos se
+    // cuentan los de los casos del issue, como se hacía entonces.
     if (!m_bugLedger) return {};
+    QSet<QString> cycleIds;
+    for (const auto& cycle : IssueStore::cyclesOf(issue, m_history)) cycleIds.insert(cycle.id);
     const QStringList caseIds = IssueStore::caseIdsOf(issue, m_plans);
     QList<IssueLink> bugs;
-    for (const auto& bug : m_bugLedger->issues())
-        if (caseIds.contains(bug.caseId)) bugs << bug;
+    for (const auto& bug : m_bugLedger->issues()) {
+        const bool linked = !bug.planRunId.trimmed().isEmpty();
+        if (linked ? cycleIds.contains(bug.planRunId) : caseIds.contains(bug.caseId)) bugs << bug;
+    }
     std::sort(bugs.begin(), bugs.end(), [](const IssueLink& a, const IssueLink& b) { return a.createdAt > b.createdAt; });
     return bugs;
 }

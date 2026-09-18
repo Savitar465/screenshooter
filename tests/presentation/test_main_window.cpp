@@ -7,9 +7,12 @@
 #include "support/FakeScreenRecorder.h"
 
 #include "application/AppContext.h"
+#include "application/BugReportService.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
 #include "presentation/views/BugDetailWindow.h"
+#include "presentation/views/BugDialog.h"
+#include "presentation/views/BugView.h"
 #include "presentation/views/CasesView.h"
 #include "presentation/views/IssuesView.h"
 #include "presentation/views/CycleStartDialog.h"
@@ -107,6 +110,9 @@ struct WindowFixture {
             if (b->property("role").toString() == QStringLiteral("row") && b->isVisible() && b->window() == window.get()) ++n;
         return n;
     }
+    /// El parte de bug abierto, si lo hay: desde que se reporta en su propia ventana, los campos
+    /// del formulario están ahí y no en la pantalla.
+    BugDialog* bugDialog() const { return window->findChild<BugDialog*>(); }
     /// Arrancar un ciclo pregunta antes en qué ambiente se prueba: responde al diálogo y acepta.
     /// Falso si no hay ninguno abierto (el ciclo no llegó a ofrecerse).
     bool answerCycleDialog(const QString& environment = QStringLiteral("QA")) const {
@@ -382,6 +388,123 @@ private slots:
         QVERIFY(f.app.run.state().isMarked(0));
     }
 
+    /// La pantalla de bugs es el libro del proyecto: lista lo reportado con su estado, filtra por
+    /// estado y por texto, trae del gestor lo que QAflow creó allí y abre la ficha de cada uno.
+    void theBugScreenListsTheProjectBugsAndBringsThemFromTheTracker() {
+        WindowFixture f;
+        IssueLink open;
+        open.key = QStringLiteral("SHOP-143"); open.title = QStringLiteral("El cupón no descuenta");
+        open.caseId = QStringLiteral("TC-104"); open.step = 2; open.tracker = QStringLiteral("Jira");
+        open.status = QStringLiteral("In Progress"); open.createdAt = QDateTime::currentDateTime().addDays(-2);
+        f.app.bugLedger.recordIssue(open);
+        IssueLink closed;
+        closed.key = QStringLiteral("SHOP-90"); closed.title = QStringLiteral("Login sin mensaje");
+        closed.tracker = QStringLiteral("Jira"); closed.status = QStringLiteral("Done"); closed.resolved = true;
+        f.app.bugLedger.recordIssue(closed);
+
+        f.window->navigate(Screen::Bug);
+        const auto rows = [&f]() {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            QStringList keys;
+            for (auto* b : f.window->findChildren<QPushButton*>())
+                if (b->objectName().startsWith(QStringLiteral("bugRow-")) && b->window() == f.window.get())
+                    keys << b->objectName().mid(7);
+            return keys;
+        };
+        QCOMPARE(rows(), (QStringList{QStringLiteral("SHOP-90"), QStringLiteral("SHOP-143")}));   // el último, primero
+
+        f.window->findChild<QPushButton*>(QStringLiteral("bugsFilterOpen"))->click();
+        QCOMPARE(rows(), QStringList{QStringLiteral("SHOP-143")});
+        f.window->findChild<QPushButton*>(QStringLiteral("bugsFilterAll"))->click();
+        f.window->findChild<QLineEdit*>(QStringLiteral("bugsSearch"))->setText(QStringLiteral("login"));
+        QCOMPARE(rows(), QStringList{QStringLiteral("SHOP-90")});
+        f.window->findChild<QLineEdit*>(QStringLiteral("bugsSearch"))->clear();
+
+        // Traer de Jira: el que ya está se actualiza y el que no, entra con su caso.
+        TrackerIssueInfo known;
+        known.key = QStringLiteral("SHOP-143"); known.title = open.title;
+        known.status = QStringLiteral("Done"); known.resolved = true;
+        TrackerIssueInfo foreign;
+        foreign.key = QStringLiteral("SHOP-155"); foreign.title = QStringLiteral("Error 500 al pagar");
+        foreign.status = QStringLiteral("To Do"); foreign.labels = {QStringLiteral("qaflow"), QStringLiteral("TC-101")};
+        f.app.tracker->issuesToReturn = {known, foreign};
+        f.window->findChild<QPushButton*>(QStringLiteral("bugsImport"))->click();
+        QTRY_COMPARE(f.app.bugLedger.issues().size(), 3);
+        QVERIFY(f.app.bugLedger.findIssue(QStringLiteral("SHOP-143"))->resolved);
+        QCOMPARE(f.app.bugLedger.findIssue(QStringLiteral("SHOP-155"))->caseId, QStringLiteral("TC-101"));
+        QVERIFY(rows().contains(QStringLiteral("SHOP-155")));
+
+        // Y la fila abre la ficha del bug en su ventana.
+        f.window->findChild<QPushButton*>(QStringLiteral("bugRow-SHOP-155"))->click();
+        auto* detail = f.window->findChild<BugDetailWindow*>();
+        QVERIFY(detail);
+        QCOMPARE(detail->bugKey(), QStringLiteral("SHOP-155"));
+    }
+
+    /// La lista no se pinta entera de golpe: se alarga al deslizar hasta abajo y, cuando se acaba lo
+    /// que hay en el libro, le pide al gestor la página siguiente.
+    void theBugListGrowsAsYouScrollAndAsksTheTrackerForMore() {
+        WindowFixture f;
+        for (int i = 0; i < 30; ++i) {
+            IssueLink l;
+            l.key = QStringLiteral("SHOP-%1").arg(100 + i);
+            l.title = QStringLiteral("Bug número %1").arg(i);
+            l.tracker = QStringLiteral("Jira");
+            l.createdAt = QDateTime::currentDateTime().addSecs(-i * 60);
+            f.app.bugLedger.recordIssue(l);
+        }
+        f.window->navigate(Screen::Bug);
+        const auto rows = [&f]() {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            int n = 0;
+            for (auto* b : f.window->findChildren<QPushButton*>())
+                if (b->objectName().startsWith(QStringLiteral("bugRow-")) && b->window() == f.window.get()) ++n;
+            return n;
+        };
+        auto* scroll = f.window->findChild<BugView*>()->findChild<QScrollArea*>();
+        QVERIFY(scroll);
+        const auto toBottom = [scroll]() {
+            QScrollBar* bar = scroll->verticalScrollBar();
+            bar->setValue(0);
+            QCoreApplication::processEvents();
+            bar->setValue(bar->maximum());
+            QCoreApplication::processEvents();
+        };
+        QTRY_VERIFY(rows() > 0);
+        QVERIFY2(rows() < 30, qPrintable(QString::number(rows())));   // sólo la primera página
+        toBottom();
+        QTRY_COMPARE(rows(), 30);                                     // deslizar trae el resto
+
+        // Y con el libro agotado, la página siguiente se le pide al gestor.
+        QList<TrackerIssueInfo> remote;
+        for (int i = 0; i < BugReportService::kImportPage + 5; ++i) {
+            TrackerIssueInfo info;
+            info.key = QStringLiteral("SHOP-%1").arg(500 + i);
+            info.title = QStringLiteral("remoto %1").arg(i);
+            info.labels = {QStringLiteral("qaflow")};
+            remote << info;
+        }
+        f.app.tracker->issuesToReturn = remote;
+        f.window->findChild<QPushButton*>(QStringLiteral("bugsImport"))->click();
+        QTRY_COMPARE(f.app.bugLedger.issues().size(), 30 + BugReportService::kImportPage);
+        QCOMPARE(f.app.tracker->issueSearchStarts, QList<int>{0});
+
+        for (int i = 0; i < 6 && f.app.tracker->issueSearchStarts.size() < 2; ++i) toBottom();
+        QTRY_COMPARE(f.app.tracker->issueSearchStarts, (QList<int>{0, BugReportService::kImportPage}));
+        QCOMPARE(f.app.bugLedger.issues().size(), 30 + remote.size());
+    }
+
+    /// Reportar no es una pantalla: el botón de la lista abre el parte en su ventana.
+    void theBugScreenOpensTheReportInItsOwnWindow() {
+        WindowFixture f;
+        f.window->navigate(Screen::Bug);
+        QVERIFY(!f.bugDialog());
+        f.window->findChild<QPushButton*>(QStringLiteral("bugsCreate"))->click();
+        QVERIFY(f.bugDialog());
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Bug));
+        f.bugDialog()->reject();
+    }
+
     /// Un paso fallido se reporta sin esperar a que termine la ejecución, y el parte llega con ese
     /// paso enlazado; un paso bloqueado además pide el bug como bloqueante.
     void aFailedStepCanBeReportedWithoutClosingTheRun() {
@@ -393,10 +516,13 @@ private slots:
         QVERIFY(report);
         QTRY_VERIFY(report->isVisible() && report->width() > 0);   // hasta que la columna se coloca
         QTest::mouseClick(report, Qt::LeftButton);
-        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Bug));
+        // El parte se abre en su ventana: la ejecución se queda en pantalla, detrás.
+        QVERIFY(f.bugDialog());
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Run));
         QCOMPARE(f.window->findChild<QLineEdit*>(QStringLiteral("bugTitle"))->text().contains(QStringLiteral("paso 1")), true);
+        f.bugDialog()->reject();              // se deja el parte y se sigue probando
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
 
-        f.window->navigate(Screen::Run);
         QVERIFY(f.app.run.isRunning());       // y se puede seguir probando el resto
         QTest::keyClick(f.window.get(), Qt::Key_B);
         QCOMPARE(f.app.run.state().markedCount(), 2);
@@ -587,7 +713,7 @@ private slots:
         f.app.tracker->searchesAssignees = true;
         f.app.tracker->assigneesToReturn = {Assignee{QStringLiteral("aperez"), QStringLiteral("Ana Pérez")},
                                             Assignee{QStringLiteral("apedro"), QStringLiteral("Pedro Antón")}};
-        f.window->navigate(Screen::Bug);
+        f.window->reportBug();
         auto* assignee = f.window->findChild<QComboBox*>(QStringLiteral("bugAssignee"));
         QVERIFY(assignee);
         QCOMPARE(assignee->count(), 0);
@@ -616,7 +742,7 @@ private slots:
         rec.startedAt = QDateTime::currentDateTime().addSecs(-300);
         rec.finishedAt = QDateTime::currentDateTime();
         rec.plannedSteps = 1;
-        rec.steps = {RunRecordStep{QStringLiteral("Entrar"), QStringLiteral("Entra"), StepResult::Pass, {}, 30}};
+        rec.steps = {RunRecordStep{QStringLiteral("Entrar"), {}, QStringLiteral("Entra"), StepResult::Pass, {}, 30}};
         const RunRecord saved = f.app.history.addRun(rec);
         f.app.history.finishPlan(planRunId);
         f.app.history.markPublished(planRunId, QStringLiteral("77"));
@@ -859,6 +985,106 @@ private slots:
         QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("publishZephyr-%1").arg(unpublished)));
     }
 
+    void thePlanCycleListsTheResultOfEachCase() {
+        WindowFixture f;
+        const QString planId = f.app.plans.activeId();
+        // Un ciclo con un caso superado y otro fallado: es lo que hay que poder distinguir de un vistazo.
+        f.app.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"), planId);
+        const QString cycle = f.app.run.planRunId();
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Fail);
+        f.window->finishRun();
+
+        f.window->navigate(Screen::Plan);
+        QTest::qWait(50);
+        QTest::mouseClick(f.window->findChild<QPushButton*>(QStringLiteral("cycleHistoryToggle")), Qt::LeftButton);
+        auto* results = f.window->findChild<QPushButton*>(QStringLiteral("cycleResults-%1").arg(cycle));
+        QVERIFY(results);
+        // Plegado, el ciclo sigue siendo un resumen; desplegado, dice qué dio cada caso.
+        QVERIFY(!f.window->findChild<QFrame*>(QStringLiteral("cycleResultRow-%1-TC-103").arg(cycle)));
+        QTest::mouseClick(results, Qt::LeftButton);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QVERIFY(f.window->findChild<QFrame*>(QStringLiteral("cycleResultRow-%1-TC-103").arg(cycle)));
+        auto* broken = f.window->findChild<QFrame*>(QStringLiteral("cycleResultRow-%1-TC-107").arg(cycle));
+        QVERIFY(broken);
+        QStringList texts;
+        for (auto* l : broken->findChildren<QLabel*>()) texts << l->text();
+        QVERIFY2(texts.contains(label(Verdict::Fallido).toUpper()), qPrintable(texts.join(QStringLiteral(" | "))));
+
+        // Y el caso fallado lleva a su ejecución completa, con sus pasos y sus evidencias.
+        auto* open = f.window->findChild<QPushButton*>(QStringLiteral("cycleResultOpen-%1-TC-107").arg(cycle));
+        QVERIFY(open);
+        QTest::mouseClick(open, Qt::LeftButton);
+        QCOMPARE(f.window->currentScreen(), Screen::Historial);
+
+        // Lo desplegado se recuerda al volver: refrescar la pantalla no vuelve a plegarlo.
+        f.window->navigate(Screen::Plan);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QVERIFY(f.window->findChild<QFrame*>(QStringLiteral("cycleResultRow-%1-TC-107").arg(cycle)));
+    }
+
+    // Un bug se encuentra ejecutando: cuelga de esa ejecución y se ve en sus resultados (los del
+    // ciclo y los de la ejecución), no en la ficha del caso.
+    void bugsBelongToTheRunTheyWereFoundInAndShowUpInItsResults() {
+        WindowFixture f;
+        const QString planId = f.app.plans.activeId();
+        f.app.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Regresión"), planId);
+        const QString cycle = f.app.run.planRunId();
+        const QString runId = f.app.run.state().runId;
+        IssueLink link;
+        link.key = QStringLiteral("SHOP-77");
+        link.caseId = QStringLiteral("TC-103");
+        link.runId = runId;
+        link.planRunId = cycle;
+        link.step = 1;
+        link.title = QStringLiteral("El correo no llega");
+        link.severity = QStringLiteral("Mayor");
+        link.url = QStringLiteral("https://acme.atlassian.net/browse/SHOP-77");
+        link.createdAt = QDateTime::currentDateTime();
+        f.app.bugLedger.recordIssue(link);
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Fail);
+        f.window->finishRun();
+
+        // En los resultados del ciclo, junto al caso del que salió.
+        f.window->navigate(Screen::Plan);
+        QTest::qWait(50);
+        QTest::mouseClick(f.window->findChild<QPushButton*>(QStringLiteral("cycleHistoryToggle")), Qt::LeftButton);
+        QTest::mouseClick(f.window->findChild<QPushButton*>(QStringLiteral("cycleResults-%1").arg(cycle)), Qt::LeftButton);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* chip = f.window->findChild<QPushButton*>(QStringLiteral("cycleResultBug-%1-SHOP-77").arg(cycle));
+        QVERIFY2(chip, "el resultado del caso enseña el bug que salió de él");
+
+        // Y en el detalle de la ejecución, que es donde se encontró. Da igual lo que el historial
+        // estuviera enseñando (aquí, las métricas): lo que se pide es ver esa ejecución.
+        f.window->showMetrics();
+        f.window->navigate(Screen::Plan);
+        QTest::mouseClick(f.window->findChild<QPushButton*>(QStringLiteral("cycleResultOpen-%1-TC-103").arg(cycle)), Qt::LeftButton);
+        QTest::qWait(50);
+        QVERIFY(f.window->findChild<QWidget*>(QStringLiteral("runBugs")));
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-77")));
+
+        // Un bug de otra ejecución del mismo caso no sale en ésta.
+        IssueLink other = link;
+        other.key = QStringLiteral("SHOP-78");
+        other.runId = QStringLiteral("R-0099");
+        other.planRunId = QStringLiteral("PR-0099");
+        f.app.bugLedger.recordIssue(other);
+        f.window->navigate(Screen::Plan);
+        f.window->navigate(Screen::Historial);
+        QTest::qWait(50);
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-77")));
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-78")));
+
+        // La ficha del caso ya no habla de bugs: se ven donde se encontraron.
+        f.window->navigate(Screen::Casos);
+        QTest::qWait(50);
+        auto* cases = f.window->findChild<CasesView*>();
+        QVERIFY(cases);
+        for (auto* l : cases->findChildren<QLabel*>())
+            QVERIFY2(!l->text().contains(QStringLiteral("BUG")), qPrintable(l->text()));
+    }
+
     void thePlanReportOffersDeletingEveryCycleButTheOneInProgress() {
         WindowFixture f;
         f.window->navigate(Screen::Historial);
@@ -1081,6 +1307,18 @@ private slots:
         QCOMPARE(f.app.plans.activeId(), planId);
         QVERIFY(f.app.plans.find(planId)->name.contains(id));
         f.app.plans.toggle(QStringLiteral("TC-104"));
+
+        // El plan de pruebas dice a qué issue prueba, y la etiqueta lleva hasta él: es donde está el
+        // porqué de sus casos.
+        f.window->navigate(Screen::Plan);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* issueTag = f.window->findChild<QPushButton*>(QStringLiteral("planIssueTag-%1").arg(id));
+        QVERIFY2(issueTag, "el plan del issue enseña su etiqueta");
+        QVERIFY(issueTag->text().contains(id));
+        issueTag->click();
+        QCOMPARE(f.window->currentScreen(), Screen::Issues);
+        QCOMPARE(f.app.issues.selectedId(), id);
+
         f.window->navigate(Screen::Issues);
         // El paso 1 de la revisión enseña el plan del issue con sus casos dentro: no hay tarjeta aparte.
         const QString planStep = f.liveLabel("issueStepPlanDetail")->text();
@@ -1669,18 +1907,22 @@ private slots:
         f.app.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"), f.app.plans.activeId());
         const QString planRunId = f.app.run.planRunId();
 
-        // Un bug de antes del ciclo, que no es suyo, y dos reportados mientras corría.
-        const auto bug = [&](const QString& key, const QString& caseId, int step, const QDateTime& at, bool resolved) {
+        // Un bug de antes del ciclo, que no es suyo, y dos reportados mientras corría: probando salen
+        // errores y también mejoras, y el informe tiene que enseñar las dos cosas.
+        const auto bug = [&](const QString& key, const QString& caseId, int step, const QDateTime& at, bool resolved,
+                             const QString& issueType = QStringLiteral("Bug")) {
             IssueLink link;
             link.key = key; link.caseId = caseId; link.step = step; link.createdAt = at; link.resolved = resolved;
             link.title = QStringLiteral("Fallo de ") + caseId;
             link.severity = QStringLiteral("Mayor");
+            link.issueType = issueType;
             link.url = QStringLiteral("https://acme.atlassian.net/browse/") + key;
             f.app.bugLedger.recordIssue(link);
         };
         bug(QStringLiteral("SHOP-90"), QStringLiteral("TC-103"), 1, QDateTime::currentDateTime().addDays(-3), false);
         bug(QStringLiteral("SHOP-11"), QStringLiteral("TC-103"), 2, QDateTime::currentDateTime(), false);
-        bug(QStringLiteral("SHOP-12"), QStringLiteral("TC-107"), 1, QDateTime::currentDateTime(), true);
+        bug(QStringLiteral("SHOP-12"), QStringLiteral("TC-107"), 1, QDateTime::currentDateTime(), true,
+            QStringLiteral("Improvement"));
 
         while (!f.app.run.state().finished) f.app.run.mark(StepResult::Fail);
         f.app.run.finish();
@@ -1699,6 +1941,13 @@ private slots:
         const PlanReport report = f.app.history.report(planRunId);
         QCOMPARE(report.bugCount(), 2);
         QCOMPARE(report.openBugCount(), 1);
+
+        // Errores y mejoras, cada uno con su cuenta: el informe no los mete a todos en el mismo saco.
+        auto* asError = f.window->findChild<QLabel*>(QStringLiteral("bugType-Bug"));
+        auto* asImprovement = f.window->findChild<QLabel*>(QStringLiteral("bugType-Improvement"));
+        QVERIFY2(asError && asImprovement, "el informe cuenta los hallazgos por tipo");
+        QCOMPARE(asError->text(), QStringLiteral("BUG · 1"));
+        QCOMPARE(asImprovement->text(), QStringLiteral("IMPROVEMENT · 1"));
 
         // Y abrirlo lleva al gestor.
         QString opened;
@@ -1755,27 +2004,42 @@ private slots:
         QVERIFY(f.app.run.state().results[0].inherited);
     }
 
-    // La columna de la derecha tiene dos pestañas: las capturas y los bugs del caso, los dos por paso.
-    // La ficha de un bug se abre en su propia ventana.
+    // La columna de la derecha tiene dos pestañas: las capturas y los bugs de la ejecución, los dos
+    // por paso. Un bug de otra ejecución del mismo caso no es de ésta. La ficha de un bug se abre en
+    // su propia ventana.
     void theRunListsItsBugsByStepAndOpensEachOneInItsOwnWindow() {
         WindowFixture f;
+        // Un bug de una ejecución anterior del mismo caso: se quedó en aquellos resultados.
+        IssueLink old;
+        old.key = QStringLiteral("SHOP-70");
+        old.caseId = QStringLiteral("TC-102");
+        old.runId = QStringLiteral("R-0099");   // otra ejecución, no la que se va a arrancar
+        old.step = 1;
+        old.title = QStringLiteral("De otra ejecución");
+        old.createdAt = QDateTime::currentDateTime();
+        f.app.bugLedger.recordIssue(old);
+
+        f.app.run.start(QStringLiteral("TC-102"));
         IssueLink link;
         link.key = QStringLiteral("SHOP-77");
         link.caseId = QStringLiteral("TC-102");
+        link.runId = f.app.run.state().runId;   // el bug sale de esta ejecución
         link.step = 2;
         link.title = QStringLiteral("El cupón no descuenta");
         link.severity = QStringLiteral("Mayor");
         link.classification = QStringLiteral("A");
         link.url = QStringLiteral("https://acme.atlassian.net/browse/SHOP-77");
         link.createdAt = QDateTime::currentDateTime();
+        QVERIFY(!link.runId.isEmpty());
         f.app.bugLedger.recordIssue(link);
 
-        f.app.run.start(QStringLiteral("TC-102"));
         f.window->navigate(Screen::Run);
         auto* bugsTab = f.window->findChild<QPushButton*>(QStringLiteral("runBugsTab"));
         QVERIFY(bugsTab);
         QCOMPARE(bugsTab->text(), QStringLiteral("BUGS · 1"));
         bugsTab->click();
+        QVERIFY2(!f.window->findChild<QPushButton*>(QStringLiteral("runBug-SHOP-70")),
+                 "el bug de otra ejecución no es de ésta");
 
         auto* card = f.window->findChild<QPushButton*>(QStringLiteral("runBug-SHOP-77"));
         QVERIFY(card);

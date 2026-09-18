@@ -45,7 +45,7 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunH
     v->addWidget(navButton(Screen::Plan, icons::Glyph::Plan, theme::Amber, tr("Plan de pruebas"), QStringLiteral("Ctrl+2")));
     v->addWidget(navButton(Screen::Run, icons::Glyph::Run, theme::Green, tr("Ejecución"), QStringLiteral("Ctrl+3")));
     v->addWidget(navButton(Screen::Historial, icons::Glyph::History, theme::Blue, tr("Historial"), QStringLiteral("Ctrl+4")));
-    v->addWidget(navButton(Screen::Bug, icons::Glyph::Bug, theme::Red, tr("Reportar bug"), QStringLiteral("Ctrl+5")));
+    v->addWidget(navButton(Screen::Bug, icons::Glyph::Bug, theme::Red, tr("Bugs"), QStringLiteral("Ctrl+5")));
     v->addStretch(1);
 
     // Al pie, como los paneles secundarios de un IDE: las métricas del historial.
@@ -143,7 +143,7 @@ void Sidebar::refresh() {
     setBadge(Screen::Bug, pending ? QString::number(pending) : open ? QString::number(open) : QString(),
              pending ? theme::Amber : theme::Red, pending ? theme::OnAccent : QStringLiteral("#ffffff"));
     setTooltip(Screen::Bug, pending ? tr("%1 pendientes de enviar").arg(pending)
-                                    : open ? tr("%1 issues abiertos").arg(open) : QString());
+                                    : open ? tr("%1 bugs abiertos").arg(open) : tr("los bugs del proyecto y su estado"));
     // Issues: los que traen cambios de GESREQ sin revisar.
     const int changed = m_issues.changedCount();
     const int issues = int(m_issues.issues().size());

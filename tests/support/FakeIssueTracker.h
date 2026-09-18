@@ -7,6 +7,8 @@
 
 #include <QList>
 
+#include <algorithm>
+
 namespace qaflow::testing {
 
 class FakeIssueTracker : public IIssueTracker {
@@ -163,6 +165,36 @@ public:
         r.url = s.issueUrl(key);
         r.attachmentsUploaded = attachments.size();
         done(r);
+    }
+
+    bool searchesIssues = true;                     // como Jira, que busca por la etiqueta de QAflow
+    QList<TrackerIssueInfo> issuesToReturn;         // el gestor entero; la búsqueda lo sirve por páginas
+    int issueSearchCalls = 0;
+    QList<int> issueSearchStarts;                   // desde dónde se pidió cada página, en orden
+
+    bool canSearchIssues(const TrackerSettings&) const override { return searchesIssues; }
+
+    void searchProjectBugs(const TrackerSettings& s, int startAt, int max, std::function<void(const TrackerIssueList&)> done) override {
+        ++issueSearchCalls;
+        issueSearchStarts << startAt;
+        if (mode == Mode::NetworkDown) {
+            TrackerIssueList f;
+            f.error = QStringLiteral("Host not found");
+            done(f);
+            return;
+        }
+        TrackerIssueList out;
+        out.ok = true;
+        out.total = static_cast<int>(issuesToReturn.size());
+        for (int i = std::max(0, startAt); i < issuesToReturn.size() && out.issues.size() < max; ++i) {
+            TrackerIssueInfo info = issuesToReturn[i];
+            info.ok = true;
+            if (info.url.isEmpty()) info.url = s.issueUrl(info.key);
+            out.issues << info;
+        }
+        const int seen = std::max(0, startAt) + static_cast<int>(out.issues.size());
+        out.nextStart = !out.issues.isEmpty() && seen < out.total ? seen : -1;
+        done(out);
     }
 
     bool linksIssues = true;                        // como Jira

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/models/IssueLink.h"
 #include "core/models/PlanReport.h"
 #include "core/models/RunHistory.h"
 #include "core/services/IRunHistoryRepository.h"
@@ -62,8 +63,16 @@ public:
     /// ahora, cuyas evidencias son de esa ejecución y todavía no pueden sellarse.
     /// Devuelve cuántas evidencias se movieron o descartaron.
     int adoptLooseEvidence(const QString& runningCaseId = QString());
-    /// Añade una ejecución terminada. Asigna el id y devuelve el registro guardado.
+    /// Id que le tocará a la próxima ejecución que se archive. Se pide al arrancarla, no al
+    /// cerrarla, para que lo que se reporte mientras corre (los bugs) pueda enlazarse con ella.
+    /// Mientras no se archive nada, dos llamadas devuelven el mismo id.
+    QString reserveRunId() const;
+    /// Añade una ejecución terminada. Respeta el id reservado si trae uno libre; si no, le asigna el
+    /// siguiente. Devuelve el registro guardado.
     RunRecord addRun(RunRecord record);
+    /// Bugs que se encontraron en esa ejecución, del más reciente al primero. Salen del libro de
+    /// `setBugs()`; sin él, ninguno.
+    QList<IssueLink> bugsOfRun(const RunRecord& run) const;
     /// Elimina un ciclo de plan con sus ejecuciones y las evidencias de éstas (los ficheros se
     /// liberan a través de TestCaseStore). Si a algún caso se le borró su última ejecución, su
     /// «última ejecución» vuelve a ser la más reciente que quede. Definitivo: no se puede deshacer.

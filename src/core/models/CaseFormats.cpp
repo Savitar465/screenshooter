@@ -9,7 +9,7 @@ namespace qaflow::formats {
 
 QJsonObject caseToJson(const TestCase& c, bool includeShots) {
     QJsonArray steps;
-    for (const auto& s : c.steps) steps.append(QJsonObject{{"action", s.action}, {"expected", s.expected}});
+    for (const auto& s : c.steps) steps.append(QJsonObject{{"action", s.action}, {"data", s.data}, {"expected", s.expected}});
     QJsonObject o{
         {"id", c.id}, {"title", c.title}, {"suite", c.suite},
         {"priority", toString(c.priority)}, {"status", toString(c.status)},
@@ -42,7 +42,7 @@ TestCase caseFromJson(const QJsonObject& o) {
     for (const auto& v : o["tags"].toArray()) if (!v.toString().trimmed().isEmpty()) c.tags << v.toString().trimmed();
     for (const auto& v : o["steps"].toArray()) {
         const auto s = v.toObject();
-        c.steps.append(TestStep{s["action"].toString(), s["expected"].toString()});
+        c.steps.append(TestStep{s["action"].toString(), s["data"].toString(), s["expected"].toString()});
     }
     for (const auto& v : o["shots"].toArray()) {
         const auto s = v.toObject();
@@ -92,7 +92,7 @@ namespace {
 const QStringList kCsvHeader = {
     QStringLiteral("id"), QStringLiteral("title"), QStringLiteral("suite"), QStringLiteral("priority"), QStringLiteral("status"),
     QStringLiteral("tags"), QStringLiteral("component"), QStringLiteral("jira"), QStringLiteral("preconditions"),
-    QStringLiteral("step"), QStringLiteral("action"), QStringLiteral("expected")};
+    QStringLiteral("step"), QStringLiteral("action"), QStringLiteral("data"), QStringLiteral("expected")};
 
 QString csvField(const QString& v) {
     if (v.contains(QLatin1Char(',')) || v.contains(QLatin1Char('"')) || v.contains(QLatin1Char('\n')) || v.contains(QLatin1Char('\r'))) {
@@ -135,14 +135,14 @@ QString casesToCsv(const QList<TestCase>& cases) {
     for (const auto& c : cases) {
         const QStringList base{c.id, c.title, c.suite, toString(c.priority), toString(c.status),
                                c.tags.join(QStringLiteral("; ")), c.component, c.jiraKey, c.preconditions};
-        auto writeRow = [&](int stepNo, const QString& action, const QString& expected) {
+        auto writeRow = [&](int stepNo, const QString& action, const QString& data, const QString& expected) {
             QStringList f;
             for (const auto& b : base) f << csvField(b);
-            f << (stepNo ? QString::number(stepNo) : QString()) << csvField(action) << csvField(expected);
+            f << (stepNo ? QString::number(stepNo) : QString()) << csvField(action) << csvField(data) << csvField(expected);
             lines << f.join(QLatin1Char(','));
         };
-        if (c.steps.isEmpty()) writeRow(0, {}, {});
-        for (int i = 0; i < c.steps.size(); ++i) writeRow(i + 1, c.steps[i].action, c.steps[i].expected);
+        if (c.steps.isEmpty()) writeRow(0, {}, {}, {});
+        for (int i = 0; i < c.steps.size(); ++i) writeRow(i + 1, c.steps[i].action, c.steps[i].data, c.steps[i].expected);
     }
     return lines.join(QLatin1Char('\n')) + QLatin1Char('\n');
 }
@@ -155,7 +155,7 @@ std::optional<QList<TestCase>> casesFromCsv(const QString& text, QString* error)
     auto col = [&](const char* name) { return header.indexOf(QString::fromLatin1(name)); };
     const int iId = col("id"), iTitle = col("title"), iSuite = col("suite"), iPrio = col("priority"), iStatus = col("status"),
               iTags = col("tags"), iComp = col("component"), iJira = col("jira"), iPre = col("preconditions"),
-              iAction = col("action"), iExpected = col("expected");
+              iAction = col("action"), iData = col("data"), iExpected = col("expected");
     if (iId < 0 || iTitle < 0) {
         if (error) *error = QStringLiteral("Faltan las columnas obligatorias id y title");
         return std::nullopt;
@@ -184,8 +184,9 @@ std::optional<QList<TestCase>> casesFromCsv(const QString& text, QString* error)
             out.append(fresh);
             c = &out.last();
         }
-        const QString action = at(r, iAction), expected = at(r, iExpected);
-        if (!action.trimmed().isEmpty() || !expected.trimmed().isEmpty()) c->steps.append(TestStep{action, expected});
+        const QString action = at(r, iAction), data = at(r, iData), expected = at(r, iExpected);
+        if (!action.trimmed().isEmpty() || !data.trimmed().isEmpty() || !expected.trimmed().isEmpty())
+            c->steps.append(TestStep{action, data, expected});
     }
     return out;
 }
@@ -207,10 +208,11 @@ QString casesToMarkdown(const QList<TestCase>& cases) {
         if (!c.tags.isEmpty()) meta << QStringLiteral("**Etiquetas:** %1").arg(c.tags.join(QStringLiteral(", ")));
         out << meta.join(QStringLiteral(" · ")) << QString();
         if (!c.preconditions.trimmed().isEmpty()) out << QStringLiteral("**Precondiciones:** %1").arg(c.preconditions.trimmed()) << QString();
-        out << QStringLiteral("| # | Acción | Resultado esperado |") << QStringLiteral("|---|--------|--------------------|");
+        out << QStringLiteral("| # | Acción | Datos de la prueba | Resultado esperado |")
+            << QStringLiteral("|---|--------|--------------------|--------------------|");
         for (int i = 0; i < c.steps.size(); ++i) {
             auto cell = [](QString s) { return s.replace(QLatin1Char('|'), QStringLiteral("\\|")).replace(QLatin1Char('\n'), QStringLiteral(" ")); };
-            out << QStringLiteral("| %1 | %2 | %3 |").arg(i + 1).arg(cell(c.steps[i].action), cell(c.steps[i].expected));
+            out << QStringLiteral("| %1 | %2 | %3 | %4 |").arg(i + 1).arg(cell(c.steps[i].action), cell(c.steps[i].data), cell(c.steps[i].expected));
         }
         out << QString();
     }

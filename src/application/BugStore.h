@@ -25,6 +25,9 @@ public:
     int openIssueCount() const;
     void recordIssue(const IssueLink& link);
     void updateStatus(const QString& key, const QString& status, bool resolved);
+    /// Lo que el gestor dice hoy de un bug que ya está en el libro: su título, su tipo y su estado.
+    /// Lo demás (caso, paso, severidad, clasificación) es de QAflow y no se toca. Falso si no lo conoce.
+    bool updateFromTracker(const QString& key, const QString& title, const QString& issueType, const QString& status, bool resolved);
     void forgetIssue(const QString& key);
 
     // Cola de pendientes

@@ -5,6 +5,7 @@
 #include "support/FakeHttpServer.h"
 
 #include "infrastructure/tracker/GitHubClient.h"
+#include "core/models/BugReport.h"
 #include "infrastructure/tracker/JiraClient.h"
 #include "infrastructure/tracker/TrackerRouter.h"
 
@@ -12,6 +13,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <QUrl>
 #include <QtTest>
 
 using namespace qaflow;
@@ -428,6 +430,85 @@ private slots:
         QVERIFY(out.resolved);
     }
 
+    // La pantalla de bugs trae del propio Jira lo que creó QAflow —su etiqueta— y es un error o una
+    // mejora, que es lo que se sigue desde aquí.
+    void jiraSearchesTheErrorsAndImprovementsLabelledByQaflow() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/search", [](const HttpRequest&) {
+            return HttpResponse::json(200, "{\"total\":1,\"issues\":[{\"key\":\"SHOP-143\",\"fields\":{\"summary\":\"El cupón no descuenta\","
+                                           "\"status\":{\"name\":\"In Progress\",\"statusCategory\":{\"key\":\"indeterminate\"}},\"issuetype\":{\"name\":\"Bug\"},"
+                                           "\"created\":\"2026-09-10T11:20:31.000+0200\",\"labels\":[\"qaflow\",\"TC-104\"]}}]}");
+        });
+        JiraClient client;
+        TrackerIssueList out; bool done = false;
+        client.searchProjectBugs(jiraSettings(server.baseUrl()), 0, 50, [&](const TrackerIssueList& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(out.issues.size(), 1);
+        QCOMPARE(out.issues[0].key, QStringLiteral("SHOP-143"));
+        QCOMPARE(out.issues[0].title, QStringLiteral("El cupón no descuenta"));
+        QCOMPARE(out.issues[0].status, QStringLiteral("In Progress"));
+        QCOMPARE(out.issues[0].issueType, BugReport::jiraIssueTypes().value(0));
+        QVERIFY(!out.issues[0].resolved);
+        QCOMPARE(out.issues[0].createdAt.date(), QDate(2026, 9, 10));
+        QCOMPARE(out.issues[0].labels, (QStringList{QStringLiteral("qaflow"), QStringLiteral("TC-104")}));
+        // El JQL acota al proyecto, a la etiqueta de QAflow y a los dos tipos, y pide los últimos primero.
+        const QString path = QUrl::fromPercentEncoding(server.requests[0].path);
+        QVERIFY(path.contains(QStringLiteral("project = \"SHOP\"")));
+        QVERIFY(path.contains(QStringLiteral("labels = qaflow")));
+        // Los tipos son los que QAflow trabaja, no dos literales: si cambian de nombre, cambia el JQL.
+        QVERIFY2(path.contains(QStringLiteral("issuetype in (\"%1\", \"%2\")")
+                                   .arg(BugReport::jiraIssueTypes().value(0), BugReport::jiraIssueTypes().value(1))),
+                 qPrintable(path));
+        QVERIFY(path.contains(QStringLiteral("ORDER BY created DESC")));
+        QVERIFY(path.contains(QStringLiteral("startAt=0")));
+        QVERIFY(path.contains(QStringLiteral("maxResults=50")));
+        QCOMPARE(out.total, 1);
+        QCOMPARE(out.nextStart, -1);   // no queda nada por detrás
+    }
+
+    // Si esta instancia no llama así a sus tipos, el 400 de Jira se explica con los que se buscaron.
+    void jiraSearchExplainsARejectedIssueTypeFilter() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/search", [](const HttpRequest&) {
+            return HttpResponse::json(400, "{\"errorMessages\":[\"The value 'Improvement' does not exist for the field 'issuetype'\"]}");
+        });
+        JiraClient client;
+        TrackerIssueList out; bool done = false;
+        client.searchProjectBugs(jiraSettings(server.baseUrl()), 0, 50, [&](const TrackerIssueList& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY2(out.error.contains(BugReport::jiraIssueTypes().join(QStringLiteral(" o "))), qPrintable(out.error));
+        QVERIFY(out.error.contains(QStringLiteral("does not exist for the field 'issuetype'")));   // y lo que dijo Jira
+    }
+
+    // La lista se alarga al deslizar: Jira dice cuántos hay y desde dónde sigue la página siguiente.
+    void jiraSearchPagesThroughTheBugsWithStartAt() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/search", [](const HttpRequest& r) {
+            const QString path = QUrl::fromPercentEncoding(r.path);
+            if (path.contains(QStringLiteral("startAt=2")))
+                return HttpResponse::json(200, "{\"total\":3,\"issues\":[{\"key\":\"SHOP-3\",\"fields\":{\"summary\":\"c\"}}]}");
+            return HttpResponse::json(200, "{\"total\":3,\"issues\":[{\"key\":\"SHOP-1\",\"fields\":{\"summary\":\"a\"}},"
+                                           "{\"key\":\"SHOP-2\",\"fields\":{\"summary\":\"b\"}}]}");
+        });
+        JiraClient client;
+        TrackerIssueList out; bool done = false;
+        client.searchProjectBugs(jiraSettings(server.baseUrl()), 0, 2, [&](const TrackerIssueList& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QCOMPARE(out.issues.size(), 2);
+        QCOMPARE(out.total, 3);
+        QCOMPARE(out.nextStart, 2);    // quedan por traer
+        QVERIFY(out.hasMore());
+
+        done = false;
+        client.searchProjectBugs(jiraSettings(server.baseUrl()), out.nextStart, 2, [&](const TrackerIssueList& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QCOMPARE(out.issues.size(), 1);
+        QCOMPARE(out.issues[0].key, QStringLiteral("SHOP-3"));
+        QVERIFY(!out.hasMore());       // la última página cierra el recorrido
+    }
+
     void jiraFetchMetadataChainsThreeRequests() {
         FakeHttpServer server;
         server.route("GET", "/rest/api/2/project/SHOP", [](const HttpRequest&) {
@@ -495,6 +576,24 @@ private slots:
         TrackerProjectList out;
         bool done = false;
         router.fetchProjects(github, [&](const TrackerProjectList& r) { out = r; done = true; });
+        QVERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(!out.error.isEmpty());
+    }
+
+    // El router es lo que ve la aplicación: lo que sabe hacer Jira tiene que llegar a través de él.
+    void theRouterForwardsWhatJiraCanDo() {
+        TrackerRouter router;
+        const TrackerSettings jira = jiraSettings(QStringLiteral("https://acme.atlassian.net"));
+        const TrackerSettings github = githubSettings(QStringLiteral("https://api.github.com"));
+        QVERIFY(router.canSearchIssues(jira));
+        QVERIFY(router.canCommentIssues(jira));
+        QVERIFY(router.canLinkIssues(jira));
+        QVERIFY(!router.canSearchIssues(github));
+        // Y el gestor que no sabe responde por el camino corto, sin red.
+        TrackerIssueList out;
+        bool done = false;
+        router.searchProjectBugs(github, 0, 10, [&](const TrackerIssueList& r) { out = r; done = true; });
         QVERIFY(done);
         QVERIFY(!out.ok);
         QVERIFY(!out.error.isEmpty());

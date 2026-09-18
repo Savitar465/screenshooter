@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QSet>
 #include <QWidget>
 
 class QLabel;
@@ -15,6 +16,7 @@ namespace qaflow {
 
 class TestCaseStore;
 class PlanStore;
+class IssueStore;
 class ProgressCells;
 class TestPublishService;
 struct PlanReport;
@@ -29,7 +31,9 @@ class PlanView : public QWidget {
 public:
     /// `publish` puede ser nullptr (tests, o sin Zephyr): entonces los ciclos no se publican ni se
     /// actualizan desde aquí, aunque los ya publicados siguen enseñando sus Tests.
-    PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* publish = nullptr, QWidget* parent = nullptr);
+    /// `issues` puede ser nullptr (tests): entonces no se enseña a qué issue prueba cada plan.
+    PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* publish = nullptr, IssueStore* issues = nullptr,
+             QWidget* parent = nullptr);
 
     /// Vuelve a pintar la pantalla (p. ej. al activar o desactivar Zephyr en los ajustes).
     void refresh();
@@ -47,6 +51,10 @@ signals:
     void openJiraRequested(const QString& key);
     /// Abrir en el navegador una URL ya construida (el ciclo de Zephyr en Jira).
     void openUrlRequested(const QString& url);
+    /// Abrir en la pantalla de issues el issue que se prueba con este plan.
+    void openIssueRequested(const QString& issueId);
+    /// Abrir en el historial el detalle de una ejecución (sus pasos y sus evidencias).
+    void openRunRequested(const QString& runId);
     void toast(const QString& message, const QString& color);
 
 private:
@@ -54,8 +62,13 @@ private:
     void buildEditor(QHBoxLayout* root);
     void refreshList();
     void refreshEditor();
+    /// Etiquetas de los issues que prueba el plan abierto; la sección se esconde si no prueba ninguno.
+    void refreshIssueTags();
     void refreshCycle();
     void refreshCycles();
+    /// Bloque desplegable con el resultado de cada caso del ciclo: lo que dio cada uno sin salir de
+    /// la pantalla, y un salto a la ejecución completa. nullptr si el ciclo no tiene casos.
+    QWidget* caseResults(const PlanReport& report);
     /// Bloque de Zephyr de un ciclo: dónde se publicó y el Test de cada ejecución, con «Actualizar
     /// en Zephyr»; o «Publicar en Zephyr» si aún no se publicó. nullptr si no procede ninguno.
     QWidget* zephyrBlock(const PlanReport& report);
@@ -78,9 +91,13 @@ private:
     TestCaseStore& m_cases;
     PlanStore& m_plans;
     TestPublishService* m_publish;
+    IssueStore* m_issues;
     bool m_selfEdit = false;
     bool m_showArchived = false;
     bool m_allCycles = false;   // la sección de historial muestra todos los ciclos o sólo los últimos
+    /// Ciclos (`PlanRun::id`) con sus resultados por caso desplegados. Se guarda aparte porque las
+    /// tarjetas se rehacen enteras en cada refresco.
+    QSet<QString> m_openResults;
 
     // lista
     QLayout* m_filterRow = nullptr;
@@ -90,6 +107,8 @@ private:
     QLabel* m_eyebrow = nullptr;
     QLineEdit* m_name = nullptr;
     QLabel* m_archivedBadge = nullptr;
+    QWidget* m_issueTags = nullptr;
+    QLayout* m_issueTagsLayout = nullptr;
     QPushButton* m_runPlan = nullptr;
     QLabel* m_count = nullptr;
     QLabel* m_steps = nullptr;
@@ -99,6 +118,7 @@ private:
     QLabel* m_cycleTitle = nullptr;
     QLabel* m_cycleSummary = nullptr;
     ProgressCells* m_cycleCells = nullptr;
+    QVBoxLayout* m_cycleResults = nullptr;
     QPushButton* m_cycleReport = nullptr;
     QWidget* m_cyclesSection = nullptr;
     QPushButton* m_cyclesHeader = nullptr;

@@ -39,6 +39,34 @@ int PlanReport::openBugCount() const {
     return n;
 }
 
+QList<QPair<QString, int>> PlanReport::bugCountsByType() const {
+    QList<QPair<QString, int>> out;
+    for (const auto& row : rows)
+        for (const auto& bug : row.bugs) {
+            const QString type = bug.issueType.trimmed();
+            const auto it = std::find_if(out.begin(), out.end(), [&type](const QPair<QString, int>& p) { return p.first == type; });
+            if (it == out.end()) out.append({type, 1});
+            else ++it->second;
+        }
+    return out;
+}
+
+bool PlanReport::foundIn(const PlanRun& plan, const IssueLink& bug) {
+    // Lo que dice el propio bug manda: si salió de otro ciclo (o de una ejecución suelta), no es de éste
+    // aunque coincidan las fechas.
+    if (!bug.planRunId.trimmed().isEmpty()) return bug.planRunId == plan.id;
+    if (!bug.runId.trimmed().isEmpty()) return false;
+    return reportedDuring(plan, bug);
+}
+
+bool PlanReport::foundIn(const RunRecord& run, const IssueLink& bug) {
+    if (!bug.runId.trimmed().isEmpty()) return bug.runId == run.id;
+    if (bug.caseId != run.caseId) return false;
+    if (!run.startedAt.isValid() || !bug.createdAt.isValid()) return false;
+    const QDateTime until = run.finishedAt.isValid() ? run.finishedAt.addSecs(3600) : QDateTime::currentDateTime();
+    return bug.createdAt >= run.startedAt && bug.createdAt <= until;
+}
+
 bool PlanReport::reportedDuring(const PlanRun& plan, const IssueLink& bug) {
     if (!plan.startedAt.isValid() || !bug.createdAt.isValid()) return true;   // sin fechas no se puede descartar
     const QDateTime until = plan.isFinished() ? plan.finishedAt.addSecs(3600) : QDateTime::currentDateTime();
@@ -81,7 +109,7 @@ PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOf
             row.title = info.title;
         }
         for (const auto& bug : bugs)
-            if (bug.caseId == caseId && reportedDuring(plan, bug)) row.bugs.append(bug);
+            if (bug.caseId == caseId && foundIn(plan, bug)) row.bugs.append(bug);
         std::sort(row.bugs.begin(), row.bugs.end(), [](const IssueLink& a, const IssueLink& b) { return a.createdAt > b.createdAt; });
         r.rows.append(row);
     }
@@ -102,8 +130,15 @@ QString PlanReport::toMarkdown() const {
     out << QCoreApplication::translate("core", "- **Casos:** %1 · Superados %2 · Fallidos %3 · Bloqueados %4 · Pendientes %5")
                .arg(total()).arg(passed).arg(failed).arg(blocked).arg(pending());
     out << QCoreApplication::translate("core", "- **Tasa de éxito:** %1 %").arg(successRate());
-    if (bugCount() > 0)
-        out << QCoreApplication::translate("core", "- **Bugs encontrados:** %1 · %2 abiertos").arg(bugCount()).arg(openBugCount());
+    if (bugCount() > 0) {
+        QString line = QCoreApplication::translate("core", "- **Bugs encontrados:** %1 · %2 abiertos").arg(bugCount()).arg(openBugCount());
+        // Errores y mejoras se cuentan por separado: son dos cosas distintas aunque se reporten igual.
+        QStringList byType;
+        for (const auto& [type, count] : bugCountsByType())
+            byType << QStringLiteral("%1 %2").arg(count).arg(type.isEmpty() ? QCoreApplication::translate("core", "sin tipo") : type);
+        if (!byType.isEmpty()) line += QStringLiteral(" · ") + byType.join(QStringLiteral(" · "));
+        out << line;
+    }
     out << QCoreApplication::translate("core", "- **Duración acumulada:** %1").arg(formatDuration(durationSecs));
     out << QString();
     out << QCoreApplication::translate("core", "| Caso | Título | Suite | Resultado | Pasos | Duración |");
@@ -124,12 +159,14 @@ QString PlanReport::toMarkdown() const {
         out << QString();
         out << QCoreApplication::translate("core", "## Bugs encontrados · %1").arg(bugCount());
         out << QString();
-        out << QCoreApplication::translate("core", "| Bug | Caso | Paso | Título | Severidad | Estado |");
-        out << QStringLiteral("|-----|------|------|--------|-----------|--------|");
+        out << QCoreApplication::translate("core", "| Bug | Tipo | Caso | Paso | Título | Severidad | Estado |");
+        out << QStringLiteral("|-----|------|------|------|--------|-----------|--------|");
         for (const auto& row : rows) {
             for (const auto& bug : row.bugs) {
-                out << QStringLiteral("| %1 | %2 | %3 | %4 | %5 | %6 |")
-                           .arg(bug.key, bug.caseId,
+                out << QStringLiteral("| %1 | %2 | %3 | %4 | %5 | %6 | %7 |")
+                           .arg(bug.key,
+                                bug.issueType.trimmed().isEmpty() ? QStringLiteral("—") : bug.issueType.trimmed(),
+                                bug.caseId,
                                 bug.step > 0 ? QString::number(bug.step) : QString(),
                                 bug.title, BugReport::severityLabel(bug.severity),
                                 bug.status.isEmpty() ? (bug.resolved ? QCoreApplication::translate("core", "Cerrado")

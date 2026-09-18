@@ -85,6 +85,8 @@ void BugDetailWindow::refresh() {
     auto* h = static_cast<QHBoxLayout*>(m_pills->layout());
     if (!m_bug.key.isEmpty()) h->addWidget(ui::pill(m_bug.key, theme::tint(theme::Cyan, 30), theme::Cyan));
     const QString classification = BugReport::classificationLabel(m_bug.classification).toUpper();
+    if (const QString type = m_bug.issueType.trimmed(); !type.isEmpty())
+        h->addWidget(ui::pill(type.toUpper(), theme::tint(theme::Muted, 30), theme::Muted));
     if (!classification.isEmpty()) h->addWidget(ui::pill(classification, theme::tint(theme::Blue, 26), theme::Blue));
     if (!m_bug.severity.isEmpty()) {
         const QString color = severityColor(m_bug.severity);

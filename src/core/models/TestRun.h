@@ -25,6 +25,9 @@ enum class Verdict { Superado, Fallido, Bloqueado };
 
 struct RunState {
     QString caseId;          // vacío = no hay ejecución
+    /// Id con el que se archivará en el historial (R-0007). Se reserva al arrancar, no al terminar,
+    /// porque lo que se reporta mientras corre (los bugs) tiene que poder enlazarse con ella.
+    QString runId;
     int idx = 0;             // paso en pantalla (0-based); se mueve libremente por el caso
     /// Un registro por paso del caso. Los que no están `marked` siguen pendientes: se puede saltar
     /// de uno a otro en cualquier orden y dejar huecos sin marcar.

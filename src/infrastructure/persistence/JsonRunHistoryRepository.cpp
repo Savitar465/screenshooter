@@ -17,7 +17,7 @@ QString isoOrEmpty(const QDateTime& dt) { return dt.isValid() ? dt.toString(Qt::
 QJsonObject toJson(const RunRecord& r) {
     QJsonArray steps;
     for (const auto& s : r.steps)
-        steps.append(QJsonObject{{"action", s.action}, {"expected", s.expected}, {"result", toString(s.result)}, {"note", s.note}, {"durationSecs", s.durationSecs}});
+        steps.append(QJsonObject{{"action", s.action}, {"data", s.data}, {"expected", s.expected}, {"result", toString(s.result)}, {"note", s.note}, {"durationSecs", s.durationSecs}});
     return QJsonObject{
         {"id", r.id}, {"caseId", r.caseId}, {"caseTitle", r.caseTitle}, {"suite", r.suite},
         {"planRunId", r.planRunId}, {"startedAt", isoOrEmpty(r.startedAt)}, {"finishedAt", isoOrEmpty(r.finishedAt)},
@@ -41,7 +41,7 @@ RunRecord runFromJson(const QJsonObject& o) {
     r.continuesRunId = o["continuesRunId"].toString();
     for (const auto& v : o["steps"].toArray()) {
         const auto s = v.toObject();
-        r.steps.append(RunRecordStep{s["action"].toString(), s["expected"].toString(), stepResultFromString(s["result"].toString()), s["note"].toString(), s["durationSecs"].toInt()});
+        r.steps.append(RunRecordStep{s["action"].toString(), s["data"].toString(), s["expected"].toString(), stepResultFromString(s["result"].toString()), s["note"].toString(), s["durationSecs"].toInt()});
     }
     // Registros anteriores a la medición por pasos: usar inicio → fin.
     r.durationSecs = o.contains("durationSecs") ? static_cast<qint64>(o["durationSecs"].toDouble())

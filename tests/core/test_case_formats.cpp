@@ -15,7 +15,8 @@ TestCase richCase() {
     c.priority = Priority::Alta; c.status = CaseStatus::Listo;
     c.tags = {QStringLiteral("smoke"), QStringLiteral("api")}; c.component = QStringLiteral("Comp"); c.jiraKey = QStringLiteral("SHOP-9");
     c.preconditions = QStringLiteral("línea 1\nlínea 2");
-    c.steps = {TestStep{QStringLiteral("Pulsar \"OK\""), QStringLiteral("Cierra")}, TestStep{QStringLiteral("Otro"), QStringLiteral("Más")}};
+    c.steps = {TestStep{QStringLiteral("Pulsar \"OK\""), QStringLiteral("usuario qa, 10 €"), QStringLiteral("Cierra")},
+               TestStep{QStringLiteral("Otro"), QString(), QStringLiteral("Más")}};
     c.shots = {Screenshot{3, 1, QStringLiteral("cap.png"), QStringLiteral("/x/cap.png")}};
     c.lastRun = LastRun{RunOutcome::Blocked, QDateTime(QDate(2026, 9, 7), QTime(10, 0))};
     return c;
@@ -39,6 +40,8 @@ private slots:
         QCOMPARE(r.jiraKey, c.jiraKey);
         QCOMPARE(r.preconditions, c.preconditions);
         QCOMPARE(r.steps.size(), 2);
+        QCOMPARE(r.steps[0].data, c.steps[0].data);
+        QCOMPARE(r.steps[0].expected, c.steps[0].expected);
         QCOMPARE(r.shots.size(), 1);
         QCOMPARE(static_cast<int>(r.priority), static_cast<int>(Priority::Alta));
         QCOMPARE(static_cast<int>(r.lastRun.outcome), static_cast<int>(RunOutcome::Blocked));
@@ -66,7 +69,7 @@ private slots:
         TestCase noSteps;
         noSteps.id = QStringLiteral("TC-2"); noSteps.title = QStringLiteral("Sin pasos");
         const QString csv = formats::casesToCsv({richCase(), noSteps});
-        QVERIFY(csv.startsWith(QStringLiteral("id,title,suite,priority,status,tags,component,jira,preconditions,step,action,expected\n")));
+        QVERIFY(csv.startsWith(QStringLiteral("id,title,suite,priority,status,tags,component,jira,preconditions,step,action,data,expected\n")));
 
         const auto back = formats::casesFromCsv(csv);
         QVERIFY(back.has_value());
@@ -74,6 +77,8 @@ private slots:
         const TestCase& r = back->first();
         QCOMPARE(r.title, QStringLiteral("Título, con coma"));       // comas y comillas escapadas
         QCOMPARE(r.steps[0].action, QStringLiteral("Pulsar \"OK\""));
+        QCOMPARE(r.steps[0].data, QStringLiteral("usuario qa, 10 €"));   // los datos de la prueba van en su columna
+        QCOMPARE(r.steps[1].data, QString());
         QCOMPARE(r.preconditions, QStringLiteral("línea 1\nlínea 2")); // saltos de línea entre comillas
         QCOMPARE(r.tags, (QStringList{QStringLiteral("smoke"), QStringLiteral("api")}));
         QCOMPARE(r.jiraKey, QStringLiteral("SHOP-9"));
@@ -94,11 +99,11 @@ private slots:
     void markdownEscapesPipesAndListsMetadata() {
         TestCase c;
         c.id = QStringLiteral("TC-1"); c.title = QStringLiteral("Login"); c.suite = QStringLiteral("Auth"); c.jiraKey = QStringLiteral("SHOP-3");
-        c.steps = {TestStep{QStringLiteral("Abrir | pantalla"), QStringLiteral("Se ve")}};
+        c.steps = {TestStep{QStringLiteral("Abrir | pantalla"), QStringLiteral("dato | raro"), QStringLiteral("Se ve")}};
         const QString md = formats::casesToMarkdown({c});
         QVERIFY(md.contains(QStringLiteral("## TC-1 · Login")));
         QVERIFY(md.contains(QStringLiteral("**Historia:** SHOP-3")));
-        QVERIFY(md.contains(QStringLiteral("| 1 | Abrir \\| pantalla | Se ve |")));
+        QVERIFY(md.contains(QStringLiteral("| 1 | Abrir \\| pantalla | dato \\| raro | Se ve |")));
     }
 };
 

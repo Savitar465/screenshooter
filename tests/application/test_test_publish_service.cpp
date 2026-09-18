@@ -33,8 +33,8 @@ PlanReport reportWith(const QList<QPair<QString, Verdict>>& executed, const QStr
         row.run.caseId = caseId;
         row.run.verdict = verdict;
         row.run.durationSecs = 245;
-        row.run.steps = {RunRecordStep{QStringLiteral("Abrir carrito"), QStringLiteral("Se abre"), StepResult::Pass, {}, 30},
-                         RunRecordStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Descuenta"),
+        row.run.steps = {RunRecordStep{QStringLiteral("Abrir carrito"), {}, QStringLiteral("Se abre"), StepResult::Pass, {}, 30},
+                         RunRecordStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Cupón QA10"), QStringLiteral("Descuenta"),
                                        verdict == Verdict::Fallido ? StepResult::Fail : StepResult::Pass,
                                        QStringLiteral("El total no cambia"), 45}};
         report.rows << row;
@@ -161,9 +161,9 @@ private slots:
         f.store.updateCase(QStringLiteral("TC-101"), [](TestCase& c) {
             c.title = QStringLiteral("Comprar con cupón");
             c.preconditions = QStringLiteral("Sesión iniciada con un usuario con carrito");
-            c.steps = {TestStep{QStringLiteral("Abrir carrito"), QStringLiteral("Se abre")},
-                       TestStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Descuenta")},
-                       TestStep{QStringLiteral("Pagar"), QStringLiteral("Se confirma")}};
+            c.steps = {TestStep{QStringLiteral("Abrir carrito"), {}, QStringLiteral("Se abre")},
+                       TestStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Cupón QA10"), QStringLiteral("Descuenta")},
+                       TestStep{QStringLiteral("Pagar"), {}, QStringLiteral("Se confirma")}};
         });
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();

@@ -1,6 +1,5 @@
 #include "CasesView.h"
 
-#include "application/BugStore.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
 #include "application/RunController.h"
@@ -66,9 +65,9 @@ QPushButton* smallButton(const QString& text, const char* role, const QString& t
 }
 } // namespace
 
-CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer, BugStore& bugs,
+CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer,
                      EvidenceService& evidence, QWidget* parent)
-    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_bugs(bugs), m_evidence(evidence) {
+    : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_evidence(evidence) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildEditor(root);
@@ -79,7 +78,6 @@ CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& 
     connect(&m_store, &TestCaseStore::caseChanged, this, &CasesView::onCaseChanged);
     connect(&m_run, &RunController::runChanged, this, &CasesView::refreshList);
     connect(&m_history, &RunHistoryStore::historyChanged, this, &CasesView::refreshHistory);
-    connect(&m_bugs, &BugStore::bugsChanged, this, &CasesView::refreshBugs);
     refreshFilters();
     refreshList();
     loadEditor();
@@ -234,10 +232,9 @@ void CasesView::refreshList() {
         }
         v->addWidget(bottom);
 
-        if (!c.tags.isEmpty() || !c.component.isEmpty() || !c.jiraKey.isEmpty()) {
+        if (!c.tags.isEmpty() || !c.component.isEmpty()) {
             QStringList bits;
             if (!c.component.isEmpty()) bits << c.component;
-            if (!c.jiraKey.isEmpty()) bits << c.jiraKey;
             for (const auto& t : c.tags) bits << QLatin1Char('#') + t;
             auto* meta = ui::label(ui::elide(bits.join(QStringLiteral("  ")), 48), "muted-sm");
             meta->setStyleSheet(QStringLiteral("font-size:11px;"));
@@ -345,30 +342,14 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_component = new QLineEdit;
     m_component->setPlaceholderText(tr("p. ej. Carrito"));
     connect(m_component, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.component = t.trimmed(); }); }); });
-    auto* jiraRow = new QWidget;
-    auto* jrh = ui::hbox(jiraRow, 0, 4);
-    m_jiraKey = new QLineEdit;
-    m_jiraKey->setProperty("role", QStringLiteral("mono"));
-    m_jiraKey->setPlaceholderText(QStringLiteral("SHOP-12"));
-    connect(m_jiraKey, &QLineEdit::textEdited, this, [this](const QString& t) {
-        edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.jiraKey = t.trimmed().toUpper(); }); });
-        m_openJira->setEnabled(!t.trimmed().isEmpty());
-    });
-    jrh->addWidget(m_jiraKey, 1);
-    m_openJira = ui::button(QStringLiteral("↗"), "icon-move");
-    m_openJira->setToolTip(tr("Abrir en Jira"));
-    m_openJira->setFixedWidth(24);
-    connect(m_openJira, &QPushButton::clicked, this, [this]() { if (const TestCase* c = m_store.selected(); c && !c->jiraKey.isEmpty()) emit openJiraRequested(c->jiraKey); });
-    jrh->addWidget(m_openJira);
     m_tags = new QLineEdit;
     m_tags->setPlaceholderText(tr("regresión, smoke…"));
     m_tags->setToolTip(tr("Etiquetas separadas por comas"));
     connect(m_tags, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.tags = parseTags(t); }); }); });
     mg->addWidget(fieldCell(tr("Componente"), m_component), 1, 0);
-    mg->addWidget(fieldCell(tr("Historia Jira"), jiraRow), 1, 1);
-    // El Test de Zephyr no se enseña aquí: lo que se enlaza son las ejecuciones, y se ve en el
-    // historial (informe del plan y detalle de la ejecución). El caso sólo lo guarda.
-    mg->addWidget(fieldCell(tr("Etiquetas"), m_tags), 1, 2, 1, 2);
+    // Ni la historia de Jira ni el Test de Zephyr se enseñan aquí: el requerimiento es del issue y
+    // lo que se enlaza son las ejecuciones, que se ven en el historial. El caso sólo lo guarda.
+    mg->addWidget(fieldCell(tr("Etiquetas"), m_tags), 1, 1, 1, 3);
     for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
     v->addWidget(meta);
 
@@ -400,11 +381,14 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     cg->setHorizontalSpacing(8);
     cg->addWidget(ui::label(QStringLiteral("#"), "eyebrow"), 0, 0);
     cg->addWidget(ui::label(tr("ACCIÓN"), "eyebrow"), 0, 1);
-    cg->addWidget(ui::label(tr("RESULTADO ESPERADO"), "eyebrow"), 0, 2);
+    // Los datos de la prueba van en medio, como en el paso de Zephyr (acción · datos · resultado).
+    cg->addWidget(ui::label(tr("DATOS DE LA PRUEBA"), "eyebrow"), 0, 2);
+    cg->addWidget(ui::label(tr("RESULTADO ESPERADO"), "eyebrow"), 0, 3);
     cg->setColumnMinimumWidth(0, 28);
-    cg->setColumnMinimumWidth(3, 60);
+    cg->setColumnMinimumWidth(4, 60);
     cg->setColumnStretch(1, 1);
     cg->setColumnStretch(2, 1);
+    cg->setColumnStretch(3, 1);
     sv->addWidget(cols);
     auto* stepsList = new QWidget;
     m_stepsLayout = ui::vbox(stepsList, 0, 8);
@@ -428,16 +412,6 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_historyLayout = ui::vbox(histList, 0, 6);
     hv2->addWidget(histList);
     v->addWidget(histBlock);
-
-    // Bugs reportados desde este caso
-    auto* bugsBlock = new QWidget;
-    auto* bv = ui::vbox(bugsBlock, 0, 8);
-    m_bugsHeader = ui::label(QString(), "eyebrow");
-    bv->addWidget(m_bugsHeader);
-    auto* bugsList = new QWidget;
-    m_bugsLayout = ui::vbox(bugsList, 0, 6);
-    bv->addWidget(bugsList);
-    v->addWidget(bugsBlock);
 
     root->addWidget(sa, 1);
 }
@@ -463,14 +437,11 @@ void CasesView::loadEditor() {
     m_lastRun->setText(c->lastRun.label());
     m_lastRun->setStyleSheet(QStringLiteral("font-weight:600;padding:5px 0;color:%1;").arg(lastRunColor(c->lastRun)));
     if (m_component->text() != c->component) m_component->setText(c->component);
-    if (m_jiraKey->text() != c->jiraKey) m_jiraKey->setText(c->jiraKey);
-    m_openJira->setEnabled(!c->jiraKey.isEmpty());
     if (parseTags(m_tags->text()) != c->tags) m_tags->setText(c->tags.join(QStringLiteral(", ")));
     m_pre->setTextSilently(c->preconditions);
     m_selfEdit = false;
     refreshSteps();
     refreshHistory();
-    refreshBugs();
 }
 
 void CasesView::refreshSteps() {
@@ -495,11 +466,17 @@ void CasesView::refreshSteps() {
         action->setTextSilently(c->steps[i].action);
         connect(action, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.action = t; }); }); });
         g->addWidget(action, 0, 1);
+        auto* data = new TextArea(2);
+        data->setPlaceholderText(tr("Con qué datos…"));
+        data->setToolTip(tr("Datos de la prueba: usuario, importe, archivo… Es el campo «data» del paso de Zephyr."));
+        data->setTextSilently(c->steps[i].data);
+        connect(data, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.data = t; }); }); });
+        g->addWidget(data, 0, 2);
         auto* expected = new TextArea(2);
         expected->setPlaceholderText(tr("Qué debe ocurrir…"));
         expected->setTextSilently(c->steps[i].expected);
         connect(expected, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.expected = t; }); }); });
-        g->addWidget(expected, 0, 2);
+        g->addWidget(expected, 0, 3);
 
         // Reordenar / insertar / eliminar
         auto* tools = new QWidget;
@@ -526,9 +503,10 @@ void CasesView::refreshSteps() {
         tg->addWidget(down, 0, 1);
         tg->addWidget(insert, 1, 0);
         tg->addWidget(remove, 1, 1);
-        g->addWidget(tools, 0, 3, Qt::AlignTop);
+        g->addWidget(tools, 0, 4, Qt::AlignTop);
         g->setColumnStretch(1, 1);
         g->setColumnStretch(2, 1);
+        g->setColumnStretch(3, 1);
         m_stepsLayout->addWidget(row);
     }
 }
@@ -567,38 +545,6 @@ void CasesView::refreshHistory() {
         h->addWidget(ui::label(p ? p->name : tr("Ejecución suelta"), "muted-sm"));
         h->addWidget(ui::label(QStringLiteral("›"), "muted"));
         m_historyLayout->addWidget(row);
-    }
-}
-
-void CasesView::refreshBugs() {
-    ui::clearLayout(m_bugsLayout);
-    const TestCase* c = m_store.selected();
-    if (!c) return;
-    const auto issues = m_bugs.issuesForCase(c->id);
-    m_bugsHeader->setText(tr("BUGS REPORTADOS · %1").arg(issues.size()));
-    if (issues.isEmpty()) {
-        m_bugsLayout->addWidget(ui::label(tr("Ningún bug reportado desde este caso."), "muted-sm"));
-        return;
-    }
-    for (const auto& i : issues) {
-        auto* row = ui::card("card-flat");
-        auto* h = ui::hbox(row, 0, 10);
-        h->setContentsMargins(10, 7, 10, 7);
-        auto* key = ui::button(i.key, "ghost");
-        key->setToolTip(tr("Abrir en %1").arg(i.tracker));
-        key->setStyleSheet(QStringLiteral("padding:2px 8px;font-size:12px;font-weight:700;font-family:'Consolas','DejaVu Sans Mono',monospace;color:%1;").arg(theme::Blue));
-        connect(key, &QPushButton::clicked, this, [this, url = i.url]() { emit openIssueRequested(url); });
-        h->addWidget(key);
-        auto* title = new QLabel(i.title);
-        title->setWordWrap(true);
-        h->addWidget(title, 1);
-        // Cada bug sale de un paso concreto del caso; los antiguos, sin paso, son del caso entero.
-        if (i.step > 0) h->addWidget(ui::label(tr("paso %1").arg(i.step), "mono-muted"));
-        h->addWidget(ui::label(i.createdAt.toString(QStringLiteral("dd/MM/yyyy")), "muted-sm"));
-        const QString status = i.status.isEmpty() ? tr("SIN CONSULTAR") : i.status.toUpper();
-        h->addWidget(ui::pill(status, i.status.isEmpty() ? theme::tint(theme::Muted, 38) : i.resolved ? theme::Green : theme::tint(theme::Blue, 38),
-                              i.status.isEmpty() ? theme::Muted : i.resolved ? theme::Bg : theme::Blue));
-        m_bugsLayout->addWidget(row);
     }
 }
 

@@ -238,6 +238,13 @@ QWidget* RunView::buildStepPanel() {
     m_action->setWordWrap(true);
     m_action->setStyleSheet(QStringLiteral("font-size:22px;font-weight:800;"));
     tv->addWidget(m_action);
+    // Los datos de la prueba sólo aparecen si el paso los tiene; el esperado va siempre.
+    m_data = new QLabel;
+    m_data->setWordWrap(true);
+    m_data->setTextFormat(Qt::RichText);
+    m_data->setStyleSheet(QStringLiteral("font-size:13.5px;color:%1;").arg(theme::TextSoft));
+    m_data->hide();
+    tv->addWidget(m_data);
     m_expected = new QLabel;
     m_expected->setWordWrap(true);
     m_expected->setTextFormat(Qt::RichText);
@@ -590,6 +597,9 @@ void RunView::refresh() {
                                    ? tr("PASO %1 DE %2 · %3").arg(r.idx + 1).arg(c->steps.size()).arg(resultLabel(r.results[r.idx].result))
                                    : tr("PASO %1 DE %2").arg(r.idx + 1).arg(c->steps.size()));
         m_action->setText(c->steps[r.idx].action);
+        const QString data = c->steps[r.idx].data.trimmed();
+        m_data->setText(tr("<b>Datos:</b> %1").arg(data.toHtmlEscaped()));
+        m_data->setVisible(!data.isEmpty());
         m_expected->setText(tr("<b>Esperado:</b> %1").arg(c->steps[r.idx].expected.toHtmlEscaped()));
         m_note->setTextSilently(r.note);
         m_note->setPlaceholderText(tr("Observaciones del paso %1…").arg(r.idx + 1));
@@ -614,6 +624,7 @@ void RunView::refresh() {
                               .arg(r.count(StepResult::Pass)).arg(r.count(StepResult::Fail)).arg(r.count(StepResult::Block));
         if (r.count(StepResult::Skip) > 0) summary += tr(" · %1 N/A").arg(r.count(StepResult::Skip));
         summary += QStringLiteral(" · %1").arg(formatDuration(r.elapsedSecs()));
+        m_data->hide();
         m_expected->setText(summary);
         m_reopen->setVisible(r.markedCount() > 0);
         m_finish->setText(m_run.queuedCount() > 0 ? tr("Siguiente caso · quedan %1").arg(m_run.queuedCount())
@@ -714,9 +725,9 @@ QWidget* RunView::stepCard(int index, const TestCase& c, const RunState& r) {
     auto* evidence = ui::label(shots == 0 ? tr("sin evidencia") : shots == 1 ? tr("1 captura") : tr("%1 capturas").arg(shots), "muted-sm");
     evidence->setStyleSheet(QStringLiteral("font-size:11px;"));
     fh->addWidget(evidence);
-    // Cada bug pertenece a un paso: el suyo lo enseña aquí, para no reportarlo dos veces.
+    // Cada bug pertenece a un paso de esta ejecución: el suyo lo enseña aquí, para no reportarlo dos veces.
     QStringList keys;
-    for (const auto& b : m_bugs.issuesForCase(c.id)) if (b.step == index + 1) keys << b.key;
+    for (const auto& b : bugsOfRun()) if (b.step == index + 1) keys << b.key;
     if (!keys.isEmpty()) {
         auto* bug = ui::pill(keys.join(QStringLiteral(" · ")), theme::tint(theme::Red, 38), theme::Red);
         bug->setStyleSheet(bug->styleSheet() + QStringLiteral("font-size:10px;font-weight:700;"));
@@ -803,6 +814,22 @@ void RunView::refreshShots() {
     m_selfEdit = false;
 }
 
+QList<IssueLink> RunView::bugsOfRun() const {
+    const RunState& r = m_run.state();
+    if (r.caseId.isEmpty()) return {};
+    QList<IssueLink> out;
+    for (const auto& bug : m_bugs.issues()) {
+        // Lo normal: el bug dice de qué ejecución salió. Una sesión guardada antes de que se anotara
+        // no lo sabe, y entonces cuentan los de este caso reportados desde que arrancó.
+        const bool mine = !bug.runId.trimmed().isEmpty()
+                              ? bug.runId == r.runId
+                              : bug.caseId == r.caseId && r.startedAt.isValid() && bug.createdAt.isValid()
+                                    && bug.createdAt >= r.startedAt;
+        if (mine) out.prepend(bug);   // el libro va del primero al último: aquí, el más reciente arriba
+    }
+    return out;
+}
+
 void RunView::refreshBugs() {
     ui::clearLayout(m_bugsLayout);
     const TestCase* c = m_cases.find(m_run.state().caseId);
@@ -810,14 +837,14 @@ void RunView::refreshBugs() {
         m_bugsTab->setText(tr("BUGS"));
         return;
     }
-    // Los bugs del caso, del más reciente al primero (`issuesForCase`), agrupados por su paso.
-    const QList<IssueLink> bugs = m_bugs.issuesForCase(c->id);
+    // Los bugs de esta ejecución, del más reciente al primero, agrupados por su paso.
+    const QList<IssueLink> bugs = bugsOfRun();
     const int open = std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; });
     m_bugsTab->setText(bugs.isEmpty() ? tr("BUGS") : tr("BUGS · %1").arg(bugs.size()));
-    m_bugsTab->setToolTip(bugs.isEmpty() ? tr("Los bugs reportados desde este caso, con el paso del que salieron")
-                                         : tr("%1 bug(s) de este caso · %2 sin cerrar").arg(bugs.size()).arg(open));
+    m_bugsTab->setToolTip(bugs.isEmpty() ? tr("Los bugs reportados en esta ejecución, con el paso del que salieron")
+                                         : tr("%1 bug(s) de esta ejecución · %2 sin cerrar").arg(bugs.size()).arg(open));
     if (bugs.isEmpty()) {
-        m_bugsEmpty = ui::label(tr("Todavía no se ha reportado ningún bug de este caso.\nAl reportar uno queda aquí, con el paso del que salió."), "muted-sm");
+        m_bugsEmpty = ui::label(tr("Todavía no se ha reportado ningún bug en esta ejecución.\nAl reportar uno queda aquí, con el paso del que salió."), "muted-sm");
         m_bugsEmpty->setWordWrap(true);
         m_bugsLayout->addWidget(m_bugsEmpty);
         m_bugsLayout->addStretch(1);

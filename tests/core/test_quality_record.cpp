@@ -34,12 +34,12 @@ QList<TestCase> twoCases() {
     TestCase a;
     a.id = QStringLiteral("TC-1");
     a.title = QStringLiteral("Alta de DAV");
-    a.steps = {TestStep{QStringLiteral("abrir"), QStringLiteral("se abre")}};
+    a.steps = {TestStep{QStringLiteral("abrir"), {}, QStringLiteral("se abre")}};
     TestCase b;
     b.id = QStringLiteral("TC-2");
     b.title = QStringLiteral("Atraque");
     b.jiraKey = QStringLiteral("SUMA2-2909");
-    b.steps = {TestStep{QStringLiteral("a"), QStringLiteral("b")}, TestStep{QStringLiteral("c"), QStringLiteral("d")}};
+    b.steps = {TestStep{QStringLiteral("a"), {}, QStringLiteral("b")}, TestStep{QStringLiteral("c"), {}, QStringLiteral("d")}};
     return {a, b};
 }
 

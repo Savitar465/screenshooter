@@ -28,7 +28,7 @@ private slots:
         QVERIFY(!c.readyToBeMarkedListo());
         c.title = QStringLiteral("x");
         QVERIFY(!c.readyToBeMarkedListo());            // sin pasos
-        c.steps.append(TestStep{QStringLiteral("a"), QString()});
+        c.steps.append(TestStep{QStringLiteral("a"), QString(), QString()});
         QVERIFY(!c.readyToBeMarkedListo());            // paso incompleto
         c.steps[0].expected = QStringLiteral("b");
         QVERIFY(c.readyToBeMarkedListo());

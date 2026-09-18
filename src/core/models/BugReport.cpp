@@ -12,6 +12,16 @@ QStringList BugReport::environments() {
     return {QStringLiteral("Staging"), QStringLiteral("QA"), QStringLiteral("Producción")};
 }
 
+QStringList BugReport::jiraIssueTypes() {
+    return {QStringLiteral("Bug"), QStringLiteral("Improvement")};
+}
+
+bool BugReport::isImprovement(const QString& issueType) {
+    const QString t = issueType.trimmed();
+    return t.compare(jiraIssueTypes().value(1), Qt::CaseInsensitive) == 0
+           || t.compare(QStringLiteral("Mejora"), Qt::CaseInsensitive) == 0;
+}
+
 QStringList BugReport::classifications() {
     return {QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("C"), QStringLiteral("D"), QStringLiteral("E")};
 }

@@ -19,6 +19,7 @@ QJsonObject reportToJson(const BugReport& b) {
     return QJsonObject{
         {"title", b.title}, {"severity", b.severity}, {"classification", b.classification}, {"environment", b.environment},
         {"linkedCaseId", b.linkedCaseId}, {"linkedStep", b.linkedStep}, {"linkedStoryKey", b.linkedStoryKey},
+        {"linkedRunId", b.linkedRunId}, {"linkedPlanRunId", b.linkedPlanRunId},
         {"stepsToReproduce", b.stepsToReproduce}, {"expected", b.expected}, {"actual", b.actual},
         {"attachmentPaths", QJsonArray::fromStringList(b.attachmentPaths)},
         {"issueType", b.issueType}, {"priority", b.priority}, {"assigneeId", b.assigneeId}, {"assigneeName", b.assigneeName},
@@ -36,6 +37,8 @@ BugReport reportFromJson(const QJsonObject& o) {
     b.linkedCaseId = o["linkedCaseId"].toString();
     b.linkedStep = o["linkedStep"].toInt();
     b.linkedStoryKey = o["linkedStoryKey"].toString();
+    b.linkedRunId = o["linkedRunId"].toString();
+    b.linkedPlanRunId = o["linkedPlanRunId"].toString();
     b.stepsToReproduce = o["stepsToReproduce"].toString();
     b.expected = o["expected"].toString();
     b.actual = o["actual"].toString();
@@ -53,7 +56,8 @@ BugReport reportFromJson(const QJsonObject& o) {
 QJsonObject issueToJson(const IssueLink& i) {
     return QJsonObject{
         {"key", i.key}, {"url", i.url}, {"title", i.title}, {"caseId", i.caseId}, {"step", i.step},
-        {"tracker", i.tracker}, {"severity", i.severity}, {"classification", i.classification},
+        {"runId", i.runId}, {"planRunId", i.planRunId},
+        {"tracker", i.tracker}, {"issueType", i.issueType}, {"severity", i.severity}, {"classification", i.classification},
         {"status", i.status}, {"resolved", i.resolved}, {"createdAt", iso(i.createdAt)}, {"statusCheckedAt", iso(i.statusCheckedAt)},
     };
 }
@@ -64,8 +68,11 @@ IssueLink issueFromJson(const QJsonObject& o) {
     i.url = o["url"].toString();
     i.title = o["title"].toString();
     i.caseId = o["caseId"].toString();
+    i.runId = o["runId"].toString();
+    i.planRunId = o["planRunId"].toString();
     i.step = o["step"].toInt();
     i.tracker = o["tracker"].toString();
+    i.issueType = o["issueType"].toString();
     i.severity = o["severity"].toString();
     i.classification = o["classification"].toString(i.classification);
     i.status = o["status"].toString();

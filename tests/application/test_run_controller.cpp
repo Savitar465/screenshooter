@@ -239,6 +239,34 @@ private slots:
         QVERIFY(f.historyRepo->saves > 0);
     }
 
+    // El id se reserva al arrancar, no al archivar: los bugs que se reportan mientras corre la
+    // ejecución se enlazan con ella, y el registro que se guarda es el que ellos nombran.
+    void theRunIsNamedFromTheStartAndKeepsThatNameWhenArchived() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-102"));
+        const QString reserved = f.run.state().runId;
+        QCOMPARE(reserved, QStringLiteral("R-0001"));
+        f.run.mark(StepResult::Pass);
+        f.run.mark(StepResult::Fail);
+        f.run.finish();
+        QCOMPARE(f.history.runs().first().id, reserved);
+
+        // Y la siguiente estrena el suyo, también antes de terminar.
+        f.run.start(QStringLiteral("TC-103"));
+        QCOMPARE(f.run.state().runId, QStringLiteral("R-0002"));
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        QCOMPARE(f.history.runs().last().id, QStringLiteral("R-0002"));
+
+        // La sesión guardada lo lleva: al restaurarla, la ejecución sigue llamándose igual.
+        f.run.start(QStringLiteral("TC-107"));
+        const QString restored = f.run.state().runId;
+        f.run.persistSessionNow();
+        RunController again(f.store, f.history, f.sessionRepo);
+        again.load();
+        QCOMPARE(again.state().runId, restored);
+    }
+
     void startingAnotherCaseArchivesTheFinishedOne() {
         AppFixture f;
         f.run.start(QStringLiteral("TC-103"));

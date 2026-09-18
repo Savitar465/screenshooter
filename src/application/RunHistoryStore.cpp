@@ -161,8 +161,26 @@ void RunHistoryStore::assignTestKeys(const QHash<QString, QString>& testKeyByRun
     if (changed) persist();
 }
 
+QString RunHistoryStore::reserveRunId() const {
+    return nextId(m_history.runs, QStringLiteral("R-"));
+}
+
+QList<IssueLink> RunHistoryStore::bugsOfRun(const RunRecord& run) const {
+    if (!m_bugs) return {};
+    QList<IssueLink> out;
+    for (const auto& bug : m_bugs->issues())
+        if (PlanReport::foundIn(run, bug)) out << bug;
+    std::sort(out.begin(), out.end(), [](const IssueLink& a, const IssueLink& b) { return a.createdAt > b.createdAt; });
+    return out;
+}
+
 RunRecord RunHistoryStore::addRun(RunRecord record) {
-    record.id = nextId(m_history.runs, QStringLiteral("R-"));
+    // El id reservado al arrancar la ejecución es con el que la conocen los bugs que se reportaron
+    // mientras corría; sólo se descarta si entretanto lo cogió otra.
+    const bool taken = record.id.trimmed().isEmpty() ||
+                       std::any_of(m_history.runs.cbegin(), m_history.runs.cend(),
+                                   [&record](const RunRecord& r) { return r.id == record.id; });
+    if (taken) record.id = nextId(m_history.runs, QStringLiteral("R-"));
     m_history.runs.append(record);
     persist();
     return record;

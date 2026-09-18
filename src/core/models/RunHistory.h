@@ -24,6 +24,7 @@ QString formatDuration(qint64 secs);
 /// Un paso tal y como se ejecutó: el texto de ese momento, su resultado y la nota del tester.
 struct RunRecordStep {
     QString action;
+    QString data;
     QString expected;
     StepResult result = StepResult::Pass;
     QString note;

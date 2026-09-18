@@ -20,7 +20,8 @@ TestCase sampleCase() {
     TestCase c;
     c.id = QStringLiteral("TC-104"); c.title = QStringLiteral("Pago con cupón"); c.suite = QStringLiteral("Checkout");
     c.priority = Priority::Alta; c.status = CaseStatus::Listo; c.preconditions = QStringLiteral("Carrito con 2 productos");
-    c.steps = {TestStep{QStringLiteral("Ir al carrito"), QStringLiteral("Se ve el resumen")}, TestStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Baja el total")}};
+    c.steps = {TestStep{QStringLiteral("Ir al carrito"), QStringLiteral("2 productos"), QStringLiteral("Se ve el resumen")},
+               TestStep{QStringLiteral("Aplicar cupón"), QStringLiteral("QA10"), QStringLiteral("Baja el total")}};
     c.shots = {Screenshot{4, 2, QStringLiteral("cap_004.png"), QStringLiteral("/tmp/cap_004.png")}};
     c.tags = {QStringLiteral("regresión"), QStringLiteral("pagos")};
     c.component = QStringLiteral("Carrito"); c.jiraKey = QStringLiteral("SHOP-12");
@@ -113,7 +114,8 @@ private slots:
         r.planRunId = QStringLiteral("PR-0001"); r.startedAt = QDateTime(QDate(2026, 3, 1), QTime(10, 0)); r.finishedAt = r.startedAt.addSecs(90);
         r.verdict = Verdict::Bloqueado; r.plannedSteps = 3; r.durationSecs = 90; r.testKey = QStringLiteral("SHOP-42");
         r.continuesRunId = QStringLiteral("R-0000");
-        r.steps = {RunRecordStep{QStringLiteral("a"), QStringLiteral("e"), StepResult::Pass, QString(), 30}, RunRecordStep{QStringLiteral("b"), QStringLiteral("f"), StepResult::Block, QStringLiteral("caído"), 60}};
+        r.steps = {RunRecordStep{QStringLiteral("a"), QStringLiteral("d"), QStringLiteral("e"), StepResult::Pass, QString(), 30},
+                   RunRecordStep{QStringLiteral("b"), {}, QStringLiteral("f"), StepResult::Block, QStringLiteral("caído"), 60}};
         h.runs << r;
         PlanRun p;
         p.id = QStringLiteral("PR-0001"); p.planId = QStringLiteral("PL-0001"); p.name = QStringLiteral("Regresión"); p.caseIds = {QStringLiteral("TC-104")};
@@ -181,6 +183,7 @@ private slots:
         IssueLink l;
         l.key = QStringLiteral("SHOP-143"); l.url = QStringLiteral("https://acme/browse/SHOP-143"); l.title = QStringLiteral("Cupón");
         l.caseId = QStringLiteral("TC-104"); l.tracker = QStringLiteral("Jira"); l.severity = QStringLiteral("Mayor");
+        l.issueType = QStringLiteral("Error");
         l.status = QStringLiteral("Done"); l.resolved = true; l.createdAt = QDateTime(QDate(2026, 3, 1), QTime(10, 0)); l.statusCheckedAt = l.createdAt.addDays(1);
         ledger.issues << l;
         PendingBug p;
@@ -193,6 +196,7 @@ private slots:
         QCOMPARE(loaded->issues.size(), 1);
         QCOMPARE(loaded->issues[0].key, QStringLiteral("SHOP-143"));
         QVERIFY(loaded->issues[0].resolved);
+        QCOMPARE(loaded->issues[0].issueType, QStringLiteral("Error"));
         QCOMPARE(loaded->issues[0].statusCheckedAt, l.statusCheckedAt);
         QCOMPARE(loaded->pending.size(), 1);
         QCOMPARE(loaded->pending[0].id, QStringLiteral("Q-0001"));

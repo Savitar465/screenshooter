@@ -19,6 +19,10 @@ struct BugReport {
     /// defecto del paso que le corresponde al publicar la ejecución en Zephyr.
     int linkedStep = 0;
     QString linkedStoryKey;   // historia enlazada al caso (opcional)
+    /// Ejecución desde la que se reporta y su ciclo de plan: con ellos el bug queda colgado de unas
+    /// pruebas concretas y no del caso en abstracto. Vacíos si no hay ninguna ejecución en curso.
+    QString linkedRunId;
+    QString linkedPlanRunId;
     QString stepsToReproduce;
     QString expected;
     QString actual;
@@ -38,6 +42,13 @@ struct BugReport {
     /// Severidades y entornos admitidos (valores canónicos, en el orden del formulario).
     static QStringList severities();
     static QStringList environments();
+    /// Tipos de incidencia de Jira con los que QAflow trabaja: lo que está mal («Error») y lo que se
+    /// pide cambiar («Mejora»). Son los que se proponen al reportar y los que se traen del gestor,
+    /// así que lo que QAflow crea es siempre lo que vuelve. Nombres de la instancia: no se traducen.
+    static QStringList jiraIssueTypes();
+    /// Si ese tipo del gestor es de los que piden un cambio («Improvement»; «Mejora» en lo guardado
+    /// antes de que los tipos fueran los de la instancia). Lo demás, incluido lo vacío, es un error.
+    static bool isImprovement(const QString& issueType);
     /// Tipos de observación del acta, en el orden del formulario: "A"… "E".
     static QStringList classifications();
     /// Nombre del tipo tal y como está impreso en el formulario ("Funcionamiento/Lógica"). No se

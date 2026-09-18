@@ -33,13 +33,24 @@ BugReport BugReportService::draftFromCurrentContext(int stepIndex) const {
     b.linkedStoryKey = c->jiraKey;
     b.components = c->component.isEmpty() ? QStringList{} : QStringList{c->component};
     QStringList lines;
-    for (int i = 0; i < c->steps.size(); ++i) lines << QStringLiteral("%1. %2").arg(i + 1).arg(c->steps[i].action);
+    for (int i = 0; i < c->steps.size(); ++i) {
+        // Con qué datos se probó el paso: sin ellos el bug no se reproduce.
+        const QString data = c->steps[i].data.trimmed();
+        lines << (data.isEmpty() ? QStringLiteral("%1. %2").arg(i + 1).arg(c->steps[i].action)
+                                 : tr("%1. %2 · Datos: %3").arg(i + 1).arg(c->steps[i].action, data));
+    }
     b.stepsToReproduce = lines.join(QLatin1Char('\n'));
 
     const RunState& r = m_run.state();
     // El paso del que se reporta: el que pide quien abre el parte (el que tiene en pantalla) y, si
     // no dice ninguno, el fallo o bloqueo que haya visto la ejecución.
     const bool sameCase = r.caseId == c->id;
+    // De qué pruebas sale el bug: la ejecución en curso de este caso y el ciclo del que forma parte.
+    // Sin ejecución (se reporta desde la ficha del caso) el bug no cuelga de ninguna.
+    if (sameCase) {
+        b.linkedRunId = r.runId;
+        b.linkedPlanRunId = m_run.planRunId();
+    }
     const int idx = !sameCase ? -1 : stepIndex >= 0 ? std::min(stepIndex, static_cast<int>(c->steps.size()) - 1)
                                                     : r.reportableStepIndex();
     if (idx >= 0 && idx < c->steps.size()) {
@@ -65,8 +76,11 @@ IssueLink BugReportService::linkFor(const BugReport& bug, const IssueResult& r) 
     l.url = r.url;
     l.title = bug.title.trimmed();
     l.caseId = bug.linkedCaseId;
+    l.runId = bug.linkedRunId;
+    l.planRunId = bug.linkedPlanRunId;
     l.step = bug.linkedStep;
     l.tracker = toString(m_settings.tracker().kind);
+    l.issueType = bug.issueType.trimmed();
     l.severity = bug.severity;
     l.classification = bug.classification;
     l.createdAt = QDateTime::currentDateTime();
@@ -137,6 +151,46 @@ void BugReportService::refreshNext(QStringList keys, RefreshResult acc, std::fun
         if (s.ok) { m_bugs.updateStatus(key, s.status, s.resolved); ++acc.updated; }
         else ++acc.failed;
         refreshNext(keys, acc, std::move(done));
+    });
+}
+
+bool BugReportService::canImportFromTracker() const {
+    return m_tracker && m_tracker->canSearchIssues(m_settings.tracker()) && !m_settings.tracker().project.trimmed().isEmpty();
+}
+
+void BugReportService::importFromTracker(int startAt, std::function<void(const ImportResult&)> done) {
+    if (!canImportFromTracker()) {
+        ImportResult refused;
+        refused.error = tr("El gestor configurado no sabe buscar los bugs de QAflow");
+        done(refused);
+        return;
+    }
+    m_tracker->searchProjectBugs(m_settings.tracker(), startAt, kImportPage, [this, done](const TrackerIssueList& list) {
+        ImportResult out;
+        if (!list.ok) { out.error = list.error; done(out); return; }
+        out.ok = true;
+        out.total = list.total;
+        out.nextStart = list.nextStart;
+        const QString tracker = toString(m_settings.tracker().kind);
+        for (const auto& i : list.issues) {
+            if (m_bugs.updateFromTracker(i.key, i.title, i.issueType, i.status, i.resolved)) { ++out.updated; continue; }
+            // Uno que este equipo no reportó: se anota con lo que el gestor sabe de él. El caso sale
+            // de las etiquetas, donde `createIssue()` deja siempre la del caso del que salió el bug.
+            IssueLink l;
+            l.key = i.key;
+            l.url = i.url;
+            l.title = i.title;
+            for (const auto& label : i.labels) if (m_cases.find(label)) { l.caseId = label; break; }
+            l.tracker = tracker;
+            l.issueType = i.issueType;
+            l.status = i.status;
+            l.resolved = i.resolved;
+            l.createdAt = i.createdAt.isValid() ? i.createdAt : QDateTime::currentDateTime();
+            l.statusCheckedAt = QDateTime::currentDateTime();
+            m_bugs.recordIssue(l);
+            ++out.imported;
+        }
+        done(out);
     });
 }
 

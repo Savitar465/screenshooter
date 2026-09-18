@@ -55,6 +55,26 @@ public:
     /// Consulta en el gestor el estado de todos los issues (o sólo los no resueltos).
     void refreshStatuses(bool onlyOpen, std::function<void(const RefreshResult&)> done);
 
+    struct ImportResult {
+        bool ok = false;
+        int imported = 0;    // bugs que el libro no conocía y ahora tiene
+        int updated = 0;     // bugs ya conocidos, con el título y el estado de hoy
+        int total = 0;       // cuántos tiene el gestor en total, quepan en esta página o no
+        int nextStart = -1;  // desde dónde pedir la página siguiente; -1 = no queda nada
+        QString error;
+
+        bool hasMore() const { return nextStart >= 0; }
+    };
+    /// Bugs que trae cada página (y cada llamada al gestor).
+    static constexpr int kImportPage = 50;
+    /// ¿Se pueden traer del gestor los bugs que creó QAflow? Depende del gestor configurado.
+    bool canImportFromTracker() const;
+    /// Trae del gestor una página de los bugs que QAflow creó en este proyecto y la pasa al libro:
+    /// los que ya están se actualizan y los que no (reportados desde otro equipo) se añaden. Nada se
+    /// borra: un bug que el gestor ya no devuelva se queda como está. `startAt` 0 empieza por el más
+    /// reciente; el `nextStart` del resultado es lo que hay que pasar para seguir.
+    void importFromTracker(int startAt, std::function<void(const ImportResult&)> done);
+
     void testConnection(std::function<void(const ConnectionResult&)> done);
 
     /// Metadatos del proyecto (tipos, prioridades, componentes, versiones, asignables). Se cachean

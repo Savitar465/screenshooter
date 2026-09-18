@@ -51,6 +51,20 @@ void BugStore::updateStatus(const QString& key, const QString& status, bool reso
     }
 }
 
+bool BugStore::updateFromTracker(const QString& key, const QString& title, const QString& issueType, const QString& status, bool resolved) {
+    for (auto& i : m_ledger.issues) {
+        if (i.key != key) continue;
+        if (!title.trimmed().isEmpty()) i.title = title;
+        if (!issueType.trimmed().isEmpty()) i.issueType = issueType;
+        i.status = status;
+        i.resolved = resolved;
+        i.statusCheckedAt = QDateTime::currentDateTime();
+        persist();
+        return true;
+    }
+    return false;
+}
+
 void BugStore::forgetIssue(const QString& key) {
     const int before = m_ledger.issues.size();
     m_ledger.issues.erase(std::remove_if(m_ledger.issues.begin(), m_ledger.issues.end(), [&](const IssueLink& i) { return i.key == key; }), m_ledger.issues.end());

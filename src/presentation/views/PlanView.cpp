@@ -1,5 +1,6 @@
 #include "PlanView.h"
 
+#include "application/IssueStore.h"
 #include "application/PlanStore.h"
 #include "application/TestCaseStore.h"
 #include "application/TestPublishService.h"
@@ -8,6 +9,8 @@
 #include "presentation/widgets/ProgressCells.h"
 #include "presentation/widgets/Ui.h"
 #include "presentation/widgets/ZephyrPublishFlow.h"
+
+#include "core/Text.h"
 
 #include <QCoreApplication>
 #include <QComboBox>
@@ -45,14 +48,18 @@ QLabel* verdictPill(Verdict v) {
     return ui::pill(label(v).toUpper(), verdictColor(v), v == Verdict::Fallido ? QStringLiteral("#ffffff") : theme::Bg);
 }
 QLabel* mutedPill(const QString& text) { return ui::pill(text, theme::tint(theme::Muted, 38), theme::Muted); }
+/// Etiqueta del issue que se prueba con el plan, en el color de la pantalla de issues.
+QLabel* issuePill(const QString& text) { return ui::pill(text, theme::tint(theme::Cyan, 38), theme::Cyan); }
+/// Largo máximo del título del issue dentro de su etiqueta: lo que no cabe se acorta con «…».
+constexpr int kMaxTagTitle = 48;
 QString when(const QDateTime& dt) { return dt.isValid() ? dt.toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QStringLiteral("—"); }
 /// Ciclos que muestra inicialmente el historial al desplegarlo.
 constexpr int kRecentCycles = 5;
 constexpr int kCasesPerPage = 10;
 } // namespace
 
-PlanView::PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* publish, QWidget* parent)
-    : QWidget(parent), m_cases(cases), m_plans(plans), m_publish(publish) {
+PlanView::PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* publish, IssueStore* issues, QWidget* parent)
+    : QWidget(parent), m_cases(cases), m_plans(plans), m_publish(publish), m_issues(issues) {
     auto* root = ui::hbox(this, 0, 0);
     buildListPane(root);
     buildEditor(root);
@@ -61,6 +68,8 @@ PlanView::PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* p
     connect(&m_plans, &PlanStore::planChanged, this, [this]() { refreshList(); refreshEditor(); });
     connect(&m_cases, &TestCaseStore::suitesChanged, this, &PlanView::refreshRows);
     connect(&m_cases, &TestCaseStore::caseChanged, this, &PlanView::refreshRows);
+    // Vincular o desvincular un plan se hace desde la pantalla de issues: las etiquetas de aquí lo siguen.
+    if (m_issues) connect(m_issues, &IssueStore::issuesChanged, this, [this]() { refreshList(); refreshIssueTags(); });
     refreshList();
     refreshEditor();
 }
@@ -115,6 +124,12 @@ void PlanView::refreshList() {
     }
 
     ui::clearLayout(m_listLayout);
+    // Un plan puede probar varios issues y la lista se recorre entera: se resuelve de una vez.
+    QHash<QString, QStringList> issuesByPlan;
+    if (m_issues) {
+        for (const auto& issue : m_issues->issues())
+            for (const auto& planId : issue.planIds) issuesByPlan[planId] << issue.id;
+    }
     int shown = 0;
     for (const auto& p : m_plans.plans()) {
         if (p.archived != m_showArchived) continue;
@@ -127,6 +142,10 @@ void PlanView::refreshList() {
         auto* th = ui::hbox(top, 0, 8);
         th->addWidget(ui::label(p.id, "mono-muted"));
         th->addStretch(1);
+        const QStringList linked = issuesByPlan.value(p.id);
+        if (!linked.isEmpty()) {
+            th->addWidget(issuePill(linked.size() == 1 ? linked.first() : tr("%1 +%2").arg(linked.first()).arg(linked.size() - 1)));
+        }
         const auto cycle = m_plans.latestCycle(p.id);
         if (!cycle) th->addWidget(mutedPill(tr("SIN CICLOS")));
         else if (!cycle->plan.isFinished()) th->addWidget(mutedPill(tr("EN CURSO")));
@@ -199,6 +218,11 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     more->setMenu(menu);
     nh->addWidget(more);
     tv->addWidget(nameRow);
+    // A qué issue se le está probando el requerimiento: el plan se compone aquí, pero lo que da
+    // sentido a sus casos está en el issue, a un clic.
+    m_issueTags = new QWidget;
+    m_issueTagsLayout = new FlowLayout(m_issueTags, 6, 6, 6);
+    tv->addWidget(m_issueTags);
     hh->addWidget(titleBlock, 1);
     auto* stats = ui::card("card");
     auto* sh = ui::hbox(stats, 12, 16);
@@ -235,6 +259,9 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     cv->addWidget(m_cycleSummary);
     m_cycleCells = new ProgressCells;
     cv->addWidget(m_cycleCells);
+    auto* cycleResults = new QWidget;
+    m_cycleResults = ui::vbox(cycleResults, 0, 0);
+    cv->addWidget(cycleResults);
     ch->addWidget(cbody, 1);
     v->addWidget(m_cycleCard);
 
@@ -332,6 +359,7 @@ void PlanView::refreshEditor() {
                                                                  cycles == 1 ? tr("1 CICLO") : tr("%1 CICLOS").arg(cycles)));
     if (!m_selfEdit && m_name->text() != p->name) { m_name->setText(p->name); m_name->setCursorPosition(0); }
     m_archivedBadge->setVisible(p->archived);
+    refreshIssueTags();
     // Un plan archivado o sin casos no se puede ejecutar: el botón lo dice en vez de fallar al pulsarlo.
     const int caseCount = int(m_plans.orderedCaseIds().size());
     m_runPlan->setEnabled(!p->archived && caseCount > 0);
@@ -345,6 +373,26 @@ void PlanView::refreshEditor() {
     refreshCycle();
     refreshCycles();
     refreshRows();
+}
+
+void PlanView::refreshIssueTags() {
+    ui::clearLayout(m_issueTagsLayout);
+    const TestPlan* p = m_plans.active();
+    const QList<Issue> issues = m_issues && p ? m_issues->issuesForPlan(p->id) : QList<Issue>{};
+    m_issueTags->setVisible(!issues.isEmpty());
+    for (const auto& issue : issues) {
+        // La clave del gestor sólo está si el issue se publicó; sin ella, la etiqueta es la del issue local.
+        const QString key = issue.publication.key.trimmed();
+        auto* tag = ui::button(QStringLiteral("%1 · %2").arg(issue.id, elideTitle(issue.title, kMaxTagTitle)), "chip");
+        tag->setObjectName(QStringLiteral("planIssueTag-%1").arg(issue.id));
+        tag->setCursor(Qt::PointingHandCursor);
+        tag->setStyleSheet(QStringLiteral("color:%1;background:%2;border-color:%3;padding:3px 10px;")
+                               .arg(theme::Cyan, theme::tint(theme::Cyan, 30), theme::tint(theme::Cyan, 90)));
+        tag->setToolTip(key.isEmpty() ? tr("Prueba el issue %1 (%2) · abrirlo").arg(issue.id, label(issue.state))
+                                      : tr("Prueba el issue %1 (%2) · %3 · abrirlo").arg(issue.id, label(issue.state), key));
+        connect(tag, &QPushButton::clicked, this, [this, id = issue.id]() { emit openIssueRequested(id); });
+        m_issueTagsLayout->addWidget(tag);
+    }
 }
 
 void PlanView::refreshCycle() {
@@ -363,6 +411,8 @@ void PlanView::refreshCycle() {
     for (const auto& row : r.rows) colors << (row.executed ? verdictColor(row.run.verdict) : theme::Border);
     m_cycleCells->setColors(colors);
     m_cycleCells->show();
+    ui::clearLayout(m_cycleResults);
+    if (auto* results = caseResults(r)) m_cycleResults->addWidget(results);
     m_cycleReport->show();
     connect(m_cycleReport, &QPushButton::clicked, this, [this, id = r.plan.id]() { emit cycleReportRequested(id); });
 }
@@ -439,15 +489,13 @@ void PlanView::refreshCycles() {
         bv->addWidget(sum);
 
         auto* cells = new ProgressCells;
-        QStringList colors, results;
-        for (const auto& c : r.rows) {
-            colors << (c.executed ? verdictColor(c.run.verdict) : theme::Border);
-            results << QStringLiteral("%1 · %2 · %3").arg(c.caseId, c.title.isEmpty() ? tr("(sin título)") : c.title, c.executed ? label(c.run.verdict) : tr("Pendiente"));
-        }
+        QStringList colors;
+        for (const auto& c : r.rows) colors << (c.executed ? verdictColor(c.run.verdict) : theme::Border);
         cells->setColors(colors);
         bv->addWidget(cells);
-        // Los resultados caso a caso, sin salir de la pantalla
-        row->setToolTip(results.join(QLatin1Char('\n')));
+        // Los resultados caso a caso, sin salir de la pantalla: las celdas dicen cuántos fallaron,
+        // pero no cuáles.
+        if (auto* results = caseResults(r)) bv->addWidget(results);
         if (auto* zephyr = zephyrBlock(r)) bv->addWidget(zephyr);
 
         g->addWidget(body, 1);
@@ -462,6 +510,89 @@ void PlanView::refreshCycles() {
         fh->addStretch(1);
         m_cyclesList->addWidget(foot);
     }
+}
+
+QWidget* PlanView::caseResults(const PlanReport& r) {
+    if (r.rows.isEmpty()) return nullptr;
+    const QString cycleId = r.plan.id;
+    const bool open = m_openResults.contains(cycleId);
+
+    auto* block = new QWidget;
+    auto* v = ui::vbox(block, 0, 4);
+    v->setContentsMargins(0, 4, 0, 0);
+
+    auto* toggle = ui::button(QStringLiteral("%1 %2").arg(open ? QStringLiteral("▾") : QStringLiteral("▸"),
+                                                          tr("Resultados por caso · %1").arg(r.total())),
+                              "chip");
+    toggle->setObjectName(QStringLiteral("cycleResults-%1").arg(cycleId));
+    toggle->setToolTip(tr("Ver qué dio cada caso de prueba en este ciclo"));
+    connect(toggle, &QPushButton::clicked, this, [this, cycleId]() {
+        if (!m_openResults.remove(cycleId)) m_openResults.insert(cycleId);
+        refreshCycle();
+        refreshCycles();
+    });
+    auto* head = new QWidget;
+    auto* hh = ui::hbox(head, 0, 8);
+    hh->addWidget(toggle);
+    hh->addStretch(1);
+    v->addWidget(head);
+    if (!open) return block;
+
+    for (int i = 0; i < r.rows.size(); ++i) {
+        const PlanReportRow& row = r.rows[i];
+        auto* line = ui::card("card-flat");
+        line->setObjectName(QStringLiteral("cycleResultRow-%1-%2").arg(cycleId, row.caseId));
+        auto* lh = ui::hbox(line, 0, 8);
+        lh->setContentsMargins(10, 6, 10, 6);
+        auto* num = ui::label(QStringLiteral("%1").arg(i + 1, 2, 10, QLatin1Char('0')), "mono-muted");
+        num->setFixedWidth(22);
+        lh->addWidget(num);
+        auto* id = ui::button(row.caseId, "ghost");
+        id->setToolTip(tr("Abrir el caso"));
+        id->setStyleSheet(QStringLiteral("padding:2px 6px;font-size:12px;font-weight:700;font-family:'Consolas','DejaVu Sans Mono',monospace;color:%1;").arg(theme::Blue));
+        connect(id, &QPushButton::clicked, this, [this, caseId = row.caseId]() { emit openCaseRequested(caseId); });
+        lh->addWidget(id);
+        auto* title = new QLabel(row.title.isEmpty() ? tr("(sin título)") : row.title);
+        title->setWordWrap(true);
+        title->setStyleSheet(QStringLiteral("font-size:12.5px;"));
+        lh->addWidget(title, 1);
+        if (!row.executed) {
+            // Sin ejecución no hay nada que abrir: el caso no llegó a correr en este ciclo.
+            lh->addWidget(mutedPill(tr("PENDIENTE")));
+            v->addWidget(line);
+            continue;
+        }
+        // Dónde se rompió: con eso se sabe si el caso cayó al principio o casi al final sin abrir nada.
+        QString detail = tr("%1/%2 pasos").arg(row.run.steps.size()).arg(row.run.plannedSteps);
+        if (const int broken = row.run.brokenStepIndex(); broken >= 0) detail += tr(" · rompió en el paso %1").arg(broken + 1);
+        if (row.run.durationSecs > 0) detail += QStringLiteral(" · ") + formatDuration(row.run.durationSecs);
+        lh->addWidget(ui::label(detail, "muted-sm"));
+        // Lo que se encontró probando este caso en este ciclo: los bugs salen de las ejecuciones, así
+        // que es en sus resultados donde se enseñan.
+        for (const auto& bug : row.bugs) {
+            auto* chip = ui::button(bug.key, "chip");
+            chip->setObjectName(QStringLiteral("cycleResultBug-%1-%2").arg(cycleId, bug.key));
+            chip->setToolTip(bug.title.isEmpty() ? tr("Abrir el bug en el gestor") : tr("%1 · abrir en el gestor").arg(bug.title));
+            const QString color = bug.resolved ? theme::Green : theme::Red;
+            chip->setStyleSheet(QStringLiteral("color:%1;background:%2;border-color:%3;padding:2px 8px;font-size:11px;")
+                                    .arg(color, theme::tint(color, 30), theme::tint(color, 90)));
+            connect(chip, &QPushButton::clicked, this, [this, url = bug.url, key = bug.key]() {
+                if (!url.isEmpty()) emit openUrlRequested(url);
+                else emit openJiraRequested(key);
+            });
+            lh->addWidget(chip);
+        }
+        lh->addWidget(verdictPill(row.run.verdict));
+        // Los pasos y las evidencias de la ejecución están en el historial: aquí se salta a ellos.
+        auto* detailBtn = ui::button(tr("Ver"), "outline");
+        detailBtn->setObjectName(QStringLiteral("cycleResultOpen-%1-%2").arg(cycleId, row.caseId));
+        detailBtn->setStyleSheet(QStringLiteral("padding:3px 8px;font-size:11.5px;border-radius:7px;"));
+        detailBtn->setToolTip(tr("Ver los pasos y las evidencias de esta ejecución"));
+        connect(detailBtn, &QPushButton::clicked, this, [this, runId = row.run.id]() { emit openRunRequested(runId); });
+        lh->addWidget(detailBtn);
+        v->addWidget(line);
+    }
+    return block;
 }
 
 QWidget* PlanView::zephyrBlock(const PlanReport& r) {

@@ -3,6 +3,7 @@
 #include "application/AppContext.h"
 #include "application/EvidenceService.h"
 #include "application/SettingsStore.h"
+#include "core/models/BugReport.h"
 #include "core/models/IssueLink.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/views/MainWindow.h"
@@ -100,14 +101,21 @@ void seedEvidence(AppContext& ctx) {
 
 /// Anota un bug ya creado en el gestor, como si se hubiera reportado en este momento de la demo.
 void reportBug(AppContext& ctx, const QString& key, const QString& title, const QString& caseId, int step,
-               const QString& severity, const QString& status, bool resolved) {
+               const QString& severity, const QString& status, bool resolved, const QString& issueType = BugReport::jiraIssueTypes().value(0)) {
     IssueLink link;
     link.key = key;
     link.url = QStringLiteral("https://acme.atlassian.net/browse/") + key;
     link.title = title;
     link.caseId = caseId;
     link.step = step;
+    // Si el caso se está ejecutando, el bug sale de esa ejecución: es lo que hace el parte de verdad,
+    // y sin ello los resultados del ciclo no tendrían de dónde colgarlo.
+    if (ctx.run->state().caseId == caseId) {
+        link.runId = ctx.run->state().runId;
+        link.planRunId = ctx.run->planRunId();
+    }
     link.tracker = QStringLiteral("Jira");
+    link.issueType = issueType;
     link.severity = severity;
     link.status = status;
     link.resolved = resolved;
@@ -152,6 +160,17 @@ void run(MainWindow& window, AppContext& ctx) {
             queued.title = QStringLiteral("[Checkout] Error 500 al pagar con Amex");
             queued.actual = QStringLiteral("Pantalla en blanco");
             ctx.bugLedger->enqueue(queued, QStringLiteral("Host not found"));
+            // Unos cuantos más, con estados distintos: la pantalla de bugs es una lista, y con una
+            // sola fila no se ve de qué va.
+            reportBug(ctx, QStringLiteral("SHOP-138"), QStringLiteral("[Auth] El bloqueo no salta al quinto intento"),
+                      QStringLiteral("TC-102"), 1, QStringLiteral("Mayor"), QStringLiteral("To Do"), false);
+            reportBug(ctx, QStringLiteral("SHOP-129"), QStringLiteral("[Checkout] El envío gratuito no se recalcula al quitar un producto"),
+                      QStringLiteral("TC-105"), 2, QStringLiteral("Menor"), QStringLiteral("Done"), true);
+            reportBug(ctx, QStringLiteral("SHOP-117"), QStringLiteral("[Perfil] El avatar de 12 MB se acepta sin avisar"),
+                      QStringLiteral("TC-106"), 2, QStringLiteral("Menor"), QStringLiteral("Done"), true);
+            // Lo que se sigue aquí no son sólo errores: también las mejoras que se piden al probar.
+            reportBug(ctx, QStringLiteral("SHOP-141"), QStringLiteral("[Checkout] Recordar el cupón usado en el pedido anterior"),
+                      QStringLiteral("TC-104"), 2, QStringLiteral("Menor"), QStringLiteral("To Do"), false, BugReport::jiraIssueTypes().value(1));
             window.navigate(Screen::Bug);
         }},
         {"07-historial-plan", [&] {
@@ -169,6 +188,10 @@ void run(MainWindow& window, AppContext& ctx) {
             ctx.run->setNote(QStringLiteral("El servicio de notificaciones está caído en staging"));
             reportBug(ctx, QStringLiteral("SHOP-152"), QStringLiteral("[Notificaciones] El servicio de staging no responde"),
                       QStringLiteral("TC-107"), 1, QStringLiteral("Bloqueante"), QStringLiteral("Done"), true);
+            // Probando no sólo salen errores: también mejoras, y el informe del ciclo cuenta las dos.
+            reportBug(ctx, QStringLiteral("SHOP-153"), QStringLiteral("[Notificaciones] Avisar por correo cuando el servicio vuelva"),
+                      QStringLiteral("TC-107"), 1, QStringLiteral("Menor"), QStringLiteral("To Do"), false,
+                      BugReport::jiraIssueTypes().value(1));
             ctx.run->mark(StepResult::Block);
             window.finishRun();   // termina el plan y abre su informe
         }},
@@ -232,7 +255,14 @@ void run(MainWindow& window, AppContext& ctx) {
             ctx.issues->select(first);
             window.navigate(Screen::Issues);
         }},
+        // El parte, en su ventana. Se le da su tamaño a mano porque la pantalla virtual con la que
+        // se generan las capturas es más pequeña que cualquier monitor.
+        {"04b-bug-nuevo", [&] {
+            window.reportBug();
+            if (QWidget* bug = window.bugWindow()) bug->resize(1060, 820);
+        }, [&] { return window.bugWindow(); }},
         {"05-ajustes", [&] {
+            if (QWidget* bug = window.bugWindow()) bug->close();
             ctx.settings->updateTracker([](TrackerSettings& s) { s.zephyr = false; });   // como estaba, para la captura de ajustes
             window.openSettings();
         }, [&] { return window.settingsWindow(); }},

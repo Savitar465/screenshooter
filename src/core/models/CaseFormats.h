@@ -20,7 +20,7 @@ std::optional<QList<TestCase>> casesFromJson(const QByteArray& bytes, QString* e
 
 // ---- CSV (una fila por paso; separador coma, comillas RFC 4180) -------------------------
 QString casesToCsv(const QList<TestCase>& cases);
-/// Cabecera obligatoria: id,title,suite,priority,status,tags,component,jira,preconditions,step,action,expected.
+/// Cabecera obligatoria: id,title,suite,priority,status,tags,component,jira,preconditions,step,action,data,expected.
 std::optional<QList<TestCase>> casesFromCsv(const QString& text, QString* error = nullptr);
 
 // ---- Markdown (sólo exportación) ---------------------------------------------------------

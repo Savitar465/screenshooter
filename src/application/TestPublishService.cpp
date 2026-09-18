@@ -15,12 +15,12 @@ TestPublishService::TestPublishService(std::shared_ptr<ITestManagement> zephyr, 
     : QObject(parent), m_zephyr(std::move(zephyr)), m_cases(cases), m_history(history), m_settings(settings), m_bugs(bugs) {}
 
 QList<PublishDefect> TestPublishService::defectsOf(const PlanReport& report, const QString& caseId) const {
-    // Los bugs de ese caso reportados mientras corría el ciclo, con la misma regla con la que el
-    // informe los enseña (`PlanReport::reportedDuring`): lo que se ve en la pantalla es lo que se sube.
+    // Los bugs de ese caso que salieron de este ciclo, con la misma regla con la que el informe los
+    // enseña (`PlanReport::foundIn`): lo que se ve en la pantalla es lo que se sube.
     QList<PublishDefect> defects;
     for (const auto& bug : m_bugs.issues()) {
         if (bug.caseId != caseId || bug.key.trimmed().isEmpty()) continue;
-        if (!PlanReport::reportedDuring(report.plan, bug)) continue;
+        if (!PlanReport::foundIn(report.plan, bug)) continue;
         defects << PublishDefect{bug.key.trimmed(), bug.step};
     }
     return defects;
@@ -111,7 +111,7 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report, bool upd
         }
         // Del caso que ya no está en el catálogo sólo queda la ejecución: sus pasos son el Test.
         if (pc.design.isEmpty())
-            for (const auto& s : row.run.steps) pc.design.append(TestStep{s.action, s.expected});
+            for (const auto& s : row.run.steps) pc.design.append(TestStep{s.action, s.data, s.expected});
         req.cases.append(pc);
     }
     return req;

@@ -8,6 +8,8 @@
 #include "application/TestCaseStore.h"
 #include "application/TestPublishService.h"
 
+#include <QSet>
+
 #include <algorithm>
 
 namespace qaflow {
@@ -40,13 +42,23 @@ QList<RunRecord> QualityRecordService::revisionRuns(const Issue& issue, int revi
 }
 
 QList<IssueLink> QualityRecordService::revisionBugs(const Issue& issue, int revision) const {
-    // La ventana de la ronda: de cuándo se abrió a cuándo se cerró. La que sigue abierta no tiene
-    // final, así que cuenta todo lo reportado desde que empezó.
+    // Lo que se encontró probando esta ronda: los bugs salen de una ejecución y anotan de qué ciclo,
+    // así que son los de los ciclos de la ronda.
+    QSet<QString> cycleIds;
+    for (const auto& cycle : IssueStore::cyclesOfRevision(issue, m_history, revisionNumber(issue, revision)))
+        cycleIds.insert(cycle.id);
+    // Los que no lo anotaron (los anteriores, y los reportados fuera de un ciclo) se sitúan como se
+    // hacía entonces: por caso del issue y por la ventana de la ronda, de cuándo se abrió a cuándo se
+    // cerró. La que sigue abierta no tiene final: cuenta todo lo reportado desde que empezó.
     const QDateTime since = revisionStart(issue, revision);
     const QDateTime until = revisionEnd(issue, revision);
     const QStringList caseIds = caseIdsOf(issue);
     QList<IssueLink> out;
     for (const auto& bug : m_bugs.issues()) {
+        if (!bug.planRunId.trimmed().isEmpty()) {
+            if (cycleIds.contains(bug.planRunId)) out << bug;
+            continue;
+        }
         if (!caseIds.contains(bug.caseId)) continue;
         if (since.isValid() && bug.createdAt.isValid() && bug.createdAt < since) continue;
         if (until.isValid() && bug.createdAt.isValid() && bug.createdAt > until) continue;

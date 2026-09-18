@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(qaflow VERSION 0.5.0 LANGUAGES CXX)
+project(qaflow VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -254,6 +254,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/HistoryView.cpp
         src/presentation/views/BugView.h
         src/presentation/views/BugView.cpp
+        src/presentation/views/BugDialog.h
+        src/presentation/views/BugDialog.cpp
         src/presentation/views/IssuesView.h
         src/presentation/views/IssuesView.cpp
         src/presentation/views/RevisionPublishDialog.h

@@ -367,10 +367,10 @@ void ZephyrClient::postTestSteps(const TrackerSettings& s, const QString& issueI
                                  const QStringList& failed, std::function<void(const QStringList&)> done) {
     if (step >= c.design.size()) { done(failed); return; }
     const TestStep& design = c.design[step];
-    // El paso de Zephyr son tres campos; QAflow no tiene datos de prueba aparte de la acción.
+    // Los tres campos del paso de Zephyr son los tres del paso de QAflow.
     const QJsonObject body{
         {"step", design.action},
-        {"data", QString()},
+        {"data", design.data},
         {"result", design.expected},
     };
     postJson(zephyr(s, QStringLiteral("/teststep/%1").arg(issueId)), QJsonDocument(body), [this, s, issueId, c, step, failed, done](const Response& r) {

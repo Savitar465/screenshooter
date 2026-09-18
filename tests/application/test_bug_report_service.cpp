@@ -27,6 +27,8 @@ private slots:
         QCOMPARE(d.linkedCaseId, QStringLiteral("TC-104"));
         QCOMPARE(d.linkedStoryKey, QStringLiteral("SHOP-12"));
         QCOMPARE(d.components, QStringList{QStringLiteral("Carrito")});
+        QCOMPARE(d.linkedRunId, f.run.state().runId);   // de qué pruebas sale el bug
+        QCOMPARE(d.linkedPlanRunId, f.run.planRunId());
         QCOMPARE(d.priority, QStringLiteral("Medium"));   // severidad Mayor por defecto
         QVERIFY(d.stepsToReproduce.startsWith(QStringLiteral("1. ")));
     }
@@ -57,6 +59,9 @@ private slots:
 
     void successfulSubmitRecordsLinkedIssue() {
         AppFixture f;
+        // Los bugs se encuentran ejecutando: el parte se abre desde la ejecución en curso.
+        f.run.startSequence({QStringLiteral("TC-104")}, QStringLiteral("Regresión"));
+        f.run.mark(StepResult::Fail);
         BugReport b = f.bugs.draftFromCurrentContext();
         b.title = QStringLiteral("Falla el cupón"); b.actual = QStringLiteral("no descuenta");
         BugReportService::SubmitResult out;
@@ -68,6 +73,10 @@ private slots:
         const IssueLink& l = f.bugLedger.issues().first();
         QCOMPARE(l.caseId, QStringLiteral("TC-104"));
         QCOMPARE(l.tracker, QStringLiteral("Jira"));
+        // El bug queda colgado de las pruebas de las que salió: la ejecución en curso y su ciclo.
+        QCOMPARE(l.runId, f.run.state().runId);
+        QVERIFY(!l.runId.isEmpty());
+        QCOMPARE(l.planRunId, f.run.planRunId());
         QCOMPARE(l.title, QStringLiteral("Falla el cupón"));
         QCOMPARE(f.bugLedger.issuesForCase(QStringLiteral("TC-104")).size(), 1);
         QVERIFY(f.bugLedger.pending().isEmpty());
@@ -165,6 +174,120 @@ private slots:
 
         f.bugs.refreshStatuses(true, [&](const BugReportService::RefreshResult& x) { r = x; });   // sólo abiertos: ninguno de Jira
         QCOMPARE(r.updated, 0);
+    }
+
+    /// La pantalla de bugs trae del gestor los que creó QAflow: los que ya están se actualizan con
+    /// lo que diga hoy Jira y los que no (reportados desde otro equipo) entran en el libro, con su
+    /// caso sacado de las etiquetas.
+    void importBringsTheTrackerBugsIntoTheLedger() {
+        AppFixture f;
+        BugReport b;
+        b.title = QStringLiteral("El cupón no descuenta"); b.actual = QStringLiteral("a");
+        b.linkedCaseId = QStringLiteral("TC-104"); b.linkedStep = 2; b.severity = QStringLiteral("Mayor");
+        f.bugs.submit(b, [](const BugReportService::SubmitResult&) {});   // SHOP-100, sin estado
+
+        TrackerIssueInfo known;      // el mismo bug, ya cerrado en Jira y con el título retocado
+        known.key = QStringLiteral("SHOP-100");
+        known.title = QStringLiteral("[Checkout] El cupón no descuenta");
+        known.issueType = QStringLiteral("Error");
+        known.status = QStringLiteral("Done");
+        known.resolved = true;
+        TrackerIssueInfo foreign;    // uno que reportó otro equipo desde su QAflow (trae su etiqueta)
+        foreign.key = QStringLiteral("SHOP-155");
+        foreign.title = QStringLiteral("Error 500 al pagar");
+        foreign.status = QStringLiteral("In Progress");
+        foreign.createdAt = QDateTime(QDate(2026, 9, 12), QTime(9, 30));
+        foreign.issueType = QStringLiteral("Mejora");
+        foreign.labels = {QStringLiteral("qaflow"), QStringLiteral("TC-101"), QStringLiteral("regresión")};
+        f.tracker->issuesToReturn = {known, foreign};
+
+        BugReportService::ImportResult r;
+        QVERIFY(f.bugs.canImportFromTracker());
+        f.bugs.importFromTracker(0, [&](const BugReportService::ImportResult& x) { r = x; });
+        QVERIFY(r.ok);
+        QCOMPARE(r.updated, 1);
+        QCOMPARE(r.imported, 1);
+        QCOMPARE(r.total, 2);
+        QVERIFY(!r.hasMore());          // caben en una página
+        QCOMPARE(f.bugLedger.issues().size(), 2);
+
+        const IssueLink* mine = f.bugLedger.findIssue(QStringLiteral("SHOP-100"));
+        QCOMPARE(mine->status, QStringLiteral("Done"));
+        QVERIFY(mine->resolved);
+        QCOMPARE(mine->title, QStringLiteral("[Checkout] El cupón no descuenta"));
+        QCOMPARE(mine->caseId, QStringLiteral("TC-104"));   // lo que es de QAflow no se toca
+        QCOMPARE(mine->step, 2);
+        QCOMPARE(mine->severity, QStringLiteral("Mayor"));
+        QCOMPARE(mine->issueType, QStringLiteral("Error"));
+
+        const IssueLink* his = f.bugLedger.findIssue(QStringLiteral("SHOP-155"));
+        QCOMPARE(his->caseId, QStringLiteral("TC-101"));    // la etiqueta que es un caso del proyecto
+        QCOMPARE(his->createdAt.date(), QDate(2026, 9, 12));
+        QCOMPARE(his->issueType, QStringLiteral("Mejora"));   // en la lista se ve que es una mejora
+        QVERIFY(!his->resolved);
+        QCOMPARE(f.bugLedger.openIssueCount(), 1);   // el mío quedó cerrado; el ajeno sigue abierto
+    }
+
+    /// Un bug de QAflow sin etiqueta de caso entra igual: sin caso ni paso, que es lo que se sabe de él.
+    void importBringsBugsWithoutACaseLabel() {
+        AppFixture f;
+        TrackerIssueInfo other;
+        other.key = QStringLiteral("SHOP-200");
+        other.title = QStringLiteral("La búsqueda tarda 8 s");
+        other.status = QStringLiteral("To Do");
+        other.labels = {QStringLiteral("qaflow")};
+        f.tracker->issuesToReturn = {other};
+        BugReportService::ImportResult r;
+        f.bugs.importFromTracker(0, [&](const BugReportService::ImportResult& x) { r = x; });
+        QVERIFY(r.ok);
+        QCOMPARE(r.imported, 1);
+        const IssueLink* l = f.bugLedger.findIssue(QStringLiteral("SHOP-200"));
+        QVERIFY(l);
+        QVERIFY(l->caseId.isEmpty());
+        QCOMPARE(l->step, 0);
+        QCOMPARE(l->tracker, QStringLiteral("Jira"));
+    }
+
+    /// El gestor se recorre por páginas: cada llamada trae las suyas y dice desde dónde seguir.
+    void importWalksTheTrackerOnePageAtATime() {
+        AppFixture f;
+        QList<TrackerIssueInfo> many;
+        for (int i = 0; i < BugReportService::kImportPage + 3; ++i) {
+            TrackerIssueInfo info;
+            info.key = QStringLiteral("SHOP-%1").arg(300 + i);
+            info.title = QStringLiteral("bug %1").arg(i);
+            many << info;
+        }
+        f.tracker->issuesToReturn = many;
+
+        BugReportService::ImportResult first;
+        f.bugs.importFromTracker(0, [&](const BugReportService::ImportResult& x) { first = x; });
+        QVERIFY(first.ok);
+        QCOMPARE(first.imported, BugReportService::kImportPage);
+        QCOMPARE(first.total, many.size());
+        QCOMPARE(first.nextStart, BugReportService::kImportPage);
+        QCOMPARE(f.bugLedger.issues().size(), BugReportService::kImportPage);
+
+        BugReportService::ImportResult second;
+        f.bugs.importFromTracker(first.nextStart, [&](const BugReportService::ImportResult& x) { second = x; });
+        QVERIFY(second.ok);
+        QCOMPARE(second.imported, 3);
+        QVERIFY(!second.hasMore());
+        QCOMPARE(f.bugLedger.issues().size(), many.size());
+        QCOMPARE(f.tracker->issueSearchStarts, (QList<int>{0, BugReportService::kImportPage}));
+    }
+
+    /// Sin gestor que sepa buscar, el botón no se ofrece y la llamada lo dice sin tocar el libro.
+    void importIsRefusedWhenTheTrackerCannotSearch() {
+        AppFixture f;
+        f.tracker->searchesIssues = false;
+        QVERIFY(!f.bugs.canImportFromTracker());
+        BugReportService::ImportResult r;
+        f.bugs.importFromTracker(0, [&](const BugReportService::ImportResult& x) { r = x; });
+        QVERIFY(!r.ok);
+        QVERIFY(!r.error.isEmpty());
+        QCOMPARE(f.tracker->issueSearchCalls, 0);   // ni se intenta
+        QVERIFY(f.bugLedger.issues().isEmpty());
     }
 
     void metadataIsCachedPerProjectAndInvalidatedOnChange() {

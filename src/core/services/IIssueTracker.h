@@ -4,6 +4,7 @@
 #include "core/models/Settings.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QList>
 #include <QString>
 #include <QtGlobal>
@@ -95,8 +96,22 @@ struct TrackerIssueInfo {
     QString issueType;
     QString status;
     bool resolved = false;
+    QDateTime createdAt;   // cuándo se creó en el gestor (lo trae la búsqueda de bugs)
+    QStringList labels;    // etiquetas del gestor; QAflow reconoce en ellas el caso del que salió
     QString error;
     bool retryable = false;
+};
+
+/// Una página de bugs del gestor, del más reciente al más antiguo. `total` es cuántos hay en total
+/// (los que caben y los que no) y `nextStart` desde dónde pedir la página siguiente; -1 = no hay más.
+struct TrackerIssueList {
+    bool ok = false;
+    QList<TrackerIssueInfo> issues;
+    int total = 0;
+    int nextStart = -1;
+    QString error;
+
+    bool hasMore() const { return nextStart >= 0; }
 };
 
 /// Gestor de incidencias. Asíncrono: las llamadas devuelven por callback en el hilo principal.
@@ -146,6 +161,19 @@ public:
                              std::function<void(const IssueResult&)> done) {
         Q_UNUSED(s); Q_UNUSED(key); Q_UNUSED(draft);
         done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no publica los issues de QAflow"), false, 0});
+    }
+
+    /// ¿Sabe este gestor devolver los bugs que creó QAflow (los que llevan su etiqueta)? Es lo que
+    /// hace falta para que la pantalla de bugs enseñe lo que hay en el gestor y no sólo lo que se
+    /// reportó desde este equipo. Sólo Jira, por ahora.
+    virtual bool canSearchIssues(const TrackerSettings& s) const { Q_UNUSED(s); return false; }
+    /// Una página de los bugs que QAflow creó en el proyecto configurado, del más reciente al más
+    /// antiguo: `max` como mucho, empezando por el que hace `startAt` (0 = el primero).
+    virtual void searchProjectBugs(const TrackerSettings& s, int startAt, int max, std::function<void(const TrackerIssueList&)> done) {
+        Q_UNUSED(s); Q_UNUSED(startAt); Q_UNUSED(max);
+        TrackerIssueList out;
+        out.error = QCoreApplication::translate("core", "Este gestor no sabe buscar los bugs de QAflow");
+        done(out);
     }
 
     /// ¿Sabe este gestor comentar un issue y adjuntarle ficheros? Es lo que hace falta para dejar allí

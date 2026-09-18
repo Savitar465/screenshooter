@@ -21,8 +21,11 @@ QString label(Priority p);
 QString label(CaseStatus s);
 QString label(RunOutcome o);
 
+/// Un paso del caso: qué hace el tester, con qué datos y qué debe ocurrir. Los tres campos son los
+/// que pide Zephyr (step / data / result); los datos son opcionales.
 struct TestStep {
     QString action;
+    QString data;
     QString expected;
 
     bool isComplete() const { return !action.trimmed().isEmpty() && !expected.trimmed().isEmpty(); }

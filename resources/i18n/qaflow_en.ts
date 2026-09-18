@@ -708,10 +708,6 @@
         <translation>## Bugs found · %1</translation>
     </message>
     <message>
-        <source>| Bug | Caso | Paso | Título | Severidad | Estado |</source>
-        <translation>| Bug | Case | Step | Title | Severity | Status |</translation>
-    </message>
-    <message>
         <source>Cerrado</source>
         <translation>Closed</translation>
     </message>
@@ -726,6 +722,18 @@
     <message>
         <source>**Bugs:** %1</source>
         <translation>**Bugs:** %1</translation>
+    </message>
+    <message>
+        <source>Este gestor no sabe buscar los bugs de QAflow</source>
+        <translation>This tracker cannot search for QAflow bugs</translation>
+    </message>
+    <message>
+        <source>sin tipo</source>
+        <translation>no type</translation>
+    </message>
+    <message>
+        <source>| Bug | Tipo | Caso | Paso | Título | Severidad | Estado |</source>
+        <translation>| Bug | Type | Test case | Step | Title | Severity | Status |</translation>
     </message>
 </context>
 <context>
@@ -1229,6 +1237,14 @@
         <source>Hacen falta dos issues distintos para enlazarlos</source>
         <translation>Two different issues are needed to link them</translation>
     </message>
+    <message>
+        <source>Los ajustes no dicen en qué proyecto de Jira buscar</source>
+        <translation>The settings do not say which Jira project to search</translation>
+    </message>
+    <message>
+        <source>Jira rechazó la búsqueda de incidencias de tipo %1 · %2</source>
+        <translation>Jira rejected the search for issues of type %1 · %2</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::AnnotationEditor</name>
@@ -1385,29 +1401,7 @@
     </message>
 </context>
 <context>
-    <name>qaflow::BugReportService</name>
-    <message>
-        <source>[%1] Falla en paso %2: %3</source>
-        <translation>[%1] Failure in step %2: %3</translation>
-    </message>
-    <message>
-        <source>Integración no disponible</source>
-        <translation>Integration not available</translation>
-    </message>
-    <message>
-        <source>[%1] Bloqueo en paso %2: %3</source>
-        <translation>[%1] Blocked at step %2: %3</translation>
-    </message>
-</context>
-<context>
-    <name>qaflow::BugStore</name>
-    <message>
-        <source>los bugs reportados</source>
-        <translation>the reported bugs</translation>
-    </message>
-</context>
-<context>
-    <name>qaflow::BugView</name>
+    <name>qaflow::BugDialog</name>
     <message>
         <source>Reportar bug</source>
         <translation>Report bug</translation>
@@ -1421,8 +1415,20 @@
         <translation>Title</translation>
     </message>
     <message>
+        <source>Tipo de observación del acta de control de calidad (R-213)</source>
+        <translation>Finding type of the quality control record (R-213)</translation>
+    </message>
+    <message>
+        <source>Paso en el que se vio el fallo; el defecto se cuelga de él al publicar la ejecución</source>
+        <translation>Step where the failure was seen; the defect hangs from it when the run is published</translation>
+    </message>
+    <message>
         <source>Severidad</source>
         <translation>Severity</translation>
+    </message>
+    <message>
+        <source>Clasificación</source>
+        <translation>Classification</translation>
     </message>
     <message>
         <source>Entorno</source>
@@ -1431,6 +1437,10 @@
     <message>
         <source>Caso vinculado</source>
         <translation>Linked test case</translation>
+    </message>
+    <message>
+        <source>Paso</source>
+        <translation>Step</translation>
     </message>
     <message>
         <source>CAMPOS DEL GESTOR</source>
@@ -1505,16 +1515,24 @@
         <translation>+ Take screenshot</translation>
     </message>
     <message>
+        <source>La ventana se esconde mientras se captura y vuelve con la imagen adjunta</source>
+        <translation>The window hides itself while capturing and comes back with the image attached</translation>
+    </message>
+    <message>
+        <source>+ Adjuntar archivo…</source>
+        <translation>+ Attach file…</translation>
+    </message>
+    <message>
+        <source>Adjunta logs, vídeos o imágenes existentes; se suben al gestor con el bug</source>
+        <translation>Attach existing logs, videos or images; they are uploaded to the tracker with the bug</translation>
+    </message>
+    <message>
         <source>Cancelar</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <source>Reintentar envío</source>
-        <translation>Retry sending</translation>
-    </message>
-    <message>
-        <source>Actualizar estados</source>
-        <translation>Refresh statuses</translation>
+        <source>NUEVO DEFECTO · DESTINO %1 &lt;span style=&quot;color:%2;font-family:monospace&quot;&gt;%3&lt;/span&gt;</source>
+        <translation>NEW DEFECT · TARGET %1 &lt;span style=&quot;color:%2;font-family:monospace&quot;&gt;%3&lt;/span&gt;</translation>
     </message>
     <message>
         <source>(sin proyecto)</source>
@@ -1523,6 +1541,18 @@
     <message>
         <source>Crear en %1</source>
         <translation>Create in %1</translation>
+    </message>
+    <message>
+        <source>Escribe para buscar en %1</source>
+        <translation>Type to search in %1</translation>
+    </message>
+    <message>
+        <source>Las personas se buscan en %1 según escribes; no hace falta cargarlas antes</source>
+        <translation>People are searched in %1 as you type; there is no need to load them first</translation>
+    </message>
+    <message>
+        <source>Personas del proyecto cargadas con «Cargar valores del proyecto»</source>
+        <translation>Project members loaded with “Load project values”</translation>
     </message>
     <message>
         <source>%1 tipos · %2 prioridades · %3 componentes · %4 versiones · %5 asignables</source>
@@ -1557,40 +1587,16 @@
         <translation>Found In field</translation>
     </message>
     <message>
+        <source>Todo el caso</source>
+        <translation>The whole case</translation>
+    </message>
+    <message>
+        <source>Paso %1 · %2</source>
+        <translation>Step %1 · %2</translation>
+    </message>
+    <message>
         <source>ADJUNTOS · %1</source>
         <translation>ATTACHMENTS · %1</translation>
-    </message>
-    <message>
-        <source>BUGS REPORTADOS · %1 · %2 ABIERTOS</source>
-        <translation>REPORTED BUGS · %1 · %2 OPEN</translation>
-    </message>
-    <message>
-        <source>Todavía no se ha reportado ningún bug desde QAflow.</source>
-        <translation>No bugs have been reported from QAflow yet.</translation>
-    </message>
-    <message>
-        <source>Abrir en %1</source>
-        <translation>Open in %1</translation>
-    </message>
-    <message>
-        <source>(sin título)</source>
-        <translation>(untitled)</translation>
-    </message>
-    <message>
-        <source>SIN CONSULTAR</source>
-        <translation>NOT CHECKED</translation>
-    </message>
-    <message>
-        <source>PENDIENTES DE ENVÍO · %1 · SE REINTENTAN AL CONECTAR</source>
-        <translation>PENDING SUBMISSION · %1 · RETRIED WHEN BACK ONLINE</translation>
-    </message>
-    <message>
-        <source>%1 · %2 intentos</source>
-        <translation>%1 · %2 attempts</translation>
-    </message>
-    <message>
-        <source>Descartar este bug pendiente</source>
-        <translation>Discard this pending bug</translation>
     </message>
     <message>
         <source>Cargando…</source>
@@ -1599,6 +1605,10 @@
     <message>
         <source>No se pudieron cargar los valores del proyecto · %1</source>
         <translation>Could not load the project values · %1</translation>
+    </message>
+    <message>
+        <source>No se pudieron buscar personas · %1</source>
+        <translation>Could not search for people · %1</translation>
     </message>
     <message>
         <source>Completa título y resultado actual</source>
@@ -1623,6 +1633,71 @@
     <message>
         <source>%1 rechazó el bug · %2</source>
         <translation>%1 rejected the bug · %2</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::BugReportService</name>
+    <message>
+        <source>[%1] Falla en paso %2: %3</source>
+        <translation>[%1] Failure in step %2: %3</translation>
+    </message>
+    <message>
+        <source>Integración no disponible</source>
+        <translation>Integration not available</translation>
+    </message>
+    <message>
+        <source>[%1] Bloqueo en paso %2: %3</source>
+        <translation>[%1] Blocked at step %2: %3</translation>
+    </message>
+    <message>
+        <source>%1. %2 · Datos: %3</source>
+        <translation>%1. %2 · Data: %3</translation>
+    </message>
+    <message>
+        <source>El gestor configurado no sabe buscar los bugs de QAflow</source>
+        <translation>The configured tracker cannot search for QAflow bugs</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::BugStore</name>
+    <message>
+        <source>los bugs reportados</source>
+        <translation>the reported bugs</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::BugView</name>
+    <message>
+        <source>Reintentar envío</source>
+        <translation>Retry sending</translation>
+    </message>
+    <message>
+        <source>Actualizar estados</source>
+        <translation>Refresh statuses</translation>
+    </message>
+    <message>
+        <source>(sin proyecto)</source>
+        <translation>(no project)</translation>
+    </message>
+    <message>
+        <source>(sin título)</source>
+        <translation>(untitled)</translation>
+    </message>
+    <message>
+        <source>SIN CONSULTAR</source>
+        <translation>NOT CHECKED</translation>
+    </message>
+    <message>
+        <source>PENDIENTES DE ENVÍO · %1 · SE REINTENTAN AL CONECTAR</source>
+        <translation>PENDING SUBMISSION · %1 · RETRIED WHEN BACK ONLINE</translation>
+    </message>
+    <message>
+        <source>%1 · %2 intentos</source>
+        <translation>%1 · %2 attempts</translation>
+    </message>
+    <message>
+        <source>Descartar este bug pendiente</source>
+        <translation>Discard this pending bug</translation>
     </message>
     <message>
         <source>Enviando…</source>
@@ -1653,60 +1728,96 @@
         <translation>%1 updated · %2 with no response</translation>
     </message>
     <message>
-        <source>NUEVO DEFECTO · DESTINO %1 &lt;span style=&quot;color:%2;font-family:monospace&quot;&gt;%3&lt;/span&gt;</source>
-        <translation>NEW DEFECT · TARGET %1 &lt;span style=&quot;color:%2;font-family:monospace&quot;&gt;%3&lt;/span&gt;</translation>
-    </message>
-    <message>
-        <source>+ Adjuntar archivo…</source>
-        <translation>+ Attach file…</translation>
-    </message>
-    <message>
-        <source>Adjunta logs, vídeos o imágenes existentes; se suben al gestor con el bug</source>
-        <translation>Attach existing logs, videos or images; they are uploaded to the tracker with the bug</translation>
-    </message>
-    <message>
-        <source>Escribe para buscar en %1</source>
-        <translation>Type to search in %1</translation>
-    </message>
-    <message>
-        <source>Las personas se buscan en %1 según escribes; no hace falta cargarlas antes</source>
-        <translation>People are searched in %1 as you type; there is no need to load them first</translation>
-    </message>
-    <message>
-        <source>Personas del proyecto cargadas con «Cargar valores del proyecto»</source>
-        <translation>Project members loaded with “Load project values”</translation>
-    </message>
-    <message>
-        <source>No se pudieron buscar personas · %1</source>
-        <translation>Could not search for people · %1</translation>
-    </message>
-    <message>
-        <source>Tipo de observación del acta de control de calidad (R-213)</source>
-        <translation>Finding type of the quality control record (R-213)</translation>
-    </message>
-    <message>
-        <source>Clasificación</source>
-        <translation>Classification</translation>
-    </message>
-    <message>
-        <source>Paso en el que se vio el fallo; el defecto se cuelga de él al publicar la ejecución</source>
-        <translation>Step where the failure was seen; the defect hangs from it when the run is published</translation>
-    </message>
-    <message>
-        <source>Paso</source>
-        <translation>Step</translation>
-    </message>
-    <message>
-        <source>Todo el caso</source>
-        <translation>The whole case</translation>
-    </message>
-    <message>
-        <source>Paso %1 · %2</source>
-        <translation>Step %1 · %2</translation>
-    </message>
-    <message>
         <source>%1 · paso %2</source>
         <translation>%1 · step %2</translation>
+    </message>
+    <message>
+        <source>Bugs</source>
+        <translation>Bugs</translation>
+    </message>
+    <message>
+        <source>Traer de %1</source>
+        <translation>Bring from %1</translation>
+    </message>
+    <message>
+        <source>+ Reportar bug</source>
+        <translation>+ Report bug</translation>
+    </message>
+    <message>
+        <source>Abre el parte en su ventana, con el caso y el paso de la ejecución en curso</source>
+        <translation>Opens the report in its own window, with the case and step of the current run</translation>
+    </message>
+    <message>
+        <source>Todos</source>
+        <translation>All</translation>
+    </message>
+    <message>
+        <source>Abiertos</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>Resueltos</source>
+        <translation>Resolved</translation>
+    </message>
+    <message>
+        <source>Buscar por clave, título o caso…</source>
+        <translation>Search by key, title or case…</translation>
+    </message>
+    <message>
+        <source>%1 BUGS · %2 ABIERTOS · %3 &lt;span style=&quot;color:%4;font-family:monospace&quot;&gt;%5&lt;/span&gt;</source>
+        <translation>%1 BUGS · %2 OPEN · %3 &lt;span style=&quot;color:%4;font-family:monospace&quot;&gt;%5&lt;/span&gt;</translation>
+    </message>
+    <message>
+        <source>BUGS REPORTADOS · %1</source>
+        <translation>REPORTED BUGS · %1</translation>
+    </message>
+    <message>
+        <source>BUGS REPORTADOS · %1 DE %2</source>
+        <translation>REPORTED BUGS · %1 OF %2</translation>
+    </message>
+    <message>
+        <source>Todavía no se ha reportado ningún bug en este proyecto. Los que se reporten durante una ejecución aparecen aquí con su estado.</source>
+        <translation>No bug has been reported in this project yet. The ones reported during a run show up here with their status.</translation>
+    </message>
+    <message>
+        <source>Ningún bug encaja con el filtro.</source>
+        <translation>No bug matches the filter.</translation>
+    </message>
+    <message>
+        <source>Ver la ficha de este bug</source>
+        <translation>See this bug&apos;s details</translation>
+    </message>
+    <message>
+        <source>Trayendo…</source>
+        <translation>Bringing…</translation>
+    </message>
+    <message>
+        <source>No se pudieron traer los bugs · %1</source>
+        <translation>The bugs could not be brought · %1</translation>
+    </message>
+    <message>
+        <source>%1 bugs nuevos · %2 actualizados</source>
+        <translation>%1 new bugs · %2 updated</translation>
+    </message>
+    <message>
+        <source>Desliza para ver los %1 restantes</source>
+        <translation>Scroll to see the remaining %1</translation>
+    </message>
+    <message>
+        <source>Trayendo más bugs de %1…</source>
+        <translation>Bringing more bugs from %1…</translation>
+    </message>
+    <message>
+        <source>Desliza para traer más de %1 · %2 de %3</source>
+        <translation>Scroll to bring more from %1 · %2 of %3</translation>
+    </message>
+    <message>
+        <source>El gestor no tiene bugs de QAflow en este proyecto</source>
+        <translation>The tracker has no QAflow bugs in this project</translation>
+    </message>
+    <message>
+        <source>Trae del gestor los errores y mejoras que creó QAflow en este proyecto, aunque se reportaran desde otro equipo; el resto llegan al deslizar</source>
+        <translation>Brings from the tracker the errors and improvements QAflow created in this project, even if they were reported from another machine; the rest arrive as you scroll</translation>
     </message>
 </context>
 <context>
@@ -1863,10 +1974,6 @@
         <translation>e.g. Cart</translation>
     </message>
     <message>
-        <source>Abrir en Jira</source>
-        <translation>Open in Jira</translation>
-    </message>
-    <message>
         <source>regresión, smoke…</source>
         <translation>regression, smoke…</translation>
     </message>
@@ -1877,10 +1984,6 @@
     <message>
         <source>Componente</source>
         <translation>Component</translation>
-    </message>
-    <message>
-        <source>Historia Jira</source>
-        <translation>Jira story</translation>
     </message>
     <message>
         <source>Etiquetas</source>
@@ -1953,22 +2056,6 @@
     <message>
         <source>Ejecución suelta</source>
         <translation>Standalone run</translation>
-    </message>
-    <message>
-        <source>BUGS REPORTADOS · %1</source>
-        <translation>REPORTED BUGS · %1</translation>
-    </message>
-    <message>
-        <source>Ningún bug reportado desde este caso.</source>
-        <translation>No bugs reported from this test case.</translation>
-    </message>
-    <message>
-        <source>Abrir en %1</source>
-        <translation>Open in %1</translation>
-    </message>
-    <message>
-        <source>SIN CONSULTAR</source>
-        <translation>NOT CHECKED</translation>
     </message>
     <message>
         <source>Nombre de la suite:</source>
@@ -2051,8 +2138,16 @@
         <translation> · %1 pieces of evidence</translation>
     </message>
     <message>
-        <source>paso %1</source>
-        <translation>step %1</translation>
+        <source>DATOS DE LA PRUEBA</source>
+        <translation>TEST DATA</translation>
+    </message>
+    <message>
+        <source>Con qué datos…</source>
+        <translation>With which data…</translation>
+    </message>
+    <message>
+        <source>Datos de la prueba: usuario, importe, archivo… Es el campo «data» del paso de Zephyr.</source>
+        <translation>Test data: user, amount, file… It is the «data» field of the Zephyr step.</translation>
     </message>
 </context>
 <context>
@@ -2562,10 +2657,6 @@
         <translation>ALL CLOSED</translation>
     </message>
     <message>
-        <source>Reportados mientras corría el ciclo, desde los casos que estaba ejecutando.</source>
-        <translation>Reported while the cycle was running, from the cases it was executing.</translation>
-    </message>
-    <message>
         <source>%1 · paso %2</source>
         <translation>%1 · step %2</translation>
     </message>
@@ -2604,6 +2695,26 @@
     <message>
         <source>Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s), cada uno desde el paso que se rompió, en la misma revisión</source>
         <translation>Runs the %1 failed or blocked case(s) again, each from the step that broke, in the same revision</translation>
+    </message>
+    <message>
+        <source>Datos: %1</source>
+        <translation>Data: %1</translation>
+    </message>
+    <message>
+        <source>BUGS DE ESTA EJECUCIÓN · %1</source>
+        <translation>BUGS FROM THIS RUN · %1</translation>
+    </message>
+    <message>
+        <source>SIN TIPO</source>
+        <translation>NO TYPE</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>Errores y mejoras encontrados ejecutando este ciclo, en los casos que estaba probando.</source>
+        <translation>Bugs and improvements found while running this cycle, in the test cases it was running.</translation>
     </message>
 </context>
 <context>
@@ -4060,10 +4171,6 @@ Create another one anyway?</translation>
         <translation>History</translation>
     </message>
     <message>
-        <source>Reportar bug</source>
-        <translation>Report bug</translation>
-    </message>
-    <message>
         <source>Issue %1</source>
         <translation>Issue %1</translation>
     </message>
@@ -4110,6 +4217,14 @@ Create another one anyway?</translation>
     <message>
         <source>Se está abriendo otro proyecto</source>
         <translation>Another project is being opened</translation>
+    </message>
+    <message>
+        <source>&amp;Bugs</source>
+        <translation>&amp;Bugs</translation>
+    </message>
+    <message>
+        <source>Bugs</source>
+        <translation>Bugs</translation>
     </message>
 </context>
 <context>
@@ -4382,10 +4497,6 @@ Create another one anyway?</translation>
         <translation>= same</translation>
     </message>
     <message>
-        <source>Pendiente</source>
-        <translation>Pending</translation>
-    </message>
-    <message>
         <source>Mostrar solo los últimos %1</source>
         <translation>Show only the last %1</translation>
     </message>
@@ -4520,6 +4631,58 @@ Create another one anyway?</translation>
     <message>
         <source>Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo</source>
         <translation>Run the %1 failed or blocked case(s) of this cycle again</translation>
+    </message>
+    <message>
+        <source>%1 +%2</source>
+        <translation>%1 +%2</translation>
+    </message>
+    <message>
+        <source>Prueba el issue %1 (%2) · abrirlo</source>
+        <translation>Tests issue %1 (%2) · open it</translation>
+    </message>
+    <message>
+        <source>Prueba el issue %1 (%2) · %3 · abrirlo</source>
+        <translation>Tests issue %1 (%2) · %3 · open it</translation>
+    </message>
+    <message>
+        <source>Resultados por caso · %1</source>
+        <translation>Results by test case · %1</translation>
+    </message>
+    <message>
+        <source>Ver qué dio cada caso de prueba en este ciclo</source>
+        <translation>See what each test case gave in this cycle</translation>
+    </message>
+    <message>
+        <source>Abrir el caso</source>
+        <translation>Open the test case</translation>
+    </message>
+    <message>
+        <source>PENDIENTE</source>
+        <translation>PENDING</translation>
+    </message>
+    <message>
+        <source>%1/%2 pasos</source>
+        <translation>%1/%2 steps</translation>
+    </message>
+    <message>
+        <source> · rompió en el paso %1</source>
+        <translation> · broke at step %1</translation>
+    </message>
+    <message>
+        <source>Ver</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <source>Ver los pasos y las evidencias de esta ejecución</source>
+        <translation>See the steps and evidence of this run</translation>
+    </message>
+    <message>
+        <source>Abrir el bug en el gestor</source>
+        <translation>Open the bug in the tracker</translation>
+    </message>
+    <message>
+        <source>%1 · abrir en el gestor</source>
+        <translation>%1 · open in the tracker</translation>
     </message>
 </context>
 <context>
@@ -5633,14 +5796,6 @@ When you report one it stays here, with the step it came from.</translation>
         <translation>BUGS · %1</translation>
     </message>
     <message>
-        <source>Los bugs reportados desde este caso, con el paso del que salieron</source>
-        <translation>The bugs reported from this case, with the step they came from</translation>
-    </message>
-    <message>
-        <source>%1 bug(s) de este caso · %2 sin cerrar</source>
-        <translation>%1 bug(s) of this case · %2 still open</translation>
-    </message>
-    <message>
         <source>Abrir la ficha del bug en otra ventana</source>
         <translation>Open the bug&apos;s details in another window</translation>
     </message>
@@ -5655,6 +5810,24 @@ When you report one it stays here, with the step it came from.</translation>
     <message>
         <source>(sin título)</source>
         <translation>(untitled)</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Datos:&lt;/b&gt; %1</source>
+        <translation>&lt;b&gt;Data:&lt;/b&gt; %1</translation>
+    </message>
+    <message>
+        <source>Los bugs reportados en esta ejecución, con el paso del que salieron</source>
+        <translation>The bugs reported in this run, with the step they came from</translation>
+    </message>
+    <message>
+        <source>%1 bug(s) de esta ejecución · %2 sin cerrar</source>
+        <translation>%1 bug(s) from this run · %2 still open</translation>
+    </message>
+    <message>
+        <source>Todavía no se ha reportado ningún bug en esta ejecución.
+Al reportar uno queda aquí, con el paso del que salió.</source>
+        <translation>No bug has been reported in this run yet.
+Reporting one leaves it here, with the step it came from.</translation>
     </message>
 </context>
 <context>
@@ -6172,10 +6345,6 @@ When you report one it stays here, with the step it came from.</translation>
         <translation>History</translation>
     </message>
     <message>
-        <source>Reportar bug</source>
-        <translation>Report bug</translation>
-    </message>
-    <message>
         <source>%1 casos</source>
         <translation>%1 cases</translation>
     </message>
@@ -6212,10 +6381,6 @@ When you report one it stays here, with the step it came from.</translation>
         <translation>%1 pending to send</translation>
     </message>
     <message>
-        <source>%1 issues abiertos</source>
-        <translation>%1 open issues</translation>
-    </message>
-    <message>
         <source>Issues</source>
         <translation>Issues</translation>
     </message>
@@ -6226,6 +6391,18 @@ When you report one it stays here, with the step it came from.</translation>
     <message>
         <source>%1 issues</source>
         <translation>%1 issues</translation>
+    </message>
+    <message>
+        <source>Bugs</source>
+        <translation>Bugs</translation>
+    </message>
+    <message>
+        <source>%1 bugs abiertos</source>
+        <translation>%1 open bugs</translation>
+    </message>
+    <message>
+        <source>los bugs del proyecto y su estado</source>
+        <translation>the project bugs and their status</translation>
     </message>
 </context>
 <context>

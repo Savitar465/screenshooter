@@ -252,6 +252,64 @@ void JiraClient::fetchIssue(const TrackerSettings& s, const QString& key, std::f
     });
 }
 
+void JiraClient::searchProjectBugs(const TrackerSettings& s, int startAt, int max, std::function<void(const TrackerIssueList&)> done) {
+    TrackerIssueList fail;
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) { fail.error = missing; done(fail); return; }
+    const QString project = s.project.trimmed();
+    if (project.isEmpty()) {
+        fail.error = QCoreApplication::translate("infrastructure", "Los ajustes no dicen en qué proyecto de Jira buscar");
+        done(fail);
+        return;
+    }
+    // Los bugs que crea QAflow llevan siempre su etiqueta: eso es lo que los distingue de los que
+    // abre cualquier otro en el mismo proyecto. Y de los suyos, los que se siguen aquí: errores y mejoras.
+    QStringList quoted;
+    for (const auto& t : BugReport::jiraIssueTypes()) quoted << QLatin1Char('"') + t + QLatin1Char('"');
+    const QString jql = QStringLiteral("project = \"%1\" AND labels = qaflow AND issuetype in (%2) ORDER BY created DESC")
+                            .arg(project, quoted.join(QStringLiteral(", ")));
+    const QString path = QStringLiteral("/rest/api/2/search?jql=%1&startAt=%2&maxResults=%3&fields=summary,status,created,labels,issuetype")
+                             .arg(QString::fromUtf8(QUrl::toPercentEncoding(jql)), QString::number(std::max(0, startAt)),
+                                  QString::number(std::clamp(max, 1, 100)));
+    get(request(s, path), [s, startAt, done](const Response& r) {
+        if (!r.ok) {
+            TrackerIssueList f;
+            f.error = errorFor(s, r);
+            // Un 400 aquí suele ser que esta instancia no llama así a sus tipos de incidencia: el
+            // mensaje de Jira no se entiende si no se sabe de dónde salen esos nombres.
+            if (r.status == 400)
+                f.error = QCoreApplication::translate("infrastructure", "Jira rechazó la búsqueda de incidencias de tipo %1 · %2")
+                              .arg(BugReport::jiraIssueTypes().join(QStringLiteral(" o ")), f.error);
+            done(f);
+            return;
+        }
+        TrackerIssueList out;
+        out.ok = true;
+        out.total = r.json.object()[QStringLiteral("total")].toInt();
+        for (const auto& v : r.json.object()[QStringLiteral("issues")].toArray()) {
+            const QJsonObject o = v.toObject();
+            const QJsonObject fields = o[QStringLiteral("fields")].toObject();
+            const QJsonObject status = fields[QStringLiteral("status")].toObject();
+            TrackerIssueInfo info;
+            info.ok = true;
+            info.key = o[QStringLiteral("key")].toString();
+            if (info.key.isEmpty()) continue;
+            info.url = s.issueUrl(info.key);
+            info.title = fields[QStringLiteral("summary")].toString();
+            info.issueType = fields[QStringLiteral("issuetype")].toObject()[QStringLiteral("name")].toString();
+            info.status = status[QStringLiteral("name")].toString();
+            info.resolved = status[QStringLiteral("statusCategory")].toObject()[QStringLiteral("key")].toString() == QStringLiteral("done");
+            // "2026-09-17T10:04:11.000+0200": Qt lee el ISO con offset si se le quitan los milisegundos.
+            info.createdAt = QDateTime::fromString(fields[QStringLiteral("created")].toString(), Qt::ISODateWithMs);
+            for (const auto& l : fields[QStringLiteral("labels")].toArray()) info.labels << l.toString();
+            out.issues << info;
+        }
+        // Jira dice cuántos hay en total; mientras queden por detrás de esta página, se puede seguir.
+        const int seen = std::max(0, startAt) + static_cast<int>(out.issues.size());
+        out.nextStart = !out.issues.isEmpty() && seen < out.total ? seen : -1;
+        done(out);
+    });
+}
+
 void JiraClient::updateIssue(const TrackerSettings& s, const QString& key, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) {
     if (const QString missing = missingCredentials(s); !missing.isEmpty()) { IssueResult f; f.error = missing; done(f); return; }
     // Sólo el texto que salió de QAflow: el tipo, las etiquetas y todo lo demás se quedan como estén en Jira.

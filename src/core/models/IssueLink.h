@@ -14,10 +14,19 @@ struct IssueLink {
     QString url;
     QString title;
     QString caseId;          // caso desde el que se reportó (puede ya no existir)
+    /// Ejecución en la que se encontró (`RunRecord::id`), y el ciclo de plan del que era parte
+    /// (`PlanRun::id`; vacío si el caso se ejecutaba suelto). Es lo que ata el bug a unas pruebas
+    /// concretas: los resultados de esa ejecución enseñan lo que salió de ella. Vacíos en los bugs
+    /// anteriores a que se anotara y en los traídos del gestor, que se atribuyen por fecha.
+    QString runId;
+    QString planRunId;
     /// Paso del caso en el que se vio (1..N); 0 = del caso entero. Con él, publicar la ejecución cuelga
     /// el defecto del paso que falló, y no sólo del caso.
     int step = 0;
     QString tracker;         // "Jira", "GitHub", …
+    /// Tipo de incidencia del gestor: "Error", "Mejora"… Vacío en los bugs anteriores a que se
+    /// guardara. Es lo que distingue en la lista un error de una mejora.
+    QString issueType;
     QString severity;
     /// Tipo de observación del acta (A–E) con el que se reportó; los bugs guardados antes de que
     /// existiera cuentan como "A".

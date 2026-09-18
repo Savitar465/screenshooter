@@ -74,6 +74,9 @@ void RunController::recomputeFinished() {
 void RunController::begin(const QString& caseId) {
     m_run = RunState{};
     m_run.caseId = caseId;
+    // El id se pide ahora, no al archivar: los bugs que se reporten mientras corre la ejecución se
+    // enlazan con ella, y para eso tiene que tener nombre desde el principio.
+    m_run.runId = m_history.reserveRunId();
     m_run.startedAt = QDateTime::currentDateTime();
     m_run.results = QList<StepRecord>(totalSteps());
     m_run.finished = m_run.results.isEmpty();
@@ -96,7 +99,8 @@ void RunController::resumeFrom(const RunRecord& previous, const TestCase& c) {
     // Lo anterior al paso roto se hereda mientras el caso no haya cambiado: un paso que hoy dice otra
     // cosa no se puede dar por superado con lo que se probó entonces.
     for (int i = 0; i < broken && i < m_run.results.size() && i < previous.steps.size(); ++i) {
-        if (c.steps[i].action != previous.steps[i].action || c.steps[i].expected != previous.steps[i].expected) break;
+        if (c.steps[i].action != previous.steps[i].action || c.steps[i].data != previous.steps[i].data
+            || c.steps[i].expected != previous.steps[i].expected) break;
         m_run.results[i].result = previous.steps[i].result;
         m_run.results[i].note = previous.steps[i].note;
         m_run.results[i].marked = true;   // el cronómetro empieza de nuevo: el tiempo es el de ahora
@@ -225,6 +229,7 @@ void RunController::commitRun(bool evenIfPending) {
     holdStep();
 
     RunRecord rec;
+    rec.id = m_run.runId;   // el que se reservó al arrancar, con el que la conocen sus bugs
     rec.caseId = c->id;
     rec.caseTitle = c->title;
     rec.suite = c->suite;
@@ -238,7 +243,7 @@ void RunController::commitRun(bool evenIfPending) {
     // como N/A, que es lo que son: pasos que no llegaron a ejecutarse.
     for (int i = 0; i <= last && i < c->steps.size(); ++i) {
         const StepRecord& r = m_run.results[i];
-        rec.steps.append(RunRecordStep{c->steps[i].action, c->steps[i].expected,
+        rec.steps.append(RunRecordStep{c->steps[i].action, c->steps[i].data, c->steps[i].expected,
                                        r.marked ? r.result : StepResult::Skip, r.note, r.durationSecs});
         rec.durationSecs += r.durationSecs;
     }

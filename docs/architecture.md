@@ -33,7 +33,7 @@ src/
 │   ├── EvidenceService    evidencias: captura (con cuenta atrás), grabación GIF, ficheros adjuntos,
 │   │                      portapapeles y sustitución de la imagen anotada; único sitio que toca ficheros
 │   ├── BugReportService   borrador de bug, envío al gestor, cola offline, estados y metadatos
-│   ├── BugStore           libro de bugs: issues enlazados a su caso y cola de pendientes
+│   ├── BugStore           libro de bugs: issues enlazados a la ejecución de la que salieron y cola de pendientes
 │   ├── IssueStore         issues de QA: los planes que prueban cada requerimiento (y los casos y ciclos que
 │   │                      salen de ellos), importación de GESREQ sin duplicados
 │   ├── IssuePublishService publicación del issue en el gestor: crear, vincular, actualizar, estado y
@@ -67,7 +67,8 @@ src/
     │                EvidencePreview (visor de la ejecución), ImageViewer (visor a tamaño completo),
     │                AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
     ├── views/       Una clase por pantalla: IssuesView (+ RequirementImportDialog, JiraPublishDialog,
-    │                QualityRecordDialog, RevisionPublishDialog), CasesView, PlanView, RunView, HistoryView, BugView,
+    │                QualityRecordDialog, RevisionPublishDialog), CasesView, PlanView, RunView, HistoryView,
+    │                BugView (+ BugDialog, el parte; BugDetailWindow, la ficha),
     │                SettingsView (+ SettingsDialog, su ventana); Sidebar (rail de iconos),
     │                StatusStrip (barra de estado) y MainWindow (menú, atajos, bandeja,
     │                navegación, avisos)
@@ -155,8 +156,7 @@ Sobre el rail hay una segunda navegación, la de profundidad, al estilo de las a
   camino de vuelta, así que el botón «atrás» desaparece y nunca promete una vuelta que ya no tiene
   sentido.
 * `navigateInto(Screen)` entra en profundidad: lo que hacen las acciones de las tarjetas —crear un
-  caso desde un plan, «Ir al plan» desde un issue, abrir el informe de un ciclo, reportar un bug
-  desde la ejecución—. Apila de qué pantalla se vino **con el nombre que tenía en ese momento**
+  caso desde un plan, «Ir al plan» desde un issue, abrir el informe de un ciclo—. Apila de qué pantalla se vino **con el nombre que tenía en ese momento**
   (`screenLabel()`: el nombre del plan, el id del issue), no el que tenga al volver.
 * `goBack()` deshace un paso. Lo disparan el botón `navbarBack` de la barra superior (que dice a
   dónde vuelve: «‹ Suite de regresión»), la acción `actBack` del menú Ver con `Alt+←` y el botón
@@ -257,7 +257,7 @@ de estilos de la aplicación y Qt repinta el árbol entero de las dos ventanas.
 | Proyectos y su sistema de GESREQ | `$XDG_DATA_HOME/QAflow/QAflow/projects.json` (`requirementSystem` de cada proyecto) |
 | Bugs y cola offline    | `$XDG_DATA_HOME/QAflow/QAflow/bugs.json`                    |
 | Issues (sus planes, lo importado de GESREQ, sus cambios, la publicación en el gestor y las revisiones con su ciclo y su acta) | `issues.json` en el directorio de datos de cada proyecto |
-| Bugs (el issue del gestor, su caso y el paso del que salió, su clasificación y su estado) | `bugs.json` en el directorio de datos de cada proyecto |
+| Bugs (el issue del gestor, la ejecución y el ciclo en los que se encontró, su caso y paso, su clasificación y su estado) | `bugs.json` en el directorio de datos de cada proyecto |
 | Actas generadas (.docx)  | donde las guarde el usuario; el issue recuerda la ruta de cada revisión |
 | Capturas, GIF y adjuntos | Carpeta configurable (por defecto `~/QAflow/capturas`)     |
 
@@ -267,11 +267,17 @@ de estilos de la aplicación y Qt repinta el árbol entero de las dos ventanas.
   Crear una suite es asignar un nombre nuevo al caso seleccionado; desaparece cuando ningún caso
   la usa. Los datos de ejemplo sólo se cargan en el primer arranque.
 * **Metadatos**: `tags`, `component` y `jiraKey` viven en `TestCase` y viajan en todos los
-  formatos. `TestCase::searchText()` es lo que consulta la búsqueda libre. `CaseFilter` (core)
+  formatos. `jiraKey` ya no se edita en la pantalla de casos —el requerimiento es del issue, y el
+  Test de Zephyr, de cada ejecución—, pero se conserva en el modelo: lo traen los casos importados
+  y lo usan el informe del plan, el acta y el parte de bug. `TestCase::searchText()` es lo que
+  consulta la búsqueda libre. `CaseFilter` (core)
   combina texto, suite, estado, prioridad y resultado de la última ejecución; la vista sólo
   rellena la estructura y pregunta `matches()`.
-* **Pasos**: `insertStep`, `moveStep` y `removeStep` renumeran las capturas asignadas para que
-  sigan a su paso (`remapShotSteps`).
+* **Pasos**: son los tres campos del paso de Zephyr —`action`, `data` (los datos de la prueba,
+  opcionales) y `expected`—, en ese orden en el editor, en el CSV, en el Markdown y en el
+  `POST /teststep`. La ejecución los archiva tal y como estaban (`RunRecordStep::data`), así que el
+  historial y lo que se publica dicen con qué datos se probó. `insertStep`, `moveStep` y
+  `removeStep` renumeran las capturas asignadas para que sigan a su paso (`remapShotSteps`).
 * **Últimas ejecuciones.** El editor lista las cinco últimas del caso —veredicto, fecha, pasos,
   duración, cuántas evidencias dejó y de qué plan salió— y cada fila abre sus resultados en el
   historial (`openRunRequested` → `HistoryView::showRun()`), que es donde están sus pasos con su
@@ -423,20 +429,33 @@ lo calcula a partir del `PlanRun` y sus registros (si un caso se repitió dentro
 última ejecución; los casos que quedaron sin ejecutar aparecen como pendientes). `toMarkdown()`
 produce el informe exportable; la vista sólo abre el diálogo de guardado o copia al portapapeles.
 
-### Los bugs del ciclo
+### Los bugs son de la ejecución en la que se encontraron
 
-El informe trae también **los bugs que se reportaron mientras corría**. Un `IssueLink` no guarda de
-qué ciclo salió —sólo su caso y el paso—, así que la pertenencia se deduce: `PlanReport::reportedDuring()`
-acepta el bug si su fecha cae entre el arranque del ciclo y su cierre **más una hora**, porque el parte
-se escribe justo después de ver el fallo, cuando la ejecución ya se ha archivado; un ciclo en curso
-admite todo lo posterior a su arranque. `PlanReport::build()` recibe el libro de bugs entero y reparte
-los que cuadran en `PlanReportRow::bugs`, caso por caso.
+Un bug no es «del caso»: sale de **unas pruebas concretas**. Al arrancar una ejecución se le reserva ya
+su id en el historial (`RunHistoryStore::reserveRunId()` → `RunState::runId`, que viaja en la sesión
+guardada y es el que `addRun()` respeta al archivarla), así que el parte que se abre mientras corre
+anota de dónde sale: `BugReport::linkedRunId` y `linkedPlanRunId` → `IssueLink::runId` y `planRunId`.
+Con eso, «qué salió de estas pruebas» es una pregunta exacta y no una deducción por fechas.
+
+`PlanReport::foundIn()` es quien responde, en sus dos formas: la del ciclo (`PlanRun`) y la de una
+ejecución (`RunRecord`). Los bugs anteriores a que se anotara la ejecución —y los traídos del gestor,
+que no salieron de QAflow— no lo saben: para ésos sigue valiendo la regla de antes,
+`PlanReport::reportedDuring()`, que acepta el bug si su fecha cae entre el arranque del ciclo y su
+cierre **más una hora** (el parte se escribe justo después de ver el fallo, cuando la ejecución ya se
+ha archivado); un ciclo en curso admite todo lo posterior a su arranque. `PlanReport::build()` recibe
+el libro de bugs entero y reparte los que cuadran en `PlanReportRow::bugs`, caso por caso.
 
 Quien pasa ese libro es `RunHistoryStore::setBugs()` (el `BugStore` se crea después que el historial,
 así que se inyecta desde `ProjectSession`), de modo que **todos** los informes lo traen: la pantalla,
 el Markdown, el acta y la publicación en Zephyr. Sin él —tests que no miran bugs— el informe sale
-igual, sólo que sin ellos. `TestPublishService::defectsOf()` usa la misma `reportedDuring()`, así que
-lo que el informe enseña es exactamente lo que se sube como defectos del ciclo.
+igual, sólo que sin ellos. `TestPublishService::defectsOf()` usa la misma `foundIn()`, así que lo que
+el informe enseña es exactamente lo que se sube como defectos del ciclo.
+
+**Dónde se ven.** En los resultados de las pruebas de las que salieron, y sólo ahí: los del ciclo, en
+el informe del plan y en «Resultados por caso» de la pantalla de planes; los de una ejecución, en su
+detalle del historial y en la pestaña «Bugs» mientras se ejecuta; los de una revisión, en el issue y
+en el acta (por los ciclos de la ronda). La ficha del caso **no** los lista: un caso vive muchas
+ejecuciones y mezclarlas ahí no decía de qué pruebas venía cada bug.
 
 `HistoryView` lista planes y ejecuciones sueltas (las de un plan se ven dentro de su informe, o con
 el filtro «Casos»). Un informe se puede eliminar desde su cabecera: `RunHistoryStore::removePlanRun()`
@@ -544,10 +563,13 @@ de ejecución manda el paso que se tiene delante— o, si no dice ninguno, el fa
 Como un fallo o un bloqueo ya no cortan la ejecución, el parte se levanta en cuanto se ve el problema
 y se sigue probando el resto del caso.
 
-`IIssueTracker` (core) tiene cuatro operaciones asíncronas: probar conexión, crear issue,
+`IIssueTracker` (core) tiene cuatro operaciones asíncronas obligatorias: probar conexión, crear issue,
 consultar estado y leer metadatos del proyecto (tipos, prioridades, componentes, versiones,
-asignables). `TrackerSettings` describe la conexión y su `kind` elige el gestor; `TrackerRouter`
-(infrastructure) despacha al cliente correspondiente, todos sobre `HttpTrackerClient`, que
+asignables), y unas cuantas opcionales que cada gestor dice si sabe hacer (`can…`): buscar personas,
+listar proyectos, publicar y mantener los issues de QAflow, buscar sus bugs, comentar y enlazar.
+`TrackerSettings` describe la conexión y su `kind` elige el gestor; `TrackerRouter`
+(infrastructure) despacha **todas** al cliente correspondiente —lo que no reenvía queda desactivado
+para la aplicación entera, que sólo ve el router—, todos sobre `HttpTrackerClient`, que
 centraliza peticiones JSON/multipart, mensajes de error y la detección de fallos **reintentables**
 (errores de red y 5xx, no rechazos del contenido).
 
@@ -700,9 +722,40 @@ instancia que sí tenía Zephyr saliera por la ruta equivocada. Que el plugin no
 reintentable — no lo arregla insistir —, y un 401 o una caída de red sí.
 
 **Libro de bugs.** `BugReportService::submit()` crea el issue y guarda un `IssueLink` (clave,
-url, título, caso, gestor, fecha) en `BugStore`; el editor de casos y la pantalla de bugs lo
-muestran con su último estado. «Actualizar estados» recorre los issues del gestor actual con
+url, título, la ejecución y el ciclo de los que salió, caso y paso, gestor, fecha) en `BugStore`; la
+pantalla de bugs y los resultados de esas pruebas lo muestran con su último estado. «Actualizar estados» recorre los issues del gestor actual con
 `fetchStatus()` y marca los resueltos.
+
+**La pantalla de bugs es el libro, no el formulario.** `BugView` lista los bugs del proyecto con su
+estado —filtros «Todos / Abiertos / Resueltos», búsqueda por clave, título o caso—, enseña la cola de
+pendientes y abre la ficha de cualquiera en su ventana (`BugDetailWindow`, una por bug). Reportar abre
+el parte en la suya: `BugDialog`, modal con `open()` (nunca `exec()`: un bucle anidado cuelga los tests
+y deja fuera de juego los atajos de la ejecución), que se **esconde sola** mientras se captura la
+pantalla y vuelve cuando la evidencia entra o falla. La abre `MainWindow::reportBug(stepIndex)`, que es
+lo que llaman el botón de la lista, el «Reportar bug» de la ejecución y Ctrl+B; no cambia de pantalla,
+así que el parte se escribe encima de lo que se estaba probando.
+
+**Traer los bugs del gestor.** `IIssueTracker::canSearchIssues/searchProjectBugs` (sólo `JiraClient`:
+`GET /rest/api/2/search` con `project = "X" AND labels = qaflow AND issuetype in ("Error", "Mejora")
+ORDER BY created DESC`) devuelve lo que **creó QAflow** en el proyecto —la etiqueta es lo que lo
+distingue de lo que abre cualquier otro— y es de los tipos que QAflow trabaja
+(`BugReport::jiraIssueTypes()`, en core: lo que está mal y lo que se pide cambiar). Esa misma lista es
+la que propone el parte al reportar, así que **lo que QAflow crea es lo que luego vuelve**; si la
+instancia no llama así a sus tipos, el 400 de Jira se explica diciendo cuáles se buscaron.
+`BugReportService::importFromTracker(startAt)` los pasa al libro: los que ya están se
+actualizan con el título y el estado de hoy (`BugStore::updateFromTracker`, que no toca lo que es de
+QAflow —caso, paso, severidad, clasificación—) y los que no —reportados desde otro equipo— se añaden,
+con el caso sacado de las etiquetas, donde `createIssue()` deja siempre la del caso del que salió el
+bug, y con su tipo (`IssueLink::issueType`), que la lista y la ficha enseñan en una píldora para
+distinguir un error de una mejora. Nada se borra: un bug que el gestor ya no devuelva se queda como está.
+
+**Por páginas, de 50 en 50.** `TrackerIssueList` lleva `total` y `nextStart` (-1 = no queda nada), que
+Jira calcula con su `startAt`/`total`, y el `ImportResult` los pasa tal cual: quien llama guarda el
+cursor y sigue cuando quiera. La pantalla lo usa para **alargar la lista al deslizar**: pinta `kPage`
+(25) filas, añade otras tantas al llegar abajo y, cuando se acaban las del libro, pide al gestor la
+página siguiente (sólo si ya se trajo una vez: la primera es una decisión del usuario, no algo que
+pase por deslizar). Con la lista más corta que el hueco no hay barra que mover, así que `fillViewport()`
+sigue pintando páginas hasta llenarlo, pero sin llamar al gestor.
 
 **Cola offline.** Si `createIssue()` falla de forma reintentable, el bug entra en
 `BugStore::pending()` con su error. «Reintentar envío» (o el arranque de la app con el gestor
@@ -797,7 +850,7 @@ destaca; los hechos se marcan con un visto y se apagan.
 |------|--------------|-----------|---------------------|
 | 1 · Preparar el plan de pruebas | el issue tiene un plan y el plan, casos | crear el plan o abrirlo, «+ Otro plan» y «Vincular plan…» | sus planes, cada uno con sus casos y lo que dio la última ejecución de cada uno |
 | 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | **«Ejecutar plan…»**, que arranca el ciclo desde aquí, «Continuar lo fallado…» si la ronda dejó casos rotos, y «Ir al plan» para componerlo antes | los ciclos de sus planes, el más reciente primero, con su veredicto, sus cifras, de qué ronda y ambiente son, si están en Zephyr y las ejecuciones de cada caso |
-| 3 · Revisar los bugs reportados | no queda ninguno abierto | — | los bugs reportados desde los casos de sus planes (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en curso) |
+| 3 · Revisar los bugs reportados | no queda ninguno abierto | — | los bugs encontrados en los ciclos de sus planes (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en curso) |
 | 4 · Generar el acta (R-213) | la revisión tiene su .docx | generar (o regenerar) el acta, y abrir la que hay | — |
 | 5 · Cerrar la revisión | la revisión está cerrada con su resultado | cerrarla, eligiendo conforme u observado | — |
 | 6 · Publicar el resultado | se publicó en el gestor o en GESREQ | «Publicar…», sólo con la revisión cerrada | — |

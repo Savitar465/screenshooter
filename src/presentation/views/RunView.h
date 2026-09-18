@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/models/IssueLink.h"
 #include "core/models/TestCase.h"
 #include "core/models/TestRun.h"
 
@@ -69,6 +70,9 @@ private:
     void refreshShots();
     /// La lista de bugs de la pestaña: los reportados desde este caso, por el paso del que salieron.
     void refreshBugs();
+    /// Bugs que se han reportado en la ejecución que está en curso. No son «los del caso»: un bug
+    /// pertenece a las pruebas de las que salió, y de las anteriores se habla en sus resultados.
+    QList<IssueLink> bugsOfRun() const;
     /// Cambia de pestaña en la columna de la derecha.
     void showTab(int index);
     /// Abre (o trae al frente) la ficha del bug en su propia ventana.
@@ -112,6 +116,7 @@ private:
     QPushButton* m_back;
     QPushButton* m_next;
     QLabel* m_action;
+    QLabel* m_data;
     QLabel* m_expected;
     QWidget* m_verdicts;
     QWidget* m_doneActions;

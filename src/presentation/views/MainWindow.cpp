@@ -3,6 +3,7 @@
 #include "application/AppContext.h"
 #include "core/models/RunHistory.h"   // label(Verdict)
 #include "presentation/theme/Theme.h"
+#include "presentation/views/BugDialog.h"
 #include "presentation/views/BugView.h"
 #include "presentation/views/CasesView.h"
 #include "presentation/views/HistoryView.h"
@@ -111,7 +112,7 @@ QWidget* MainWindow::viewFor(Screen s) {
 
 CasesView* MainWindow::casesView() {
     if (m_cases) return m_cases;
-    m_cases = new CasesView(*m_ctx.cases, *m_ctx.run, *m_ctx.history, *m_ctx.transfer, *m_ctx.bugLedger, *m_ctx.evidence);
+    m_cases = new CasesView(*m_ctx.cases, *m_ctx.run, *m_ctx.history, *m_ctx.transfer, *m_ctx.evidence);
     m_stack->addWidget(m_cases);
     wireCases();
     return m_cases;
@@ -119,7 +120,7 @@ CasesView* MainWindow::casesView() {
 
 PlanView* MainWindow::planView() {
     if (m_plan) return m_plan;
-    m_plan = new PlanView(*m_ctx.cases, *m_ctx.plan, m_ctx.publish);
+    m_plan = new PlanView(*m_ctx.cases, *m_ctx.plan, m_ctx.publish, m_ctx.issues);
     m_stack->addWidget(m_plan);
     wirePlan();
     return m_plan;
@@ -143,7 +144,7 @@ HistoryView* MainWindow::historyView() {
 
 BugView* MainWindow::bugView() {
     if (m_bug) return m_bug;
-    m_bug = new BugView(*m_ctx.cases, *m_ctx.settings, *m_ctx.bugs, *m_ctx.bugLedger, *m_ctx.evidence);
+    m_bug = new BugView(*m_ctx.cases, *m_ctx.settings, *m_ctx.bugs, *m_ctx.bugLedger);
     m_stack->addWidget(m_bug);
     wireBug();
     return m_bug;
@@ -501,7 +502,7 @@ void MainWindow::buildMenus() {
     const struct { Screen screen; QString label; Qt::Key key; } screens[] = {
         {Screen::Issues, tr("I&ssues"), Qt::Key_6}, {Screen::Casos, tr("&Casos de prueba"), Qt::Key_1},
         {Screen::Plan, tr("&Planes de pruebas"), Qt::Key_2}, {Screen::Run, tr("&Ejecución"), Qt::Key_3},
-        {Screen::Historial, tr("&Historial"), Qt::Key_4}, {Screen::Bug, tr("&Reportar bug"), Qt::Key_5}};
+        {Screen::Historial, tr("&Historial"), Qt::Key_4}, {Screen::Bug, tr("&Bugs"), Qt::Key_5}};
     auto* screenGroup = new QActionGroup(this);
     for (const auto& [screen, label, key] : screens) {
         auto* a = view->addAction(label, QKeySequence(Qt::CTRL | key), this, [this, screen]() { navigate(screen); });
@@ -544,7 +545,7 @@ void MainWindow::buildMenus() {
         m_ctx.evidence->attachFiles(evidence::pickFiles(this));
     });
     m_actAttach->setObjectName(QStringLiteral("actAttach"));
-    m_actReportBug = runMenu->addAction(tr("&Reportar bug"), QKeySequence(Qt::CTRL | Qt::Key_B), this, [this]() { navigateInto(Screen::Bug); });
+    m_actReportBug = runMenu->addAction(tr("&Reportar bug"), QKeySequence(Qt::CTRL | Qt::Key_B), this, [this]() { reportBug(); });
     runMenu->addSeparator();
     // Avanzar de paso sin volver a la ventana: son atajos de ámbito aplicación y, además,
     // main.cpp los registra en el sistema para que funcionen desde la aplicación que se prueba.
@@ -689,8 +690,6 @@ void MainWindow::wireCases() {
         navigateInto(Screen::Historial);
         historyView()->showRun(runId);
     });
-    connect(m_cases, &CasesView::openJiraRequested, this, &MainWindow::openTrackerIssue);
-    connect(m_cases, &CasesView::openIssueRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
 }
 
 void MainWindow::wirePlan() {
@@ -706,16 +705,22 @@ void MainWindow::wirePlan() {
     connect(m_ctx.settings, &SettingsStore::trackerChanged, m_plan, &PlanView::refresh);
     connect(m_plan, &PlanView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
     connect(m_plan, &PlanView::openJiraRequested, this, &MainWindow::openTrackerIssue);
+    // El resultado de un caso del ciclo lleva a su ejecución completa: pasos, notas y evidencias.
+    connect(m_plan, &PlanView::openRunRequested, this, [this](const QString& runId) {
+        navigateInto(Screen::Historial);
+        historyView()->showRun(runId);
+    });
+    connect(m_plan, &PlanView::openIssueRequested, this, [this](const QString& id) {
+        m_ctx.issues->select(id);
+        navigateInto(Screen::Issues);
+    });
 }
 
 void MainWindow::wireRun() {
     connect(m_run, &RunView::toast, this, &MainWindow::showToast);
     connect(m_run, &RunView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
     connect(m_run, &RunView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
-    connect(m_run, &RunView::reportBugRequested, this, [this](int stepIndex) {
-        bugView()->setDraftStep(stepIndex);
-        navigateInto(Screen::Bug);
-    });
+    connect(m_run, &RunView::reportBugRequested, this, &MainWindow::reportBug);
     connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
 }
 
@@ -734,12 +739,28 @@ void MainWindow::wireHistory() {
 void MainWindow::wireBug() {
     connect(m_bug, &BugView::toast, this, &MainWindow::showToast);
     connect(m_bug, &BugView::openIssueRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
-    connect(m_bug, &BugView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
-    // Terminar (o dejar) el parte devuelve a donde se pidió —la ejecución, casi siempre—; sin camino
-    // que deshacer, a los casos.
-    const auto leaveBug = [this]() { if (m_back.isEmpty()) navigate(Screen::Casos); else goBack(); };
-    connect(m_bug, &BugView::cancelled, this, leaveBug);
-    connect(m_bug, &BugView::submitted, this, [leaveBug](const QString&) { leaveBug(); });
+    // Reportar no es una pantalla: el parte se abre en su ventana, encima de donde se esté.
+    connect(m_bug, &BugView::createRequested, this, [this]() { reportBug(); });
+}
+
+QWidget* MainWindow::bugWindow() const { return m_bugDialog; }
+
+void MainWindow::reportBug(int stepIndex) {
+    if (m_bugDialog) {   // ya hay un parte a medias: se trae al frente con el paso que se pida
+        m_bugDialog->loadDraft(stepIndex);
+        m_bugDialog->show();
+        m_bugDialog->raise();
+        m_bugDialog->activateWindow();
+        return;
+    }
+    auto* dialog = new BugDialog(*m_ctx.cases, *m_ctx.settings, *m_ctx.bugs, *m_ctx.evidence, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &BugDialog::toast, this, &MainWindow::showToast);
+    m_bugDialog = dialog;
+    dialog->loadDraft(stepIndex);
+    // `open()` y no `exec()`: es modal, pero sin bucle propio (uno anidado cuelga los tests y deja
+    // fuera de juego a los atajos globales de la ejecución).
+    dialog->open();
 }
 
 void MainWindow::wireIssues() {
@@ -970,7 +991,6 @@ void MainWindow::goBack() {
 void MainWindow::showScreen(Screen s) {
     // Entrar en la pantalla es lo que construye su vista, si es la primera vez.
     QWidget* view = viewFor(s);
-    if (s == Screen::Bug) m_bug->loadDraft();
     m_current = s;
     selectContextTarget();
     m_stack->setCurrentWidget(view);
@@ -1006,7 +1026,7 @@ QString MainWindow::screenLabel(Screen s) const {
     }
     case Screen::Run: return tr("Ejecución");
     case Screen::Historial: return tr("Historial");
-    case Screen::Bug: return tr("Reportar bug");
+    case Screen::Bug: return tr("Bugs");
     case Screen::Issues: {
         const Issue* i = m_ctx.issues->find(m_ctx.issues->selectedId());
         return i ? tr("Issue %1").arg(i->id) : tr("Issues");

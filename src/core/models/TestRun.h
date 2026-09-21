@@ -105,12 +105,19 @@ struct RunState {
     }
 };
 
+/// Ejecución de un caso del ciclo que se dejó a medias para ir a otro: se retoma tal cual al volver.
+struct ParkedRun {
+    RunState run;
+    QString continuesRunId;   // ejecución que retoma (vacío si el caso se ejecuta entero)
+};
+
 /// Ejecución en curso tal y como se guarda en disco para sobrevivir al cierre.
 struct RunSession {
     RunState run;
-    QStringList queue;     // casos del plan pendientes
+    QStringList queue;     // casos del plan pendientes (los aparcados incluidos)
     QString planRunId;     // ejecución de plan abierta en el historial (vacío si es suelta)
     QString continuesRunId;   // ejecución que se está retomando (vacío si el caso se ejecuta entero)
+    QList<ParkedRun> parked;  // casos del plan empezados y dejados para ir a otro
 };
 
 } // namespace qaflow

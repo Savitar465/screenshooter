@@ -126,6 +126,34 @@ void IssuePublishService::publishResult(const QString& issueId, const QString& c
     });
 }
 
+bool IssuePublishService::canClose(const Issue& issue) const {
+    return m_tracker && issue.isPublished() && m_tracker->canCloseIssues(m_settings.tracker());
+}
+
+void IssuePublishService::close(const QString& issueId, std::function<void(const Result&)> done) {
+    const Issue* issue = m_issues.find(issueId);
+    if (!issue) { done(Result{false, {}, {}, tr("El issue ya no existe"), false, false}); return; }
+    if (!canClose(*issue)) { done(Result{false, {}, {}, tr("El issue no está en un gestor que QAflow sepa cerrar"), false, false}); return; }
+    const QString key = issue->publication.key;
+    const QString url = issue->publication.url;
+    m_tracker->closeIssue(m_settings.tracker(), key, [this, issueId, key, url, done](const IssueResult& r) {
+        Result out;
+        out.key = key;
+        out.url = url;
+        out.error = r.error;
+        out.retryable = r.retryable;
+        if (!r.ok) {
+            // Una transición cortada puede haberse aplicado: se sabe mirando el estado, no reintentando.
+            out.uncertain = r.retryable;
+            done(out);
+            return;
+        }
+        out.ok = true;
+        // El estado que se enseña es el que dice el gestor ahora (el nombre lo pone su flujo).
+        refreshStatus(issueId, [done, out](const Result&) { done(out); });
+    });
+}
+
 bool IssuePublishService::canLinkIssues(const Issue& issue) const {
     return m_tracker && issue.isPublished() && m_tracker->canLinkIssues(m_settings.tracker());
 }
@@ -177,6 +205,7 @@ void IssuePublishService::publish(const QString& issueId, const IssueDraft& draf
         out.ok = true;
         out.key = r.key;
         out.url = r.url;
+        out.warning = r.warning;
         m_issues.updateIssue(issueId, [&](Issue& i) {
             IssuePublication& p = i.publication;
             p.tracker = toString(settings.kind);

@@ -337,7 +337,91 @@ private slots:
         QCOMPARE(f.history.runsForPlan(planRunId).size(), 1);
     }
 
+    // ---- Ir de un caso a otro del ciclo -------------------------------------------------
+
+    // Ir a otro caso deja el actual en pausa, sin archivarlo, y al volver se retoma donde se dejó.
+    void goingToAnotherCaseParksTheCurrentOneAndResumesItLater() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-104"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        QCOMPARE(f.run.planCases(), (QStringList{QStringLiteral("TC-104"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}));
+        const QString runId = f.run.state().runId;
+        f.run.mark(StepResult::Pass);
+        f.run.setNote(QStringLiteral("a medias"));
+
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-107")));
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-107"));
+        QCOMPARE(f.store.selectedId(), QStringLiteral("TC-107"));
+        QVERIFY(f.run.isQueued(QStringLiteral("TC-104")));
+        QVERIFY(!f.run.isQueued(QStringLiteral("TC-107")));
+        QCOMPARE(f.run.queuedCount(), 2);
+        const RunState* parked = f.run.parkedRun(QStringLiteral("TC-104"));
+        QVERIFY(parked);
+        QCOMPARE(parked->markedCount(), 1);
+        QVERIFY(f.history.runsForPlan(f.run.planRunId()).isEmpty());   // nada archivado todavía
+
+        // «Siguiente caso» sigue el orden del plan: vuelve a TC-104, donde se dejó.
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.finish());
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-104"));
+        QCOMPARE(f.run.state().runId, runId);
+        QCOMPARE(f.run.state().idx, 1);
+        QCOMPARE(f.run.state().markedCount(), 1);
+        QCOMPARE(f.run.state().note, QStringLiteral("a medias"));   // la nota del paso en pantalla, también
+        QVERIFY(!f.run.parkedRun(QStringLiteral("TC-104")));
+        QCOMPARE(f.history.runsForPlan(f.run.planRunId()).size(), 1);
+    }
+
+    void onlyQueuedCasesOfTheCycleCanBeReached() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-103"));
+        QVERIFY(!f.run.goToCase(QStringLiteral("TC-107")));   // un caso suelto no tiene ciclo
+        QVERIFY(f.run.planCases().isEmpty());
+
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107"), QStringLiteral("TC-104")}, QStringLiteral("Regresión"));
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.finish());                                   // TC-103 archivado
+        QVERIFY(!f.run.goToCase(QStringLiteral("TC-103")));
+        QVERIFY(!f.run.goToCase(QStringLiteral("TC-101")));   // no es del plan
+        QVERIFY(!f.run.goToCase(QStringLiteral("TC-107")));   // ya está en pantalla
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-107"));
+    }
+
+    // Al cerrar el ciclo, lo aparcado con todos sus pasos marcados se archiva; lo que quedó a medias, no.
+    void closingTheCycleArchivesTheFinishedParkedCases() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-104"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        f.run.mark(StepResult::Fail);                              // TC-103 terminado, sin cerrar
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-104")));
+        f.run.mark(StepResult::Pass);                              // TC-104 a medias
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-107")));
+        f.run.abandon();
+        const auto runs = f.history.runsForPlan(cycle);
+        QCOMPARE(runs.size(), 1);
+        QCOMPARE(runs[0].caseId, QStringLiteral("TC-103"));
+        QCOMPARE(static_cast<int>(runs[0].verdict), static_cast<int>(Verdict::Fallido));
+        QVERIFY(!f.run.parkedRun(QStringLiteral("TC-104")));
+    }
+
     // ---- Sesión persistente ------------------------------------------------------------
+
+    void parkedCasesSurviveRestart() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-104"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-107")));
+        f.run.persistSessionNow();
+
+        RunController again(f.store, f.history, f.sessionRepo);
+        again.load();
+        QCOMPARE(again.state().caseId, QStringLiteral("TC-107"));
+        const RunState* parked = again.parkedRun(QStringLiteral("TC-104"));
+        QVERIFY(parked);
+        QCOMPARE(parked->markedCount(), 1);
+        QVERIFY(again.goToCase(QStringLiteral("TC-104")));
+        QCOMPARE(again.state().idx, 1);
+        QCOMPARE(again.state().markedCount(), 1);
+    }
 
     void sessionSurvivesRestart() {
         AppFixture f;

@@ -213,6 +213,21 @@ public:
         done(r);
     }
 
+    bool closesIssues = true;                       // como Jira
+    QStringList closed;                             // issues cerrados, en orden
+
+    bool canCloseIssues(const TrackerSettings&) const override { return closesIssues; }
+
+    void closeIssue(const TrackerSettings& s, const QString& key, std::function<void(const IssueResult&)> done) override {
+        IssueResult r;
+        if (mode == Mode::NetworkDown) { r.error = QStringLiteral("Host not found"); r.retryable = true; done(r); return; }
+        closed << key;
+        r.ok = true;
+        r.key = key;
+        r.url = s.issueUrl(key);
+        done(r);
+    }
+
     void fetchProjects(const TrackerSettings&, std::function<void(const TrackerProjectList&)> done) override {
         ++projectListCalls;
         if (mode == Mode::NetworkDown) done(TrackerProjectList{false, {}, QStringLiteral("Host not found")});

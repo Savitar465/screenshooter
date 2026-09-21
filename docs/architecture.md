@@ -663,11 +663,18 @@ El cliente encadena entonces, por cada caso:
 |------|----------|
 | Resolver los ids | `GET /rest/api/2/project/{clave}` (Zephyr trabaja con ids numéricos, no con claves): el del proyecto, el de la versión y el del tipo de incidencia de los Tests; y `GET /rest/api/2/issue/{testKey}?fields=id` para la ejecución que ya tiene Test (republicación) |
 | Crear el ciclo | `POST {api}/cycle` con `projectId`, `versionId`, el `environment` del ciclo y las fechas en el formato de Zephyr (`12/May/26`) |
-| Crear el Test que falta | `POST /rest/api/2/issue` (tipo Test, título y precondiciones del caso) y un `POST {api}/teststep/{issueId}` por paso |
-| Añadir el caso | `POST {api}/execution` → la respuesta viene indexada por el id de la ejecución creada |
+| Crear el Test que falta | `POST /rest/api/2/issue` (tipo Test, título y precondiciones del caso), `PUT /rest/api/2/issue/{clave}/assignee` para dejarlo a nombre del usuario de la conexión y un `POST {api}/teststep/{issueId}` por paso |
+| Añadir el caso | `POST {api}/execution` con `assigneeType: "assignee"` y `assignee` = el usuario de la conexión → la respuesta viene indexada por el id de la ejecución creada. Si Zephyr rechaza la asignación, se repite sin ella |
 | Veredicto del caso | `PUT {api}/execution/{id}/execute` con 1 PASS · 2 FAIL · 4 BLOCKED |
 | Veredicto por paso | `GET {api}/stepResult?executionId=` y `PUT {api}/stepResult/{id}` (N/A queda sin ejecutar, -1) |
 | Evidencias | `POST {api}/attachment?entityId=&entityType=` — `TESTSTEPRESULT` las de un paso, `EXECUTION` las demás |
+
+**Todo lo que se crea queda a nombre de quien publica.** `ZephyrClient::resolveUser()` pregunta una vez
+por instancia y usuario `GET /rest/api/2/myself` (de ahí salían ya la configuración regional de las
+fechas) y guarda también el usuario tal como Jira lo asigna (`name` en Server, `accountId` en Cloud). Con él
+se asignan los Tests nuevos y las ejecuciones nuevas; lo que no se pudo asignar va a
+`PublishResult::warnings`, que se cuenta pero **no** hace fallar la publicación (no queda nada fuera, a
+diferencia de `skipped`).
 
 **El nombre del ciclo dice de qué control de calidad es.** `TestPublishService::cycleName()` lo arma
 con lo que el `PlanRun` sabe: el requerimiento (`GREQ 2026997`, resuelto por `issueId` contra el
@@ -849,8 +856,29 @@ Sin sistema vinculado al proyecto, la consulta no se lanza y abre los ajustes. L
 se lee bajo demanda («Cargar ficha», `RequirementSourceService::fetchDetail`) y se guarda en el issue con su
 fecha; «Abrir en GESREQ» abre la ficha en el navegador, donde hace falta haber entrado.
 
-**Pantalla.** `IssuesView` sigue el esquema de Casos: lista filtrable (texto sobre `Issue::searchText()`,
-estado, prioridad, publicación en Jira) y el issue a la derecha en **tres bloques**: el requerimiento
+**Pantalla.** `IssuesView` son dos páginas (`QStackedWidget`). Se abre en el **tablero**: filtros (texto
+sobre `Issue::searchText()`, prioridad, publicación en Jira) y una columna por cómo va el trabajo de QA
+—Pendiente, En preparación, En pruebas, **Fallido / bloqueado** y Finalizado—, con cada issue en una
+tarjeta (GREQ, sistema, ronda, barra de resultados, fallidos y bloqueados, cambios, qué le toca y su
+clave en el gestor). La columna de fallidos **no es un estado guardado**: `IssuesView::columnOf` pone ahí
+el issue en preparación o en pruebas cuya ronda en curso tiene algún caso fallido o bloqueado según
+`IssueProgress` (sin el servicio del acta, si hay un ciclo que se puede continuar), así que sale de ella
+en cuanto se repite lo roto y el avance automático del estado no cambia. Un clic elige la tarjeta y
+abre a la derecha su **panel**: «Lo siguiente» (el primer paso sin hacer de la revisión, o continuar lo
+fallado, con su acción: `issueNextAction`), los pasos de la ronda de un vistazo y cómo va cada destino
+del resultado. Tarjeta, panel y pasos del detalle leen lo mismo de `IssuesView::snapshotOf`, y lo que
+toca y su acción salen de `IssuesView::nextActionOf`. La tarjeta también se maneja sin ir al panel: la
+elegida (o la que tiene el ratón encima) cambia su última fila por el **botón de lo siguiente**
+(`issueCardAction-<id>`) y un «⋯»; ese «⋯», el del panel (`issueDrawerMore`) y el clic derecho abren su **menú** (abrir, lo siguiente,
+ejecutar, continuar lo fallado, el plan, el estado de QA, el gestor, GESREQ y eliminar), y **arrastrarla**
+a otra columna cambia su estado de QA (MIME `application/x-qaflow-issue`; la columna destino se resalta).
+La de fallidos no acepta tarjetas porque no es un estado; si un issue con casos rotos se suelta en otra,
+cambia su estado pero sigue en fallidos, y un aviso lo explica. Ojo: el resto de la tarjeta es
+transparente al ratón para que clic, doble clic y arrastre sean suyos, pero la fila de los botones no
+puede serlo —`WA_TransparentForMouseEvents` se lleva por delante a todos los hijos—, y en los tests eso
+sólo se ve comprobando `childAt`, porque `QTest::mouseClick` entrega el clic al botón sin buscarlo. Doble clic,
+«Abrir el issue», «+ Nuevo» o un requerimiento que se empieza a probar llevan al **detalle** («← Tablero»
+vuelve), el issue en **tres bloques**: el requerimiento
 (cambios, ausencia, datos y ficha), la **revisión** —con todo lo que se prueba dentro de sus pasos— y las
 **revisiones anteriores**. La publicación en el gestor no es un bloque: está hecha desde que el
 requerimiento se importa, así que es contexto y vive en el **tag de la cabecera** (clave y estado en el
@@ -951,10 +979,11 @@ publica a mano desde el menú de su tag, que es donde además se puede vincular 
 
 | Acción | Qué hace |
 |--------|----------|
-| Publicar | `draftFor()` arma título y descripción (lo importado de GESREQ, las notas de QA y de qué issue salió) y el diálogo los enseña para corregirlos antes de enviar; se crea con las etiquetas `qaflow`, el id del issue y `GREQ-<número>`. El título es `QA - <requerimiento> - <título del issue>` acortado a 120 caracteres con `elideTitle()` (core), que corta por palabras enteras y termina en «…»: la descripción corta de GESREQ suele ser un párrafo y en el gestor el título se lee en tableros y listas. El del issue no se toca, y el texto entero sigue en la descripción |
+| Publicar | Tras crearlo, `JiraClient` lo **asigna al usuario de la conexión** (`GET /myself` cacheado + `PUT /rest/api/2/issue/{clave}/assignee`): quien importa el requerimiento es quien lo prueba. Se asigna aparte y no en los campos del alta porque el campo puede no estar en la pantalla de creación del proyecto, y Jira rechazaría el issue entero; si la asignación falla, el issue queda creado y `IssueResult::warning` lo dice. `draftFor()` arma título y descripción (lo importado de GESREQ, las notas de QA y de qué issue salió) y el diálogo los enseña para corregirlos antes de enviar; se crea con las etiquetas `qaflow`, el id del issue y `GREQ-<número>`. El título es `QA - <requerimiento> - <título del issue>` acortado a 120 caracteres con `elideTitle()` (core), que corta por palabras enteras y termina en «…»: la descripción corta de GESREQ suele ser un párrafo y en el gestor el título se lee en tableros y listas. El del issue no se toca, y el texto entero sigue en la descripción |
 | Vincular | `fetchIssue()` comprueba que la clave existe y la guarda como `linked`: lo escribió otra persona, así que QAflow no ofrece sobrescribirlo |
 | Actualizar | `needsUpdate()` compara lo de ahora con `publishedTitle`/`publishedDescription` (lo último que salió de QAflow) y avisa; sólo esta acción reescribe el título y la descripción en el gestor, diciendo antes que lo editado allí se pierde |
 | Estado | `refreshStatus()` guarda el estado del gestor, que se enseña aparte del estado de QA |
+| Cerrar | `close()` → `IIssueTracker::closeIssue()` (sólo Jira): mira el estado y, si no está resuelto, pide `GET …/transitions?expand=transitions.fields` y aplica la transición que lleva a la categoría **done** —si hay varias, la que se llame como un cierre: «Cerrar», «Close», «Finalizar», «Done»…— con la resolución si la transición la pide (`JiraClient::closingTransition`). Un flujo sin salida directa a «hecho» se explica y hay que cerrarlo en Jira. Luego pone al día el estado con `refreshStatus()` |
 | Resultado | `publishResult()` comenta en el issue cómo quedó la revisión (resumen de `quality::summaryOf`) y le adjunta el acta, con `IIssueTracker::commentIssue()` — opcional, sólo Jira (`POST /rest/api/2/issue/{clave}/comment` y los adjuntos del issue). Lo llama la publicación de la revisión, que enseña el texto antes de enviarlo |
 
 Nada se publica ni se sobrescribe solo. Si un envío se corta sin respuesta, el issue queda marcado como
@@ -963,8 +992,8 @@ buscarlo por su etiqueta y publicar otra vez pide confirmación expresa. Un rech
 incidencia que no existe, por ejemplo) no deja esa duda y no marca nada.
 
 **Publicar el resultado de una revisión.** Cuando la revisión se cierra, la tarjeta «Revisión» ofrece
-«Publicar…» (`RevisionPublishDialog` sobre `RevisionPublishService`): una sola pantalla con los tres
-destinos, lo que iría a cada uno y lo que ya se hizo, para elegir y ver cómo termina cada paso.
+«Publicar…» (`RevisionPublishDialog` sobre `RevisionPublishService`): una sola pantalla con los cuatro
+pasos, lo que iría a cada uno y lo que ya se hizo, para elegir y ver cómo termina cada paso.
 
 **Todo esto habla de una ronda concreta.** `QualityRecordService` y `RevisionPublishService` reciben el
 número de revisión en cada llamada (`cyclesFor`, `draftFor`, `summaryFor`, `suggestedFileName`, `generate`,
@@ -985,6 +1014,7 @@ gestor ya empezaba por «Control de calidad GREQ X — revisión N».
 | Zephyr | Los ciclos de los planes del issue, con sus casos, pasos, evidencias y **defectos** —cada bug va en la ejecución y en el resultado del paso del que salió (`IssueLink::step`, el paso del que se levantó el parte)— (`TestPublishService`); los ya publicados se actualizan en vez de duplicarse | Zephyr activado en Ajustes y algún caso ejecutado en esos ciclos |
 | El gestor | Un comentario en el issue con el resumen de la revisión, los enlaces de los ciclos de Zephyr y el acta adjunta; y del issue se **cuelgan sus pruebas**: los bugs de la revisión y los Tests de Zephyr de sus ejecuciones, enlazados con `IIssueTracker::linkIssues()` (`RevisionPublishService::linkEvidence`) | El issue está en el gestor (lo está desde que se importó) y el gestor sabe comentar |
 | GESREQ | El registro del control de calidad: resultado, comentario, las cinco cifras A–E del acta y el acta adjunta. Al guardar, el sistema dice con qué **estado** queda el requerimiento y el issue se actualiza con él (`IssueStore::noteRequirementState`), sin volver a leer la bandeja | El issue viene de GESREQ, el conector sabe registrar, **el sistema aceptaría el registro** y el control **no se registró ya** |
+| Cerrar el issue del gestor | La transición a un estado resuelto (`IssuePublishService::close`), como **último paso** (`runClose`) | El resultado que se publica es **Conforme** (el diálogo sólo ofrece la casilla entonces), el gestor sabe cerrar y **todo lo elegido antes salió bien**; si algo falló, el issue sigue abierto y se dice. Observado no cierra: el requerimiento vuelve a desarrollo. En los chips de destino sólo cuenta como pendiente en una ronda conforme |
 
 El envío se escribe **byte a byte como el de un navegador** (`HttpClient::formData`): delimitador sin
 comillas, cada campo con sólo su `Content-Disposition` y el acta en el sitio que ocupa en el formulario

@@ -74,6 +74,8 @@ struct PublishResult {
     QHash<QString, QString> createdTests;
     /// Lo que no se pudo publicar, con el motivo ("TC-103: no se pudo crear el Test · …").
     QStringList skipped;
+    /// Lo que salió a medias sin dejar nada fuera: un Test o una ejecución que no se pudo asignar.
+    QStringList warnings;
     QString error;
     bool retryable = false;  // fallo de red o 5xx: merece la pena reintentar
 };

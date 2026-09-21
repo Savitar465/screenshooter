@@ -735,6 +735,10 @@
         <source>| Bug | Tipo | Caso | Paso | Título | Severidad | Estado |</source>
         <translation>| Bug | Type | Test case | Step | Title | Severity | Status |</translation>
     </message>
+    <message>
+        <source>Este gestor no cierra issues desde QAflow</source>
+        <translation>This tracker does not close issues from QAflow</translation>
+    </message>
 </context>
 <context>
     <name>infrastructure</name>
@@ -1244,6 +1248,30 @@
     <message>
         <source>Jira rechazó la búsqueda de incidencias de tipo %1 · %2</source>
         <translation>Jira rejected the search for issues of type %1 · %2</translation>
+    </message>
+    <message>
+        <source>%1: el Test %2 no se pudo asignar a tu usuario</source>
+        <translation>%1: Test %2 could not be assigned to your user</translation>
+    </message>
+    <message>
+        <source>%1: la ejecución no se pudo asignar a tu usuario · %2</source>
+        <translation>%1: the execution could not be assigned to your user · %2</translation>
+    </message>
+    <message>
+        <source>Jira no dice quién es el usuario de la conexión</source>
+        <translation>Jira does not say who the connection user is</translation>
+    </message>
+    <message>
+        <source>%1 no se pudo asignar a tu usuario · %2</source>
+        <translation>%1 could not be assigned to your user · %2</translation>
+    </message>
+    <message>
+        <source>Indica el issue del gestor que se cierra</source>
+        <translation>Enter the tracker issue to close</translation>
+    </message>
+    <message>
+        <source>El flujo de %1 no ofrece desde su estado actual ninguna transición que lo cierre: ciérralo en Jira</source>
+        <translation>The workflow of %1 offers no transition that closes it from its current status: close it in Jira</translation>
     </message>
 </context>
 <context>
@@ -2850,6 +2878,10 @@
         <source>Publica antes el issue en el gestor para dejar allí el resultado</source>
         <translation>Publish the issue in the tracker first to leave the result there</translation>
     </message>
+    <message>
+        <source>El issue no está en un gestor que QAflow sepa cerrar</source>
+        <translation>The issue is not in a tracker QAflow can close</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::IssueStore</name>
@@ -2895,10 +2927,6 @@
     <message>
         <source>Buscar por título, número de GREQ, sistema, solicitante…</source>
         <translation>Search by title, GREQ number, system, requester…</translation>
-    </message>
-    <message>
-        <source>Estado</source>
-        <translation>Status</translation>
     </message>
     <message>
         <source>Prioridad</source>
@@ -3433,10 +3461,6 @@ Create another one anyway?</translation>
         <translation>%1 created and linked to %2: now add its cases</translation>
     </message>
     <message>
-        <source>%1 creado en el gestor para %2</source>
-        <translation>%1 created in the tracker for %2</translation>
-    </message>
-    <message>
         <source>El envío al gestor se cortó sin respuesta: comprueba si %1 se creó antes de publicarlo otra vez · %2</source>
         <translation>The send to the tracker was cut off with no answer: check whether %1 was created before publishing it again · %2</translation>
     </message>
@@ -3691,6 +3715,247 @@ Create another one anyway?</translation>
     <message>
         <source>%1 de %2 ejecutados · %3 superados · %4 fallidos · %5 bloqueados · %6</source>
         <translation>%1 of %2 run · %3 passed · %4 failed · %5 blocked · %6</translation>
+    </message>
+    <message>
+        <source>PENDIENTE</source>
+        <translation>PENDING</translation>
+    </message>
+    <message>
+        <source>Sin plan todavía</source>
+        <translation>No plan yet</translation>
+    </message>
+    <message>
+        <source>EN PREPARACIÓN</source>
+        <translation>PREPARING</translation>
+    </message>
+    <message>
+        <source>Plan en composición</source>
+        <translation>Plan being put together</translation>
+    </message>
+    <message>
+        <source>EN PRUEBAS</source>
+        <translation>TESTING</translation>
+    </message>
+    <message>
+        <source>Ejecutándose, sin fallos</source>
+        <translation>Running, no failures</translation>
+    </message>
+    <message>
+        <source>FALLIDO / BLOQUEADO</source>
+        <translation>FAILED / BLOCKED</translation>
+    </message>
+    <message>
+        <source>Quedaron casos rotos: continuar lo fallado</source>
+        <translation>Broken cases left: continue the failures</translation>
+    </message>
+    <message>
+        <source>FINALIZADO</source>
+        <translation>DONE</translation>
+    </message>
+    <message>
+        <source>Revisión cerrada</source>
+        <translation>Review closed</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n FALLIDO(S)</source>
+        <translation>
+            <numerusform>%n FAILED</numerusform>
+            <numerusform>%n FAILED</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n BLOQUEADO(S)</source>
+        <translation>
+            <numerusform>%n BLOCKED</numerusform>
+            <numerusform>%n BLOCKED</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Continuar lo fallado</source>
+        <translation>Continue the failures</translation>
+    </message>
+    <message>
+        <source>Crear el plan</source>
+        <translation>Create the plan</translation>
+    </message>
+    <message>
+        <source>Añadir casos al plan</source>
+        <translation>Add cases to the plan</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n caso(s) sin ejecutar</source>
+        <translation>
+            <numerusform>%n case not run</numerusform>
+            <numerusform>%n cases not run</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n bug(s) abierto(s)</source>
+        <translation>
+            <numerusform>%n open bug</numerusform>
+            <numerusform>%n open bugs</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Generar el acta</source>
+        <translation>Generate the record</translation>
+    </message>
+    <message>
+        <source>%1 · publicado</source>
+        <translation>%1 · published</translation>
+    </message>
+    <message>
+        <source>LO SIGUIENTE</source>
+        <translation>NEXT UP</translation>
+    </message>
+    <message>
+        <source>%1 dejó %2 fallido(s) y %3 bloqueado(s): se repiten desde el paso que se rompió, en la misma revisión.</source>
+        <translation>%1 left %2 failed and %3 blocked: they are rerun from the step that broke, in the same review.</translation>
+    </message>
+    <message>
+        <source>▶ Continuar lo fallado (%1)</source>
+        <translation>▶ Continue the failures (%1)</translation>
+    </message>
+    <message>
+        <source>El plan todavía no tiene casos: ábrelo y añádeselos.</source>
+        <translation>The plan has no cases yet: open it and add them.</translation>
+    </message>
+    <message>
+        <source>%1 de %2 casos ejecutados en esta revisión</source>
+        <translation>%1 of %2 cases executed in this review</translation>
+    </message>
+    <message>
+        <source>▶ Ejecutar plan…</source>
+        <translation>▶ Run plan…</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n bug(s) abierto(s): con alguno abierto el requerimiento no queda conforme.</source>
+        <translation>
+            <numerusform>%n open bug: while any is open the requirement is not compliant.</numerusform>
+            <numerusform>%n open bugs: while any is open the requirement is not compliant.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Ver los bugs</source>
+        <translation>See the bugs</translation>
+    </message>
+    <message>
+        <source>Se propone «%1»</source>
+        <translation>“%1” is proposed</translation>
+    </message>
+    <message>
+        <source>Nada pendiente</source>
+        <translation>Nothing pending</translation>
+    </message>
+    <message>
+        <source>Revisión %1 cerrada como %2</source>
+        <translation>Review %1 closed as %2</translation>
+    </message>
+    <message>
+        <source>Abrir el issue</source>
+        <translation>Open the issue</translation>
+    </message>
+    <message>
+        <source>REVISIÓN %1</source>
+        <translation>REVIEW %1</translation>
+    </message>
+    <message>
+        <source>Preparar el plan</source>
+        <translation>Prepare the plan</translation>
+    </message>
+    <message>
+        <source>Revisar los bugs</source>
+        <translation>Review the bugs</translation>
+    </message>
+    <message>
+        <source>Publicar</source>
+        <translation>Publish</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n caso(s)</source>
+        <translation>
+            <numerusform>%n case</numerusform>
+            <numerusform>%n cases</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n abierto(s)</source>
+        <translation>
+            <numerusform>%n open</numerusform>
+            <numerusform>%n open</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Hecho</source>
+        <translation>Done</translation>
+    </message>
+    <message>
+        <source>Pendiente</source>
+        <translation>Pending</translation>
+    </message>
+    <message>
+        <source>No disponible</source>
+        <translation>Not available</translation>
+    </message>
+    <message>
+        <source>← Tablero</source>
+        <translation>← Board</translation>
+    </message>
+    <message>
+        <source>Doble clic para abrir el issue · arrástralo a otra columna para cambiar su estado · clic derecho para más</source>
+        <translation>Double-click to open the issue · drag it to another column to change its state · right-click for more</translation>
+    </message>
+    <message>
+        <source>Más acciones</source>
+        <translation>More actions</translation>
+    </message>
+    <message>
+        <source>▶ Continuar (%1)</source>
+        <translation>▶ Continue (%1)</translation>
+    </message>
+    <message>
+        <source>▶ Ejecutar</source>
+        <translation>▶ Run</translation>
+    </message>
+    <message>
+        <source>Ver bugs</source>
+        <translation>See bugs</translation>
+    </message>
+    <message>
+        <source>Generar acta</source>
+        <translation>Generate record</translation>
+    </message>
+    <message>
+        <source>Cerrar</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <source>Lo siguiente: %1</source>
+        <translation>Next: %1</translation>
+    </message>
+    <message>
+        <source>Abrir %1 en el gestor</source>
+        <translation>Open %1 in the tracker</translation>
+    </message>
+    <message>
+        <source>%1 sigue en «Fallido / bloqueado»: su revisión tiene casos rotos. Continúa lo fallado para sacarlo.</source>
+        <translation>%1 stays in “Failed / blocked”: its review has broken cases. Continue the failures to move it out.</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>%1 creado en el gestor · %2</source>
+        <translation>%1 created in the tracker · %2</translation>
+    </message>
+    <message>
+        <source>%1 creado en el gestor para %2 · %3</source>
+        <translation>%1 created in the tracker for %2 · %3</translation>
+    </message>
+    <message>
+        <source>%1 creado en el gestor para %2 y asignado a tu usuario</source>
+        <translation>%1 created in the tracker for %2 and assigned to your user</translation>
     </message>
 </context>
 <context>
@@ -5251,6 +5516,10 @@ Status: %4
         <source>Publicar el resultado de la revisión %1</source>
         <translation>Publish the result of review %1</translation>
     </message>
+    <message>
+        <source>Cerrar el issue en el gestor (sólo si es Conforme)</source>
+        <translation>Close the tracker issue (only if Passed)</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::RevisionPublishService</name>
@@ -5417,6 +5686,46 @@ Status: %4
     <message>
         <source>La revisión %1 ya se registró en GESREQ el %2: lo de esta ronda ya no es lo último que sabe el sistema</source>
         <translation>Review %1 was already registered in GESREQ on %2: this round is no longer the latest the system knows</translation>
+    </message>
+    <message>
+        <source>el cierre en el gestor</source>
+        <translation>closing in the tracker</translation>
+    </message>
+    <message>
+        <source>El gestor configurado no permite cerrar issues desde QAflow</source>
+        <translation>The configured tracker does not allow closing issues from QAflow</translation>
+    </message>
+    <message>
+        <source>Ya está cerrado en el gestor (%1)</source>
+        <translation>Already closed in the tracker (%1)</translation>
+    </message>
+    <message>
+        <source>Sólo si el resultado es Conforme y lo demás se publica bien</source>
+        <translation>Only if the result is Passed and everything else publishes fine</translation>
+    </message>
+    <message>
+        <source>No se puede cerrar el issue en el gestor</source>
+        <translation>The tracker issue cannot be closed</translation>
+    </message>
+    <message>
+        <source>%1 sigue abierto: la publicación no terminó bien. Complétala y se cerrará</source>
+        <translation>%1 stays open: the publication did not finish well. Complete it and it will be closed</translation>
+    </message>
+    <message>
+        <source>%1 cerrado en el gestor</source>
+        <translation>%1 closed in the tracker</translation>
+    </message>
+    <message>
+        <source>%1 cerrado en el gestor · «%2»</source>
+        <translation>%1 closed in the tracker · “%2”</translation>
+    </message>
+    <message>
+        <source>El cierre se cortó sin respuesta: compruébalo en el gestor · %1</source>
+        <translation>Closing was cut off without a reply: check it in the tracker · %1</translation>
+    </message>
+    <message>
+        <source>No se pudo cerrar %1 en el gestor · %2</source>
+        <translation>%1 could not be closed in the tracker · %2</translation>
     </message>
 </context>
 <context>
@@ -5894,6 +6203,54 @@ Press “Capture” or drop a file on the window.</translation>
     <message>
         <source>Sólo se pueden anotar imágenes</source>
         <translation>Only images can be annotated</translation>
+    </message>
+    <message>
+        <source>Casos</source>
+        <translation>Cases</translation>
+    </message>
+    <message>
+        <source>Los casos del ciclo: ir a otro deja éste en pausa, tal como está</source>
+        <translation>The cases of the cycle: going to another one pauses this one, as it is</translation>
+    </message>
+    <message>
+        <source>Casos · %1/%2</source>
+        <translation>Cases · %1/%2</translation>
+    </message>
+    <message>
+        <source>EN PAUSA · %1/%2</source>
+        <translation>PAUSED · %1/%2</translation>
+    </message>
+    <message>
+        <source>BLOQUEADO</source>
+        <translation>BLOCKED</translation>
+    </message>
+    <message>
+        <source>FALLIDO</source>
+        <translation>FAILED</translation>
+    </message>
+    <message>
+        <source>SUPERADO</source>
+        <translation>PASSED</translation>
+    </message>
+    <message>
+        <source>SIN EJECUTAR</source>
+        <translation>NOT RUN</translation>
+    </message>
+    <message>
+        <source>Volver a este caso, donde se dejó</source>
+        <translation>Back to this case, where it was left</translation>
+    </message>
+    <message>
+        <source>Ir a este caso; el actual queda en pausa</source>
+        <translation>Go to this case; the current one is paused</translation>
+    </message>
+    <message>
+        <source>Ya archivado en el historial de este ciclo</source>
+        <translation>Already archived in this cycle&apos;s history</translation>
+    </message>
+    <message>
+        <source>(caso eliminado)</source>
+        <translation>(deleted case)</translation>
     </message>
 </context>
 <context>
@@ -6709,6 +7066,10 @@ HEADS-UP: these results were already published on %1 (cycle %2). A new cycle wil
     <message>
         <source>El ciclo se creó en Zephyr, pero %1 cosas se quedaron fuera.</source>
         <translation>The cycle was created in Zephyr, but %1 things were left out.</translation>
+    </message>
+    <message>
+        <source> · %1 sin asignar a tu usuario</source>
+        <translation> · %1 not assigned to your user</translation>
     </message>
 </context>
 </TS>

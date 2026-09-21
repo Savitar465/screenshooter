@@ -33,6 +33,7 @@ struct ZephyrClient::Job {
     PublishResult result;
     Project project;
     QString locale;            // la del usuario de Jira, para las fechas del ciclo
+    QString assignee;          // el usuario de Jira de la conexión: los Tests y ejecuciones van a su nombre
     int index = 0;             // caso que se está publicando
     QString executionId;       // ejecución del caso en curso
     /// Un resultado de paso de Zephyr emparejado con el paso que se ejecutó y con su número (1..N),
@@ -251,20 +252,41 @@ void ZephyrClient::publish(const TrackerSettings& s, const PublishRequest& reque
         job->project = project;
         ensureApi(job->settings, project.id, [this, job](bool found, const QString& detectError, bool retryable) {
             if (!found) { job->result.error = detectError; job->result.retryable = retryable; job->finish(); return; }
-            resolveLocale(job, [this, job]() { if (job->updating()) checkCycle(job); else createCycle(job); });
+            resolveUser(job, [this, job]() { if (job->updating()) checkCycle(job); else createCycle(job); });
         });
     });
 }
 
-void ZephyrClient::resolveLocale(const std::shared_ptr<Job>& job, std::function<void()> done) {
-    if (m_localeFor == job->settings.baseUrl()) { job->locale = m_locale; done(); return; }
-    get(jira(job->settings, QStringLiteral("/rest/api/2/myself")), [this, job, done](const Response& r) {
-        // Si Jira no la dice, se formatea en inglés, que es como sale un Jira recién instalado.
-        m_locale = r.ok ? r.json.object()[QStringLiteral("locale")].toString() : QString();
-        m_localeFor = job->settings.baseUrl();
+void ZephyrClient::resolveUser(const std::shared_ptr<Job>& job, std::function<void()> done) {
+    const QString scope = job->settings.baseUrl() + QLatin1Char('|') + job->settings.user.trimmed();
+    if (m_userFor == scope) { job->locale = m_locale; job->assignee = m_assignee; done(); return; }
+    get(jira(job->settings, QStringLiteral("/rest/api/2/myself")), [this, job, scope, done](const Response& r) {
+        // Si Jira no la dice, se formatea en inglés, que es como sale un Jira recién instalado; y sin
+        // usuario, lo que se crea se queda sin asignar (se avisa al crearlo).
+        const QJsonObject me = r.ok ? r.json.object() : QJsonObject{};
+        m_locale = me[QStringLiteral("locale")].toString();
+        m_assignee = job->settings.usesAccountId() ? me[QStringLiteral("accountId")].toString() : me[QStringLiteral("name")].toString();
+        m_userFor = scope;
         job->locale = m_locale;
+        job->assignee = m_assignee;
         done();
     });
+}
+
+void ZephyrClient::assignTest(const std::shared_ptr<Job>& job, const QString& key, std::function<void()> next) {
+    const QString unassigned = QCoreApplication::translate("infrastructure", "%1: el Test %2 no se pudo asignar a tu usuario")
+                                   .arg(job->current().caseId, key);
+    if (job->assignee.isEmpty() || key.isEmpty()) {
+        job->result.warnings << unassigned;
+        next();
+        return;
+    }
+    const QJsonObject body = job->settings.usesAccountId() ? QJsonObject{{"accountId", job->assignee}} : QJsonObject{{"name", job->assignee}};
+    sendCustom("PUT", jira(job->settings, QStringLiteral("/rest/api/2/issue/%1/assignee").arg(key)),
+               QJsonDocument(body).toJson(QJsonDocument::Compact), [job, unassigned, next](const Response& r) {
+                   if (!r.ok) job->result.warnings << QStringLiteral("%1 · %2").arg(unassigned, r.error);
+                   next();
+               });
 }
 
 void ZephyrClient::createCycle(const std::shared_ptr<Job>& job, bool withDates) {
@@ -405,10 +427,12 @@ void ZephyrClient::createTestForCase(const std::shared_ptr<Job>& job) {
         job->result.createdTests.insert(c.caseId, key);
         // La clave recién creada también vale para los avisos que vienen después de este punto.
         job->request.cases[job->index].testKey = key;
-        postTestSteps(job->settings, issueId, c, 0, {}, [this, job, issueId](const QStringList& failed) {
-            // El veredicto del paso que no llegó a existir se cuenta luego, al leer los resultados.
-            job->result.skipped += failed;
-            executeCase(job, issueId);
+        assignTest(job, key, [this, job, issueId]() {
+            postTestSteps(job->settings, issueId, job->current(), 0, {}, [this, job, issueId](const QStringList& failed) {
+                // El veredicto del paso que no llegó a existir se cuenta luego, al leer los resultados.
+                job->result.skipped += failed;
+                executeCase(job, issueId);
+            });
         });
     });
 }
@@ -440,15 +464,28 @@ void ZephyrClient::findExecution(const std::shared_ptr<Job>& job, const QString&
     });
 }
 
-void ZephyrClient::createExecution(const std::shared_ptr<Job>& job, const QString& issueId) {
-    const QJsonObject body{
+void ZephyrClient::createExecution(const std::shared_ptr<Job>& job, const QString& issueId, bool withAssignee) {
+    QJsonObject body{
         {"issueId", issueId},
         {"versionId", job->project.versionId},
         {"cycleId", job->result.cycleId},
         {"projectId", job->project.id},
     };
-    postJson(zephyr(job->settings, QStringLiteral("/execution")), QJsonDocument(body), [this, job, issueId](const Response& r) {
+    // La ejecución la hizo quien publica: queda a su nombre en el ciclo.
+    const bool assigning = withAssignee && !job->assignee.isEmpty();
+    if (assigning) {
+        body["assigneeType"] = QStringLiteral("assignee");
+        body["assignee"] = job->assignee;
+    }
+    postJson(zephyr(job->settings, QStringLiteral("/execution")), QJsonDocument(body), [this, job, issueId, assigning](const Response& r) {
         const PublishCase& c = job->current();
+        // Una instalación que no acepte la asignación no se queda sin la ejecución: se repite sin ella.
+        if (!r.ok && assigning && !r.retryable) {
+            job->result.warnings << QCoreApplication::translate("infrastructure", "%1: la ejecución no se pudo asignar a tu usuario · %2")
+                                        .arg(c.caseId, r.error);
+            createExecution(job, issueId, false);
+            return;
+        }
         if (!r.ok) {
             job->skip(QCoreApplication::translate("infrastructure", "%1: no se pudo añadir al ciclo · %2").arg(c.caseId, r.error));
             ++job->index;

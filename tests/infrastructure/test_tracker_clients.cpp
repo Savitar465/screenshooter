@@ -589,6 +589,8 @@ private slots:
         QVERIFY(router.canSearchIssues(jira));
         QVERIFY(router.canCommentIssues(jira));
         QVERIFY(router.canLinkIssues(jira));
+        QVERIFY(router.canCloseIssues(jira));
+        QVERIFY(!router.canCloseIssues(github));
         QVERIFY(!router.canSearchIssues(github));
         // Y el gestor que no sabe responde por el camino corto, sin red.
         TrackerIssueList out;
@@ -603,6 +605,8 @@ private slots:
     void jiraPublishesTheIssueWithItsTypeAndLabels() {
         FakeHttpServer server;
         server.route("POST", "/rest/api/2/issue", [](const HttpRequest&) { return HttpResponse::json(201, "{\"key\":\"SHOP-31\"}"); });
+        server.route("GET", "/rest/api/2/myself", [](const HttpRequest&) { return HttpResponse::json(200, R"({"name":"aperez","locale":"es_ES"})"); });
+        server.route("PUT", "/rest/api/2/issue/SHOP-31/assignee", [](const HttpRequest&) { return HttpResponse::json(204, ""); });
         JiraClient client;
         const TrackerSettings s = jiraServerSettings(server.baseUrl());
         QVERIFY(client.canPublishIssues(s));
@@ -624,6 +628,87 @@ private slots:
         QCOMPARE(fields[QStringLiteral("summary")].toString(), draft.summary);
         QCOMPARE(fields[QStringLiteral("description")].toString(), draft.description);
         QCOMPARE(fields[QStringLiteral("labels")].toArray().last().toString(), QStringLiteral("SUMA-TRANSITO"));
+        // Y queda asignado a quien lo crea: el usuario de la conexión (en Server, por su nombre).
+        QVERIFY(out.warning.isEmpty());
+        QCOMPARE(server.requests.size(), 3);
+        QCOMPARE(server.requests[2].method, QByteArray("PUT"));
+        QCOMPARE(bodyOf(server.requests[2])[QStringLiteral("name")].toString(), QStringLiteral("aperez"));
+    }
+
+    // Si Jira no deja asignarlo, el issue sigue creado y se avisa.
+    void jiraKeepsTheIssueWhenItCannotBeAssigned() {
+        FakeHttpServer server;
+        server.route("POST", "/rest/api/2/issue", [](const HttpRequest&) { return HttpResponse::json(201, "{\"key\":\"SHOP-32\"}"); });
+        server.route("GET", "/rest/api/2/myself", [](const HttpRequest&) { return HttpResponse::json(200, R"({"accountId":"5b10ac8d"})"); });
+        server.route("PUT", "/rest/api/2/issue/SHOP-32/assignee", [](const HttpRequest&) {
+            return HttpResponse::json(400, R"({"errorMessages":["User cannot be assigned"]})");
+        });
+        JiraClient client;
+        IssueResult out;
+        bool done = false;
+        client.publishIssue(jiraSettings(server.baseUrl()), TrackerIssueDraft{QStringLiteral("QA"), {}, QStringLiteral("Tarea"), {}},
+                            [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(out.key, QStringLiteral("SHOP-32"));
+        QVERIFY(out.warning.contains(QStringLiteral("SHOP-32")));
+        QCOMPARE(bodyOf(server.requests[2])[QStringLiteral("accountId")].toString(), QStringLiteral("5b10ac8d"));   // Cloud
+    }
+
+    // Cerrar: la transición que lleva a «hecho», con la resolución si la pide.
+    void jiraClosesTheIssueWithTheTransitionToDone() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/issue/SHOP-12", [](const HttpRequest&) {
+            return HttpResponse::json(200, R"({"fields":{"status":{"name":"En curso","statusCategory":{"key":"indeterminate"}}}})");
+        });
+        server.route("GET", "/rest/api/2/issue/SHOP-12/transitions", [](const HttpRequest&) {
+            return HttpResponse::json(200, R"({"transitions":[
+                {"id":"11","name":"Detener","to":{"name":"Por hacer","statusCategory":{"key":"new"}}},
+                {"id":"31","name":"Resolver","to":{"name":"Resuelta","statusCategory":{"key":"done"}}},
+                {"id":"41","name":"Cerrar","to":{"name":"Cerrada","statusCategory":{"key":"done"}},
+                 "fields":{"resolution":{"required":true,"allowedValues":[{"name":"No se hará"},{"name":"Hecho"}]}}}]})");
+        });
+        server.route("POST", "/rest/api/2/issue/SHOP-12/transitions", [](const HttpRequest&) { return HttpResponse::json(204, ""); });
+        JiraClient client;
+        QVERIFY(client.canCloseIssues(jiraSettings(server.baseUrl())));
+        IssueResult out;
+        bool done = false;
+        client.closeIssue(jiraSettings(server.baseUrl()), QStringLiteral("SHOP-12"), [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        const QJsonObject body = bodyOf(server.requests.last());
+        QCOMPARE(body[QStringLiteral("transition")].toObject()[QStringLiteral("id")].toString(), QStringLiteral("41"));
+        QCOMPARE(body[QStringLiteral("fields")].toObject()[QStringLiteral("resolution")].toObject()[QStringLiteral("name")].toString(),
+                 QStringLiteral("Hecho"));
+    }
+
+    // Uno ya cerrado no se toca, y uno sin salida a «hecho» se explica.
+    void jiraDoesNotCloseTwiceAndExplainsAWorkflowWithoutAWayOut() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/issue/SHOP-12", [](const HttpRequest&) {
+            return HttpResponse::json(200, R"({"fields":{"status":{"name":"Cerrada","statusCategory":{"key":"done"}}}})");
+        });
+        server.route("GET", "/rest/api/2/issue/SHOP-13", [](const HttpRequest&) {
+            return HttpResponse::json(200, R"({"fields":{"status":{"name":"Por hacer","statusCategory":{"key":"new"}}}})");
+        });
+        server.route("GET", "/rest/api/2/issue/SHOP-13/transitions", [](const HttpRequest&) {
+            return HttpResponse::json(200, R"({"transitions":[{"id":"21","name":"Empezar","to":{"name":"En curso","statusCategory":{"key":"indeterminate"}}}]})");
+        });
+        JiraClient client;
+        IssueResult out;
+        bool done = false;
+        client.closeIssue(jiraSettings(server.baseUrl()), QStringLiteral("SHOP-12"), [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(server.requests.size(), 1);   // sólo se miró el estado
+
+        done = false;
+        client.closeIssue(jiraSettings(server.baseUrl()), QStringLiteral("SHOP-13"), [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QVERIFY(out.error.contains(QStringLiteral("SHOP-13")));
+        QVERIFY(std::none_of(server.requests.cbegin(), server.requests.cend(),
+                             [](const HttpRequest& r) { return r.method == "POST"; }));
     }
 
     void jiraReadsAnExistingIssueToLinkItAndSaysWhenItIsNotThere() {

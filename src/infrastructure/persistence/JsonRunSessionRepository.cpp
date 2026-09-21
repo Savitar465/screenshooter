@@ -12,6 +12,40 @@
 
 namespace qaflow {
 
+namespace {
+
+RunState runFromJson(const QJsonObject& run) {
+    RunState r;
+    r.caseId = run["caseId"].toString();
+    r.runId = run["runId"].toString();
+    r.idx = run["idx"].toInt();
+    r.note = run["note"].toString();
+    r.startedAt = QDateTime::fromString(run["startedAt"].toString(), Qt::ISODate);
+    r.finished = run["finished"].toBool();
+    r.stepElapsedSecs = run["stepElapsedSecs"].toInt();
+    for (const auto& v : run["results"].toArray()) {
+        const auto x = v.toObject();
+        // Las sesiones anteriores sólo guardaban los pasos ya ejecutados: sin "marked", todos lo están.
+        r.results.append(StepRecord{stepResultFromString(x["result"].toString()), x["note"].toString(),
+                                    x["durationSecs"].toInt(), x["marked"].toBool(true), x["inherited"].toBool()});
+    }
+    return r;
+}
+
+QJsonObject runToJson(const RunState& run) {
+    QJsonArray results;
+    for (const auto& r : run.results)
+        results.append(QJsonObject{{"result", toString(r.result)}, {"note", r.note}, {"durationSecs", r.durationSecs},
+                                   {"marked", r.marked}, {"inherited", r.inherited}});
+    return QJsonObject{
+        {"caseId", run.caseId}, {"runId", run.runId}, {"idx", run.idx}, {"note", run.note},
+        {"startedAt", run.startedAt.isValid() ? run.startedAt.toString(Qt::ISODate) : QString()},
+        {"finished", run.finished}, {"stepElapsedSecs", run.stepElapsedSecs}, {"results", results},
+    };
+}
+
+} // namespace
+
 JsonRunSessionRepository::JsonRunSessionRepository(const QString& dataDir)
     : m_path(QDir(dataDir).filePath(QStringLiteral("session.json"))) {}
 
@@ -24,41 +58,25 @@ std::optional<RunSession> JsonRunSessionRepository::loadSession() {
     const auto o = doc.object();
 
     RunSession s;
-    const auto run = o["run"].toObject();
-    s.run.caseId = run["caseId"].toString();
-    s.run.runId = run["runId"].toString();
-    s.run.idx = run["idx"].toInt();
-    s.run.note = run["note"].toString();
-    s.run.startedAt = QDateTime::fromString(run["startedAt"].toString(), Qt::ISODate);
-    s.run.finished = run["finished"].toBool();
-    s.run.stepElapsedSecs = run["stepElapsedSecs"].toInt();
-    for (const auto& v : run["results"].toArray()) {
-        const auto r = v.toObject();
-        // Las sesiones anteriores sólo guardaban los pasos ya ejecutados: sin "marked", todos lo están.
-        s.run.results.append(StepRecord{stepResultFromString(r["result"].toString()), r["note"].toString(),
-                                        r["durationSecs"].toInt(), r["marked"].toBool(true), r["inherited"].toBool()});
-    }
+    s.run = runFromJson(o["run"].toObject());
     for (const auto& v : o["queue"].toArray()) s.queue << v.toString();
     s.planRunId = o["planRunId"].toString();
     s.continuesRunId = o["continuesRunId"].toString();
+    for (const auto& v : o["parked"].toArray()) {
+        const auto p = v.toObject();
+        s.parked.append(ParkedRun{runFromJson(p["run"].toObject()), p["continuesRunId"].toString()});
+    }
     return s;
 }
 
 bool JsonRunSessionRepository::saveSession(const RunSession& s) {
-    QJsonArray results;
-    for (const auto& r : s.run.results)
-        results.append(QJsonObject{{"result", toString(r.result)}, {"note", r.note}, {"durationSecs", r.durationSecs},
-                                   {"marked", r.marked}, {"inherited", r.inherited}});
-    const QJsonObject run{
-        {"caseId", s.run.caseId}, {"runId", s.run.runId}, {"idx", s.run.idx}, {"note", s.run.note},
-        {"startedAt", s.run.startedAt.isValid() ? s.run.startedAt.toString(Qt::ISODate) : QString()},
-        {"finished", s.run.finished}, {"stepElapsedSecs", s.run.stepElapsedSecs}, {"results", results},
-    };
+    QJsonArray parked;
+    for (const auto& p : s.parked) parked.append(QJsonObject{{"run", runToJson(p.run)}, {"continuesRunId", p.continuesRunId}});
     QDir().mkpath(QFileInfo(m_path).absolutePath());
     QSaveFile f(m_path);
     if (!f.open(QIODevice::WriteOnly)) return false;
-    f.write(QJsonDocument(QJsonObject{{"run", run}, {"queue", QJsonArray::fromStringList(s.queue)}, {"planRunId", s.planRunId},
-                                      {"continuesRunId", s.continuesRunId}})
+    f.write(QJsonDocument(QJsonObject{{"run", runToJson(s.run)}, {"queue", QJsonArray::fromStringList(s.queue)}, {"planRunId", s.planRunId},
+                                      {"continuesRunId", s.continuesRunId}, {"parked", parked}})
                 .toJson(QJsonDocument::Indented));
     return f.commit();
 }

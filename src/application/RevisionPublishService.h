@@ -20,13 +20,15 @@ class TestPublishService;
 /// Publicar el resultado de una revisión: lo que se hace, de una vez y en orden, cuando el control de
 /// calidad de un requerimiento termina.
 ///
-/// Son tres destinos y cada uno es opcional:
+/// Son cuatro pasos y cada uno es opcional:
 ///  1. **Zephyr**: los ciclos de los planes del issue, con sus casos y sus evidencias (los ya
 ///     publicados se actualizan, no se duplican). De aquí salen los enlaces que llevan los otros dos.
 ///  2. **El gestor (Jira)**: un comentario en el issue con el resultado, los enlaces de Zephyr y el
 ///     acta adjunta. El issue ya está en el gestor desde que se importó el requerimiento, así que
 ///     aquí sólo se comenta.
 ///  3. **GESREQ**: el registro del resultado en el requerimiento, con su acta.
+///  4. **Cerrar el issue del gestor**: sólo cuando la revisión se publica como **Conforme** y todo lo
+///     elegido antes salió bien —el requerimiento pasó el control y no queda nada que hacer en él—.
 ///
 /// Nada se manda solo: quien publica elige los pasos y ve antes qué va a cada sitio. Los pasos se
 /// ejecutan en ese orden y uno que falle no impide los demás (se informa de cada uno). Un envío
@@ -38,7 +40,7 @@ public:
                            TestPublishService* zephyr, IssuePublishService* tracker,
                            RequirementSourceService* requirements, QObject* parent = nullptr);
 
-    enum class Destination { Zephyr, Tracker, Requirement };
+    enum class Destination { Zephyr, Tracker, Requirement, Close };
 
     /// Un destino de la publicación, tal y como se le enseña a quien va a publicar.
     struct Step {
@@ -78,6 +80,7 @@ public:
         bool zephyr = true;
         bool tracker = true;
         bool requirement = true;
+        bool close = true;        // cerrar el issue del gestor; sólo se hace con el resultado Conforme
         QaOutcome outcome = QaOutcome::Conforme;
         QString comment;          // el resumen que va al gestor y a GESREQ
         QString documentPath;     // acta a adjuntar; vacía = sin adjunto
@@ -114,6 +117,8 @@ private:
     /// Zephyr de sus ejecuciones. Así, desde el issue del requerimiento se llega a todo.
     void linkEvidence(const std::shared_ptr<Run>& run, const QString& key);
     void runRequirement(const std::shared_ptr<Run>& run);
+    /// El último paso: con el resultado Conforme y todo lo anterior bien, cierra el issue del gestor.
+    void runClose(const std::shared_ptr<Run>& run);
     /// Por qué esa ronda ya no se puede registrar en GESREQ (ella misma ya se registró, una ronda
     /// posterior se le adelantó, o el control se cerró como Conforme); vacío si todavía se puede.
     /// Registrar cambia el estado del requerimiento en el sistema, así que se hace una sola vez por

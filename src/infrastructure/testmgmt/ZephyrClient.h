@@ -71,8 +71,12 @@ private:
     void resolveProject(const TrackerSettings& s, const QString& versionName,
                         std::function<void(bool, const Project& project, const QString& error)> done);
 
-    /// Configuración regional del usuario de Jira, que es con la que Zephyr parsea las fechas.
-    void resolveLocale(const std::shared_ptr<Job>& job, std::function<void()> done);
+    /// El usuario de Jira de la conexión: su configuración regional, que es con la que Zephyr parsea las
+    /// fechas, y su nombre, que es a quien se asignan los Tests y las ejecuciones que se crean.
+    void resolveUser(const std::shared_ptr<Job>& job, std::function<void()> done);
+    /// Deja el Test recién creado a nombre del usuario de la conexión, como el issue del requerimiento.
+    /// Si no se puede, lo anota en los avisos y sigue: el Test ya existe y vale igual.
+    void assignTest(const std::shared_ptr<Job>& job, const QString& key, std::function<void()> next);
     /// `withDates` a false repite el ciclo sin fechas cuando Zephyr rechaza el formato de las suyas.
     void createCycle(const std::shared_ptr<Job>& job, bool withDates = true);
     /// Crea en Jira el issue de tipo Test que representa al caso (título y precondiciones).
@@ -91,7 +95,9 @@ private:
     void executeCase(const std::shared_ptr<Job>& job, const QString& issueId);
     /// Al actualizar: la ejecución que ese Test ya tiene en el ciclo (vacía si ninguna).
     void findExecution(const std::shared_ptr<Job>& job, const QString& issueId, std::function<void(const QString& executionId)> done);
-    void createExecution(const std::shared_ptr<Job>& job, const QString& issueId);
+    /// La ejecución se crea asignada al usuario de la conexión; si Zephyr no acepta la asignación, se
+    /// repite sin ella (`withAssignee` a false) y queda el aviso.
+    void createExecution(const std::shared_ptr<Job>& job, const QString& issueId, bool withAssignee = true);
     /// Fija el veredicto de la ejecución (recién creada o reutilizada) y sigue con sus pasos.
     void markExecution(const std::shared_ptr<Job>& job, const QString& issueId);
     /// Al actualizar: descarta las evidencias que ya están en su destino (mismo nombre de fichero),
@@ -108,7 +114,8 @@ private:
     QString m_api;        // ruta detectada, para no repetir la detección en cada publicación
     QString m_apiFor;     // instancia para la que vale `m_api`
     QString m_locale;     // configuración regional del usuario de Jira ("es_ES")
-    QString m_localeFor;  // instancia para la que vale `m_locale`
+    QString m_assignee;   // el usuario de Jira de la conexión, tal y como se asigna (name / accountId)
+    QString m_userFor;    // instancia + usuario para los que valen `m_locale` y `m_assignee`
 };
 
 } // namespace qaflow

@@ -522,7 +522,7 @@ QWidget* RunView::buildInspector() {
     m_casePanel->setStyleSheet(QStringLiteral("QFrame#casePanel{border-right:none;border-left:1px solid %1;}").arg(theme::Border));
     auto* v = ui::vbox(m_casePanel, 0, 0);
 
-    // Tres pestañas: el paso en pantalla, todos los pasos y lo que se ha reportado.
+    // Las pestañas: el paso en pantalla, todos los pasos, lo que se ha reportado y, en un ciclo, sus casos.
     auto* tabs = new QFrame;
     tabs->setObjectName(QStringLiteral("inspectorTabs"));
     tabs->setStyleSheet(QStringLiteral("QFrame#inspectorTabs{border:none;border-bottom:1px solid %1;}").arg(theme::Border));
@@ -531,11 +531,14 @@ QWidget* RunView::buildInspector() {
     m_stepTab = inspectorTab(tr("Paso"), "runStepTab");
     m_stepsTab = inspectorTab(tr("Pasos"), "runStepsTab");
     m_bugsTab = inspectorTab(tr("Bugs"), "runBugsTab");
-    for (auto* t : {m_stepTab, m_stepsTab, m_bugsTab}) th->addWidget(t);
+    m_casesTab = inspectorTab(tr("Casos"), "runCasesTab");
+    m_casesTab->setToolTip(tr("Los casos del ciclo: ir a otro deja éste en pausa, tal como está"));
+    for (auto* t : {m_stepTab, m_stepsTab, m_bugsTab, m_casesTab}) th->addWidget(t);
     th->addStretch(1);
     connect(m_stepTab, &QPushButton::clicked, this, [this]() { showTab(0); });
     connect(m_stepsTab, &QPushButton::clicked, this, [this]() { showTab(1); });
     connect(m_bugsTab, &QPushButton::clicked, this, [this]() { showTab(2); });
+    connect(m_casesTab, &QPushButton::clicked, this, [this]() { showTab(3); });
     v->addWidget(tabs);
 
     m_inspectorStack = new QStackedWidget;
@@ -579,6 +582,21 @@ QWidget* RunView::buildInspector() {
     connect(report, &QPushButton::clicked, this, [this]() { emit reportBugRequested(bugStepIndex()); });
     bv->addWidget(report);
     m_inspectorStack->addWidget(bugsPage);
+
+    // Pestaña «Casos»: los del ciclo, con cómo va cada uno. Un clic en uno pendiente lo pone en
+    // pantalla y deja éste en pausa, sin archivarlo: se retoma donde se dejó.
+    auto* casesPage = new QWidget;
+    auto* cpv = ui::vbox(casesPage, 0, 0);
+    cpv->setContentsMargins(10, 10, 10, 8);
+    QWidget* casesList;
+    QVBoxLayout* casesLayout;
+    m_casesScroll = ui::scrollArea(&casesList, &casesLayout);
+    m_casesScroll->setObjectName(QStringLiteral("casesScroll"));
+    m_casesLayout = casesLayout;
+    m_casesLayout->setSpacing(4);
+    m_casesLayout->addStretch(1);
+    cpv->addWidget(m_casesScroll, 1);
+    m_inspectorStack->addWidget(casesPage);
     showTab(0);
 
     v->addWidget(buildFooter());
@@ -693,6 +711,7 @@ void RunView::showTab(int index) {
     m_stepTab->setChecked(index == 0);
     m_stepsTab->setChecked(index == 1);
     m_bugsTab->setChecked(index == 2);
+    m_casesTab->setChecked(index == 3);
 }
 
 QWidget* RunView::stepGroupHeader(int step, const TestCase& c) const {
@@ -750,6 +769,9 @@ void RunView::refresh() {
         ui::clearLayout(m_chipsLayout);
         ui::clearLayout(m_shotsLayout);
         ui::clearLayout(m_bugsLayout);
+        ui::clearLayout(m_casesLayout);
+        m_casesTab->hide();
+        if (m_inspectorStack->currentIndex() == 3) showTab(0);
         m_selectedShot = 0;
         m_maxShotId = 0;
         m_preview->setShot(Screenshot{});
@@ -864,6 +886,7 @@ void RunView::refresh() {
     refreshSteps();
     refreshShots();
     refreshBugs();
+    refreshCases();
 }
 
 int RunView::bugStepIndex() const {
@@ -1192,6 +1215,97 @@ void RunView::openBug(const QString& key) {
     window->show();
 }
 
+void RunView::refreshCases() {
+    ui::clearLayout(m_casesLayout);
+    const QStringList cases = m_run.planCases();
+    m_casesTab->setVisible(!cases.isEmpty());
+    if (cases.isEmpty()) {
+        if (m_inspectorStack->currentIndex() == 3) showTab(0);
+        return;
+    }
+    // Lo que ya se archivó en este ciclo, con su veredicto: la última ejecución de cada caso.
+    QHash<QString, Verdict> archived;
+    for (const auto& run : m_history.runsForPlan(m_run.planRunId())) archived.insert(run.caseId, run.verdict);
+    int done = 0;
+    for (const auto& id : cases) if (archived.contains(id) && id != m_run.state().caseId && !m_run.isQueued(id)) ++done;
+    m_casesTab->setText(tr("Casos · %1/%2").arg(done).arg(cases.size()));
+
+    QWidget* currentCard = nullptr;
+    for (const auto& id : cases) {
+        QWidget* card = caseCard(id, archived);
+        if (id == m_run.state().caseId) currentCard = card;
+        m_casesLayout->addWidget(card);
+    }
+    m_casesLayout->addStretch(1);
+    if (currentCard) {
+        QTimer::singleShot(0, this, [this, card = QPointer<QWidget>(currentCard)]() {
+            if (!card) return;
+            m_casesScroll->widget()->layout()->activate();
+            m_casesScroll->ensureWidgetVisible(card, 0, 8);
+        });
+    }
+}
+
+QWidget* RunView::caseCard(const QString& caseId, const QHash<QString, Verdict>& archived) {
+    const TestCase* c = m_cases.find(caseId);
+    const bool current = caseId == m_run.state().caseId;
+    const bool queued = m_run.isQueued(caseId);
+    const RunState* parked = m_run.parkedRun(caseId);
+    const bool isArchived = !current && !queued && archived.contains(caseId);
+    // Lo que se enseña de cada uno: el activo, el que se dejó a medias, el ya archivado con su
+    // veredicto o el que todavía no se ha empezado.
+    QString state;
+    QString color;
+    if (current) {
+        state = tr("ACTIVO");
+        color = theme::Blue;
+    } else if (parked) {
+        state = tr("EN PAUSA · %1/%2").arg(parked->markedCount()).arg(parked->results.size());
+        color = theme::TextSoft;
+    } else if (isArchived) {
+        const Verdict v = archived.value(caseId);
+        state = v == Verdict::Bloqueado ? tr("BLOQUEADO") : v == Verdict::Fallido ? tr("FALLIDO") : tr("SUPERADO");
+        color = v == Verdict::Bloqueado ? theme::Amber : v == Verdict::Fallido ? theme::Red : theme::Green;
+    } else {
+        state = queued ? tr("PENDIENTE") : tr("SIN EJECUTAR");
+        color = theme::Muted;
+    }
+    const bool reachable = queued && c;
+
+    auto* card = ui::card("step-card");
+    ui::setFlag(card, "active", current);
+    card->setObjectName(QStringLiteral("caseCard-%1").arg(caseId));
+    if (reachable) {
+        card->setProperty("caseId", caseId);
+        card->setCursor(Qt::PointingHandCursor);
+        card->setAttribute(Qt::WA_Hover);
+        card->setToolTip(parked ? tr("Volver a este caso, donde se dejó") : tr("Ir a este caso; el actual queda en pausa"));
+        card->installEventFilter(this);
+    } else if (isArchived) {
+        card->setToolTip(tr("Ya archivado en el historial de este ciclo"));
+    }
+    auto* h = ui::hbox(card, 0, 0);
+    auto* bar = ui::accentBar(current ? theme::Blue : isArchived ? color : parked ? theme::TextSoft : theme::Border);
+    bar->setFixedWidth(3);
+    h->addWidget(bar);
+    auto* body = new QWidget;
+    auto* v = ui::vbox(body, 0, 4);
+    v->setContentsMargins(10, 8, 8, 8);
+    auto* head = new QWidget;
+    auto* hh = ui::hbox(head, 0, 6);
+    hh->addWidget(ui::label(caseId, "eyebrow"));
+    hh->addStretch(1);
+    hh->addWidget(statePill(state, color));
+    v->addWidget(head);
+    auto* title = new QLabel(c ? c->title : tr("(caso eliminado)"));
+    title->setWordWrap(true);
+    title->setStyleSheet(QStringLiteral("font-size:12.5px;font-weight:%1;color:%2;")
+                             .arg(current ? 700 : 400).arg(current ? theme::Text : isArchived ? theme::Muted : theme::TextSoft));
+    v->addWidget(title);
+    h->addWidget(body, 1);
+    return card;
+}
+
 const Screenshot* RunView::selectedShot() const {
     const TestCase* c = m_cases.find(m_run.state().caseId);
     if (!c) return nullptr;
@@ -1221,6 +1335,15 @@ void RunView::annotateSelectedShot() {
 bool RunView::eventFilter(QObject* watched, QEvent* event) {
     if (watched == m_preview && event->type() == QEvent::Resize) placeViewerOverlay();
     if (event->type() == QEvent::MouseButtonPress && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+        const QVariant caseId = watched->property("caseId");
+        if (caseId.isValid()) {
+            // Ir a otro caso lleva a su ficha, como elegir un paso: es lo que se va a probar ahora.
+            // En diferido: la tarjeta pulsada se destruye al refrescar la lista.
+            QTimer::singleShot(0, this, [this, id = caseId.toString()]() {
+                if (m_run.goToCase(id)) showTab(0);
+            });
+            return true;
+        }
         const QVariant step = watched->property("stepIndex");
         if (step.isValid()) {
             // Elegir un paso de la lista lleva a su ficha: es lo que se quiere leer a continuación.

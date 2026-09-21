@@ -52,7 +52,9 @@ void ZephyrPublishFlow::run(QWidget* parent, TestPublishService& service, const 
                           .arg(r.cycleId).arg(r.executions).arg(r.steps).arg(r.attachments);
         if (r.testsCreated > 0) msg += tr(" · %1 Tests creados").arg(r.testsCreated);
         if (!r.skipped.isEmpty()) msg += tr(" · %1 sin publicar").arg(r.skipped.size());
-        toast(msg, r.skipped.isEmpty() ? theme::Green : theme::Amber);
+        // Lo que no se pudo asignar no deja nada fuera: basta con decirlo.
+        if (!r.warnings.isEmpty()) msg += tr(" · %1 sin asignar a tu usuario").arg(r.warnings.size());
+        toast(msg, r.skipped.isEmpty() && r.warnings.isEmpty() ? theme::Green : theme::Amber);
         // Un contador no dice qué arreglar: lo que se quedó fuera va con su motivo, uno por línea.
         if (!r.skipped.isEmpty() && owner) {
             QMessageBox box(QMessageBox::Warning, tr("Publicado con salvedades"),

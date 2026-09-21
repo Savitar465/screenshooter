@@ -13,6 +13,13 @@
 #include "presentation/widgets/Ui.h"
 
 #include <QComboBox>
+#include <QApplication>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QEvent>
+#include <QMimeData>
+#include <QMouseEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGridLayout>
@@ -24,6 +31,8 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QStackedWidget>
+#include <QTimer>
 #include <QUrl>
 
 #include <algorithm>
@@ -35,6 +44,8 @@ namespace qaflow {
 
 namespace {
 constexpr int kMaxResults = 20;
+/// Tipo MIME con el que viaja el id del issue al arrastrar su tarjeta.
+constexpr char kIssueMime[] = "application/x-qaflow-issue";
 /// Largo máximo del título del issue dentro del nombre del plan que se crea para él: el nombre se lee
 /// en listas y selectores, así que lo que no cabe se acorta con «…», igual que el título del gestor.
 constexpr int kMaxPlanTitle = 60;
@@ -42,16 +53,6 @@ constexpr int kMaxPlanTitle = 60;
 /// Nombre del plan con el que se prueba un issue: su número y su título, acortado si es largo.
 QString planNameFor(const Issue& issue) {
     return QStringLiteral("%1 · %2").arg(issue.id, elideTitle(issue.title, kMaxPlanTitle));
-}
-
-QString stateColor(IssueState s) {
-    switch (s) {
-        case IssueState::Pending: return theme::Muted;
-        case IssueState::Preparing: return theme::Amber;
-        case IssueState::Testing: return theme::Blue;
-        case IssueState::Done: return theme::Green;
-    }
-    return theme::Muted;
 }
 
 QString verdictColor(Verdict v) {
@@ -134,6 +135,7 @@ QString destinationTag(RevisionPublishService::Destination destination) {
         case RevisionPublishService::Destination::Zephyr: return QStringLiteral("ZEPHYR");
         case RevisionPublishService::Destination::Tracker: return QStringLiteral("GESTOR");
         case RevisionPublishService::Destination::Requirement: return QStringLiteral("GESREQ");
+        case RevisionPublishService::Destination::Close: return QStringLiteral("CERRADO");
     }
     return {};
 }
@@ -152,18 +154,33 @@ IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
       m_bugs(ctx.bugs), m_bugLedger(ctx.bugLedger), m_records(ctx.records),
       m_projects(ctx.projects),
       m_projectId(ctx.projectId) {
-    auto* root = ui::hbox(this, 0, 0);
-    buildListPane(root);
-    buildDetail(root);
+    auto* root = ui::vbox(this, 0, 0);
+    m_pages = new QStackedWidget;
+    root->addWidget(m_pages);
+
+    auto* board = new QWidget;
+    auto* bv = ui::vbox(board, 0, 0);
+    buildBoard(bv);
+    m_pages->addWidget(board);
+
+    auto* detail = new QWidget;
+    auto* dv = ui::vbox(detail, 0, 0);
+    buildDetail(dv);
+    m_pages->addWidget(detail);
 
     connect(&m_issues, &IssueStore::issuesChanged, this, [this]() { refreshList(); loadDetail(); });
     connect(&m_issues, &IssueStore::selectionChanged, this, [this]() {
+        if (!selected()) showDetail(false);
         refreshList();
         loadDetail();
     });
     // Casos, planes y ejecuciones cambian a menudo mientras se trabaja en otras pantallas: sólo se
     // redibuja si la pantalla se ve, y al volver a ella se refresca entera.
-    auto refreshIfVisible = [this]() { if (isVisible()) loadDetail(); };
+    auto refreshIfVisible = [this]() {
+        if (!isVisible()) return;
+        refreshList();
+        loadDetail();
+    };
     connect(&m_cases, &TestCaseStore::casesChanged, this, refreshIfVisible);
     connect(&m_cases, &TestCaseStore::caseChanged, this, refreshIfVisible);
     connect(&m_plans, &PlanStore::plansChanged, this, refreshIfVisible);
@@ -185,6 +202,73 @@ void IssuesView::showEvent(QShowEvent* e) {
 
 void IssuesView::hideEvent(QHideEvent* e) { QWidget::hideEvent(e); }
 
+bool IssuesView::eventFilter(QObject* watched, QEvent* event) {
+    if (const QString id = watched->property("issueId").toString(); !id.isEmpty()) {
+        auto* card = qobject_cast<QPushButton*>(watched);
+        switch (event->type()) {
+            case QEvent::MouseButtonDblClick:   // doble clic: se abre el issue entero
+                m_issues.select(id);
+                showDetail(true);
+                return true;
+            case QEvent::MouseButtonPress:
+                if (static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton)
+                    m_dragStart = static_cast<QMouseEvent*>(event)->position().toPoint();
+                break;
+            case QEvent::MouseMove: {
+                const auto* e = static_cast<QMouseEvent*>(event);
+                if ((e->buttons() & Qt::LeftButton) && card &&
+                    (e->position().toPoint() - m_dragStart).manhattanLength() >= QApplication::startDragDistance()) {
+                    startCardDrag(card);
+                    return true;
+                }
+                break;
+            }
+            case QEvent::Enter:
+            case QEvent::Leave: {
+                // Con el ratón encima, la tarjeta enseña sus acciones; la elegida las enseña siempre.
+                const bool show = event->type() == QEvent::Enter || id == m_issues.selectedId();
+                if (auto* idle = watched->findChild<QWidget*>(QStringLiteral("cardIdle"))) idle->setVisible(!show);
+                if (auto* actions = watched->findChild<QWidget*>(QStringLiteral("cardActions"))) actions->setVisible(show);
+                break;
+            }
+            default: break;
+        }
+        return QWidget::eventFilter(watched, event);
+    }
+    if (const QVariant column = watched->property("boardColumn"); column.isValid()) {
+        const int i = column.toInt();
+        switch (event->type()) {
+            case QEvent::DragEnter:
+            case QEvent::DragMove: {
+                auto* e = static_cast<QDropEvent*>(event);
+                const QString id = e->mimeData() ? QString::fromUtf8(e->mimeData()->data(kIssueMime)) : QString();
+                const Issue* issue = m_issues.find(id);
+                const bool accepts = issue && static_cast<Column>(i) != Column::Broken &&
+                                     static_cast<Column>(i) != columnOf(*issue, snapshotOf(*issue));
+                if (accepts) e->acceptProposedAction();
+                else e->ignore();
+                styleWell(i, accepts);
+                return true;
+            }
+            case QEvent::DragLeave:
+                styleWell(i, false);
+                return true;
+            case QEvent::Drop: {
+                auto* e = static_cast<QDropEvent*>(event);
+                styleWell(i, false);
+                const QString id = e->mimeData() ? QString::fromUtf8(e->mimeData()->data(kIssueMime)) : QString();
+                if (id.isEmpty() || static_cast<Column>(i) == Column::Broken) { e->ignore(); return true; }
+                e->acceptProposedAction();
+                // Después de la entrega: cambiar el estado rehace el tablero, y con él la columna y la tarjeta.
+                QTimer::singleShot(0, this, [this, id, i]() { moveToColumn(id, static_cast<Column>(i)); });
+                return true;
+            }
+            default: break;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 const Issue* IssuesView::selected() const { return m_issues.find(m_issues.selectedId()); }
 
 QString IssuesView::linkedSystem() const {
@@ -193,65 +277,115 @@ QString IssuesView::linkedSystem() const {
 }
 
 void IssuesView::focusSearch() {
+    showDetail(false);
     m_search->setFocus();
     m_search->selectAll();
 }
 
-// ---- Lista ---------------------------------------------------------------------------------------
+void IssuesView::showDetail(bool on) {
+    m_pages->setCurrentIndex(on && selected() ? 1 : 0);
+}
 
-void IssuesView::buildListPane(QHBoxLayout* root) {
-    auto* pane = ui::card("list-pane");
-    pane->setMinimumWidth(280);
-    pane->setMaximumWidth(340);
-    pane->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-    auto* v = ui::vbox(pane, 0, 0);
+IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
+    RevisionSnapshot s;
+    if (m_records) s.progress = m_records->progressFor(issue.id);
+    const IssueRevision* open = issue.currentRevision();
+    const IssueRevision* last = issue.revisions.isEmpty() ? nullptr : &issue.revisions.last();
+    s.open = open != nullptr;
+    s.closed = !open && last != nullptr;
+    s.number = last ? last->number : 1;
+    s.hasPlan = !issue.planIds.isEmpty() && !IssueStore::caseIdsOf(issue, m_plans).isEmpty();
+    s.executed = s.progress.executed > 0;
+    const QList<IssueLink> bugs = bugsOf(issue);
+    s.openBugs = int(std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
+    s.hasRecord = last && last->hasDocument();
+    s.published = last && (!last->jira.isEmpty() || !last->gesreq.isEmpty());
+    s.continuable = continuableCycle(issue, s.number);
+    const bool done[] = {s.hasPlan, s.executed, s.openBugs == 0, s.hasRecord, s.closed, s.published};
+    s.nextStep = 7;
+    for (int i = 0; i < 6; ++i)
+        if (!done[i]) { s.nextStep = i + 1; break; }
+    return s;
+}
 
+IssuesView::Column IssuesView::columnOf(const Issue& issue, const RevisionSnapshot& s) const {
+    switch (issue.state) {
+        case IssueState::Done: return Column::Done;
+        case IssueState::Pending: return Column::Pending;
+        case IssueState::Preparing:
+        case IssueState::Testing: break;
+    }
+    // Lo último que se sabe de cada caso de la ronda: con alguno fallido o bloqueado, el issue espera a
+    // que se repita. Sin el servicio del acta (contexto mínimo), lo dice el ciclo que se puede continuar.
+    const bool broken = m_records ? s.progress.failed + s.progress.blocked > 0 : !s.continuable.isEmpty();
+    if (broken) return Column::Broken;
+    return issue.state == IssueState::Preparing ? Column::Preparing : Column::Testing;
+}
+
+// ---- Tablero -------------------------------------------------------------------------------------
+
+namespace {
+struct ColumnInfo {
+    QString name;
+    QString hint;
+    QString color;
+};
+
+ColumnInfo columnInfo(IssuesView::Column c) {
+    switch (c) {
+        case IssuesView::Column::Pending: return {IssuesView::tr("PENDIENTE"), IssuesView::tr("Sin plan todavía"), theme::Muted};
+        case IssuesView::Column::Preparing: return {IssuesView::tr("EN PREPARACIÓN"), IssuesView::tr("Plan en composición"), theme::Violet};
+        case IssuesView::Column::Testing: return {IssuesView::tr("EN PRUEBAS"), IssuesView::tr("Ejecutándose, sin fallos"), theme::Blue};
+        case IssuesView::Column::Broken:
+            return {IssuesView::tr("FALLIDO / BLOQUEADO"), IssuesView::tr("Quedaron casos rotos: continuar lo fallado"), theme::Red};
+        case IssuesView::Column::Done: return {IssuesView::tr("FINALIZADO"), IssuesView::tr("Revisión cerrada"), theme::Green};
+    }
+    return {};
+}
+
+/// Barra fina con lo que salió de los casos de la ronda: superados, fallidos, bloqueados y el resto.
+QWidget* resultBar(const IssueProgress& p) {
+    auto* bar = new QWidget;
+    bar->setFixedHeight(4);
+    auto* h = ui::hbox(bar, 0, 2);
+    auto segment = [h](int stretch, const QString& color) {
+        if (stretch <= 0) return;
+        auto* f = new QFrame;
+        f->setStyleSheet(QStringLiteral("background:%1;border-radius:2px;").arg(color));
+        h->addWidget(f, stretch);
+    };
+    segment(p.passed, theme::Green);
+    segment(p.failed, theme::Red);
+    segment(p.blocked, theme::Amber);
+    segment(std::max(p.cases - p.passed - p.failed - p.blocked, p.cases > 0 ? 0 : 1), theme::Border);
+    return bar;
+}
+} // namespace
+
+void IssuesView::buildBoard(QVBoxLayout* root) {
     auto* head = new QWidget;
-    auto* hv = ui::vbox(head, 16, 10);
-    hv->setContentsMargins(16, 18, 16, 12);
-    auto* titleRow = new QWidget;
-    auto* th = ui::hbox(titleRow, 0, 6);
-    th->addWidget(ui::label(tr("Issues"), "h1-sm"), 1);
-    auto* create = smallButton(tr("+ Nuevo"), "primary", tr("Issue creado a mano, sin requerimiento de GESREQ"));
-    create->setObjectName(QStringLiteral("issuesNew"));
-    connect(create, &QPushButton::clicked, this, [this]() {
-        m_issues.createIssue(tr("Nuevo issue"));
-        m_title->setFocus();
-        m_title->selectAll();
-    });
-    th->addWidget(create);
-    hv->addWidget(titleRow);
-
-    m_consult = smallButton(tr("Consultar GESREQ"), "outline");
-    m_consult->setObjectName(QStringLiteral("issuesConsult"));
-    m_consult->setVisible(m_requirements != nullptr);
-    connect(m_consult, &QPushButton::clicked, this, &IssuesView::consultRequirements);
-    hv->addWidget(m_consult);
+    auto* hh = ui::hbox(head, 0, 10);
+    hh->setContentsMargins(22, 16, 22, 14);
+    hh->addWidget(ui::label(tr("Issues"), "h1-sm"));
+    m_listCount = ui::label(QString(), "muted-sm");
+    hh->addWidget(m_listCount);
+    hh->addStretch(1);
 
     m_search = new QLineEdit;
     m_search->setObjectName(QStringLiteral("issueSearch"));
     m_search->setPlaceholderText(tr("Buscar por título, número de GREQ, sistema, solicitante…"));
     m_search->setClearButtonEnabled(true);
+    m_search->setMinimumWidth(240);
     connect(m_search, &QLineEdit::textChanged, this, [this](const QString& t) { m_filter.text = t; refreshList(); });
-    hv->addWidget(m_search);
+    hh->addWidget(m_search);
 
-    auto* combos = new QWidget;
-    auto* ch = ui::hbox(combos, 0, 6);
-    // Cada opción lleva el valor del enum como dato: el texto se traduce, el filtro no.
-    m_stateFilter = filterBox(tr("Estado"), {{label(IssueState::Pending), static_cast<int>(IssueState::Pending)},
-                                             {label(IssueState::Preparing), static_cast<int>(IssueState::Preparing)},
-                                             {label(IssueState::Testing), static_cast<int>(IssueState::Testing)},
-                                             {label(IssueState::Done), static_cast<int>(IssueState::Done)}});
+    // Cada opción lleva el valor del enum como dato: el texto se traduce, el filtro no. El estado no se
+    // filtra: es la columna.
     m_priorityFilter = filterBox(tr("Prioridad"), {{label(Priority::Alta), static_cast<int>(Priority::Alta)},
                                                    {label(Priority::Media), static_cast<int>(Priority::Media)},
                                                    {label(Priority::Baja), static_cast<int>(Priority::Baja)}});
     m_jiraFilter = filterBox(tr("Jira"), {{tr("Publicados"), 1}, {tr("Sin publicar"), 0}});
-    m_stateFilter->setObjectName(QStringLiteral("issueStateFilter"));
     m_jiraFilter->setObjectName(QStringLiteral("issueJiraFilter"));
-    connect(m_stateFilter, &QComboBox::currentIndexChanged, this, [this](int i) {
-        m_filter.state = i <= 0 ? std::nullopt : std::optional<IssueState>(static_cast<IssueState>(m_stateFilter->currentData().toInt()));
-        refreshList();
-    });
     connect(m_priorityFilter, &QComboBox::currentIndexChanged, this, [this](int i) {
         m_filter.priority = i <= 0 ? std::nullopt : std::optional<Priority>(static_cast<Priority>(m_priorityFilter->currentData().toInt()));
         refreshList();
@@ -260,88 +394,574 @@ void IssuesView::buildListPane(QHBoxLayout* root) {
         m_filter.published = i <= 0 ? std::nullopt : std::optional<bool>(m_jiraFilter->currentData().toInt() == 1);
         refreshList();
     });
-    ch->addWidget(m_stateFilter, 1);
-    ch->addWidget(m_priorityFilter, 1);
-    ch->addWidget(m_jiraFilter, 1);
-    hv->addWidget(combos);
-    m_listCount = ui::label(QString(), "muted-sm");
-    hv->addWidget(m_listCount);
-    v->addWidget(head);
+    hh->addWidget(m_priorityFilter);
+    hh->addWidget(m_jiraFilter);
 
+    m_consult = smallButton(tr("Consultar GESREQ"), "outline");
+    m_consult->setObjectName(QStringLiteral("issuesConsult"));
+    m_consult->setVisible(m_requirements != nullptr);
+    connect(m_consult, &QPushButton::clicked, this, &IssuesView::consultRequirements);
+    hh->addWidget(m_consult);
+    auto* create = smallButton(tr("+ Nuevo"), "primary", tr("Issue creado a mano, sin requerimiento de GESREQ"));
+    create->setObjectName(QStringLiteral("issuesNew"));
+    connect(create, &QPushButton::clicked, this, [this]() {
+        m_issues.createIssue(tr("Nuevo issue"));
+        showDetail(true);
+        m_title->setFocus();
+        m_title->selectAll();
+    });
+    hh->addWidget(create);
+    root->addWidget(head);
+    auto* divider = new QFrame;
+    divider->setFixedHeight(1);
+    divider->setStyleSheet(QStringLiteral("background:%1;").arg(theme::Border));
+    root->addWidget(divider);
+
+    auto* body = new QWidget;
+    auto* bh = ui::hbox(body, 0, 0);
+    root->addWidget(body, 1);
+
+    auto* boardArea = new QWidget;
+    auto* av = ui::vbox(boardArea, 0, 8);
+    av->setContentsMargins(12, 14, 12, 14);
+    m_boardEmpty = ui::label(QString(), "muted");
+    m_boardEmpty->setObjectName(QStringLiteral("issueBoardEmpty"));
+    m_boardEmpty->setWordWrap(true);
+    av->addWidget(m_boardEmpty);
+    auto* columns = new QWidget;
+    auto* ch = ui::hbox(columns, 0, 8);
+    for (int i = 0; i < kColumns; ++i) {
+        const ColumnInfo info = columnInfo(static_cast<Column>(i));
+        auto* column = new QWidget;
+        column->setMinimumWidth(170);
+        auto* cv = ui::vbox(column, 0, 6);
+        auto* top = new QWidget;
+        auto* th = ui::hbox(top, 0, 8);
+        th->setContentsMargins(4, 0, 4, 0);
+        th->addWidget(ui::dot(info.color, 8));
+        auto* name = ui::label(info.name, "eyebrow");
+        name->setStyleSheet(QStringLiteral("color:%1;letter-spacing:0.3px;").arg(theme::TextSoft));
+        th->addWidget(name);
+        m_columnCounts[i] = ui::label(QString(), "muted-sm");
+        th->addWidget(m_columnCounts[i], 1);
+        cv->addWidget(top);
+        // Dos líneas para todas: así las columnas empiezan a la misma altura aunque una explique más.
+        auto* hint = ui::label(info.hint, "muted-sm");
+        hint->setWordWrap(true);
+        hint->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+        hint->setContentsMargins(4, 0, 4, 0);
+        hint->setFixedHeight(2 * hint->fontMetrics().lineSpacing() + 2);
+        cv->addWidget(hint);
+
+        auto* well = new QFrame;
+        well->setObjectName(QStringLiteral("issueBoardColumn-%1").arg(i));
+        // Las tarjetas se sueltan aquí para cambiar de estado (menos en la de fallidos, que es calculada).
+        well->setProperty("boardColumn", i);
+        well->setAcceptDrops(true);
+        well->installEventFilter(this);
+        m_wells[i] = well;
+        styleWell(i, false);
+        auto* wv = ui::vbox(well, 0, 0);
+        QWidget* content;
+        auto* sa = ui::scrollArea(&content, &m_columns[i]);
+        sa->setStyleSheet(QStringLiteral("QScrollArea{background:transparent;}"));
+        content->setStyleSheet(QStringLiteral("background:transparent;"));
+        m_columns[i]->setContentsMargins(6, 6, 6, 6);
+        m_columns[i]->setSpacing(6);
+        wv->addWidget(sa);
+        cv->addWidget(well, 1);
+        ch->addWidget(column, 1);
+    }
+    av->addWidget(columns, 1);
+    bh->addWidget(boardArea, 1);
+    buildDrawer(bh);
+}
+
+void IssuesView::buildDrawer(QHBoxLayout* root) {
+    auto* pane = ui::card("list-pane");
+    pane->setObjectName(QStringLiteral("issueDrawer"));
+    pane->setFixedWidth(320);
+    pane->setStyleSheet(QStringLiteral("QFrame#issueDrawer{border-right:none;border-left:1px solid %1;}").arg(theme::Border));
+    m_drawer = pane;
+    auto* v = ui::vbox(pane, 0, 0);
     QWidget* content;
-    auto* sa = ui::scrollArea(&content, &m_listLayout);
-    m_listLayout->setContentsMargins(10, 0, 10, 16);
-    m_listLayout->setSpacing(4);
-    v->addWidget(sa, 1);
+    auto* sa = ui::scrollArea(&content, &m_drawerLayout);
+    m_drawerLayout->setContentsMargins(20, 18, 20, 18);
+    m_drawerLayout->setSpacing(14);
+    v->addWidget(sa);
     root->addWidget(pane);
+}
+
+QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Column column) {
+    auto* card = ui::button(QString(), "board-card");
+    card->setObjectName(QStringLiteral("issueRow-%1").arg(issue.id));
+    card->setProperty("issueId", issue.id);
+    card->installEventFilter(this);
+    card->setToolTip(tr("Doble clic para abrir el issue · arrástralo a otra columna para cambiar su estado · clic derecho para más"));
+    // La tarjeta toma el ancho de su columna: su contenido se ajusta a él, no al revés.
+    card->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    ui::setFlag(card, "active", issue.id == m_issues.selectedId());
+    auto* v = ui::vbox(card, 0, 7);
+    v->setContentsMargins(11, 10, 11, 10);
+
+    auto* top = new QWidget;
+    auto* th = ui::hbox(top, 0, 6);
+    th->addWidget(ui::label(issue.isImported() ? issue.requirement.data.id : issue.id, "mono-muted"));
+    if (issue.isImported() && !issue.requirement.data.systemCode.isEmpty())
+        th->addWidget(ui::pill(issue.requirement.data.systemCode, theme::tint(theme::Muted, 26), theme::Muted));
+    th->addStretch(1);
+    if (!issue.revisions.isEmpty()) {
+        auto* rev = ui::label(tr("REV %1").arg(s.number), "muted-sm");
+        rev->setStyleSheet(QStringLiteral("color:%1;font-weight:700;font-size:10.5px;").arg(theme::Cyan));
+        th->addWidget(rev);
+    }
+    v->addWidget(top);
+
+    auto* title = new QLabel(issue.title);
+    title->setWordWrap(true);
+    title->setStyleSheet(QStringLiteral("font-size:13px;font-weight:600;color:%1;").arg(theme::Text));
+    v->addWidget(title);
+
+    if (s.progress.cases > 0) v->addWidget(resultBar(s.progress));
+
+    // Lo que avisa: casos rotos, cambios en GESREQ o que el requerimiento salió de la bandeja.
+    QList<QLabel*> flags;
+    if (s.progress.failed > 0)
+        flags << ui::pill(tr("%n FALLIDO(S)", nullptr, s.progress.failed), theme::tint(theme::Red, 46), theme::RedSoft);
+    if (s.progress.blocked > 0)
+        flags << ui::pill(tr("%n BLOQUEADO(S)", nullptr, s.progress.blocked), theme::tint(theme::Amber, 46), theme::AmberSoft);
+    if (!issue.requirement.changes.isEmpty()) flags << ui::pill(tr("CAMBIOS"), theme::tint(theme::Amber, 46), theme::AmberSoft);
+    if (issue.requirement.missing) flags << ui::pill(tr("FUERA DE LA BANDEJA"), theme::tint(theme::Muted, 38), theme::Muted);
+    if (!flags.isEmpty()) {
+        auto* row = new QWidget;
+        auto* fh = ui::hbox(row, 0, 4);
+        for (auto* f : flags) fh->addWidget(f);
+        fh->addStretch(1);
+        v->addWidget(row);
+    }
+
+    // La última fila dice qué le toca y su clave en el gestor; en la tarjeta elegida o con el ratón
+    // encima, lo cambia por el botón que lo hace y el «⋯» de su menú. Las dos ocupan lo mismo, así que
+    // la tarjeta no salta al pasar por encima.
+    const NextAction next = nextActionOf(issue, s, column);
+    const bool active = issue.id == m_issues.selectedId();
+    auto* bottom = new QWidget;
+    bottom->setFixedHeight(26);
+    auto* bs = ui::hbox(bottom, 0, 0);
+    auto* idle = new QWidget;
+    idle->setObjectName(QStringLiteral("cardIdle"));
+    auto* ih = ui::hbox(idle, 0, 6);
+    auto* nextLabel = ui::label(next.hint, "muted-sm");
+    nextLabel->setObjectName(QStringLiteral("issueCardNext-%1").arg(issue.id));
+    ih->addWidget(nextLabel, 1);
+    if (issue.isPublished()) ih->addWidget(ui::label(issue.publication.key, "mono-muted"));
+    idle->setVisible(!active);
+    bs->addWidget(idle, 1);
+    v->addWidget(bottom);
+
+    auto* actions = new QWidget;
+    actions->setObjectName(QStringLiteral("cardActions"));
+    auto* ah = ui::hbox(actions, 0, 6);
+    if (next.run) {
+        auto* go = smallButton(next.shortButton, "primary", next.title);
+        go->setObjectName(QStringLiteral("issueCardAction-%1").arg(issue.id));
+        // Estilo propio y completo: dentro de otro botón (la tarjeta) el del rol no llega a pintar el fondo.
+        go->setStyleSheet(QStringLiteral("QPushButton{background:%1;color:%2;border:none;border-radius:7px;padding:3px 9px;"
+                                         "font-size:11.5px;font-weight:700;}QPushButton:hover{background:%3;}")
+                              .arg(theme::Blue, theme::OnAccent, theme::TextSoft));
+        connect(go, &QPushButton::clicked, this, [go, run = next.run]() { run(go); });
+        ah->addWidget(go);
+    } else {
+        ah->addWidget(ui::label(next.hint, "muted-sm"));
+    }
+    ah->addStretch(1);
+    auto* more = smallButton(QStringLiteral("⋯"), "ghost", tr("Más acciones"));
+    more->setObjectName(QStringLiteral("issueCardMore-%1").arg(issue.id));
+    more->setFixedWidth(30);
+    connect(more, &QPushButton::clicked, this, [this, more, id = issue.id]() {
+        showCardMenu(id, more->mapToGlobal(QPoint(0, more->height())));
+    });
+    ah->addWidget(more);
+    actions->setVisible(active);
+    bs->addWidget(actions, 1);
+
+    // El resto no atiende al ratón: el clic, el doble clic y el arrastre son de la tarjeta. Los botones sí,
+    // y por eso ni ellos ni la fila que los contiene se tocan: un widget transparente al ratón lo es con
+    // todos sus hijos. Esa fila deja pasar a la tarjeta los clics que no caen en un botón.
+    for (auto* child : card->findChildren<QWidget*>())
+        if (child != bottom && child != actions && !actions->isAncestorOf(child)) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+    card->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(card, &QWidget::customContextMenuRequested, this, [this, card, id = issue.id](const QPoint& pos) {
+        showCardMenu(id, card->mapToGlobal(pos));
+    });
+    connect(card, &QPushButton::clicked, this, [this, id = issue.id]() { m_issues.select(id); });
+    return card;
+}
+
+IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const RevisionSnapshot& s, Column column) {
+    NextAction a;
+    const QString issueId = issue.id;
+    if (column == Column::Broken && !s.continuable.isEmpty()) {
+        const int broken = int(m_history.report(s.continuable).brokenCaseIds().size());
+        a.title = tr("Continuar lo fallado");
+        a.why = tr("%1 dejó %2 fallido(s) y %3 bloqueado(s): se repiten desde el paso que se rompió, en la misma revisión.")
+                    .arg(s.continuable).arg(s.progress.failed).arg(s.progress.blocked);
+        a.hint = tr("Continuar lo fallado");
+        a.button = tr("▶ Continuar lo fallado (%1)").arg(broken);
+        a.shortButton = tr("▶ Continuar (%1)").arg(broken);
+        a.run = [this, cycle = s.continuable](QWidget*) { emit continueCycleRequested(cycle); };
+    } else switch (s.nextStep) {
+        case 1:
+            a.title = tr("Preparar el plan de pruebas");
+            a.why = issue.planIds.isEmpty() ? tr("El requerimiento todavía no tiene plan") : tr("El plan todavía no tiene casos: ábrelo y añádeselos.");
+            a.hint = issue.planIds.isEmpty() ? tr("Crear el plan") : tr("Añadir casos al plan");
+            a.button = a.shortButton = issue.planIds.isEmpty() ? tr("Crear plan") : tr("Abrir plan");
+            if (issue.planIds.isEmpty()) a.run = [this](QWidget*) { createPlan(); };
+            else a.run = [this, planId = issue.planIds.first()](QWidget*) { emit openPlanRequested(planId); };
+            break;
+        case 2:
+            a.title = tr("Ejecutar el plan");
+            a.why = tr("%1 de %2 casos ejecutados en esta revisión").arg(s.progress.executed).arg(s.progress.cases);
+            a.hint = s.progress.notRun() > 0 ? tr("%n caso(s) sin ejecutar", nullptr, s.progress.notRun()) : tr("Ejecutar el plan");
+            a.button = tr("▶ Ejecutar plan…");
+            a.shortButton = tr("▶ Ejecutar");
+            a.run = [this](QWidget* anchor) { runPlan(anchor); };
+            break;
+        case 3:
+            a.title = tr("Revisar los bugs reportados");
+            a.why = tr("%n bug(s) abierto(s): con alguno abierto el requerimiento no queda conforme.", nullptr, s.openBugs);
+            a.hint = tr("%n bug(s) abierto(s)", nullptr, s.openBugs);
+            a.button = tr("Ver los bugs");
+            a.shortButton = tr("Ver bugs");
+            a.run = [this](QWidget*) { showDetail(true); };
+            break;
+        case 4:
+            a.title = tr("Generar el acta (R-213)");
+            a.why = tr("Con lo del requerimiento, la ejecución elegida y los bugs de la revisión");
+            a.hint = tr("Generar el acta");
+            a.button = tr("Generar acta…");
+            a.shortButton = tr("Generar acta");
+            a.run = [this](QWidget*) { generateRecord(); };
+            break;
+        case 5:
+            a.title = tr("Cerrar la revisión");
+            a.why = tr("Se propone «%1»").arg(label(s.progress.suggested));
+            a.hint = tr("Cerrar la revisión");
+            a.button = tr("Cerrar revisión…");
+            a.shortButton = tr("Cerrar");
+            a.run = [this](QWidget*) { closeRevision(); };
+            break;
+        case 6:
+            a.title = tr("Publicar el resultado");
+            a.why = tr("Los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ");
+            a.hint = tr("Publicar el resultado");
+            a.button = tr("Publicar…");
+            a.shortButton = tr("Publicar");
+            if (m_revisionPublish) a.run = [this](QWidget*) { publishRevision(); };
+            break;
+        default:
+            a.title = issue.lastOutcome() == QaOutcome::Observado ? tr("Volver a probar") : tr("Nada pendiente");
+            a.why = tr("Revisión %1 cerrada como %2").arg(s.number).arg(label(issue.lastOutcome()));
+            a.hint = tr("%1 · publicado").arg(label(issue.lastOutcome()));
+            a.button = a.shortButton = tr("Nueva revisión");
+            a.run = [this](QWidget*) { openRevision(); };
+            break;
+    }
+    // Lo que lanza la acción trabaja sobre el issue elegido: desde una tarjeta, primero se elige el suyo.
+    if (a.run) a.run = [this, issueId, run = a.run](QWidget* anchor) {
+        m_issues.select(issueId);
+        run(anchor);
+    };
+    return a;
+}
+
+void IssuesView::showCardMenu(const QString& issueId, const QPoint& globalPos) {
+    m_issues.select(issueId);
+    const Issue* found = m_issues.find(issueId);
+    if (!found) return;
+    const Issue issue = *found;
+    const RevisionSnapshot s = snapshotOf(issue);
+    const Column column = columnOf(issue, s);
+    const NextAction next = nextActionOf(issue, s, column);
+
+    auto* menu = new QMenu(this);
+    menu->setObjectName(QStringLiteral("issueCardMenu"));
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    auto add = [menu](const QString& text, const char* name, const std::function<void()>& f, bool enabled = true) {
+        QAction* a = menu->addAction(text, f);
+        a->setObjectName(QString::fromLatin1(name));
+        a->setEnabled(enabled);
+        return a;
+    };
+    add(tr("Abrir el issue"), "issueMenuOpen", [this]() { showDetail(true); });
+    if (next.run) add(tr("Lo siguiente: %1").arg(next.title), "issueMenuNext", [run = next.run]() { run(nullptr); });
+    menu->addSeparator();
+    add(tr("Ejecutar plan…"), "issueMenuRun", [this]() { runPlan(nullptr); }, !runnablePlans(issue).isEmpty());
+    if (!s.continuable.isEmpty())
+        add(tr("Continuar lo fallado…"), "issueMenuContinue", [this, cycle = s.continuable]() { emit continueCycleRequested(cycle); });
+    if (!issue.planIds.isEmpty())
+        add(tr("Ir al plan"), "issueMenuPlan", [this, planId = issue.planIds.first()]() { emit openPlanRequested(planId); });
+    else
+        add(tr("Crear plan"), "issueMenuPlan", [this]() { createPlan(); });
+
+    // El estado de QA, como en el detalle: a mano manda sobre el avance automático.
+    QMenu* states = menu->addMenu(tr("Estado de QA"));
+    for (const auto state : {IssueState::Pending, IssueState::Preparing, IssueState::Testing, IssueState::Done}) {
+        QAction* a = states->addAction(label(state), this, [this, issueId, state]() {
+            m_issues.updateIssue(issueId, [state](Issue& i) { i.state = state; });
+        });
+        a->setObjectName(QStringLiteral("issueMenuState-%1").arg(static_cast<int>(state)));
+        a->setCheckable(true);
+        a->setChecked(issue.state == state);
+    }
+    menu->addSeparator();
+    if (issue.isPublished() && !issue.publication.url.isEmpty())
+        add(tr("Abrir %1 en el gestor").arg(issue.publication.key), "issueMenuJira",
+            [this, url = issue.publication.url]() { emit openUrlRequested(url); });
+    if (issue.isImported() && !issue.requirement.data.detailUrl.isEmpty())
+        add(tr("Abrir en GESREQ"), "issueMenuGesreq", [this, url = issue.requirement.data.detailUrl]() { emit openUrlRequested(url); });
+    menu->addSeparator();
+    add(tr("Eliminar…"), "issueMenuRemove", [this]() { removeSelected(); });
+    menu->popup(globalPos);
+}
+
+void IssuesView::moveToColumn(const QString& issueId, Column column) {
+    const Issue* issue = m_issues.find(issueId);
+    if (!issue || column == Column::Broken) return;
+    IssueState state = IssueState::Pending;
+    switch (column) {
+        case Column::Pending: state = IssueState::Pending; break;
+        case Column::Preparing: state = IssueState::Preparing; break;
+        case Column::Testing: case Column::Broken: state = IssueState::Testing; break;
+        case Column::Done: state = IssueState::Done; break;
+    }
+    m_issues.select(issueId);
+    if (issue->state != state) m_issues.updateIssue(issueId, [state](Issue& i) { i.state = state; });
+    // Con casos rotos en la ronda, el issue se queda en fallidos aunque cambie su estado: se avisa, para
+    // que no parezca que el arrastre no hizo nada.
+    if (const Issue* now = m_issues.find(issueId); now && columnOf(*now, snapshotOf(*now)) == Column::Broken)
+        emit toast(tr("%1 sigue en «Fallido / bloqueado»: su revisión tiene casos rotos. Continúa lo fallado para sacarlo.").arg(issueId),
+                   theme::Amber);
+    else
+        emit toast(tr("%1 · %2").arg(issueId, label(state)), theme::Green);
+}
+
+void IssuesView::startCardDrag(QPushButton* card) {
+    const QString id = card->property("issueId").toString();
+    auto* mime = new QMimeData;
+    mime->setData(kIssueMime, id.toUtf8());
+    mime->setText(id);
+    auto* drag = new QDrag(card);
+    drag->setMimeData(mime);
+    const QPixmap pixmap = card->grab();
+    drag->setPixmap(pixmap);
+    drag->setHotSpot(m_dragStart);
+    QPointer<QPushButton> guard(card);
+    drag->exec(Qt::MoveAction);
+    // El botón se queda hundido si el arrastre se tragó el soltar el ratón.
+    if (guard) guard->setDown(false);
+}
+
+void IssuesView::styleWell(int column, bool hot) {
+    QFrame* well = m_wells[column];
+    const bool broken = static_cast<Column>(column) == Column::Broken;
+    QString bg = broken ? theme::tint(theme::Red, 14) : theme::tint(theme::Border, 70);
+    QString border = broken ? theme::tint(theme::Red, 60) : QStringLiteral("transparent");
+    if (hot) {
+        bg = theme::tint(theme::Blue, 22);
+        border = theme::Blue;
+    }
+    well->setStyleSheet(QStringLiteral("QFrame#%1{background:%2;border:1px solid %3;border-radius:12px;}").arg(well->objectName(), bg, border));
 }
 
 void IssuesView::refreshList() {
     const QString system = linkedSystem();
     m_consult->setToolTip(system.isEmpty() ? tr("Vincula antes un sistema de GESREQ a este proyecto en Ajustes")
                                            : tr("Leer la bandeja de control de calidad e importar los requerimientos de %1").arg(system));
-    ui::clearLayout(m_listLayout);
+    int counts[kColumns] = {};
+    for (int i = 0; i < kColumns; ++i) ui::clearLayout(m_columns[i]);
     int shown = 0;
     for (const auto& issue : m_issues.issues()) {
         if (!m_filter.matches(issue)) continue;
         ++shown;
-        auto* row = ui::button(QString(), "row");
-        row->setObjectName(QStringLiteral("issueRow-%1").arg(issue.id));
-        ui::setFlag(row, "active", issue.id == m_issues.selectedId());
-        auto* v = ui::vbox(row, 0, 4);
-        v->setContentsMargins(12, 10, 12, 10);
-
-        auto* top = new QWidget;
-        auto* th = ui::hbox(top, 0, 8);
-        th->addWidget(ui::label(issue.id, "mono-muted"));
-        if (issue.isImported()) th->addWidget(ui::label(QStringLiteral("· GREQ %1").arg(issue.requirement.data.id), "mono-muted"));
-        th->addStretch(1);
-        const auto pill = theme::priorityPill(toString(issue.priority));
-        th->addWidget(ui::pill(label(issue.priority), pill.bg, pill.fg));
-        v->addWidget(top);
-
-        auto* title = new QLabel(issue.title);
-        title->setWordWrap(true);
-        title->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;color:%1;").arg(theme::Text));
-        v->addWidget(title);
-
-        auto* bottom = new QWidget;
-        auto* bh = ui::hbox(bottom, 0, 6);
-        auto* state = new QLabel(label(issue.state));
-        state->setStyleSheet(QStringLiteral("font-size:11.5px;font-weight:600;color:%1;").arg(stateColor(issue.state)));
-        bh->addWidget(state);
-        bh->addStretch(1);
-        if (!issue.requirement.changes.isEmpty()) bh->addWidget(ui::pill(tr("CAMBIOS"), theme::tint(theme::Amber, 46), theme::AmberSoft));
-        if (issue.requirement.missing) bh->addWidget(ui::pill(tr("FUERA DE LA BANDEJA"), theme::tint(theme::Muted, 38), theme::Muted));
-        if (issue.isPublished()) bh->addWidget(ui::label(issue.publication.key, "mono-muted"));
-        v->addWidget(bottom);
-
-        if (issue.isImported()) {
-            const QString where = issue.requirement.data.systemCode + QStringLiteral(" · ") + issue.requirement.data.states.join(QStringLiteral(" + "));
-            auto* meta = ui::label(ui::elide(where, 48), "muted-sm");
-            meta->setStyleSheet(QStringLiteral("font-size:11px;"));
-            v->addWidget(meta);
-        }
-
-        for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
-        connect(row, &QPushButton::clicked, this, [this, id = issue.id]() { m_issues.select(id); });
-        m_listLayout->addWidget(row);
+        const RevisionSnapshot s = snapshotOf(issue);
+        const Column column = columnOf(issue, s);
+        const int i = static_cast<int>(column);
+        ++counts[i];
+        m_columns[i]->addWidget(boardCard(issue, s, column));
     }
-    if (shown == 0) {
-        auto* e = ui::label(m_issues.issues().isEmpty() ? tr("Todavía no hay issues. Consulta GESREQ para importar tus requerimientos o crea uno a mano.")
-                                                        : tr("Ningún issue coincide con los filtros."),
-                            "muted");
-        e->setWordWrap(true);
-        e->setContentsMargins(8, 8, 8, 8);
-        m_listLayout->addWidget(e);
+    for (int i = 0; i < kColumns; ++i) {
+        m_columnCounts[i]->setText(QString::number(counts[i]));
+        m_columns[i]->addStretch(1);
     }
+    m_boardEmpty->setText(m_issues.issues().isEmpty() ? tr("Todavía no hay issues. Consulta GESREQ para importar tus requerimientos o crea uno a mano.")
+                                                      : tr("Ningún issue coincide con los filtros."));
+    m_boardEmpty->setVisible(shown == 0);
     m_listCount->setText(m_filter.isEmpty() ? tr("%1 issues").arg(shown) : tr("%1 de %2 issues").arg(shown).arg(m_issues.issues().size()));
-    m_listLayout->addStretch(1);
+    refreshDrawer();
+}
+
+void IssuesView::refreshDrawer() {
+    ui::clearLayout(m_drawerLayout);
+    const Issue* found = selected();
+    m_drawer->setVisible(found != nullptr);
+    if (!found) return;
+    const Issue issue = *found;
+    const RevisionSnapshot s = snapshotOf(issue);
+    const Column column = columnOf(issue, s);
+    const ColumnInfo info = columnInfo(column);
+
+    auto* top = new QWidget;
+    auto* th = ui::hbox(top, 0, 8);
+    // Se ajusta al ancho del panel en vez de ensancharlo: al lado va el botón del menú.
+    auto* identity = ui::label(issue.isImported() ? QStringLiteral("%1 · GREQ %2 · %3").arg(issue.id, issue.requirement.data.id,
+                                                                                          issue.requirement.data.systemCode)
+                                                  : issue.id,
+                               "eyebrow-mono");
+    identity->setWordWrap(true);
+    identity->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    th->addWidget(identity, 1);
+    // El mismo menú que la tarjeta: todo lo que se puede hacer con el issue, a mano desde el panel.
+    auto* more = smallButton(QStringLiteral("⋯"), "ghost", tr("Más acciones"));
+    more->setObjectName(QStringLiteral("issueDrawerMore"));
+    more->setFixedWidth(34);
+    connect(more, &QPushButton::clicked, this, [this, more, id = issue.id]() {
+        showCardMenu(id, more->mapToGlobal(QPoint(0, more->height())));
+    });
+    th->addWidget(more, 0, Qt::AlignTop);
+    m_drawerLayout->addWidget(top);
+
+    auto* title = new QLabel(issue.title);
+    title->setObjectName(QStringLiteral("issueDrawerTitle"));
+    title->setWordWrap(true);
+    title->setStyleSheet(QStringLiteral("font-size:18px;font-weight:700;color:%1;").arg(theme::Text));
+    m_drawerLayout->addWidget(title);
+
+    auto* chips = new QWidget;
+    auto* chh = ui::hbox(chips, 0, 6);
+    chh->addWidget(ui::pill(info.name, theme::tint(info.color, 46), info.color));
+    if (!issue.revisions.isEmpty()) {
+        QString rev = tr("REV %1").arg(s.number);
+        QStringList environments;
+        for (const auto& cycle : IssueStore::cyclesOfRevision(issue, m_history, s.number))
+            if (const QString env = cycle.environment.trimmed(); !env.isEmpty() && !environments.contains(env)) environments << env;
+        if (!environments.isEmpty()) rev += QStringLiteral(" · ") + environments.join(QStringLiteral(", ")).toUpper();
+        chh->addWidget(ui::pill(rev, theme::tint(theme::Cyan, 38), theme::Cyan));
+    }
+    if (issue.isPublished()) {
+        const auto& p = issue.publication;
+        chh->addWidget(ui::pill(p.status.isEmpty() ? p.key : QStringLiteral("%1 · %2").arg(p.key, p.status), theme::tint(theme::Blue, 30), theme::Blue));
+    }
+    chh->addStretch(1);
+    m_drawerLayout->addWidget(chips);
+
+    // Lo siguiente: el paso que toca de la revisión, con su acción a mano.
+    auto* next = ui::card("card-flat");
+    next->setObjectName(QStringLiteral("issueNext"));
+    auto* nv = ui::vbox(next, 0, 8);
+    nv->setContentsMargins(14, 12, 14, 14);
+    nv->addWidget(ui::label(tr("LO SIGUIENTE"), "eyebrow"));
+    const NextAction action = nextActionOf(issue, s, column);
+    const QString what = action.title;
+    const QString why = action.why;
+    auto* whatLabel = ui::label(what);
+    whatLabel->setObjectName(QStringLiteral("issueNextTitle"));
+    whatLabel->setWordWrap(true);
+    whatLabel->setStyleSheet(QStringLiteral("font-size:14.5px;font-weight:600;"));
+    nv->addWidget(whatLabel);
+    auto* whyLabel = ui::label(why, "muted-sm");
+    whyLabel->setWordWrap(true);
+    nv->addWidget(whyLabel);
+    auto* buttons = new QWidget;
+    auto* bh = ui::hbox(buttons, 0, 8);
+    if (action.run) {
+        auto* go = smallButton(action.button, "primary");
+        go->setObjectName(QStringLiteral("issueNextAction"));
+        connect(go, &QPushButton::clicked, this, [go, run = action.run]() { run(go); });
+        bh->addWidget(go);
+    }
+    auto* openButton = smallButton(tr("Abrir el issue"), "outline");
+    openButton->setObjectName(QStringLiteral("issueOpenDetail"));
+    connect(openButton, &QPushButton::clicked, this, [this]() { showDetail(true); });
+    bh->addWidget(openButton);
+    bh->addStretch(1);
+    nv->addWidget(buttons);
+    m_drawerLayout->addWidget(next);
+
+    // Los pasos de la revisión, de un vistazo.
+    m_drawerLayout->addWidget(ui::label(issue.revisions.isEmpty() ? tr("REVISIÓN") : tr("REVISIÓN %1").arg(s.number), "eyebrow"));
+    const QStringList caseIds = IssueStore::caseIdsOf(issue, m_plans);
+    const QString names[] = {tr("Preparar el plan"), tr("Ejecutar el plan"), tr("Revisar los bugs"), tr("Generar el acta"),
+                             tr("Cerrar la revisión"), tr("Publicar"), tr("Volver a probar")};
+    const QString notes[] = {caseIds.isEmpty() ? QString() : tr("%n caso(s)", nullptr, int(caseIds.size())),
+                             s.progress.cases > 0 ? QStringLiteral("%1/%2").arg(s.progress.executed).arg(s.progress.cases) : QString(),
+                             s.openBugs > 0 ? tr("%n abierto(s)", nullptr, s.openBugs) : QString(),
+                             QString(), QString(), QString(), QString()};
+    const int steps = s.open ? 6 : 7;
+    auto* list = new QWidget;
+    auto* lv = ui::vbox(list, 0, 6);
+    for (int i = 0; i < steps; ++i) {
+        const bool done = i + 1 < s.nextStep && i < 6;
+        const bool current = i + 1 == s.nextStep;
+        const QString color = done ? theme::Green : (current ? (column == Column::Broken ? theme::Red : theme::Amber) : theme::Muted);
+        auto* row = new QWidget;
+        auto* rh = ui::hbox(row, 0, 10);
+        auto* mark = ui::label(done ? QStringLiteral("✓") : QString::number(i + 1));
+        mark->setAlignment(Qt::AlignCenter);
+        mark->setFixedSize(20, 20);
+        mark->setStyleSheet(QStringLiteral("background:%1;color:%2;border-radius:10px;font-size:10.5px;font-weight:700;")
+                                .arg(theme::tint(color, done || current ? 46 : 20), color));
+        rh->addWidget(mark);
+        auto* name = ui::label(names[i]);
+        name->setStyleSheet(current ? QStringLiteral("font-weight:700;") : (done ? QString() : QStringLiteral("color:%1;").arg(theme::Muted)));
+        rh->addWidget(name, 1);
+        rh->addWidget(ui::label(notes[i], "muted-sm"));
+        lv->addWidget(row);
+    }
+    m_drawerLayout->addWidget(list);
+
+    // Cómo va cada destino del resultado de la ronda.
+    if (m_revisionPublish && !issue.revisions.isEmpty()) {
+        auto* dest = new QWidget;
+        auto* dg = new QGridLayout(dest);
+        dg->setContentsMargins(0, 0, 0, 0);
+        dg->setSpacing(6);
+        int col = 0;
+        for (const auto& step : m_revisionPublish->stepsFor(issue.id, 0)) {
+            // El cierre en el gestor no es un destino más del resultado: sólo se enseña hecho.
+            if (step.destination == RevisionPublishService::Destination::Close && !step.done) continue;
+            auto* box = ui::card("card-flat");
+            auto* bv = ui::vbox(box, 0, 3);
+            bv->setContentsMargins(10, 8, 10, 8);
+            const QString color = step.done ? theme::Green : (step.available ? theme::Amber : theme::Muted);
+            auto* tag = ui::label(destinationTag(step.destination) + (step.done ? QStringLiteral(" ✓") : QString()), "eyebrow");
+            tag->setStyleSheet(QStringLiteral("color:%1;").arg(color));
+            bv->addWidget(tag);
+            const QString text = step.done ? tr("Hecho") : (step.available ? tr("Pendiente") : tr("No disponible"));
+            bv->addWidget(ui::label(text, "muted-sm"));
+            box->setToolTip(step.blocked.isEmpty() ? step.detail : step.blocked);
+            dg->addWidget(box, 0, col++);
+        }
+        m_drawerLayout->addWidget(dest);
+    }
+    m_drawerLayout->addStretch(1);
 }
 
 // ---- Detalle -------------------------------------------------------------------------------------
 
-void IssuesView::buildDetail(QHBoxLayout* root) {
+void IssuesView::buildDetail(QVBoxLayout* root) {
+    // Del detalle se vuelve al tablero: el issue sigue elegido y su panel, abierto.
+    auto* bar = new QWidget;
+    auto* barh = ui::hbox(bar, 0, 8);
+    barh->setContentsMargins(20, 12, 20, 0);
+    auto* back = ui::button(tr("← Tablero"), "back");
+    back->setObjectName(QStringLiteral("issuesBack"));
+    connect(back, &QPushButton::clicked, this, [this]() { showDetail(false); });
+    barh->addWidget(back);
+    barh->addStretch(1);
+    root->addWidget(bar);
+
     QWidget* content;
     QVBoxLayout* outer;
     auto* sa = ui::scrollArea(&content, &outer);
@@ -637,11 +1257,13 @@ void IssuesView::refreshRevision(const Issue& issue) {
     m_historyCard->setVisible(false);
     if (!m_records) return;
 
-    const IssueProgress progress = m_records->progressFor(issue.id);
+    // Lo mismo que cuentan la tarjeta y el panel del tablero, para que los tres digan igual qué toca.
+    const RevisionSnapshot snapshot = snapshotOf(issue);
+    const IssueProgress& progress = snapshot.progress;
     const IssueRevision* open = issue.currentRevision();
     const IssueRevision* last = issue.revisions.isEmpty() ? nullptr : &issue.revisions.last();
-    const bool closed = !open && last != nullptr;
-    const int number = last ? last->number : 1;
+    const bool closed = snapshot.closed;
+    const int number = snapshot.number;
     const QaOutcome outcome = closed ? issue.lastOutcome() : progress.suggested;
 
     m_revisionHeader->setText(issue.revisions.isEmpty() ? tr("REVISIÓN") : tr("REVISIÓN %1 · %2").arg(number).arg(label(issue.state).toUpper()));
@@ -666,10 +1288,10 @@ void IssuesView::refreshRevision(const Issue& issue) {
 
     // Los pasos del control de calidad, en el orden en que se hacen. El primero sin terminar es el que toca.
     const QStringList caseIds = IssueStore::caseIdsOf(issue, m_plans);
-    const bool hasPlan = !issue.planIds.isEmpty() && !caseIds.isEmpty();
-    const bool executed = progress.executed > 0;
-    const bool hasRecord = last && last->hasDocument();
-    const bool published = last && (!last->jira.isEmpty() || !last->gesreq.isEmpty());
+    const bool hasPlan = snapshot.hasPlan;
+    const bool executed = snapshot.executed;
+    const bool hasRecord = snapshot.hasRecord;
+    const bool published = snapshot.published;
     int number_ = 0;
     bool currentTaken = false;
     auto step = [&](bool done, const QString& title, const QString& detail, const QString& detailName = QString()) {
@@ -742,7 +1364,7 @@ void IssuesView::refreshRevision(const Issue& issue) {
         connect(run, &QPushButton::clicked, this, [this, run]() { runPlan(run); });
         actions->addWidget(run);
         // Lo que quedó roto no obliga a repetir el plan entero: se continúa la ronda por donde se quedó.
-        if (const QString pending = continuableCycle(issue, number); !pending.isEmpty()) {
+        if (const QString pending = snapshot.continuable; !pending.isEmpty()) {
             const PlanReport report = m_history.report(pending);
             auto* proceed = smallButton(tr("Continuar lo fallado…"), "outline",
                                         tr("Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) del ciclo %2, "
@@ -850,6 +1472,9 @@ void IssuesView::refreshRevision(const Issue& issue) {
         if (m_revisionPublish)
             for (const auto& step : m_revisionPublish->stepsFor(issue.id, number)) {
                 if (!step.done && !step.available) continue;
+                // Cerrar el issue sólo le toca a una ronda conforme; en las observadas no es algo pendiente.
+                if (step.destination == RevisionPublishService::Destination::Close && !step.done && it->outcome != QaOutcome::Conforme)
+                    continue;
                 const QString color = step.done ? theme::Green : theme::Amber;
                 auto* chip = ui::pill(QStringLiteral("%1 %2").arg(destinationTag(step.destination), step.done ? QStringLiteral("✓")
                                                                                                              : QStringLiteral("—")),
@@ -1153,7 +1778,8 @@ void IssuesView::openPublishDialog(bool update) {
                 self->m_publishing = false;
                 self->loadDetail();
                 if (r.ok) {
-                    emit self->toast(update ? tr("%1 actualizado en el gestor").arg(r.key) : tr("%1 creado en el gestor").arg(r.key), theme::Green);
+                    if (!r.warning.isEmpty()) emit self->toast(tr("%1 creado en el gestor · %2").arg(r.key, r.warning), theme::Amber);
+                    else emit self->toast(update ? tr("%1 actualizado en el gestor").arg(r.key) : tr("%1 creado en el gestor").arg(r.key), theme::Green);
                     return;
                 }
                 if (r.uncertain) {
@@ -1533,6 +2159,7 @@ void IssuesView::askForProject(const ExternalRequirement& requirement, const QSt
 void IssuesView::openRequirement(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt) {
     const QString id = m_issues.openForRequirement(requirement, connection, fetchedAt);
     if (id.isEmpty()) return;
+    showDetail(true);
     // El requerimiento llega con lo suyo listo: su issue en el gestor y el plan con el que se prueba.
     const QString planId = ensurePlan(id);
     emit toast(planId.isEmpty() ? tr("%1 · pruebas del requerimiento %2").arg(id, requirement.id)
@@ -1567,7 +2194,9 @@ void IssuesView::publishImported(const QString& issueId) {
             if (!self) return;
             self->loadDetail();
             if (r.ok) {
-                emit self->toast(tr("%1 creado en el gestor para %2").arg(r.key, issueId), theme::Green);
+                // Creado queda igual aunque no se haya podido asignar: se dice, para asignarlo a mano.
+                if (!r.warning.isEmpty()) emit self->toast(tr("%1 creado en el gestor para %2 · %3").arg(r.key, issueId, r.warning), theme::Amber);
+                else emit self->toast(tr("%1 creado en el gestor para %2 y asignado a tu usuario").arg(r.key, issueId), theme::Green);
                 return;
             }
             if (r.uncertain) {
@@ -1673,6 +2302,7 @@ void IssuesView::removeSelected() {
     const QString id = issue->id;
     if (QMessageBox::question(this, tr("Eliminar issue"), tr("¿Eliminar %1? Sus casos, planes y resultados no se borran.").arg(id)) != QMessageBox::Yes) return;
     m_issues.removeIssue(id);
+    showDetail(false);
 }
 
 } // namespace qaflow

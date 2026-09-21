@@ -42,6 +42,8 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
+#include <QMimeData>
+#include <QDropEvent>
 #include <QPushButton>
 #include <QProgressBar>
 #include <QUrl>
@@ -409,6 +411,43 @@ private slots:
         QTest::mouseClick(first, Qt::LeftButton);       // volver a uno ya marcado
         QCOMPARE(f.app.run.state().idx, 0);
         QVERIFY(f.app.run.state().isMarked(0));
+    }
+
+    /// En un ciclo, la pestaña «Casos» lista los del plan con su estado y lleva de uno a otro: el que
+    /// se deja queda en pausa con lo marcado. Con un caso suelto la pestaña no está.
+    void theCasesTabOfTheRunMovesBetweenTheCasesOfTheCycle() {
+        WindowFixture f;
+        f.action("actRun")->trigger();   // un caso suelto
+        auto* casesTab = f.window->findChild<QPushButton*>(QStringLiteral("runCasesTab"));
+        QVERIFY(casesTab);
+        QVERIFY(casesTab->isHidden());
+
+        f.app.run.startSequence({QStringLiteral("TC-104"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        f.window->navigate(Screen::Run);
+        f.app.run.mark(StepResult::Pass);
+        QTRY_VERIFY(casesTab->isVisible());
+        QCOMPARE(casesTab->text(), QStringLiteral("Casos · 0/3"));
+        casesTab->click();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* target = f.window->findChild<QFrame*>(QStringLiteral("caseCard-TC-107"));
+        QVERIFY(target);
+        QTRY_VERIFY(target->isVisible());
+        QTest::mouseClick(target, Qt::LeftButton);
+        QTRY_COMPARE(f.app.run.state().caseId, QStringLiteral("TC-107"));
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("runStepTab"))->isChecked());
+
+        // El que se dejó sigue en la lista, en pausa y con su paso marcado; y se vuelve a él.
+        casesTab->click();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* back = f.window->findChild<QFrame*>(QStringLiteral("caseCard-TC-104"));
+        QVERIFY(back);
+        QVERIFY(!back->findChildren<QLabel*>().isEmpty());
+        bool paused = false;
+        for (auto* l : back->findChildren<QLabel*>()) paused |= l->text() == QStringLiteral("EN PAUSA · 1/4");
+        QVERIFY(paused);
+        QTest::mouseClick(back, Qt::LeftButton);
+        QTRY_COMPARE(f.app.run.state().caseId, QStringLiteral("TC-104"));
+        QCOMPARE(f.app.run.state().markedCount(), 1);
     }
 
     /// La pantalla de bugs es el libro del proyecto: lista lo reportado con su estado, filtra por
@@ -2033,6 +2072,131 @@ private slots:
         connect(history, &HistoryView::openUrlRequested, this, [&opened](const QString& url) { opened = url; });
         f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-11"))->click();
         QCOMPARE(opened, QStringLiteral("https://acme.atlassian.net/browse/SHOP-11"));
+    }
+
+    // El tablero de issues reparte por cómo va el trabajo de QA, con una columna para lo que dejó casos
+    // fallados o bloqueados; su panel propone continuarlo y el issue entero se abre con doble clic.
+    void theIssueBoardHasAColumnForBrokenCasesAndProposesContinuingThem() {
+        WindowFixture f;
+        const QString fresh = f.app.issues.createIssue(QStringLiteral("Exportar pedidos"));
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        const QString planId = f.app.plans.activeId();
+        f.app.issues.linkPlan(issueId, planId);
+        f.app.issues.openRevision(issueId);
+        f.app.issues.updateIssue(issueId, [](Issue& i) { i.state = IssueState::Testing; });
+
+        f.app.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-102")}, QStringLiteral("Regresión"), planId,
+                                QStringLiteral("QA"));
+        const QString planRunId = f.app.run.planRunId();
+        f.app.history.noteCycleRevision(planRunId, issueId, 1);
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);   // TC-101 entero
+        f.app.run.finish();
+        f.app.run.mark(StepResult::Pass);                                       // TC-102, paso 1
+        f.app.run.mark(StepResult::Fail);                                       // TC-102, paso 2
+        f.window->finishRun();
+        f.app.issues.select(issueId);
+        f.window->navigate(Screen::Issues);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+
+        const auto columnOf = [&f](const QString& id) {
+            auto* card = f.window->findChild<QPushButton*>(QStringLiteral("issueRow-") + id);
+            for (QWidget* w = card; w; w = w->parentWidget())
+                if (w->objectName().startsWith(QStringLiteral("issueBoardColumn-"))) return w->objectName();
+            return QString();
+        };
+        QCOMPARE(columnOf(fresh), QStringLiteral("issueBoardColumn-0"));
+        QCOMPARE(columnOf(issueId), QStringLiteral("issueBoardColumn-3"));
+
+        // El panel del issue elegido propone continuar lo fallado, y hacerlo arranca la continuación.
+        QCOMPARE(f.liveLabel("issueNextTitle")->text(), QStringLiteral("Continuar lo fallado"));
+        auto* back = f.window->findChild<QPushButton*>(QStringLiteral("issuesBack"));
+        QVERIFY(!back->isVisible());
+        QTest::mouseDClick(f.window->findChild<QPushButton*>(QStringLiteral("issueRow-") + issueId), Qt::LeftButton);
+        QVERIFY(back->isVisible());
+        back->click();
+        QVERIFY(!back->isVisible());
+
+        f.window->findChild<QPushButton*>(QStringLiteral("issueNextAction"))->click();
+        QVERIFY(f.answerCycleDialog(QStringLiteral("QA")));
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+        const PlanRun* cycle = f.app.history.findPlan(f.app.run.planRunId());
+        QVERIFY(cycle);
+        QCOMPARE(cycle->continuesCycleId, planRunId);
+    }
+
+    // La tarjeta del issue se maneja sin salir del tablero: su botón hace lo siguiente que toca, su menú
+    // cambia el estado de QA y soltarla en otra columna también (menos en la de fallidos, que es calculada).
+    void theIssueCardActsFromTheBoard() {
+        WindowFixture f;
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Exportar pedidos"));
+        f.app.issues.select(issueId);
+        f.window->navigate(Screen::Issues);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        const auto card = [&f, &issueId] { return f.window->findChild<QPushButton*>(QStringLiteral("issueRow-") + issueId); };
+
+        // Sin plan, lo siguiente es crearlo, y el botón de la tarjeta elegida lo hace.
+        auto* quick = f.window->findChild<QPushButton*>(QStringLiteral("issueCardAction-") + issueId);
+        QVERIFY(quick);
+        QCOMPARE(card()->childAt(quick->mapTo(card(), quick->rect().center())), quick);
+        QCOMPARE(quick->text(), QStringLiteral("Crear plan"));
+        quick->click();
+        QCOMPARE(f.app.issues.find(issueId)->planIds.size(), 1);
+        QCOMPARE(f.window->currentScreen(), Screen::Plan);
+
+        // El menú de la tarjeta cambia el estado de QA.
+        f.window->navigate(Screen::Issues);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        emit card()->customContextMenuRequested(QPoint(4, 4));
+        auto* menu = f.window->findChild<QMenu*>(QStringLiteral("issueCardMenu"));
+        QVERIFY(menu);
+        menu->findChild<QAction*>(QStringLiteral("issueMenuState-%1").arg(static_cast<int>(IssueState::Testing)))->trigger();
+        QVERIFY(f.app.issues.find(issueId)->state == IssueState::Testing);
+        menu->close();
+
+        // El «⋯» de la tarjeta abre el mismo menú, también en una tarjeta que aún no estaba elegida.
+        const QString other = f.app.issues.createIssue(QStringLiteral("Cambiar avatar"));
+        f.app.issues.select(issueId);
+        QCoreApplication::processEvents();   // las tarjetas nuevas se enseñan en diferido
+        QTest::qWait(50);
+        auto* otherCard = f.window->findChild<QPushButton*>(QStringLiteral("issueRow-") + other);
+        QEvent enter(QEvent::Enter);
+        QCoreApplication::sendEvent(otherCard, &enter);
+        auto* more = f.window->findChild<QPushButton*>(QStringLiteral("issueCardMore-") + other);
+        QVERIFY(more && more->isVisible());
+        // Un clic en su sitio le llega a él, no a la tarjeta (un padre transparente al ratón lo taparía).
+        QCOMPARE(otherCard->childAt(more->mapTo(otherCard, more->rect().center())), more);
+        QTest::mouseClick(more, Qt::LeftButton);
+        QTRY_VERIFY(f.window->findChild<QMenu*>(QStringLiteral("issueCardMenu")) &&
+                    f.window->findChild<QMenu*>(QStringLiteral("issueCardMenu"))->isVisible());
+        QCOMPARE(f.app.issues.selectedId(), other);
+        f.window->findChild<QMenu*>(QStringLiteral("issueCardMenu"))->close();
+        QTest::qWait(50);   // el panel se rehízo al elegir el otro issue y se enseña en diferido
+
+        // Y el panel del issue abierto tiene el suyo.
+        auto* drawerMore = f.window->findChild<QPushButton*>(QStringLiteral("issueDrawerMore"));
+        QVERIFY(drawerMore && drawerMore->isVisible());
+        QTest::mouseClick(drawerMore, Qt::LeftButton);
+        QTRY_VERIFY(f.window->findChild<QMenu*>(QStringLiteral("issueCardMenu")) &&
+                    f.window->findChild<QMenu*>(QStringLiteral("issueCardMenu"))->isVisible());
+        f.window->findChild<QMenu*>(QStringLiteral("issueCardMenu"))->close();
+        f.app.issues.select(issueId);
+
+        // Soltarla en «Finalizado» la finaliza; en la de fallidos no hace nada.
+        const auto drop = [&f, &issueId](int column) {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            auto* well = f.window->findChild<QWidget*>(QStringLiteral("issueBoardColumn-%1").arg(column));
+            QMimeData mime;
+            mime.setData(QByteArrayLiteral("application/x-qaflow-issue"), issueId.toUtf8());
+            QDragEnterEvent enter(QPoint(10, 10), Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(well, &enter);
+            QDropEvent event(QPointF(10, 10), Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(well, &event);
+            QCoreApplication::processEvents();
+        };
+        drop(static_cast<int>(IssuesView::Column::Broken));
+        QVERIFY(f.app.issues.find(issueId)->state == IssueState::Testing);
+        drop(static_cast<int>(IssuesView::Column::Done));
+        QTRY_VERIFY(f.app.issues.find(issueId)->state == IssueState::Done);
     }
 
     // Lo que falló o quedó bloqueado se retoma desde el informe: el ciclo nuevo repite sólo esos casos,

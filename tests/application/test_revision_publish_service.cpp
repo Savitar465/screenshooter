@@ -109,7 +109,7 @@ private slots:
         AppFixture f;
         const Finished done = finishedRevision(f);
         const QList<RevisionPublishService::Step> steps = f.revisionPublish.stepsFor(done.issueId);
-        QCOMPARE(steps.size(), 3);
+        QCOMPARE(steps.size(), 4);
 
         const auto zephyr = stepOf(steps, Destination::Zephyr);
         QVERIFY(zephyr.available);
@@ -123,6 +123,57 @@ private slots:
         const auto gesreq = stepOf(steps, Destination::Requirement);
         QVERIFY(gesreq.available);
         QVERIFY(gesreq.target.contains(QStringLiteral("2026997")));
+
+        const auto close = stepOf(steps, Destination::Close);
+        QVERIFY(close.available);
+        QVERIFY(!close.done);
+    }
+
+    // Publicada como Conforme y con todo bien, el issue del gestor se cierra al final.
+    void aConformePublicationClosesTheTrackerIssueAtTheEnd() {
+        AppFixture f;
+        const Finished done = finishedRevision(f);
+        f.tracker->resolvedToReturn = true;
+        f.tracker->statusToReturn = QStringLiteral("Cerrada");
+        RevisionPublishService::Options options;
+        options.outcome = QaOutcome::Conforme;
+        options.comment = QStringLiteral("Conforme");
+
+        QList<Destination> order;
+        RevisionPublishService::Result result;
+        f.revisionPublish.publish(
+            done.issueId, options, [&order](const RevisionPublishService::Outcome& o) { order << o.destination; },
+            [&result](const RevisionPublishService::Result& r) { result = r; });
+        QVERIFY2(result.ok, qPrintable(result.steps.isEmpty() ? QString() : result.steps.last().message));
+        QCOMPARE(order.last(), Destination::Close);
+        QCOMPARE(f.tracker->closed, QStringList{QStringLiteral("SHOP-12")});
+        QVERIFY(f.issues.find(done.issueId)->publication.resolved);
+        QVERIFY(result.steps.last().message.contains(QStringLiteral("Cerrada")));
+        QVERIFY(stepOf(f.revisionPublish.stepsFor(done.issueId), Destination::Close).done);
+    }
+
+    // Observado no cierra nada, y si algo de lo elegido falla, el issue sigue abierto.
+    void theTrackerIssueStaysOpenWhenObservedOrWhenSomethingFailed() {
+        AppFixture f;
+        const Finished done = finishedRevision(f);
+        RevisionPublishService::Options options;
+        options.outcome = QaOutcome::Observado;
+        options.comment = QStringLiteral("Observado");
+        RevisionPublishService::Result result;
+        f.revisionPublish.publish(done.issueId, options, {}, [&result](const RevisionPublishService::Result& r) { result = r; });
+        QVERIFY(result.ok);
+        QVERIFY(f.tracker->closed.isEmpty());
+        for (const auto& step : result.steps) QVERIFY(step.destination != Destination::Close);
+
+        AppFixture g;
+        const Finished other = finishedRevision(g);
+        g.requirementSource->registrationCutOff = true;   // GESREQ no confirma
+        options.outcome = QaOutcome::Conforme;
+        g.revisionPublish.publish(other.issueId, options, {}, [&result](const RevisionPublishService::Result& r) { result = r; });
+        QVERIFY(!result.ok);
+        QVERIFY(g.tracker->closed.isEmpty());
+        QCOMPARE(result.steps.last().destination, Destination::Close);
+        QVERIFY(!result.steps.last().ok);
     }
 
     void publishingSendsTheCycleTheCommentAndTheRegistrationInOrder() {
@@ -303,6 +354,7 @@ private slots:
         RevisionPublishService::Options options;
         options.zephyr = false;
         options.tracker = false;
+        options.close = false;
         options.outcome = QaOutcome::Conforme;
         f.revisionPublish.publish(done.issueId, options, {}, {});
         QCOMPARE(f.requirementSource->registrations.size(), 1);
@@ -373,6 +425,7 @@ private slots:
         RevisionPublishService::Options options;
         options.zephyr = false;
         options.tracker = false;
+        options.close = false;
         options.outcome = QaOutcome::Conforme;
         options.comment = QStringLiteral("Conforme");
 

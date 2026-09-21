@@ -34,6 +34,8 @@ public:
                       std::function<void(const IssueResult&)> done) override;
     bool canLinkIssues(const TrackerSettings& s) const override;
     void linkIssues(const TrackerSettings& s, const QString& from, const QString& to, std::function<void(const IssueResult&)> done) override;
+    bool canCloseIssues(const TrackerSettings& s) const override;
+    void closeIssue(const TrackerSettings& s, const QString& key, std::function<void(const IssueResult&)> done) override;
 
 private:
     IIssueTracker& client(TrackerKind kind);

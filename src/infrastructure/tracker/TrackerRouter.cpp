@@ -43,5 +43,7 @@ void TrackerRouter::commentIssue(const TrackerSettings& s, const QString& key, c
                                  std::function<void(const IssueResult&)> done) { client(s.kind).commentIssue(s, key, body, attachments, std::move(done)); }
 bool TrackerRouter::canLinkIssues(const TrackerSettings& s) const { return client(s.kind).canLinkIssues(s); }
 void TrackerRouter::linkIssues(const TrackerSettings& s, const QString& from, const QString& to, std::function<void(const IssueResult&)> done) { client(s.kind).linkIssues(s, from, to, std::move(done)); }
+bool TrackerRouter::canCloseIssues(const TrackerSettings& s) const { return client(s.kind).canCloseIssues(s); }
+void TrackerRouter::closeIssue(const TrackerSettings& s, const QString& key, std::function<void(const IssueResult&)> done) { client(s.kind).closeIssue(s, key, std::move(done)); }
 
 } // namespace qaflow

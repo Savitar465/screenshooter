@@ -45,7 +45,25 @@ public:
     void linkIssues(const TrackerSettings& s, const QString& from, const QString& to,
                     std::function<void(const IssueResult&)> done) override;
 
+    /// Cierra con la transición del flujo que lleve a un estado de la categoría «hecho».
+    bool canCloseIssues(const TrackerSettings& s) const override { Q_UNUSED(s); return true; }
+    void closeIssue(const TrackerSettings& s, const QString& key, std::function<void(const IssueResult&)> done) override;
+
+    /// De las transiciones que ofrece un issue (`GET …/transitions?expand=transitions.fields`), la que
+    /// lo cierra: una que lleve a la categoría «done», mejor si se llama como un cierre («Cerrar»,
+    /// «Close», «Done»…). Vacía si no hay ninguna. `resolution` es la resolución con la que se manda
+    /// cuando la transición la pide, o vacía si no la pide.
+    static QString closingTransition(const QJsonArray& transitions, QString* resolution = nullptr);
+
 private:
+    /// El usuario de las credenciales, tal y como Jira lo asigna: `accountId` en Cloud, `name` en
+    /// Server. Se pregunta una vez por instancia y usuario.
+    void withMyself(const TrackerSettings& s, std::function<void(const QString& id, const QString& error)> done);
+    QString m_myself;      // el usuario ya resuelto
+    QString m_myselfFor;   // instancia + usuario para los que vale
+    /// Asigna el issue al usuario de las credenciales. No falla la operación de la que cuelga: si no se
+    /// puede, lo deja dicho en `result.warning`.
+    void assignToMyself(const TrackerSettings& s, IssueResult result, std::function<void(const IssueResult&)> done);
     /// Tipo de enlace con el que se relacionan dos issues, preguntado al servidor una vez: el nombre lo
     /// configura cada instancia («Relates», «Relacionada con»…), así que no se puede dar por supuesto.
     void withLinkType(const TrackerSettings& s, std::function<void(const QString& type, const QString& error)> done);

@@ -21,6 +21,8 @@ struct IssueResult {
     /// El fallo fue de red o del servidor (5xx), no del contenido: merece la pena reintentar.
     bool retryable = false;
     int attachmentsUploaded = 0;
+    /// Lo que salió a medias sin invalidar la operación (el issue se creó pero no se pudo asignar…).
+    QString warning;
 };
 
 struct ConnectionResult {
@@ -144,7 +146,9 @@ public:
 
     /// ¿Sabe este gestor publicar y mantener los issues de QAflow (no los defectos)? Sólo Jira, por ahora.
     virtual bool canPublishIssues(const TrackerSettings& s) const { Q_UNUSED(s); return false; }
-    /// Crea en el gestor la representación del issue de QAflow.
+    /// Crea en el gestor la representación del issue de QAflow, asignada al usuario de las credenciales
+    /// (quien lo crea es quien lleva las pruebas). Si la asignación falla, el issue sigue creado y
+    /// `IssueResult::warning` lo dice.
     virtual void publishIssue(const TrackerSettings& s, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) {
         Q_UNUSED(s); Q_UNUSED(draft);
         done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no publica los issues de QAflow"), false, 0});
@@ -196,6 +200,16 @@ public:
                             std::function<void(const IssueResult&)> done) {
         Q_UNUSED(s); Q_UNUSED(from); Q_UNUSED(to);
         done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no enlaza issues desde QAflow"), false, 0});
+    }
+
+    /// ¿Sabe este gestor cerrar un issue (llevarlo a un estado de «hecho»)? Es lo que hace falta para
+    /// que el issue del requerimiento se cierre al publicar una revisión conforme. Sólo Jira, por ahora.
+    virtual bool canCloseIssues(const TrackerSettings& s) const { Q_UNUSED(s); return false; }
+    /// Lleva el issue a un estado resuelto con la transición que ofrezca el flujo. Si ya lo estaba no
+    /// hace nada y responde bien: cerrar dos veces es inofensivo.
+    virtual void closeIssue(const TrackerSettings& s, const QString& key, std::function<void(const IssueResult&)> done) {
+        Q_UNUSED(s); Q_UNUSED(key);
+        done(IssueResult{false, {}, {}, QCoreApplication::translate("core", "Este gestor no cierra issues desde QAflow"), false, 0});
     }
 };
 

@@ -171,6 +171,23 @@ private slots:
         QCOMPARE(loaded->run.stepElapsedSecs, 7);
         QCOMPARE(loaded->queue, QStringList{QStringLiteral("TC-105")});
         QCOMPARE(loaded->planRunId, QStringLiteral("PR-0003"));
+        QVERIFY(loaded->parked.isEmpty());
+
+        // Los casos del ciclo dejados a medias para ir a otro viajan con la sesión.
+        RunState parked;
+        parked.caseId = QStringLiteral("TC-105"); parked.runId = QStringLiteral("R-0009"); parked.idx = 2;
+        parked.results = {StepRecord{StepResult::Pass, QStringLiteral("ok"), 5, true}, StepRecord{}, StepRecord{}};
+        s.parked = {ParkedRun{parked, QStringLiteral("R-0004")}};
+        QVERIFY(repo.saveSession(s));
+        const auto withParked = repo.loadSession();
+        QVERIFY(withParked);
+        QCOMPARE(withParked->parked.size(), 1);
+        QCOMPARE(withParked->parked[0].run.caseId, QStringLiteral("TC-105"));
+        QCOMPARE(withParked->parked[0].run.runId, QStringLiteral("R-0009"));
+        QCOMPARE(withParked->parked[0].run.idx, 2);
+        QCOMPARE(withParked->parked[0].run.markedCount(), 1);
+        QCOMPARE(withParked->parked[0].run.results[0].note, QStringLiteral("ok"));
+        QCOMPARE(withParked->parked[0].continuesRunId, QStringLiteral("R-0004"));
         repo.clearSession();
         QVERIFY(!repo.loadSession());
         QVERIFY(!QFile::exists(dir.filePath(QStringLiteral("session.json"))));

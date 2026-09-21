@@ -216,13 +216,124 @@ void JiraClient::publishIssue(const TrackerSettings& s, const TrackerIssueDraft&
         done(f);
         return;
     }
-    postJson(request(s, QStringLiteral("/rest/api/2/issue")), QJsonDocument(QJsonObject{{"fields", issueFields(s, draft)}}), [s, done](const Response& r) {
+    postJson(request(s, QStringLiteral("/rest/api/2/issue")), QJsonDocument(QJsonObject{{"fields", issueFields(s, draft)}}), [this, s, done](const Response& r) {
         if (!r.ok) { IssueResult f; f.error = errorFor(s, r); f.retryable = r.retryable; done(f); return; }
         IssueResult res;
         res.ok = true;
         res.key = r.json.object()[QStringLiteral("key")].toString();
         res.url = s.issueUrl(res.key);
-        done(res);
+        // Quien crea el issue del requerimiento es quien lo prueba: queda a su nombre. Se asigna aparte
+        // (y no en los campos de la creación) porque el campo puede no estar en la pantalla de alta del
+        // proyecto, y entonces Jira rechazaría el issue entero.
+        assignToMyself(s, res, done);
+    });
+}
+
+void JiraClient::withMyself(const TrackerSettings& s, std::function<void(const QString&, const QString&)> done) {
+    const QString scope = s.baseUrl() + QLatin1Char('|') + s.user.trimmed();
+    if (!m_myself.isEmpty() && m_myselfFor == scope) { done(m_myself, {}); return; }
+    get(request(s, QStringLiteral("/rest/api/2/myself")), [this, s, scope, done](const Response& r) {
+        if (!r.ok) { done({}, errorFor(s, r)); return; }
+        const QJsonObject me = r.json.object();
+        const QString id = s.usesAccountId() ? me[QStringLiteral("accountId")].toString() : me[QStringLiteral("name")].toString();
+        if (id.isEmpty()) { done({}, QCoreApplication::translate("infrastructure", "Jira no dice quién es el usuario de la conexión")); return; }
+        m_myself = id;
+        m_myselfFor = scope;
+        done(id, {});
+    });
+}
+
+void JiraClient::assignToMyself(const TrackerSettings& s, IssueResult result, std::function<void(const IssueResult&)> done) {
+    withMyself(s, [this, s, result, done](const QString& id, const QString& error) mutable {
+        if (id.isEmpty()) {
+            result.warning = QCoreApplication::translate("infrastructure", "%1 no se pudo asignar a tu usuario · %2").arg(result.key, error);
+            done(result);
+            return;
+        }
+        const QJsonObject body = s.usesAccountId() ? QJsonObject{{"accountId", id}} : QJsonObject{{"name", id}};
+        sendCustom("PUT", request(s, QStringLiteral("/rest/api/2/issue/%1/assignee").arg(result.key)),
+                   QJsonDocument(body).toJson(QJsonDocument::Compact), [s, result, done](const Response& r) mutable {
+                       if (!r.ok)
+                           result.warning = QCoreApplication::translate("infrastructure", "%1 no se pudo asignar a tu usuario · %2")
+                                                .arg(result.key, errorFor(s, r));
+                       done(result);
+                   });
+    });
+}
+
+QString JiraClient::closingTransition(const QJsonArray& transitions, QString* resolution) {
+    // Los nombres con los que se suele llamar al cierre, en el orden en que se prefieren: un flujo
+    // puede ofrecer varias salidas a «hecho» («Resolver» y «Cerrar») y la definitiva es la de cerrar.
+    static const QStringList preferred{QStringLiteral("cerrar"), QStringLiteral("close"), QStringLiteral("finaliz"),
+                                       QStringLiteral("done"), QStringLiteral("hecho"), QStringLiteral("resol"), QStringLiteral("resolv")};
+    int bestRank = -1;
+    QJsonObject best;
+    for (const auto& v : transitions) {
+        const QJsonObject t = v.toObject();
+        const QJsonObject to = t[QStringLiteral("to")].toObject();
+        if (to[QStringLiteral("statusCategory")].toObject()[QStringLiteral("key")].toString() != QStringLiteral("done")) continue;
+        const QString name = t[QStringLiteral("name")].toString() + QLatin1Char(' ') + to[QStringLiteral("name")].toString();
+        int rank = 0;   // cualquier transición a «hecho» vale; las que se llaman como un cierre, más
+        for (int i = 0; i < preferred.size(); ++i)
+            if (name.contains(preferred[i], Qt::CaseInsensitive)) { rank = int(preferred.size()) - i; break; }
+        if (rank > bestRank) { bestRank = rank; best = t; }
+    }
+    if (best.isEmpty()) return {};
+    if (resolution) {
+        resolution->clear();
+        const QJsonObject field = best[QStringLiteral("fields")].toObject()[QStringLiteral("resolution")].toObject();
+        const QJsonArray allowed = field[QStringLiteral("allowedValues")].toArray();
+        // La resolución se manda sólo si la transición la pide; entre las que admite, la de «hecho».
+        for (const auto& wanted : {QStringLiteral("Done"), QStringLiteral("Hecho"), QStringLiteral("Fixed"), QStringLiteral("Resuelta"),
+                                   QStringLiteral("Resuelto"), QStringLiteral("Finalizado"), QStringLiteral("Listo")}) {
+            for (const auto& a : allowed)
+                if (a.toObject()[QStringLiteral("name")].toString().compare(wanted, Qt::CaseInsensitive) == 0) {
+                    *resolution = a.toObject()[QStringLiteral("name")].toString();
+                    break;
+                }
+            if (!resolution->isEmpty()) break;
+        }
+        if (resolution->isEmpty() && !allowed.isEmpty()) *resolution = allowed.first().toObject()[QStringLiteral("name")].toString();
+    }
+    return best[QStringLiteral("id")].toString();
+}
+
+void JiraClient::closeIssue(const TrackerSettings& s, const QString& key, std::function<void(const IssueResult&)> done) {
+    if (const QString missing = missingCredentials(s); !missing.isEmpty()) { IssueResult f; f.error = missing; done(f); return; }
+    const QString issue = key.trimmed();
+    if (issue.isEmpty()) {
+        IssueResult f;
+        f.error = QCoreApplication::translate("infrastructure", "Indica el issue del gestor que se cierra");
+        done(f);
+        return;
+    }
+    // Un issue ya cerrado no se toca: cerrar dos veces tiene que ser inofensivo.
+    fetchStatus(s, issue, [this, s, issue, done](const IssueStatus& status) {
+        IssueResult res;
+        res.key = issue;
+        res.url = s.issueUrl(issue);
+        if (status.ok && status.resolved) { res.ok = true; done(res); return; }
+        get(request(s, QStringLiteral("/rest/api/2/issue/%1/transitions?expand=transitions.fields").arg(issue)),
+            [this, s, issue, res, done](const Response& r) mutable {
+                if (!r.ok) { res.error = errorFor(s, r); res.retryable = r.retryable; done(res); return; }
+                QString resolution;
+                const QString transition = closingTransition(r.json.object()[QStringLiteral("transitions")].toArray(), &resolution);
+                if (transition.isEmpty()) {
+                    res.error = QCoreApplication::translate("infrastructure",
+                                                            "El flujo de %1 no ofrece desde su estado actual ninguna transición que lo cierre: "
+                                                            "ciérralo en Jira").arg(issue);
+                    done(res);
+                    return;
+                }
+                QJsonObject body{{"transition", QJsonObject{{"id", transition}}}};
+                if (!resolution.isEmpty()) body["fields"] = QJsonObject{{"resolution", QJsonObject{{"name", resolution}}}};
+                postJson(request(s, QStringLiteral("/rest/api/2/issue/%1/transitions").arg(issue)), QJsonDocument(body),
+                         [s, res, done](const Response& r2) mutable {
+                             if (!r2.ok) { res.error = errorFor(s, r2); res.retryable = r2.retryable; done(res); return; }
+                             res.ok = true;
+                             done(res);
+                         });
+            });
     });
 }
 

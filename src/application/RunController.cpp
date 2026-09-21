@@ -31,6 +31,8 @@ void RunController::load() {
     m_queue = saved->queue;
     m_planRunId = saved->planRunId;
     m_continuesRunId = saved->continuesRunId;
+    for (const auto& p : saved->parked)
+        if (m_store.find(p.run.caseId) && m_queue.contains(p.run.caseId)) m_parked.insert(p.run.caseId, p);
     // La lista siempre tiene un registro por paso: se recorta si el caso perdió pasos entre
     // sesiones y se completa con pendientes si ganó alguno.
     m_run.results.resize(totalSteps());
@@ -43,6 +45,16 @@ void RunController::load() {
     m_run.stepStartedAt = QDateTime::currentDateTime();
     m_store.select(m_run.caseId);
     emit runChanged();
+}
+
+QStringList RunController::planCases() const {
+    const PlanRun* plan = m_planRunId.isEmpty() ? nullptr : m_history.findPlan(m_planRunId);
+    return plan ? plan->caseIds : QStringList{};
+}
+
+const RunState* RunController::parkedRun(const QString& caseId) const {
+    const auto it = m_parked.constFind(caseId);
+    return it == m_parked.constEnd() ? nullptr : &it->run;
 }
 
 int RunController::totalSteps() const {
@@ -89,6 +101,25 @@ void RunController::begin(const QString& caseId) {
         m_resume.erase(m_resume.find(caseId));
         if (const TestCase* c = m_store.find(caseId)) resumeFrom(previous, *c);
     }
+    m_store.select(caseId);
+}
+
+void RunController::enterCase(const QString& caseId) {
+    const auto it = m_parked.constFind(caseId);
+    if (it == m_parked.constEnd()) {
+        begin(caseId);
+        return;
+    }
+    m_run = it->run;
+    m_continuesRunId = it->continuesRunId;
+    m_parked.erase(m_parked.find(caseId));
+    // Como al restaurar la sesión: el caso pudo cambiar de pasos mientras estaba aparcado, y el
+    // tiempo que pasó fuera no cuenta.
+    m_run.results.resize(totalSteps());
+    recomputeFinished();
+    m_run.stepElapsedSecs = m_run.idx < m_run.results.size() ? m_run.results[m_run.idx].durationSecs : 0;
+    m_run.stepStartedAt = QDateTime::currentDateTime();
+    m_run.note = m_run.idx < m_run.results.size() ? m_run.results[m_run.idx].note : QString();
     m_store.select(caseId);
 }
 
@@ -209,6 +240,22 @@ void RunController::back() { goTo(m_run.finished ? m_run.idx : m_run.idx - 1); }
 
 void RunController::next() { goTo(m_run.idx + 1); }
 
+bool RunController::goToCase(const QString& caseId) {
+    if (m_planRunId.isEmpty() || m_run.caseId.isEmpty() || !m_queue.contains(caseId)) return false;
+    holdStep();
+    m_parked.insert(m_run.caseId, ParkedRun{m_run, m_continuesRunId});
+    // El que se deja vuelve a la cola en su sitio del plan, para que «Siguiente caso» siga el orden.
+    const QStringList order = planCases();
+    m_queue.removeAll(caseId);
+    m_queue << m_run.caseId;
+    std::stable_sort(m_queue.begin(), m_queue.end(), [&order](const QString& a, const QString& b) {
+        return order.indexOf(a) < order.indexOf(b);
+    });
+    enterCase(caseId);
+    changed();
+    return true;
+}
+
 void RunController::setResult(int index, StepResult result) {
     if (m_run.caseId.isEmpty() || index < 0 || index >= m_run.results.size()) return;
     if (m_run.results[index].marked && m_run.results[index].result == result) return;
@@ -265,6 +312,18 @@ void RunController::commitRun(bool evenIfPending) {
 
 void RunController::closePlan() {
     if (m_planRunId.isEmpty()) return;
+    // Los casos aparcados con todos sus pasos marcados se archivan como el que está en pantalla; los
+    // que quedaron a medias, igual que él al abandonar, no.
+    const RunState current = m_run;
+    const QString continues = m_continuesRunId;
+    for (const auto& p : std::as_const(m_parked)) {
+        m_run = p.run;
+        m_continuesRunId = p.continuesRunId;
+        commitRun(false);
+    }
+    m_parked.clear();
+    m_run = current;
+    m_continuesRunId = continues;
     const QString id = m_planRunId;
     m_planRunId.clear();
     m_queue.clear();
@@ -276,7 +335,7 @@ bool RunController::finish() {
     if (m_run.caseId.isEmpty()) return false;
     commitRun(true);
     if (!m_queue.isEmpty()) {
-        begin(m_queue.takeFirst());
+        enterCase(m_queue.takeFirst());
         changed();
         return true;
     }
@@ -303,7 +362,7 @@ bool RunController::persistSession() {
     m_saveTimer.stop();
     if (!m_session) return false;
     if (m_run.caseId.isEmpty()) { m_session->clearSession(); return true; }
-    RunSession s{m_run, m_queue, m_planRunId, m_continuesRunId};
+    RunSession s{m_run, m_queue, m_planRunId, m_continuesRunId, m_parked.values()};
     // Lo transcurrido en este paso se consolida para que al restaurar siga desde aquí.
     s.run.stepElapsedSecs = m_run.currentStepSecs();
     if (s.run.idx >= 0 && s.run.idx < s.run.results.size()) {

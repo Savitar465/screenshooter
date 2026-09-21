@@ -107,6 +107,10 @@ QPushButton[role="row"] { text-align: left; background: transparent; border: 1px
 QPushButton[role="row"]:hover { background: @elevated; }
 QPushButton[role="row"][active="true"] { background: @elevated; border-color: @blue; }
 QPushButton[role="row"][running="true"] { background: @tint(green,20); border-color: @green; }
+/* Tarjeta del tablero de issues: se elige con un clic y se abre con doble clic */
+QPushButton[role="board-card"] { text-align: left; background: @panel; border: 1px solid @border; border-radius: 10px; padding: 0; }
+QPushButton[role="board-card"]:hover { border-color: @tint(blue,90); }
+QPushButton[role="board-card"][active="true"] { background: @tint(blue,18); border-color: @blue; }
 QPushButton[role="plan-row"] { text-align: left; background: transparent; border: 1px solid @border; border-radius: 10px; padding: 0; }
 QPushButton[role="plan-row"]:hover { background: @elevated; }
 QPushButton[role="plan-row"][active="true"] { background: @tint(green,15); border-color: @tint(green,90); }

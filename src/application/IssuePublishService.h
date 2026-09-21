@@ -48,6 +48,8 @@ public:
         bool retryable = false;
         /// El envío se cortó sin respuesta: hay que comprobar en el gestor si se creó antes de reintentar.
         bool uncertain = false;
+        /// Salió bien, pero algo quedó a medias (el issue se creó y no se pudo asignar a tu usuario).
+        QString warning;
     };
     void publish(const QString& issueId, const IssueDraft& draft, std::function<void(const Result&)> done);
     void update(const QString& issueId, const IssueDraft& draft, std::function<void(const Result&)> done);
@@ -65,6 +67,11 @@ public:
     /// la publicación.
     void publishResult(const QString& issueId, const QString& comment, const QString& documentPath,
                        std::function<void(const Result&)> done, int revision = 0);
+
+    /// ¿Se puede cerrar el issue en el gestor? Hace falta que esté publicado y que el gestor sepa cerrar.
+    bool canClose(const Issue& issue) const;
+    /// Cierra el issue en el gestor (el control terminó conforme) y pone al día su estado en QAflow.
+    void close(const QString& issueId, std::function<void(const Result&)> done);
 
     /// ¿Se pueden colgar del issue del gestor los bugs y los Tests de sus pruebas? Hace falta que el
     /// gestor sepa enlazar issues (sólo Jira) y que el issue esté publicado.

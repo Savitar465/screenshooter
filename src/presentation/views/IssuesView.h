@@ -2,18 +2,22 @@
 
 #include "core/models/Issue.h"
 #include "core/models/IssueLink.h"
+#include "core/models/IssueProgress.h"
 #include "core/models/RunHistory.h"
 
+#include <QPoint>
 #include <QWidget>
 #include <functional>
 
 class QAction;
 class QComboBox;
+class QFrame;
 class QHBoxLayout;
 class QLabel;
 class QLineEdit;
 class QMenu;
 class QPushButton;
+class QStackedWidget;
 class QVBoxLayout;
 
 namespace qaflow {
@@ -31,10 +35,16 @@ class BugReportService;
 class BugStore;
 class ProjectStore;
 
-/// Pantalla "Issues": el punto de entrada para organizar las pruebas de cada requerimiento. A la izquierda,
-/// la lista con búsqueda y filtros (estado, prioridad, publicación en Jira) y la consulta de la bandeja de
-/// GESREQ; a la derecha, el issue en tres bloques: lo importado del requerimiento (con lo que cambió y si
-/// sigue en la bandeja), **la revisión paso a paso** y las rondas ya cerradas.
+/// Pantalla "Issues": el punto de entrada para organizar las pruebas de cada requerimiento. Se abre en el
+/// **tablero**: una columna por cómo va el trabajo de QA —pendiente, en preparación, en pruebas, **con
+/// casos fallidos o bloqueados** y finalizado— con búsqueda, filtros (prioridad, publicación en Jira) y la
+/// consulta de la bandeja de GESREQ, y a la derecha el panel del issue elegido con lo siguiente que toca,
+/// los pasos de su revisión y cómo va cada destino. La columna de fallidos no es un estado guardado: sale
+/// de los resultados de la revisión en curso, así que un issue sale de ella en cuanto se repite lo roto.
+///
+/// Al abrir un issue (doble clic, «Abrir el issue», uno nuevo o uno importado) se pasa a su **detalle**,
+/// en tres bloques: lo importado del requerimiento (con lo que cambió y si sigue en la bandeja), **la
+/// revisión paso a paso** y las rondas ya cerradas.
 ///
 /// La revisión es el corazón del issue, así que se enseña como lo que es: una serie de pasos —preparar
 /// el plan, ejecutarlo, revisar los bugs, levantar el acta, cerrar la revisión y publicar el resultado—,
@@ -52,6 +62,10 @@ class IssuesView : public QWidget {
 public:
     explicit IssuesView(const AppContext& ctx, QWidget* parent = nullptr);
     ~IssuesView() override;
+
+    /// Columnas del tablero, en el orden en que avanza un issue.
+    enum class Column { Pending, Preparing, Testing, Broken, Done };
+    static constexpr int kColumns = 5;
 
     void focusSearch();
     /// Lee la bandeja de GESREQ y ofrece importar los requerimientos del sistema vinculado al proyecto.
@@ -85,11 +99,58 @@ signals:
 protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
-    void buildListPane(QHBoxLayout* root);
-    void buildDetail(QHBoxLayout* root);
+    /// Cómo va la revisión de un issue, lo que cuentan igual la tarjeta del tablero, su panel y los
+    /// pasos del detalle: el primero sin hacer (`nextStep`, de 1 a 7) es el que toca.
+    struct RevisionSnapshot {
+        IssueProgress progress;
+        bool hasPlan = false;
+        bool executed = false;
+        int openBugs = 0;
+        bool hasRecord = false;
+        bool open = false;       // hay una ronda abierta
+        bool closed = false;     // la última ronda está cerrada
+        bool published = false;
+        int number = 1;          // número de la ronda en curso (o de la última)
+        QString continuable;     // ciclo de la ronda que se puede continuar; vacío si ninguno
+        int nextStep = 1;
+    };
+    RevisionSnapshot snapshotOf(const Issue& issue) const;
+    Column columnOf(const Issue& issue, const RevisionSnapshot& snapshot) const;
+
+    /// Lo siguiente que toca a un issue, con su acción: lo proponen igual la tarjeta (su botón rápido),
+    /// su menú y el panel. La acción elige antes el issue, porque lo que lanza trabaja sobre el elegido.
+    struct NextAction {
+        QString title;    // «Continuar lo fallado», «Generar el acta (R-213)»…
+        QString why;      // por qué toca
+        QString hint;     // en pocas palabras, para la tarjeta
+        QString button;   // el botón del panel
+        QString shortButton;   // el de la tarjeta, que es estrecha
+        std::function<void(QWidget*)> run;   // vacía si no hay nada que lanzar desde aquí
+    };
+    NextAction nextActionOf(const Issue& issue, const RevisionSnapshot& snapshot, Column column);
+    /// El menú de una tarjeta (clic derecho o «⋯»): abrir, lo siguiente, ejecutar, continuar, el plan,
+    /// el estado de QA, el gestor y GESREQ, y eliminar.
+    void showCardMenu(const QString& issueId, const QPoint& globalPos);
+    /// Soltar una tarjeta en otra columna: cambia su estado de QA. La de fallidos no admite nada, porque
+    /// no es un estado: se sale de ella repitiendo lo roto.
+    void moveToColumn(const QString& issueId, Column column);
+    void startCardDrag(QPushButton* card);
+    /// Resalta la columna sobre la que se arrastra una tarjeta (o la deja como estaba).
+    void styleWell(int column, bool hot);
+
+    void buildBoard(QVBoxLayout* root);
+    void buildDrawer(QHBoxLayout* root);
+    void buildDetail(QVBoxLayout* root);
+    /// El tablero: reparte los issues que pasan los filtros por sus columnas.
     void refreshList();
+    /// El panel del issue elegido en el tablero.
+    void refreshDrawer();
+    QWidget* boardCard(const Issue& issue, const RevisionSnapshot& snapshot, Column column);
+    /// Pasa del tablero al detalle del issue elegido (o vuelve).
+    void showDetail(bool on);
     void loadDetail();
     void refreshRequirement(const Issue& issue);
     /// Los planes del issue con sus casos, dentro del paso que manda prepararlos.
@@ -174,14 +235,20 @@ private:
     bool m_readingRequirement = false;
     bool m_publishing = false;
 
-    // Lista
+    QStackedWidget* m_pages;
+    // Tablero
     QPushButton* m_consult;
     QLineEdit* m_search;
-    QComboBox* m_stateFilter;
     QComboBox* m_priorityFilter;
     QComboBox* m_jiraFilter;
     QLabel* m_listCount;
-    QVBoxLayout* m_listLayout;
+    QLabel* m_boardEmpty;
+    QVBoxLayout* m_columns[kColumns];
+    QFrame* m_wells[kColumns];
+    QPoint m_dragStart;   // dónde se pulsó la tarjeta que quizá se arrastre
+    QLabel* m_columnCounts[kColumns];
+    QWidget* m_drawer;
+    QVBoxLayout* m_drawerLayout;   // se rehace en cada refresco
     // Detalle
     QWidget* m_empty;
     QWidget* m_detail;

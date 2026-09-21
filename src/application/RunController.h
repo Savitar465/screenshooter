@@ -41,6 +41,12 @@ public:
     QString continuesRunId() const { return m_continuesRunId; }
     /// Casos de la continuación que todavía no se han retomado (los que siguen en la cola).
     int pendingResumes() const { return static_cast<int>(m_resume.size()); }
+    /// Casos del ciclo en curso, en el orden del plan; vacío si el caso se ejecuta suelto.
+    QStringList planCases() const;
+    /// El caso está en la cola del ciclo (sin empezar o aparcado): se puede ir a él con `goToCase`.
+    bool isQueued(const QString& caseId) const { return m_queue.contains(caseId); }
+    /// Estado con el que se dejó un caso del ciclo para ir a otro; nullptr si no se ha empezado.
+    const RunState* parkedRun(const QString& caseId) const;
     bool canGoBack() const { return !m_run.caseId.isEmpty() && (m_run.finished || m_run.idx > 0); }
     bool canGoNext() const { return !m_run.caseId.isEmpty() && m_run.idx + 1 < m_run.results.size(); }
 
@@ -66,6 +72,10 @@ public:
     /// Paso anterior; sobre una ejecución terminada, reabre el paso en pantalla.
     void back();
     void next();
+    /// Pone en pantalla otro caso pendiente del ciclo. El que estaba se aparca tal cual —veredictos,
+    /// notas, cronómetros— sin archivarse, y vuelve a la cola: se retoma donde se dejó al volver a él.
+    /// Falso si no hay ciclo o el caso no está en su cola (ya archivado, o no es del plan).
+    bool goToCase(const QString& caseId);
     /// Corrige (o pone) el veredicto de un paso desde la lista, sin moverse de sitio.
     void setResult(int index, StepResult result);
     /// Cierra la ejecución archivándola —con lo marcado hasta ahora si quedan pasos pendientes—.
@@ -83,6 +93,8 @@ signals:
 
 private:
     void begin(const QString& caseId);
+    /// Pone en pantalla un caso de la cola: el aparcado tal como se dejó, o uno nuevo con `begin`.
+    void enterCase(const QString& caseId);
     /// Deja el estado como lo dejó la ejecución que se retoma: lo anterior al paso roto se conserva
     /// marcado y la ejecución empieza en ese paso. Si el caso se editó desde entonces, sólo se hereda
     /// el tramo cuyos pasos siguen siendo los mismos.
@@ -110,6 +122,8 @@ private:
     QHash<QString, RunRecord> m_resume;
     /// Ejecución que retoma la que está en curso; se archiva con ella.
     QString m_continuesRunId;
+    /// Casos del ciclo que se empezaron y se dejaron para ir a otro, por caso. Siguen en la cola.
+    QHash<QString, ParkedRun> m_parked;
     QTimer m_saveTimer;
 };
 

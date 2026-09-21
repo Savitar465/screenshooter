@@ -400,6 +400,8 @@ private slots:
         FakeHttpServer server;
         routeProject(server);
         routeZephyr(server, "/rest/zapi/latest");
+        routeMyself(server, "es_ES");
+        server.route("PUT", "/rest/api/2/issue/SHOP-77/assignee", [](const HttpRequest&) { return HttpResponse::json(204, ""); });
 
         PublishCase c = caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {StepResult::Pass, StepResult::Pass});
         c.title = QStringLiteral("Comprar con cupón");
@@ -447,6 +449,40 @@ private slots:
         QCOMPARE(bodyOf(find("POST", "/rest/zapi/latest/teststep/10700"))[QStringLiteral("result")].toString(), QStringLiteral("Se abre"));
         // La ejecución va con el id del Test recién creado.
         QCOMPARE(bodyOf(find("POST", "/rest/zapi/latest/execution"))[QStringLiteral("issueId")].toString(), QStringLiteral("10700"));
+        // Y el Test y la ejecución quedan a nombre de quien publica, el usuario de la conexión.
+        QVERIFY2(out.warnings.isEmpty(), qPrintable(out.warnings.join(QLatin1Char('\n'))));
+        QCOMPARE(bodyOf(find("PUT", "/rest/api/2/issue/SHOP-77/assignee"))[QStringLiteral("name")].toString(), QStringLiteral("aperez"));
+        const QJsonObject execution = bodyOf(find("POST", "/rest/zapi/latest/execution"));
+        QCOMPARE(execution[QStringLiteral("assigneeType")].toString(), QStringLiteral("assignee"));
+        QCOMPARE(execution[QStringLiteral("assignee")].toString(), QStringLiteral("aperez"));
+    }
+
+    // Un Zephyr que no acepta la asignación no se queda sin la ejecución: se repite sin ella y se avisa.
+    void anExecutionIsCreatedUnassignedWhenZephyrRejectsTheAssignee() {
+        FakeHttpServer server;
+        routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+        routeMyself(server, "es_ES");
+        int attempts = 0;
+        server.route("POST", "/rest/zapi/latest/execution", [&attempts](const HttpRequest& r) {
+            ++attempts;
+            if (bodyOf(r).contains(QStringLiteral("assignee")))
+                return HttpResponse::json(400, "{\"errorDesc\":\"Invalid assignee\"}");
+            return HttpResponse::json(200, "{\"501\":{\"id\":501,\"executionStatus\":\"-1\"}}");
+        });
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.publish(settingsFor(server.baseUrl()), requestOf({caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado,
+                                                                         {StepResult::Pass, StepResult::Pass})}),
+                       [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.executions, 1);
+        QCOMPARE(attempts, 2);
+        QVERIFY(out.skipped.isEmpty());
+        QCOMPARE(out.warnings.size(), 1);
+        QVERIFY(out.warnings.first().contains(QStringLiteral("TC-104")));
     }
 
     // En un Jira traducido el tipo se llama de otra manera: el de los ajustes es el que manda.

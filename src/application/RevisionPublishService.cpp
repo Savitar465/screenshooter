@@ -26,6 +26,7 @@ struct RevisionPublishService::Run {
     int testsCreated = 0;
     QStringList cycleUrls;         // enlaces a los ciclos publicados, para el comentario
     QStringList problems;          // lo que Zephyr no pudo publicar
+    QStringList warnings;          // lo que Zephyr publicó sin poder asignarlo
 };
 
 RevisionPublishService::RevisionPublishService(IssueStore& issues, RunHistoryStore& history, QualityRecordService& records,
@@ -39,6 +40,7 @@ QString RevisionPublishService::label(Destination destination) {
         case Destination::Zephyr: return tr("Zephyr");
         case Destination::Tracker: return tr("el gestor");
         case Destination::Requirement: return tr("GESREQ");
+        case Destination::Close: return tr("el cierre en el gestor");
     }
     return {};
 }
@@ -98,8 +100,13 @@ QString RevisionPublishService::requirementProblem(const QString& issueId, QaOut
 
 QList<RevisionPublishService::Destination> RevisionPublishService::pendingFor(const QString& issueId, int revision) const {
     QList<Destination> pending;
-    for (const auto& step : stepsFor(issueId, revision))
+    const Issue* issue = m_issues.find(issueId);
+    const IssueRevision* round = issue ? issue->revision(revision) : nullptr;
+    for (const auto& step : stepsFor(issueId, revision)) {
+        // Cerrar el issue sólo le falta a una ronda que terminó conforme.
+        if (step.destination == Destination::Close && (!round || round->outcome != QaOutcome::Conforme)) continue;
         if (!step.done && step.available) pending << step.destination;
+    }
     return pending;
 }
 
@@ -172,7 +179,20 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
         requirement.detail = tr("Cambia el estado del requerimiento en GESREQ");
     }
 
-    return {zephyr, tracker, requirement};
+    // Cerrar el issue del gestor: el final de un control conforme. Depende del resultado con el que se
+    // publique, que se elige en la pantalla; aquí sólo se dice si se podría.
+    Step close;
+    close.destination = Destination::Close;
+    close.target = tracker.target;
+    close.done = issue->isPublished() && issue->publication.resolved;
+    close.available = m_tracker && m_tracker->canClose(*issue) && !close.done;
+    if (!close.available && !close.done)
+        close.blocked = issue->isPublished() ? tr("El gestor configurado no permite cerrar issues desde QAflow")
+                                             : tr("El issue no está en el gestor");
+    close.detail = close.done ? tr("Ya está cerrado en el gestor (%1)").arg(issue->publication.status)
+                              : tr("Sólo si el resultado es Conforme y lo demás se publica bien");
+
+    return {zephyr, tracker, requirement, close};
 }
 
 void RevisionPublishService::publish(const QString& issueId, const Options& options,
@@ -223,6 +243,7 @@ void RevisionPublishService::runZephyr(const std::shared_ptr<Run>& run) {
             run->problems << tr("%1: %2").arg(cycle.plan.name, r.error);
         }
         for (const auto& skipped : r.skipped) run->problems << skipped;
+        run->warnings += r.warnings;
 
         if (!run->cycles.isEmpty()) {
             runZephyr(run);
@@ -235,6 +256,8 @@ void RevisionPublishService::runZephyr(const std::shared_ptr<Run>& run) {
                               ? tr("%1 ciclo(s) en Zephyr · %2 Test(s) creado(s)").arg(run->cyclesDone).arg(run->testsCreated)
                               : tr("No se pudo publicar en Zephyr");
         if (!run->problems.isEmpty()) outcome.message += QStringLiteral("\n") + run->problems.join(QLatin1Char('\n'));
+        // Lo que no se pudo asignar se cuenta, pero no hace fallar el paso: está todo publicado.
+        if (!run->warnings.isEmpty()) outcome.message += QStringLiteral("\n") + run->warnings.join(QLatin1Char('\n'));
         finish(run, outcome);
         runTracker(run);
     };
@@ -321,7 +344,7 @@ void RevisionPublishService::runRequirement(const std::shared_ptr<Run>& run) {
             outcome.message = registeredAlready.isEmpty() ? tr("No se puede registrar el resultado en GESREQ") : registeredAlready;
             finish(run, outcome);
         }
-        if (run->done) run->done(run->result);
+        runClose(run);
         return;
     }
 
@@ -363,7 +386,43 @@ void RevisionPublishService::runRequirement(const std::shared_ptr<Run>& run) {
                             : (r.uncertain ? tr("El registro no quedó confirmado: compruébalo en GESREQ antes de repetirlo · %1").arg(r.error)
                                            : tr("No se pudo registrar en GESREQ · %1").arg(r.error));
         finish(run, step);
-        if (run->done) run->done(run->result);
+        runClose(run);
+    });
+}
+
+void RevisionPublishService::runClose(const std::shared_ptr<Run>& run) {
+    const auto end = [run]() { if (run->done) run->done(run->result); };
+    // Observado, el requerimiento vuelve a desarrollo: su issue sigue abierto para la ronda siguiente.
+    if (!run->options.close || run->options.outcome != QaOutcome::Conforme) { end(); return; }
+    Outcome outcome;
+    outcome.destination = Destination::Close;
+    const Issue* issue = m_issues.find(run->issueId);
+    if (!issue || !m_tracker || !m_tracker->canClose(*issue)) {
+        outcome.message = tr("No se puede cerrar el issue en el gestor");
+        finish(run, outcome);
+        end();
+        return;
+    }
+    // Se cierra lo que terminó: si algo de lo elegido falló, el issue sigue abierto hasta completarlo.
+    if (!run->result.ok) {
+        outcome.message = tr("%1 sigue abierto: la publicación no terminó bien. Complétala y se cerrará").arg(issue->publication.key);
+        finish(run, outcome);
+        end();
+        return;
+    }
+    m_tracker->close(run->issueId, [this, run, end](const IssuePublishService::Result& r) {
+        Outcome outcome;
+        outcome.destination = Destination::Close;
+        outcome.ok = r.ok;
+        outcome.uncertain = r.uncertain;
+        const Issue* issue = m_issues.find(run->issueId);
+        const QString status = issue ? issue->publication.status : QString();
+        outcome.message = r.ok ? (status.isEmpty() ? tr("%1 cerrado en el gestor").arg(r.key)
+                                                   : tr("%1 cerrado en el gestor · «%2»").arg(r.key, status))
+                               : (r.uncertain ? tr("El cierre se cortó sin respuesta: compruébalo en el gestor · %1").arg(r.error)
+                                              : tr("No se pudo cerrar %1 en el gestor · %2").arg(r.key, r.error));
+        finish(run, outcome);
+        end();
     });
 }
 

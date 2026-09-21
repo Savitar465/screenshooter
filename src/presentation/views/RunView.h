@@ -37,10 +37,11 @@ class TextArea;
 ///   · izquierda: arriba el caso (estado, título, cronómetro y «Cerrar ejecución»); debajo la barra de
 ///     la evidencia (su paso, su fichero, a qué paso se asigna, ampliar, anotar, modo foco, quitar), el
 ///     visor —con ‹ › para recorrerlas— y la tira horizontal de capturas de la ejecución;
-///   · derecha: el inspector, con tres pestañas —«Paso», la ficha completa del activo (acción, datos,
+///   · derecha: el inspector, con sus pestañas —«Paso», la ficha completa del activo (acción, datos,
 ///     esperado y observaciones, con scroll: los textos pueden ser largos) con los números de todos
-///     los pasos para saltar; «Pasos», la lista; y «Bugs», los partes de esta ejecución por paso— y al
-///     pie, siempre a mano, los veredictos, capturar, reportar bug y ir y venir de paso.
+///     los pasos para saltar; «Pasos», la lista; «Bugs», los partes de esta ejecución por paso; y, en
+///     un ciclo, «Casos», los del plan con cómo va cada uno, para saltar de uno a otro— y al pie,
+///     siempre a mano, los veredictos, capturar, reportar bug y ir y venir de paso.
 ///
 /// El **modo foco** (F11, o el botón del visor) deja la evidencia a toda la ventana: se esconden el
 /// caso, el inspector, la tira y el marco de la ventana principal, y un mando al pie mantiene el paso
@@ -100,7 +101,11 @@ private:
     /// Bugs que se han reportado en la ejecución que está en curso. No son «los del caso»: un bug
     /// pertenece a las pruebas de las que salió, y de las anteriores se habla en sus resultados.
     QList<IssueLink> bugsOfRun() const;
-    /// Cambia de pestaña en el inspector: 0 = el paso, 1 = la lista de pasos, 2 = los bugs.
+    /// La pestaña «Casos»: los del ciclo en el orden del plan, con su estado; sólo existe en un ciclo.
+    void refreshCases();
+    /// Tarjeta de un caso en la pestaña «Casos». Las de los pendientes llevan a él con un clic.
+    QWidget* caseCard(const QString& caseId, const QHash<QString, Verdict>& archived);
+    /// Cambia de pestaña en el inspector: 0 = el paso, 1 = la lista de pasos, 2 = los bugs, 3 = los casos.
     void showTab(int index);
     /// Abre (o trae al frente) la ficha del bug en su propia ventana.
     void openBug(const QString& key);
@@ -121,7 +126,7 @@ private:
     /// Coloca las flechas y el contador que van sobre el visor.
     void placeViewerOverlay();
     void tick();   // cronómetros (cada segundo)
-    /// Un clic en una tarjeta de la lista pone ese paso en pantalla; el visor recoloca sus flechas.
+    /// Un clic en una tarjeta de la lista pone ese paso (o ese caso) en pantalla; el visor recoloca sus flechas.
     bool eventFilter(QObject* watched, QEvent* event) override;
 
     TestCaseStore& m_cases;
@@ -168,12 +173,15 @@ private:
     QPushButton* m_stepTab;
     QPushButton* m_stepsTab;
     QPushButton* m_bugsTab;
+    QPushButton* m_casesTab;
     QStackedWidget* m_inspectorStack;
     QLayout* m_chipsLayout;
     QScrollArea* m_stepsScroll;
     QVBoxLayout* m_stepsLayout;
     QVBoxLayout* m_bugsLayout;
     QLabel* m_bugsEmpty;
+    QScrollArea* m_casesScroll;
+    QVBoxLayout* m_casesLayout;
 
     // Inspector: la ficha del paso
     QLabel* m_stepCounter;

@@ -44,6 +44,8 @@ private:
     /// Vuelve a preguntar si GESREQ aceptaría el registro con el resultado y el acta de ahora, y lo
     /// dice en su paso: cambiar el resultado puede desbloquearlo (o bloquearlo).
     void refreshRequirementStep();
+    /// Cerrar el issue del gestor sólo se ofrece con el resultado Conforme.
+    void refreshCloseStep();
     /// El acta que se adjuntaría ahora mismo; vacía si no hay o si se desmarcó.
     QString documentPath() const;
     QaOutcome outcome() const;

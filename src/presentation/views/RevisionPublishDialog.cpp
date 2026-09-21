@@ -32,6 +32,8 @@ QString title(RevisionPublishService::Destination destination) {
             return QCoreApplication::translate("qaflow::RevisionPublishDialog", "Dejar el resultado y el acta en el gestor");
         case RevisionPublishService::Destination::Requirement:
             return QCoreApplication::translate("qaflow::RevisionPublishDialog", "Registrar el resultado en GESREQ");
+        case RevisionPublishService::Destination::Close:
+            return QCoreApplication::translate("qaflow::RevisionPublishDialog", "Cerrar el issue en el gestor (sólo si es Conforme)");
     }
     return {};
 }
@@ -41,6 +43,7 @@ QString objectNameFor(RevisionPublishService::Destination destination) {
         case RevisionPublishService::Destination::Zephyr: return QStringLiteral("revisionPublishZephyr");
         case RevisionPublishService::Destination::Tracker: return QStringLiteral("revisionPublishTracker");
         case RevisionPublishService::Destination::Requirement: return QStringLiteral("revisionPublishRequirement");
+        case RevisionPublishService::Destination::Close: return QStringLiteral("revisionPublishClose");
     }
     return {};
 }
@@ -76,7 +79,10 @@ RevisionPublishDialog::RevisionPublishDialog(RevisionPublishService& service, co
     buildSteps(v);
     // El resultado decide si GESREQ acepta el registro (no admite «OK» con observaciones, ni
     // «OBSERVADO» sin ninguna), así que su paso se revisa cada vez que cambia.
-    connect(m_outcome, &QComboBox::currentIndexChanged, this, [this](int) { refreshRequirementStep(); });
+    connect(m_outcome, &QComboBox::currentIndexChanged, this, [this](int) {
+        refreshRequirementStep();
+        refreshCloseStep();
+    });
 
     m_comment = new TextArea(10);
     m_comment->setObjectName(QStringLiteral("revisionPublishComment"));
@@ -104,6 +110,7 @@ RevisionPublishDialog::RevisionPublishDialog(RevisionPublishService& service, co
     v->addWidget(note);
 
     refreshRequirementStep();
+    refreshCloseStep();
 
     auto* buttons = new QWidget;
     auto* h = ui::hbox(buttons, 0, 8);
@@ -158,6 +165,19 @@ QString RevisionPublishDialog::documentPath() const {
     return (m_attach && !m_attach->isChecked()) ? QString() : m_documentPath;
 }
 
+void RevisionPublishDialog::refreshCloseStep() {
+    const int key = static_cast<int>(RevisionPublishService::Destination::Close);
+    auto* choice = m_choices.value(key);
+    if (!choice) return;
+    bool available = false;
+    for (const auto& s : m_steps)
+        if (s.destination == RevisionPublishService::Destination::Close) available = s.available;
+    // El issue del gestor sólo se cierra cuando el control termina conforme: observado, sigue abierto.
+    const bool conforme = outcome() == QaOutcome::Conforme;
+    choice->setEnabled(available && conforme);
+    choice->setChecked(available && conforme);
+}
+
 void RevisionPublishDialog::refreshRequirementStep() {
     const int key = static_cast<int>(RevisionPublishService::Destination::Requirement);
     auto* choice = m_choices.value(key);
@@ -184,6 +204,7 @@ void RevisionPublishDialog::start() {
     options.zephyr = m_choices.value(static_cast<int>(RevisionPublishService::Destination::Zephyr))->isChecked();
     options.tracker = m_choices.value(static_cast<int>(RevisionPublishService::Destination::Tracker))->isChecked();
     options.requirement = m_choices.value(static_cast<int>(RevisionPublishService::Destination::Requirement))->isChecked();
+    options.close = m_choices.value(static_cast<int>(RevisionPublishService::Destination::Close))->isChecked();
     if (!options.zephyr && !options.tracker && !options.requirement) {
         reject();
         return;

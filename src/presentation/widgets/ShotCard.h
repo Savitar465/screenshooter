@@ -12,7 +12,7 @@ class Thumbnail;
 /// Tarjeta de evidencia: miniatura + selector de paso + mover/eliminar.
 /// `Layout::Grid` es la tarjeta vertical (Casos), `Layout::Row` la fila compacta,
 /// `Layout::Compact` la tarjeta pequeña sin selector (Reportar bug) y `Layout::Film` la del
-/// columna de capturas de la ejecución: como la compacta pero ancha y con estado seleccionado.
+/// tira de capturas de la ejecución: como la compacta pero con estado seleccionado.
 /// Un clic en la miniatura pide abrirla a tamaño completo; el botón de anotar y el menú
 /// contextual (botón derecho) dan acceso al resto de acciones.
 class ShotCard : public QFrame {
@@ -25,6 +25,9 @@ public:
     const Screenshot& shot() const { return m_shot; }
     /// Vuelve a leer la miniatura (tras anotar la imagen).
     void reloadThumbnail();
+    /// Ancho con el que la miniatura calcula su alto: la tarjeta de la tira de la ejecución es más
+    /// estrecha que la de la columna para la que se pensó `Layout::Film`.
+    void setThumbWidthHint(int w);
     /// Resalta la tarjeta como la evidencia abierta en el visor (sólo `Layout::Film`).
     void setSelected(bool on);
     /// Evidencia de una ejecución ya archivada: se mira, se anota y se copia, pero no se reordena,

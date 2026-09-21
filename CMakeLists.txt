@@ -215,6 +215,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/LayoutButton.cpp
         src/presentation/widgets/FlowLayout.h
         src/presentation/widgets/FlowLayout.cpp
+        src/presentation/widgets/ElidedLabel.h
+        src/presentation/widgets/ElidedLabel.cpp
         src/presentation/widgets/Toast.h
         src/presentation/widgets/Toast.cpp
         src/presentation/widgets/BusyIndicator.h

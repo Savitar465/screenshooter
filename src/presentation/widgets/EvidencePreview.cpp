@@ -27,6 +27,11 @@ void EvidencePreview::setShot(const Screenshot& shot) {
     reload();
 }
 
+void EvidencePreview::setCaptionVisible(bool on) {
+    m_caption = on;
+    update();
+}
+
 void EvidencePreview::setPlaceholder(const QString& text) {
     m_placeholder = text;
     update();
@@ -66,6 +71,14 @@ void EvidencePreview::paintEvent(QPaintEvent*) {
     clip.addRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), kRadius, kRadius);
     p.setClipPath(clip);
     p.fillRect(rect(), QColor(theme::Field));
+    if (!m_caption) {
+        // Fondo punteado: separa la imagen del marco aunque sus bordes sean del mismo color.
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(theme::Border));
+        for (int y = 8; y < height(); y += 16)
+            for (int x = 8; x < width(); x += 16) p.drawEllipse(QPointF(x, y), 0.9, 0.9);
+        p.setBrush(Qt::NoBrush);
+    }
 
     if (!m_shot.id) {
         p.setPen(QColor(theme::Muted));
@@ -89,7 +102,7 @@ void EvidencePreview::paintEvent(QPaintEvent*) {
     p.setPen(QPen(QColor(theme::Border), 1));
     p.setBrush(Qt::NoBrush);
     p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), kRadius, kRadius);
-    if (!m_shot.id) return;
+    if (!m_shot.id || !m_caption) return;
 
     int x = 12;
     const auto chip = [&](const QString& text, const QColor& bg, const QColor& fg, bool mono) {

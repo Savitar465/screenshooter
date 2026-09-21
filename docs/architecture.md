@@ -358,26 +358,42 @@ corta la ejecución: un bloqueo se queda en su paso y se sigue navegando por el 
   acumulado antes (`stepElapsedSecs`) sí. `MainWindow` abre directamente la pantalla de ejecución.
 * **Duración real.** Cada `StepRecord` mide su tiempo; `RunRecord::durationSecs` es la suma. La
   vista muestra un reloj por paso y por caso (un `QTimer` de un segundo sólo actualiza etiquetas).
-* **La pantalla, en tres columnas.** `RunView` se construye con una función por columna:
-  `buildCasePanel()` (estado del caso, progreso, la lista de pasos con su veredicto —la pastilla de
-  cada paso ya marcado abre el menú para corregirlo, la clave del bug que se reportó en él, y un clic
-  en la tarjeta va a ese paso—, los
-  botones de navegación y «Cerrar ejecución»), `buildStepPanel()` (el paso en pantalla, sus
-  veredictos, «Reportar bug» —que sale en cualquier momento de la ejecución, no sólo al final—, el
-  visor grande de la evidencia elegida con la barra «Asignar a» y las observaciones del paso) y
-  `buildFilmPanel()` (la columna de la derecha, con sus dos pestañas).
-  El visor es `EvidencePreview`, que dibuja la imagen ajustada al hueco con la etiqueta del paso y
-  el nombre del fichero; las tarjetas de la columna de capturas son `ShotCard` con `Layout::Film`,
-  que en vez de abrir el visor a tamaño completo emiten `selectRequested` para elegir qué se ve en
-  grande. Una captura nueva se abre sola y la lista se desplaza hasta ella.
-* **La columna de la derecha son dos pestañas, las dos por paso.** «Capturas» agrupa las evidencias
-  de la ejecución bajo la cabecera del paso al que están asignadas (`stepGroupHeader`), en el orden de
-  los pasos y con las que no tienen ninguno al final; así se ve de un vistazo qué paso quedó sin
-  evidencia. «Bugs» lista los partes del caso con la misma agrupación, con su clave, si el gestor los
-  da por cerrados y su clasificación, y un botón para reportar otro con el paso ya puesto. Pulsar uno
-  abre su ficha en **otra ventana** (`BugDetailWindow`, no modal: se mira el bug sin perder la prueba
-  de vista), con lo que QAflow sabe de él y un salto al gestor; una ventana por bug, y volver a
-  pulsarlo trae la que ya está abierta.
+* **La pantalla: el visor a la izquierda, el inspector a la derecha.** `RunView` se construye por
+  piezas. A la izquierda: `buildCaseBar()` (el caso **encima de la imagen**: estado, título en una
+  línea con `ElidedLabel` —entero, con suite y componente, en el tooltip—, pasos, capturas y
+  cronómetro, «Cerrar ejecución», y debajo el aviso de continuación), `buildStage()` (la barra de la
+  evidencia —la etiqueta de su paso en el color de su veredicto, el fichero, «Asignar a», «Ampliar»,
+  anotar, «Foco», quitar—, **encima** del visor y nunca sobre la imagen; el visor, con ‹ › a los lados
+  y la posición «2 / 2» abajo, colocados en `placeViewerOverlay`) y `buildFilmStrip()` (la **tira
+  horizontal** de capturas con «+ Capturar», GIF y «+ Archivo»). A la derecha, `buildInspector()`: un
+  panel de 380 px con tres pestañas subrayadas y `buildFooter()` al pie. El visor es
+  `EvidencePreview` con `setCaptionVisible(false)`: la imagen sola sobre un fondo punteado, porque el
+  paso y el fichero ya están en la barra. Las tarjetas de la tira son `ShotCard` con `Layout::Film`
+  (con `setThumbWidthHint`, porque la tira es más estrecha que la columna para la que se pensó), que
+  emiten `selectRequested` para elegir qué se ve en grande. Una captura nueva se abre sola y la tira
+  se desplaza hasta ella.
+* **Los textos de un paso pueden ser largos: se leen enteros en su pestaña.** «Paso»
+  (`buildStepPage`) enseña los números de todos los pasos (`stepChip`, en un `FlowLayout`: el borde de
+  abajo en el color de su veredicto, un clic va a ese paso) y la **ficha del activo**: acción, datos,
+  resultado esperado y observaciones, enteros, seleccionables y con scroll. «Pasos · N» es la lista
+  (`stepCard`: número, capturas, bug y veredicto —la pastilla abre el menú para corregirlo— y la
+  acción entera); un clic en una tarjeta va a ese paso y vuelve a su ficha.
+* **El pie, siempre a la vista.** Los cuatro veredictos en un grupo (`buildVerdicts`: cada uno sobre
+  el tinte de su color, con su tecla), y debajo «Capturar» con su icono y su atajo, el bug como icono
+  —tinte rojo, y rojo lleno cuando el paso quedó bloqueado y el bug será bloqueante; su nombre
+  accesible lo dice— y ← → para ir y venir de paso. Los iconos (capturar, foco, anotar, bug) son
+  glifos de `icons::pixmap`.
+* **Bugs, en la otra pestaña, por paso.** Lista los partes de la ejecución agrupados por paso
+  (`stepGroupHeader`), con su clave, si el gestor los da por cerrados y su clasificación, y un botón
+  para reportar otro con el paso ya puesto. Pulsar uno abre su ficha en **otra ventana**
+  (`BugDetailWindow`, no modal: se mira el bug sin perder la prueba de vista), con lo que QAflow sabe
+  de él y un salto al gestor; una ventana por bug, y volver a pulsarlo trae la que ya está abierta.
+* **Modo foco.** F11 (la F ya es «falla») o el botón «Foco» dejan la evidencia a toda la ventana:
+  `RunView` esconde la barra del caso, el inspector y la tira y emite `focusModeChanged`, con la que `MainWindow`
+  esconde el rail, la barra superior y la barra de estado. El mando del pie mantiene el paso
+  (`ElidedLabel`) con sus veredictos, «Capturar» y «Bug», y las teclas P / F / B / S siguen
+  funcionando. Esc (un atajo que sólo está activo durante el modo), el botón «Salir» o salir de la
+  pantalla (`hideEvent`) vuelven; sin ejecución no se entra.
 * **Estimación del plan.** `PlanStore::estimatedSecs()` usa la media real por paso de cada caso
   según su historial; para los casos sin historial, la media global; sin datos, 3 min por paso.
   `estimateBasis()` explica en la vista de qué datos sale.
@@ -399,7 +415,7 @@ nada a partir del primer paso que ya no diga lo mismo: lo que cambió hay que pr
 siempre empieza de cero —el tiempo es el de ahora— y la ejecución archivada recuerda a cuál retoma
 (`RunRecord::continuesRunId`).
 
-La pantalla de ejecución lo dice en la columna del caso: «CONTINUANDO LA REVISIÓN 2 · se repiten sólo
+La pantalla de ejecución lo dice bajo la barra del caso: «CONTINUANDO LA REVISIÓN 2 · se repiten sólo
 los casos que fallaron o quedaron bloqueados en el ciclo PR-0003», con el ambiente y, en el caso en
 curso, de qué ejecución vienen sus pasos heredados. Un ciclo normal enseña ahí su ronda y su ambiente.
 

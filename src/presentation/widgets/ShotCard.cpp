@@ -130,6 +130,8 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
 
 void ShotCard::reloadThumbnail() { if (m_thumb) m_thumb->reload(); }
 
+void ShotCard::setThumbWidthHint(int w) { if (m_thumb) m_thumb->setWidthHint(w); }
+
 void ShotCard::setSelected(bool on) {
     setStyleSheet(QStringLiteral("ShotCard{background:%1;border:1px solid %2;border-radius:8px;}")
                       .arg(theme::Field, on ? theme::Blue : theme::Border));

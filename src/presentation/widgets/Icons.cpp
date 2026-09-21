@@ -77,6 +77,42 @@ void drawIssues(QPainter& p) {
     for (const qreal y : {10.5, 14.0, 17.2}) p.drawLine(QPointF(8.5, y), QPointF(15.5, y));
 }
 
+/// Esquinas de un encuadre con un punto: capturar la pantalla.
+void drawCapture(QPainter& p) {
+    QPainterPath c;
+    c.moveTo(4, 8.5); c.lineTo(4, 6); c.quadTo(4, 4, 6, 4); c.lineTo(8.5, 4);
+    c.moveTo(15.5, 4); c.lineTo(18, 4); c.quadTo(20, 4, 20, 6); c.lineTo(20, 8.5);
+    c.moveTo(20, 15.5); c.lineTo(20, 18); c.quadTo(20, 20, 18, 20); c.lineTo(15.5, 20);
+    c.moveTo(8.5, 20); c.lineTo(6, 20); c.quadTo(4, 20, 4, 18); c.lineTo(4, 15.5);
+    p.drawPath(c);
+    p.setBrush(p.pen().color());
+    p.drawEllipse(QPointF(12, 12), 2.2, 2.2);
+    p.setBrush(Qt::NoBrush);
+}
+
+/// Dos flechas hacia las esquinas: el modo foco, la evidencia a toda la ventana.
+void drawFocus(QPainter& p) {
+    p.drawLine(QPointF(14, 10), QPointF(19.5, 4.5));
+    p.drawLine(QPointF(14.5, 4.5), QPointF(19.5, 4.5));
+    p.drawLine(QPointF(19.5, 4.5), QPointF(19.5, 9.5));
+    p.drawLine(QPointF(10, 14), QPointF(4.5, 19.5));
+    p.drawLine(QPointF(4.5, 14.5), QPointF(4.5, 19.5));
+    p.drawLine(QPointF(4.5, 19.5), QPointF(9.5, 19.5));
+}
+
+/// Lápiz: anotar la evidencia.
+void drawAnnotate(QPainter& p) {
+    QPainterPath pen;
+    pen.moveTo(15.5, 4.5);
+    pen.lineTo(19.5, 8.5);
+    pen.lineTo(8.5, 19.5);
+    pen.lineTo(4.5, 19.5);
+    pen.lineTo(4.5, 15.5);
+    pen.closeSubpath();
+    p.drawPath(pen);
+    p.drawLine(QPointF(13, 7), QPointF(17, 11));
+}
+
 } // namespace
 
 QPixmap pixmap(Glyph g, const QString& color, int size) {
@@ -98,6 +134,9 @@ QPixmap pixmap(Glyph g, const QString& color, int size) {
         case Glyph::Bug: drawBug(p); break;
         case Glyph::Metrics: drawMetrics(p); break;
         case Glyph::Issues: drawIssues(p); break;
+        case Glyph::Capture: drawCapture(p); break;
+        case Glyph::Focus: drawFocus(p); break;
+        case Glyph::Annotate: drawAnnotate(p); break;
     }
     return pm;
 }

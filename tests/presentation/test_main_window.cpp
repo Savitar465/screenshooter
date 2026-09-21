@@ -23,6 +23,9 @@
 #include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/RequirementImportDialog.h"
 #include "presentation/views/RevisionPublishDialog.h"
+#include "presentation/views/RunView.h"
+#include "presentation/views/Sidebar.h"
+#include "presentation/views/StatusStrip.h"
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/ImageViewer.h"
@@ -368,18 +371,38 @@ private slots:
         QCOMPARE(f.app.run.state().idx, 2);
     }
 
-    /// La lista de pasos de la ejecución es navegable: un clic lleva a ese paso, marcado o no.
+    /// Los pasos de la ejecución son navegables: un clic en su número (pestaña «Paso») o en su tarjeta
+    /// (pestaña «Pasos») lleva a ese paso, marcado o no, y la tarjeta vuelve a la ficha del paso.
     void clickingAStepOfTheRunListGoesToIt() {
         WindowFixture f;
         f.action("actRun")->trigger();   // TC-104, 4 pasos
         f.action("actStepPass")->trigger();
         QCOMPARE(f.app.run.state().idx, 1);
 
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* chip = f.window->findChild<QPushButton*>(QStringLiteral("stepChip3"));
+        QVERIFY(chip);
+        QTRY_VERIFY(chip->isVisible());   // hasta que el inspector se coloca
+        QTest::mouseClick(chip, Qt::LeftButton);
+        QCOMPARE(f.app.run.state().idx, 2);
+        QCOMPARE(f.app.run.state().markedCount(), 1);
+
+        auto* stepTab = f.window->findChild<QPushButton*>(QStringLiteral("runStepTab"));
+        auto* stepsTab = f.window->findChild<QPushButton*>(QStringLiteral("runStepsTab"));
+        QVERIFY(stepTab->isChecked());
+        QCOMPARE(stepsTab->text(), QStringLiteral("Pasos · 4"));
+        stepsTab->click();
+        // Las tarjetas se rehacen en cada refresco: se despachan las viejas, que esperan su borrado.
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         auto* fourth = f.window->findChild<QFrame*>(QStringLiteral("stepCard4"));
         QVERIFY(fourth);
+        QVERIFY(fourth->isVisible());
         QTest::mouseClick(fourth, Qt::LeftButton);
         QCOMPARE(f.app.run.state().idx, 3);
         QCOMPARE(f.app.run.state().markedCount(), 1);   // saltar no marca nada
+        QVERIFY(stepTab->isChecked());                  // y se ve la ficha del paso elegido
+        stepsTab->click();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
 
         auto* first = f.window->findChild<QFrame*>(QStringLiteral("stepCard1"));
         QVERIFY(first);
@@ -527,7 +550,7 @@ private slots:
         QTest::keyClick(f.window.get(), Qt::Key_B);
         QCOMPARE(f.app.run.state().markedCount(), 2);
         QVERIFY(f.app.run.isRunning());
-        QCOMPARE(report->text(), QStringLiteral("Reportar bug bloqueante"));
+        QCOMPARE(report->accessibleName(), QStringLiteral("Reportar bug bloqueante"));   // es un icono: lo dice su nombre
         QTest::mouseClick(report, Qt::LeftButton);
         auto* severity = f.window->findChild<QComboBox*>(QStringLiteral("bugSeverity"));
         QVERIFY(severity);
@@ -626,6 +649,48 @@ private slots:
         QVERIFY(!f.window->findChild<QFrame*>(QStringLiteral("casePanel"))->isVisible());
         QVERIFY(!f.window->findChild<QFrame*>(QStringLiteral("filmPanel"))->isVisible());
         QVERIFY(!f.window->findChild<EvidencePreview*>(QStringLiteral("evidencePreview"))->isVisible());
+        // Y sin ejecución no hay nada que enfocar.
+        QTest::keyClick(f.window.get(), Qt::Key_F11);
+        QVERIFY(!f.window->findChild<RunView*>()->focusMode());
+    }
+
+    /// El modo foco deja la evidencia a toda la ventana: se van el inspector, la tira y el marco de
+    /// la ventana, y el mando del pie sigue marcando pasos. Esc, el botón o salir de la pantalla vuelven.
+    void focusModeLeavesTheEvidenceAloneAndKeepsTheVerdictsAtHand() {
+        WindowFixture f;
+        f.action("actRun")->trigger();   // TC-104
+        auto* run = f.window->findChild<RunView*>();
+        QVERIFY(run);
+        auto* inspector = f.window->findChild<QFrame*>(QStringLiteral("casePanel"));
+        auto* film = f.window->findChild<QFrame*>(QStringLiteral("filmPanel"));
+        auto* bar = f.window->findChild<QFrame*>(QStringLiteral("focusBar"));
+        auto* sidebar = f.window->findChild<Sidebar*>();
+        auto* status = f.window->findChild<StatusStrip*>();
+        QVERIFY(inspector->isVisible() && film->isVisible() && !bar->isVisible());
+
+        QTest::keyClick(f.window.get(), Qt::Key_F11);
+        QVERIFY(run->focusMode());
+        QVERIFY(!inspector->isVisible() && !film->isVisible() && bar->isVisible());
+        QVERIFY(!sidebar->isVisible() && !status->isVisible());
+        QVERIFY(f.window->findChild<EvidencePreview*>(QStringLiteral("evidencePreview"))->isVisible());
+
+        // Se sigue probando sin salir: la P marca y el mando dice en qué paso se está.
+        QTest::keyClick(f.window.get(), Qt::Key_P);
+        QCOMPARE(f.app.run.state().markedCount(), 1);
+        QVERIFY(run->focusMode());
+        QVERIFY(bar->findChild<QLabel*>()->text().contains(QStringLiteral("2")));
+
+        QTest::keyClick(f.window.get(), Qt::Key_Escape);
+        QVERIFY(!run->focusMode());
+        QVERIFY(inspector->isVisible() && film->isVisible() && !bar->isVisible());
+        QVERIFY(sidebar->isVisible() && status->isVisible());
+
+        // El botón del visor también entra, y cambiar de pantalla saca del modo: el marco vuelve.
+        f.window->findChild<QPushButton*>(QStringLiteral("runFocus"))->click();
+        QVERIFY(run->focusMode());
+        f.window->navigate(Screen::Casos);
+        QVERIFY(!run->focusMode());
+        QVERIFY(sidebar->isVisible() && status->isVisible());
     }
 
     /// El visor de la pantalla de ejecución abre la última captura, la barra la reasigna de paso
@@ -654,7 +719,7 @@ private slots:
         QCOMPARE(preview->shotId(), shots[1].id);
     }
 
-    /// Con varias capturas, la última cae fuera de la parte visible del carrete: debe traerse a la vista.
+    /// Con varias capturas, la última cae fuera de la parte visible de la tira: debe traerse a la vista.
     void newScreenshotScrollsIntoViewInTheFilmStrip() {
         WindowFixture f;
         f.action("actRun")->trigger();   // TC-104
@@ -665,7 +730,7 @@ private slots:
         }
         auto* scroll = f.window->findChild<QScrollArea*>(QStringLiteral("filmScroll"));
         QVERIFY(scroll);
-        QScrollBar* bar = scroll->verticalScrollBar();
+        QScrollBar* bar = scroll->horizontalScrollBar();   // la tira va en horizontal, bajo el visor
         QTRY_VERIFY(bar->maximum() > 0);                 // hay más capturas de las que caben
         QTRY_COMPARE(bar->value(), bar->maximum());      // desplazado hasta la última
     }
@@ -1811,7 +1876,7 @@ private slots:
         QVERIFY(!f.app.publish.enabled());
     }
 
-    void theBackButtonUndoesDrillDownsButNotRailNavigation() {
+    void theBackButtonUndoesDrillDownsAndRailNavigation() {
         WindowFixture f;
         auto* back = f.window->findChild<QPushButton*>(QStringLiteral("navbarBack"));
         QVERIFY(back);
@@ -1831,10 +1896,24 @@ private slots:
         QCOMPARE(f.window->currentScreen(), Screen::Plan);
         QVERIFY(!back->isVisible());
 
-        // El rail es la raíz de cada sección: no deja camino que deshacer.
-        f.window->findChild<QPushButton*>(QStringLiteral("planNewCase"))->click();
-        QVERIFY(back->isVisible());
+        // Saltar con el rail también deja vuelta a la pantalla de la que se salió.
         QTest::mouseClick(f.nav(Screen::Historial), Qt::LeftButton);
+        QCOMPARE(f.window->currentScreen(), Screen::Historial);
+        QVERIFY(back->isVisible());
+        QVERIFY2(back->text().contains(QStringLiteral("Suite de regresión")), qPrintable(back->text()));
+        QVERIFY(f.action("actBack")->isEnabled());
+        back->click();
+        QCOMPARE(f.window->currentScreen(), Screen::Plan);
+        QVERIFY(!back->isVisible());
+
+        // Pulsar el botón de la pantalla en la que ya se está no alarga el camino.
+        QTest::mouseClick(f.nav(Screen::Plan), Qt::LeftButton);
+        QVERIFY(!back->isVisible());
+
+        // El menú y los atajos siguen yendo a la raíz de la sección: vacían el camino.
+        QTest::mouseClick(f.nav(Screen::Bug), Qt::LeftButton);
+        QVERIFY(back->isVisible());
+        f.window->navigate(Screen::Historial);
         QVERIFY(!back->isVisible());
         QVERIFY(!f.action("actBack")->isEnabled());
 
@@ -2036,7 +2115,7 @@ private slots:
         f.window->navigate(Screen::Run);
         auto* bugsTab = f.window->findChild<QPushButton*>(QStringLiteral("runBugsTab"));
         QVERIFY(bugsTab);
-        QCOMPARE(bugsTab->text(), QStringLiteral("BUGS · 1"));
+        QCOMPARE(bugsTab->text(), QStringLiteral("Bugs · 1"));
         bugsTab->click();
         QVERIFY2(!f.window->findChild<QPushButton*>(QStringLiteral("runBug-SHOP-70")),
                  "el bug de otra ejecución no es de ésta");

@@ -45,12 +45,12 @@ class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(AppContext& ctx, QWidget* parent = nullptr);
 
-    /// Va a la raíz de esa sección: es lo que hacen el rail, el menú y los atajos, así que vacía el
-    /// camino de vuelta (el botón «atrás» desaparece).
+    /// Va a la raíz de esa sección: es lo que hacen el menú y los atajos, así que vacía el camino de
+    /// vuelta (el botón «atrás» desaparece).
     void navigate(Screen s);
     /// Entra en profundidad, al estilo de iOS: guarda la pantalla actual para que el botón «atrás»
     /// vuelva a ella con su contexto (el plan desde el que se creó el caso, el issue desde el que se
-    /// abrió el plan). Es lo que hacen las acciones de las tarjetas, no la navegación del rail.
+    /// abrió el plan). Es lo que hacen las acciones de las tarjetas y los botones del rail.
     void navigateInto(Screen s);
     /// Vuelve a la pantalla anterior del camino. No hace nada si no hay ninguna.
     void goBack();
@@ -189,6 +189,7 @@ private:
     BusyIndicator* m_projectSpinner = nullptr;
     bool m_switchingProject = false;
     QPushButton* m_projectMenu = nullptr;
+    QWidget* m_navbar = nullptr;           // se esconde en el modo foco de la ejecución
     QPushButton* m_navBack = nullptr;
     QComboBox* m_runTarget = nullptr;
     QPushButton* m_navRun = nullptr;

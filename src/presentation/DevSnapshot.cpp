@@ -7,6 +7,7 @@
 #include "core/models/IssueLink.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/views/MainWindow.h"
+#include "presentation/views/RunView.h"
 
 #include <QApplication>
 #include <QDir>
@@ -144,7 +145,12 @@ void run(MainWindow& window, AppContext& ctx) {
             ctx.run->back();   // reabre el paso 3
             window.navigate(Screen::Run);
         }},
+        {"03c-ejecucion-foco", [&] {
+            window.navigate(Screen::Run);
+            if (auto* run = window.findChild<RunView*>()) run->setFocusMode(true);
+        }},
         {"03b-ejecucion-fin", [&] {
+            if (auto* run = window.findChild<RunView*>()) run->setFocusMode(false);
             ctx.run->mark(StepResult::Pass);
             ctx.run->mark(StepResult::Pass);
             window.navigate(Screen::Run);

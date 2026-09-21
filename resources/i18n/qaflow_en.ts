@@ -5436,10 +5436,6 @@ Status: %4
 <context>
     <name>qaflow::RunView</name>
     <message>
-        <source>Capturar pantalla</source>
-        <translation>Take screenshot</translation>
-    </message>
-    <message>
         <source>Tiempo en este paso</source>
         <translation>Time on this step</translation>
     </message>
@@ -5512,10 +5508,6 @@ Status: %4
         <translation>Sort by step</translation>
     </message>
     <message>
-        <source>PASO %1 DE %2</source>
-        <translation>STEP %1 OF %2</translation>
-    </message>
-    <message>
         <source>Fallido</source>
         <translation>Failed</translation>
     </message>
@@ -5576,10 +5568,6 @@ Status: %4
         <translation>N/A</translation>
     </message>
     <message>
-        <source>Saltar: el paso no cuenta para el veredicto</source>
-        <translation>Skip: the step does not count towards the verdict</translation>
-    </message>
-    <message>
         <source>ASIGNAR A</source>
         <translation>ASSIGN TO</translation>
     </message>
@@ -5594,18 +5582,6 @@ Status: %4
     <message>
         <source>Eliminar esta evidencia</source>
         <translation>Delete this evidence</translation>
-    </message>
-    <message>
-        <source>%1 de %2 pasos · %3 capturas · ⏱ %4</source>
-        <translation>%1 of %2 steps · %3 screenshots · ⏱ %4</translation>
-    </message>
-    <message>
-        <source>EJECUTANDO</source>
-        <translation>RUNNING</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;Esperado:&lt;/b&gt; %1</source>
-        <translation>&lt;b&gt;Expected:&lt;/b&gt; %1</translation>
     </message>
     <message>
         <source>Observaciones del paso %1…</source>
@@ -5630,24 +5606,6 @@ Status: %4
     <message>
         <source>PENDIENTE</source>
         <translation>PENDING</translation>
-    </message>
-    <message>
-        <source>sin evidencia</source>
-        <translation>no evidence</translation>
-    </message>
-    <message>
-        <source>1 captura</source>
-        <translation>1 screenshot</translation>
-    </message>
-    <message>
-        <source>%1 capturas</source>
-        <translation>%1 screenshots</translation>
-    </message>
-    <message>
-        <source>Aún no hay evidencias de este caso.
-Pulsa «Capturar pantalla» o arrastra un fichero a la ventana.</source>
-        <translation>This case has no evidence yet.
-Press “Take screenshot” or drag a file onto the window.</translation>
     </message>
     <message>
         <source>Sin asignar</source>
@@ -5678,16 +5636,8 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <translation>Open a case in “Test cases” and press ▶ Run (F5) to start.</translation>
     </message>
     <message>
-        <source>← Anterior</source>
-        <translation>← Previous</translation>
-    </message>
-    <message>
         <source>Vuelve al paso anterior sin tocar su veredicto (Retroceso o Alt+←)</source>
         <translation>Goes back to the previous step without touching its verdict (Backspace or Alt+←)</translation>
-    </message>
-    <message>
-        <source>Siguiente →</source>
-        <translation>Next →</translation>
     </message>
     <message>
         <source>Pasa al siguiente sin darle veredicto a este (Alt+→)</source>
@@ -5706,28 +5656,12 @@ Press “Take screenshot” or drag a file onto the window.</translation>
         <translation>Report blocking bug</translation>
     </message>
     <message>
-        <source>Abre el parte enlazado al paso %1 · %2</source>
-        <translation>Opens the report linked to step %1 · %2</translation>
-    </message>
-    <message>
-        <source>Abre el parte de un bug de este caso</source>
-        <translation>Opens a bug report for this case</translation>
-    </message>
-    <message>
-        <source>Ir al paso %1</source>
-        <translation>Go to step %1</translation>
-    </message>
-    <message>
         <source>Bug reportado en este paso</source>
         <translation>Bug reported on this step</translation>
     </message>
     <message>
         <source>Bugs reportados en este paso</source>
         <translation>Bugs reported on this step</translation>
-    </message>
-    <message>
-        <source>BUGS</source>
-        <translation>BUGS</translation>
     </message>
     <message>
         <source>Ordena las evidencias del caso por el paso al que están asignadas</source>
@@ -5792,10 +5726,6 @@ When you report one it stays here, with the step it came from.</translation>
         <translation>It comes from the run being continued: this step has not been repeated</translation>
     </message>
     <message>
-        <source>BUGS · %1</source>
-        <translation>BUGS · %1</translation>
-    </message>
-    <message>
         <source>Abrir la ficha del bug en otra ventana</source>
         <translation>Open the bug&apos;s details in another window</translation>
     </message>
@@ -5812,10 +5742,6 @@ When you report one it stays here, with the step it came from.</translation>
         <translation>(untitled)</translation>
     </message>
     <message>
-        <source>&lt;b&gt;Datos:&lt;/b&gt; %1</source>
-        <translation>&lt;b&gt;Data:&lt;/b&gt; %1</translation>
-    </message>
-    <message>
         <source>Los bugs reportados en esta ejecución, con el paso del que salieron</source>
         <translation>The bugs reported in this run, with the step they came from</translation>
     </message>
@@ -5828,6 +5754,146 @@ When you report one it stays here, with the step it came from.</translation>
 Al reportar uno queda aquí, con el paso del que salió.</source>
         <translation>No bug has been reported in this run yet.
 Reporting one leaves it here, with the step it came from.</translation>
+    </message>
+    <message>
+        <source>Salir del modo foco (Esc o F11)</source>
+        <translation>Leave focus mode (Esc or F11)</translation>
+    </message>
+    <message>
+        <source>Modo foco: la evidencia a toda la ventana (F11)</source>
+        <translation>Focus mode: the evidence fills the window (F11)</translation>
+    </message>
+    <message>
+        <source>Ampliar</source>
+        <translation>Enlarge</translation>
+    </message>
+    <message>
+        <source>Abre la evidencia a tamaño completo, con zoom</source>
+        <translation>Opens the evidence at full size, with zoom</translation>
+    </message>
+    <message>
+        <source>Capturar</source>
+        <translation>Capture</translation>
+    </message>
+    <message>
+        <source>Salir · Esc</source>
+        <translation>Exit · Esc</translation>
+    </message>
+    <message>
+        <source>DATOS</source>
+        <translation>DATA</translation>
+    </message>
+    <message>
+        <source>RESULTADO ESPERADO</source>
+        <translation>EXPECTED RESULT</translation>
+    </message>
+    <message>
+        <source>OBSERVACIONES</source>
+        <translation>FINDINGS</translation>
+    </message>
+    <message>
+        <source>(sin resultado esperado)</source>
+        <translation>(no expected result)</translation>
+    </message>
+    <message>
+        <source>PASO %1 / %2</source>
+        <translation>STEP %1 / %2</translation>
+    </message>
+    <message>
+        <source>RESUMEN</source>
+        <translation>SUMMARY</translation>
+    </message>
+    <message>
+        <source>· 1 captura</source>
+        <translation>· 1 screenshot</translation>
+    </message>
+    <message>
+        <source>· %1 capturas</source>
+        <translation>· %1 screenshots</translation>
+    </message>
+    <message>
+        <source>Aún no hay capturas en esta ejecución.
+Pulsa «Capturar» o arrastra un fichero a la ventana.</source>
+        <translation>No screenshots in this run yet.
+Press “Capture” or drop a file on the window.</translation>
+    </message>
+    <message>
+        <source>Aún no hay evidencias de este caso.
+Pulsa «Capturar» o arrastra un fichero a la ventana.</source>
+        <translation>No evidence for this case yet.
+Press “Capture” or drop a file on the window.</translation>
+    </message>
+    <message>
+        <source>Anotar (flechas, rectángulos, texto, difuminado)</source>
+        <translation>Annotate (arrows, rectangles, text, blur)</translation>
+    </message>
+    <message>
+        <source>Foco</source>
+        <translation>Focus</translation>
+    </message>
+    <message>
+        <source>Saltar: el paso no cuenta para el veredicto (S)</source>
+        <translation>Skip: the step does not count towards the verdict (S)</translation>
+    </message>
+    <message>
+        <source>Marcar el paso: %1 (%2)</source>
+        <translation>Mark the step: %1 (%2)</translation>
+    </message>
+    <message>
+        <source>Paso</source>
+        <translation>Step</translation>
+    </message>
+    <message>
+        <source>Pasos</source>
+        <translation>Steps</translation>
+    </message>
+    <message>
+        <source>Bugs</source>
+        <translation>Bugs</translation>
+    </message>
+    <message>
+        <source>⏱ %1</source>
+        <translation>⏱ %1</translation>
+    </message>
+    <message>
+        <source>%1/%2 pasos · %3 capturas · ⏱ %4</source>
+        <translation>%1/%2 steps · %3 screenshots · ⏱ %4</translation>
+    </message>
+    <message>
+        <source>%1 · EJECUTANDO</source>
+        <translation>%1 · RUNNING</translation>
+    </message>
+    <message>
+        <source>PASO %1 DE %2 · ACCIÓN</source>
+        <translation>STEP %1 OF %2 · ACTION</translation>
+    </message>
+    <message>
+        <source>%1 · TERMINADA</source>
+        <translation>%1 · FINISHED</translation>
+    </message>
+    <message>
+        <source>Pasos · %1</source>
+        <translation>Steps · %1</translation>
+    </message>
+    <message>
+        <source>%1 · paso %2 · %3</source>
+        <translation>%1 · step %2 · %3</translation>
+    </message>
+    <message>
+        <source>%1 de este caso</source>
+        <translation>%1 for this case</translation>
+    </message>
+    <message>
+        <source>Ir al paso %1</source>
+        <translation>Go to step %1</translation>
+    </message>
+    <message>
+        <source>Bugs · %1</source>
+        <translation>Bugs · %1</translation>
+    </message>
+    <message>
+        <source>Sólo se pueden anotar imágenes</source>
+        <translation>Only images can be annotated</translation>
     </message>
 </context>
 <context>

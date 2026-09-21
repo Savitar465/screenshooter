@@ -77,7 +77,8 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
     m_toast = new Toast(body);            // sobre la pantalla, sin tapar la barra de estado
     m_flash = new FlashOverlay(central);   // el destello de captura sí cubre toda la ventana
 
-    rows->insertWidget(0, buildNavbar());
+    m_navbar = buildNavbar();
+    rows->insertWidget(0, m_navbar);
     buildMenus();
     buildTray();
     wireSignals();
@@ -722,6 +723,12 @@ void MainWindow::wireRun() {
     connect(m_run, &RunView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
     connect(m_run, &RunView::reportBugRequested, this, &MainWindow::reportBug);
     connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
+    // El modo foco deja la evidencia sola: la ventana esconde su marco mientras dura.
+    connect(m_run, &RunView::focusModeChanged, this, [this](bool on) {
+        m_sidebar->setVisible(!on);
+        m_navbar->setVisible(!on);
+        m_status->setVisible(!on);
+    });
 }
 
 void MainWindow::wireHistory() {
@@ -791,7 +798,8 @@ void MainWindow::openTrackerIssue(const QString& key) {
 }
 
 void MainWindow::wireSignals() {
-    connect(m_sidebar, &Sidebar::navigate, this, &MainWindow::navigate);
+    // El rail deja camino de vuelta: «atrás» regresa a la pantalla desde la que se saltó.
+    connect(m_sidebar, &Sidebar::navigate, this, &MainWindow::navigateInto);
     connect(m_sidebar, &Sidebar::metricsRequested, this, &MainWindow::showMetrics);
     connect(m_status, &StatusStrip::navigate, this, &MainWindow::navigate);
     connect(m_status, &StatusStrip::metricsRequested, this, &MainWindow::showMetrics);

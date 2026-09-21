@@ -47,7 +47,8 @@ QList<IssueLink> QualityRecordService::revisionBugs(const Issue& issue, int revi
     QSet<QString> cycleIds;
     for (const auto& cycle : IssueStore::cyclesOfRevision(issue, m_history, revisionNumber(issue, revision)))
         cycleIds.insert(cycle.id);
-    // Los que no lo anotaron (los anteriores, y los reportados fuera de un ciclo) se sitúan como se
+    // Los de una ejecución suelta no son de la ronda: como sus resultados, no son del issue. Los que no
+    // anotaron ejecución (los anteriores, y los reportados desde la ficha del caso) se sitúan como se
     // hacía entonces: por caso del issue y por la ventana de la ronda, de cuándo se abrió a cuándo se
     // cerró. La que sigue abierta no tiene final: cuenta todo lo reportado desde que empezó.
     const QDateTime since = revisionStart(issue, revision);
@@ -59,6 +60,8 @@ QList<IssueLink> QualityRecordService::revisionBugs(const Issue& issue, int revi
             if (cycleIds.contains(bug.planRunId)) out << bug;
             continue;
         }
+        // De una ejecución suelta: no salió de ningún ciclo del issue.
+        if (!bug.runId.trimmed().isEmpty()) continue;
         if (!caseIds.contains(bug.caseId)) continue;
         if (since.isValid() && bug.createdAt.isValid() && bug.createdAt < since) continue;
         if (until.isValid() && bug.createdAt.isValid() && bug.createdAt > until) continue;
@@ -115,11 +118,18 @@ quality::DraftContext QualityRecordService::contextFor(const Issue& issue, const
     context.revisionNumber = number > 0 ? number : 1;
     context.previous = previousRecord(issue.id);
 
+    // Los bugs de rondas anteriores, con la misma regla que los de la ronda (`revisionBugs`): los que
+    // anotaron su ciclo, si es del issue; los de una ejecución suelta, nunca; los antiguos, por caso.
     const QDateTime since = revisionStart(issue, revision);
     const QStringList caseIds = caseIdsOf(issue);
-    for (const auto& bug : m_bugs.issues())
-        if (caseIds.contains(bug.caseId) && since.isValid() && bug.createdAt.isValid() && bug.createdAt < since)
-            context.previousBugs << bug;
+    QSet<QString> cycleIds;
+    for (const auto& cycle : IssueStore::cyclesOf(issue, m_history)) cycleIds.insert(cycle.id);
+    for (const auto& bug : m_bugs.issues()) {
+        if (!since.isValid() || !bug.createdAt.isValid() || bug.createdAt >= since) continue;
+        const bool ofIssue = !bug.planRunId.trimmed().isEmpty() ? cycleIds.contains(bug.planRunId)
+                             : bug.runId.trimmed().isEmpty() && caseIds.contains(bug.caseId);
+        if (ofIssue) context.previousBugs << bug;
+    }
 
     if (m_publish)
         for (const auto& cycle : cycles) {

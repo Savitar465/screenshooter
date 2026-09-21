@@ -14,14 +14,18 @@ TestPublishService::TestPublishService(std::shared_ptr<ITestManagement> zephyr, 
                                        SettingsStore& settings, BugStore& bugs, QObject* parent)
     : QObject(parent), m_zephyr(std::move(zephyr)), m_cases(cases), m_history(history), m_settings(settings), m_bugs(bugs) {}
 
-QList<PublishDefect> TestPublishService::defectsOf(const PlanReport& report, const QString& caseId) const {
+QList<PublishDefect> TestPublishService::defectsOf(const PlanReport& report, const QString& caseId, const QString& runId) const {
     // Los bugs de ese caso que salieron de este ciclo, con la misma regla con la que el informe los
     // enseña (`PlanReport::foundIn`): lo que se ve en la pantalla es lo que se sube.
     QList<PublishDefect> defects;
     for (const auto& bug : m_bugs.issues()) {
         if (bug.caseId != caseId || bug.key.trimmed().isEmpty()) continue;
         if (!PlanReport::foundIn(report.plan, bug)) continue;
-        defects << PublishDefect{bug.key.trimmed(), bug.step};
+        // El paso es el de la ejecución de la que salió el bug. Si fue otra (el caso se repitió en el
+        // ciclo y se publica la última), el bug va sólo a la ejecución. Los que no anotaron su
+        // ejecución conservan su paso, como antes.
+        const bool otherRun = !bug.runId.trimmed().isEmpty() && bug.runId != runId;
+        defects << PublishDefect{bug.key.trimmed(), otherRun ? 0 : bug.step};
     }
     return defects;
 }
@@ -99,7 +103,7 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report, bool upd
         pc.title = row.title;
         pc.verdict = row.run.verdict;
         pc.steps = row.run.steps;
-        pc.defects = defectsOf(report, row.caseId);
+        pc.defects = defectsOf(report, row.caseId, row.run.id);
         pc.durationSecs = row.run.durationSecs;
         if (const TestCase* c = m_cases.find(row.caseId)) {
             // Con lo que el caso dice hoy se crea el Test de la ejecución.

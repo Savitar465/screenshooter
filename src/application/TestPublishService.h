@@ -62,9 +62,10 @@ public:
 private:
     void send(const PlanReport& report, bool update, std::function<void(const PublishResult&)> done);
 
-    /// Bugs reportados desde ese caso durante ese ciclo, con el paso del que salieron. Se enlazan a la
-    /// ejecución y a su paso en Zephyr, que es donde se buscan los defectos de una prueba.
-    QList<PublishDefect> defectsOf(const PlanReport& report, const QString& caseId) const;
+    /// Bugs reportados desde ese caso durante ese ciclo. Todos se enlazan a la ejecución en Zephyr;
+    /// al paso, sólo los que salieron de la ejecución que se publica (`runId`): los de una repetición
+    /// anterior del caso en el ciclo señalarían un paso que en ésta pudo pasar.
+    QList<PublishDefect> defectsOf(const PlanReport& report, const QString& caseId, const QString& runId) const;
     /// Cuántas continuaciones lleva encadenadas el ciclo (0 = no es una continuación).
     int continuationDepth(const PlanRun& plan) const;
 

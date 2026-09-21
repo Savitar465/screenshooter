@@ -10,6 +10,7 @@
 #include "presentation/views/RevisionPublishDialog.h"
 #include "presentation/views/RequirementImportDialog.h"
 #include "presentation/widgets/ChoiceDialog.h"
+#include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QComboBox>
@@ -31,6 +32,8 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSettings>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QUrl>
@@ -417,9 +420,15 @@ void IssuesView::buildBoard(QVBoxLayout* root) {
     divider->setStyleSheet(QStringLiteral("background:%1;").arg(theme::Border));
     root->addWidget(divider);
 
-    auto* body = new QWidget;
-    auto* bh = ui::hbox(body, 0, 0);
-    root->addWidget(body, 1);
+    // El panel del issue se ensancha o se estrecha arrastrando su borde; el ancho se recuerda.
+    m_boardSplit = new QSplitter(Qt::Horizontal);
+    m_boardSplit->setObjectName(QStringLiteral("issueBoardSplit"));
+    m_boardSplit->setChildrenCollapsible(false);
+    m_boardSplit->setHandleWidth(5);
+    m_boardSplit->setStyleSheet(QStringLiteral("QSplitter#issueBoardSplit::handle{background:transparent;}"
+                                               "QSplitter#issueBoardSplit::handle:hover{background:%1;}")
+                                    .arg(theme::tint(theme::Blue, 70)));
+    root->addWidget(m_boardSplit, 1);
 
     auto* boardArea = new QWidget;
     auto* av = ui::vbox(boardArea, 0, 8);
@@ -473,14 +482,22 @@ void IssuesView::buildBoard(QVBoxLayout* root) {
         ch->addWidget(column, 1);
     }
     av->addWidget(columns, 1);
-    bh->addWidget(boardArea, 1);
-    buildDrawer(bh);
+    m_boardSplit->addWidget(boardArea);
+    buildDrawer(m_boardSplit);
+    m_boardSplit->setStretchFactor(0, 1);
+    m_boardSplit->setStretchFactor(1, 0);
+    const int width = QSettings().value(QStringLiteral("issues/drawerWidth"), 360).toInt();
+    m_boardSplit->setSizes({4 * width, width});
+    connect(m_boardSplit, &QSplitter::splitterMoved, this, [this]() {
+        if (m_drawer->isVisible()) QSettings().setValue(QStringLiteral("issues/drawerWidth"), m_drawer->width());
+    });
 }
 
-void IssuesView::buildDrawer(QHBoxLayout* root) {
+void IssuesView::buildDrawer(QSplitter* root) {
     auto* pane = ui::card("list-pane");
     pane->setObjectName(QStringLiteral("issueDrawer"));
-    pane->setFixedWidth(320);
+    pane->setMinimumWidth(280);
+    pane->setMaximumWidth(720);
     pane->setStyleSheet(QStringLiteral("QFrame#issueDrawer{border-right:none;border-left:1px solid %1;}").arg(theme::Border));
     m_drawer = pane;
     auto* v = ui::vbox(pane, 0, 0);
@@ -836,24 +853,33 @@ void IssuesView::refreshDrawer() {
     title->setObjectName(QStringLiteral("issueDrawerTitle"));
     title->setWordWrap(true);
     title->setStyleSheet(QStringLiteral("font-size:18px;font-weight:700;color:%1;").arg(theme::Text));
+    // Se parte en líneas al ancho del panel en vez de ensancharlo (y cortarse por la derecha).
+    title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    title->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_drawerLayout->addWidget(title);
 
+    // Los tags bajan a otra línea cuando no caben; uno demasiado largo se parte en dos.
     auto* chips = new QWidget;
-    auto* chh = ui::hbox(chips, 0, 6);
-    chh->addWidget(ui::pill(info.name, theme::tint(info.color, 46), info.color));
+    auto* chh = new FlowLayout(chips, 0, 6, 6);
+    auto pill = [](const QString& text, const QString& bg, const QString& fg) {
+        QLabel* p = ui::pill(text, bg, fg);
+        p->setWordWrap(true);
+        p->setToolTip(text);
+        return p;
+    };
+    chh->addWidget(pill(info.name, theme::tint(info.color, 46), info.color));
     if (!issue.revisions.isEmpty()) {
         QString rev = tr("REV %1").arg(s.number);
         QStringList environments;
         for (const auto& cycle : IssueStore::cyclesOfRevision(issue, m_history, s.number))
             if (const QString env = cycle.environment.trimmed(); !env.isEmpty() && !environments.contains(env)) environments << env;
         if (!environments.isEmpty()) rev += QStringLiteral(" · ") + environments.join(QStringLiteral(", ")).toUpper();
-        chh->addWidget(ui::pill(rev, theme::tint(theme::Cyan, 38), theme::Cyan));
+        chh->addWidget(pill(rev, theme::tint(theme::Cyan, 38), theme::Cyan));
     }
     if (issue.isPublished()) {
         const auto& p = issue.publication;
-        chh->addWidget(ui::pill(p.status.isEmpty() ? p.key : QStringLiteral("%1 · %2").arg(p.key, p.status), theme::tint(theme::Blue, 30), theme::Blue));
+        chh->addWidget(pill(p.status.isEmpty() ? p.key : QStringLiteral("%1 · %2").arg(p.key, p.status), theme::tint(theme::Blue, 30), theme::Blue));
     }
-    chh->addStretch(1);
     m_drawerLayout->addWidget(chips);
 
     // Lo siguiente: el paso que toca de la revisión, con su acción a mano.
@@ -874,7 +900,7 @@ void IssuesView::refreshDrawer() {
     whyLabel->setWordWrap(true);
     nv->addWidget(whyLabel);
     auto* buttons = new QWidget;
-    auto* bh = ui::hbox(buttons, 0, 8);
+    auto* bh = new FlowLayout(buttons, 0, 8, 8);
     if (action.run) {
         auto* go = smallButton(action.button, "primary");
         go->setObjectName(QStringLiteral("issueNextAction"));
@@ -885,7 +911,6 @@ void IssuesView::refreshDrawer() {
     openButton->setObjectName(QStringLiteral("issueOpenDetail"));
     connect(openButton, &QPushButton::clicked, this, [this]() { showDetail(true); });
     bh->addWidget(openButton);
-    bh->addStretch(1);
     nv->addWidget(buttons);
     m_drawerLayout->addWidget(next);
 
@@ -914,6 +939,7 @@ void IssuesView::refreshDrawer() {
                                 .arg(theme::tint(color, done || current ? 46 : 20), color));
         rh->addWidget(mark);
         auto* name = ui::label(names[i]);
+        name->setWordWrap(true);
         name->setStyleSheet(current ? QStringLiteral("font-weight:700;") : (done ? QString() : QStringLiteral("color:%1;").arg(theme::Muted)));
         rh->addWidget(name, 1);
         rh->addWidget(ui::label(notes[i], "muted-sm"));
@@ -939,7 +965,9 @@ void IssuesView::refreshDrawer() {
             tag->setStyleSheet(QStringLiteral("color:%1;").arg(color));
             bv->addWidget(tag);
             const QString text = step.done ? tr("Hecho") : (step.available ? tr("Pendiente") : tr("No disponible"));
-            bv->addWidget(ui::label(text, "muted-sm"));
+            auto* state = ui::label(text, "muted-sm");
+            state->setWordWrap(true);
+            bv->addWidget(state);
             box->setToolTip(step.blocked.isEmpty() ? step.detail : step.blocked);
             dg->addWidget(box, 0, col++);
         }
@@ -2016,16 +2044,20 @@ void IssuesView::fillResults(const Issue& issue, const QList<PlanRun>& cycles, Q
 
 QList<IssueLink> IssuesView::bugsOf(const Issue& issue) const {
     // Los bugs del issue son los que se encontraron ejecutando sus ciclos, del más reciente al
-    // primero. Los reportados antes de que el bug anotara su ejecución no lo saben: de ésos se
-    // cuentan los de los casos del issue, como se hacía entonces.
+    // primero. Uno de una ejecución suelta (con ejecución y sin ciclo) no es de ninguno de ellos
+    // aunque su caso sea del issue. Los reportados antes de que el bug anotara su ejecución no lo
+    // saben: de ésos se cuentan los de los casos del issue, como se hacía entonces.
     if (!m_bugLedger) return {};
     QSet<QString> cycleIds;
     for (const auto& cycle : IssueStore::cyclesOf(issue, m_history)) cycleIds.insert(cycle.id);
     const QStringList caseIds = IssueStore::caseIdsOf(issue, m_plans);
     QList<IssueLink> bugs;
     for (const auto& bug : m_bugLedger->issues()) {
-        const bool linked = !bug.planRunId.trimmed().isEmpty();
-        if (linked ? cycleIds.contains(bug.planRunId) : caseIds.contains(bug.caseId)) bugs << bug;
+        if (!bug.planRunId.trimmed().isEmpty()) {
+            if (cycleIds.contains(bug.planRunId)) bugs << bug;
+        } else if (bug.runId.trimmed().isEmpty() && caseIds.contains(bug.caseId)) {
+            bugs << bug;
+        }
     }
     std::sort(bugs.begin(), bugs.end(), [](const IssueLink& a, const IssueLink& b) { return a.createdAt > b.createdAt; });
     return bugs;

@@ -79,6 +79,14 @@ QJsonArray ZephyrClient::defectsOf(const QList<PublishDefect>& defects, int step
     return out;
 }
 
+void ZephyrClient::addDefects(QJsonObject& body, const QJsonArray& defects) {
+    if (defects.isEmpty()) return;
+    // ZAPI sólo enlaza los defectos con `defectList` y `updateDefectList`; cualquier otra clave la
+    // ignora sin error y el ciclo queda publicado sin sus bugs.
+    body[QStringLiteral("defectList")] = defects;
+    body[QStringLiteral("updateDefectList")] = QStringLiteral("true");
+}
+
 int ZephyrClient::zephyrStatus(StepResult r) {
     switch (r) {
         case StepResult::Pass: return 1;
@@ -509,7 +517,7 @@ void ZephyrClient::markExecution(const std::shared_ptr<Job>& job, const QString&
     const PublishCase& c = job->current();
     QJsonObject status{{"status", QString::number(zephyrStatus(c.verdict))}};
     // Los bugs que salieron del caso se cuelgan de la ejecución: quien la abra ve qué se reportó.
-    if (const QJsonArray defects = defectsOf(c.defects); !defects.isEmpty()) status[QStringLiteral("defects")] = defects;
+    addDefects(status, defectsOf(c.defects));
     putWithComment(zephyr(job->settings, QStringLiteral("/execution/%1/execute").arg(job->executionId)), status,
                    QCoreApplication::translate("infrastructure", "Publicado por QAflow · %1").arg(formatDuration(c.durationSecs)),
                    [this, job, issueId](const Response& exec) {
@@ -595,8 +603,7 @@ void ZephyrClient::writeNextStep(const std::shared_ptr<Job>& job, const QString&
         {"status", QString::number(zephyrStatus(pending.step.result))},
     };
     // Y cada bug, del paso en el que se vio: el defecto queda donde falló, no sólo en el caso.
-    if (const QJsonArray defects = defectsOf(job->current().defects, pending.number); !defects.isEmpty())
-        body[QStringLiteral("defects")] = defects;
+    addDefects(body, defectsOf(job->current().defects, pending.number));
     putWithComment(zephyr(job->settings, QStringLiteral("/stepResult/%1").arg(pending.id)), body, pending.step.note,
                    [this, job, issueId](const Response& r) {
                        if (r.ok) ++job->result.steps;

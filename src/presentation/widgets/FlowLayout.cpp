@@ -44,7 +44,12 @@ int FlowLayout::doLayout(const QRect& rect, bool testOnly) const {
     int y = effective.y();
     int lineHeight = 0;
     for (QLayoutItem* item : m_items) {
-        const QSize hint = item->sizeHint();
+        QSize hint = item->sizeHint();
+        // Lo que no cabe ni solo en una línea se estrecha a ella (y, si sabe, crece hacia abajo) en vez de salirse.
+        if (hint.width() > effective.width() && effective.width() > 0) {
+            hint.setWidth(qMax(item->minimumSize().width(), effective.width()));
+            if (item->hasHeightForWidth()) hint.setHeight(item->heightForWidth(hint.width()));
+        }
         int nextX = x + hint.width() + m_hSpace;
         if (nextX - m_hSpace > effective.right() && lineHeight > 0) {
             x = effective.x();

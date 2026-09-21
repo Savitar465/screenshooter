@@ -309,6 +309,37 @@ private slots:
         QCOMPARE(sent[0].path, shot);
         QCOMPARE(sent[0].step, 2);
     }
+
+    // Un bug se cuelga del paso sólo en la ejecución de la que salió. Si el caso se repitió en el ciclo
+    // y se publica la última, el de la anterior va a la ejecución pero no a un paso que en ésta pudo pasar.
+    void onlyBugsOfThePublishedRunAreLinkedToTheirStep() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
+        auto bug = [&](const QString& key, const QString& runId, int step) {
+            IssueLink l;
+            l.key = key;
+            l.caseId = QStringLiteral("TC-101");
+            l.runId = runId;
+            l.planRunId = QStringLiteral("PR-0001");
+            l.step = step;
+            l.createdAt = QDateTime(QDate(2026, 5, 12), QTime(10, 0));
+            f.bugLedger.recordIssue(l);
+        };
+        bug(QStringLiteral("SHOP-1"), QStringLiteral("R-1"), 2);   // de la ejecución que se publica
+        bug(QStringLiteral("SHOP-2"), QStringLiteral("R-0"), 1);   // de una repetición anterior en el ciclo
+        bug(QStringLiteral("SHOP-3"), QString(), 2);               // antiguo, sin ejecución anotada
+
+        publish.publish(reportWith({{QStringLiteral("TC-101"), Verdict::Fallido}}), [](const PublishResult&) {});
+        const QList<PublishDefect> defects = zephyr->published[0].cases[0].defects;
+        QCOMPARE(defects.size(), 3);                       // todos van a la ejecución
+        QCOMPARE(defects[0].key, QStringLiteral("SHOP-1"));
+        QCOMPARE(defects[0].step, 2);
+        QCOMPARE(defects[1].key, QStringLiteral("SHOP-2"));
+        QCOMPARE(defects[1].step, 0);                      // a ningún paso
+        QCOMPARE(defects[2].step, 2);
+    }
 };
 
 QTEST_MAIN(TestPublishServiceTest)

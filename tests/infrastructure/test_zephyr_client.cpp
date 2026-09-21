@@ -255,12 +255,17 @@ private slots:
         QCOMPARE(step2[QStringLiteral("status")].toString(), QStringLiteral("2"));
         QCOMPARE(step2[QStringLiteral("comment")].toString(), QStringLiteral("El cupón no descuenta"));
         // Los defectos: todos en la ejecución, y en cada paso los que salieron de él.
-        const QJsonArray execDefects = bodyOf(find("PUT", "/rest/zephyr/latest/execution/501/execute"))[QStringLiteral("defects")].toArray();
+        // ZAPI sólo los enlaza con `defectList` + `updateDefectList`.
+        const QJsonObject execBody = bodyOf(find("PUT", "/rest/zephyr/latest/execution/501/execute"));
+        const QJsonArray execDefects = execBody[QStringLiteral("defectList")].toArray();
         QCOMPARE(execDefects.size(), 2);
         QCOMPARE(execDefects[0].toString(), QStringLiteral("SHOP-143"));
-        QCOMPARE(step2[QStringLiteral("defects")].toArray().size(), 1);
-        QCOMPARE(step2[QStringLiteral("defects")].toArray()[0].toString(), QStringLiteral("SHOP-143"));
-        QVERIFY(!bodyOf(find("PUT", "/rest/zephyr/latest/stepResult/9001")).contains(QStringLiteral("defects")));
+        QCOMPARE(execBody[QStringLiteral("updateDefectList")].toString(), QStringLiteral("true"));
+        QCOMPARE(step2[QStringLiteral("defectList")].toArray().size(), 1);
+        QCOMPARE(step2[QStringLiteral("defectList")].toArray()[0].toString(), QStringLiteral("SHOP-143"));
+        QCOMPARE(step2[QStringLiteral("updateDefectList")].toString(), QStringLiteral("true"));
+        const QJsonObject step1 = bodyOf(find("PUT", "/rest/zephyr/latest/stepResult/9001"));
+        QVERIFY(!step1.contains(QStringLiteral("defectList")) && !step1.contains(QStringLiteral("updateDefectList")));
         // La evidencia del paso 2 va a su resultado; la del caso, a la ejecución.
         QStringList attachmentPaths;
         for (const auto& r : server.requests) if (r.method == "POST" && r.path.startsWith("/rest/zephyr/latest/attachment")) attachmentPaths << QString::fromUtf8(r.path);

@@ -54,6 +54,8 @@ private:
 
     /// Los defectos que van en una petición: todos los de la ejecución, o sólo los del paso `step`.
     static QJsonArray defectsOf(const QList<PublishDefect>& defects, int step = 0);
+    /// Pone los defectos en el cuerpo de un veredicto (ejecución o paso), como los pide ZAPI.
+    static void addDefects(QJsonObject& body, const QJsonArray& defects);
 
     QNetworkRequest jira(const TrackerSettings& s, const QString& path) const;
     QNetworkRequest zephyr(const TrackerSettings& s, const QString& path) const;

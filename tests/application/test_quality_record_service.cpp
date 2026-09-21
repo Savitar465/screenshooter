@@ -175,6 +175,55 @@ private slots:
         QVERIFY(!draft.bugs.contains(QStringLiteral("SHOP-1")));
     }
 
+    // Un bug de una ejecución suelta de un caso del issue no es de la ronda: como su resultado, no es
+    // de ninguno de los ciclos del issue aunque se reportara mientras la revisión estaba abierta.
+    void bugsOfALooseRunAreNotObservationsOfTheRevision() {
+        AppFixture f;
+        const Testing t = issueInTesting(f);
+        const QDateTime now = QDateTime::currentDateTime();
+        const QString cycle = addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), now, {{QStringLiteral("TC-101"), Verdict::Fallido}});
+        IssueLink ofCycle = bugOf(QStringLiteral("SHOP-5"), QStringLiteral("TC-101"), QStringLiteral("A"), now);
+        ofCycle.runId = QStringLiteral("R-1");
+        ofCycle.planRunId = cycle;
+        f.bugLedger.recordIssue(ofCycle);
+        IssueLink loose = bugOf(QStringLiteral("SHOP-6"), QStringLiteral("TC-101"), QStringLiteral("B"), now);
+        loose.runId = QStringLiteral("R-99");   // ejecución suelta: sin ciclo
+        f.bugLedger.recordIssue(loose);
+
+        const QualityRecord draft = f.records.draftFor(t.issueId);
+        QVERIFY(draft.bugs.contains(QStringLiteral("SHOP-5")));
+        QVERIFY(!draft.bugs.contains(QStringLiteral("SHOP-6")));
+        QCOMPARE(draft.totalObservations(), 1);
+    }
+
+    // Las correcciones (bugs de rondas anteriores ya cerrados) siguen la misma regla: cuenta el del
+    // ciclo del issue y el antiguo sin ejecución; el de una ejecución suelta o de un ciclo ajeno, no.
+    void correctionsOnlyCountBugsOfTheIssueCycles() {
+        AppFixture f;
+        const QDateTime old = QDateTime::currentDateTime().addDays(-5);
+        const Testing t = issueInTesting(f);
+        const QString earlier = addCycle(f, t.planId, QStringLiteral("Ronda anterior"), old, {{QStringLiteral("TC-101"), Verdict::Fallido}});
+        IssueLink ofCycle = bugOf(QStringLiteral("SHOP-1"), QStringLiteral("TC-101"), QStringLiteral("A"), old.addSecs(120), true);
+        ofCycle.runId = QStringLiteral("R-1");
+        ofCycle.planRunId = earlier;
+        f.bugLedger.recordIssue(ofCycle);
+        f.bugLedger.recordIssue(bugOf(QStringLiteral("SHOP-2"), QStringLiteral("TC-101"), QStringLiteral("B"), old, true));   // antiguo
+        IssueLink loose = bugOf(QStringLiteral("SHOP-3"), QStringLiteral("TC-101"), QStringLiteral("C"), old, true);
+        loose.runId = QStringLiteral("R-99");   // ejecución suelta
+        f.bugLedger.recordIssue(loose);
+        IssueLink foreign = bugOf(QStringLiteral("SHOP-4"), QStringLiteral("TC-101"), QStringLiteral("D"), old, true);
+        foreign.runId = QStringLiteral("R-98");
+        foreign.planRunId = QStringLiteral("PR-OTRO");   // ciclo de otro plan
+        f.bugLedger.recordIssue(foreign);
+        addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), QDateTime::currentDateTime(), {{QStringLiteral("TC-101"), Verdict::Superado}});
+
+        const QualityRecord draft = f.records.draftFor(t.issueId);
+        QCOMPARE(draft.observations[0].corrections, 1);    // A, del ciclo del issue
+        QCOMPARE(draft.observations[1].corrections, 1);    // B, antiguo sin ejecución
+        QCOMPARE(draft.observations[2].corrections, 0);    // C, ejecución suelta
+        QCOMPARE(draft.observations[3].corrections, 0);    // D, ciclo ajeno
+    }
+
     void generatingTheRecordSavesItInTheRevisionAndTheNextDraftKeepsIt() {
         AppFixture f;
         const Testing t = issueInTesting(f);

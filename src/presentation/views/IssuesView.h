@@ -17,6 +17,7 @@ class QLabel;
 class QLineEdit;
 class QMenu;
 class QPushButton;
+class QSplitter;
 class QStackedWidget;
 class QVBoxLayout;
 
@@ -142,7 +143,7 @@ private:
     void styleWell(int column, bool hot);
 
     void buildBoard(QVBoxLayout* root);
-    void buildDrawer(QHBoxLayout* root);
+    void buildDrawer(QSplitter* root);
     void buildDetail(QVBoxLayout* root);
     /// El tablero: reparte los issues que pasan los filtros por sus columnas.
     void refreshList();
@@ -248,6 +249,7 @@ private:
     QPoint m_dragStart;   // dónde se pulsó la tarjeta que quizá se arrastre
     QLabel* m_columnCounts[kColumns];
     QWidget* m_drawer;
+    QSplitter* m_boardSplit;   // tablero | panel del issue: el borde se arrastra
     QVBoxLayout* m_drawerLayout;   // se rehace en cada refresco
     // Detalle
     QWidget* m_empty;

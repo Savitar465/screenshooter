@@ -14,6 +14,7 @@ public:
     void setFullText(const QString& text);
     const QString& fullText() const { return m_full; }
 
+    QSize sizeHint() const override;   // lo que ocupa el texto entero: hasta ahí puede crecer
     QSize minimumSizeHint() const override;
 
 protected:

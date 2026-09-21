@@ -34,9 +34,11 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
     remove->setToolTip(tr("Eliminar"));
     connect(remove, &QPushButton::clicked, this, [this, id]() { emit removeRequested(id); });
     m_thumb = new Thumbnail(shot.path, shot.step, id);
-    // En la columna de capturas la miniatura elige la evidencia; en el resto la abre a tamaño completo.
-    connect(m_thumb, &Thumbnail::clicked, this, [this, id, film = layout == Layout::Film]() {
+    // En la columna de capturas la miniatura elige la evidencia; en el resto abre el editor de
+    // anotaciones (imágenes fijas) o el visor (GIF, vídeos, logs…).
+    connect(m_thumb, &Thumbnail::clicked, this, [this, id, editable, film = layout == Layout::Film]() {
         if (film) emit selectRequested(id);
+        else if (editable) emit annotateRequested(id);
         else emit openRequested(id);
     });
     auto* annotate = ui::button(QStringLiteral("✎"), "icon-move");

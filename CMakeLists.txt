@@ -134,6 +134,8 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/persistence/QSettingsRepository.cpp
         src/infrastructure/capture/ScreenCaptureService.h
         src/infrastructure/capture/ScreenCaptureService.cpp
+        src/infrastructure/capture/ScreenPicker.h
+        src/infrastructure/capture/ScreenPicker.cpp
         src/infrastructure/capture/RegionSelector.h
         src/infrastructure/capture/RegionSelector.cpp
         src/infrastructure/capture/PortalScreenshot.h

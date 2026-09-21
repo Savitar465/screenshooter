@@ -42,7 +42,8 @@ void RunController::load() {
     if (m_run.idx < m_run.results.size())
         m_run.results[m_run.idx].durationSecs = std::max(m_run.results[m_run.idx].durationSecs, m_run.stepElapsedSecs);
     m_run.stepElapsedSecs = m_run.idx < m_run.results.size() ? m_run.results[m_run.idx].durationSecs : 0;
-    m_run.stepStartedAt = QDateTime::currentDateTime();
+    if (m_run.finished) m_run.paused = false;
+    startStepClock();   // una ejecución que se cerró en pausa sigue en pausa
     m_store.select(m_run.caseId);
     emit runChanged();
 }
@@ -68,13 +69,17 @@ void RunController::holdStep() {
     m_run.results[m_run.idx].note = m_run.note;
 }
 
+void RunController::startStepClock() {
+    m_run.stepStartedAt = m_run.paused ? QDateTime() : QDateTime::currentDateTime();
+}
+
 void RunController::enterStep(int index) {
     holdStep();
     m_run.idx = index;
     const bool valid = index >= 0 && index < m_run.results.size();
     m_run.note = valid ? m_run.results[index].note : QString();
     m_run.stepElapsedSecs = valid ? m_run.results[index].durationSecs : 0;
-    m_run.stepStartedAt = QDateTime::currentDateTime();
+    startStepClock();
 }
 
 void RunController::recomputeFinished() {
@@ -111,6 +116,7 @@ void RunController::enterCase(const QString& caseId) {
         return;
     }
     m_run = it->run;
+    m_run.paused = false;   // volver a un caso es ponerse a probarlo
     m_continuesRunId = it->continuesRunId;
     m_parked.erase(m_parked.find(caseId));
     // Como al restaurar la sesión: el caso pudo cambiar de pasos mientras estaba aparcado, y el
@@ -201,6 +207,22 @@ void RunController::restart() {
     changed();
 }
 
+void RunController::pause() {
+    if (!isRunning() || m_run.paused) return;
+    // Lo que lleva el paso se consolida y el reloj se para: la pausa no cuenta.
+    m_run.stepElapsedSecs = m_run.currentStepSecs();
+    m_run.paused = true;
+    startStepClock();
+    changed();
+}
+
+void RunController::resume() {
+    if (!m_run.paused) return;
+    m_run.paused = false;
+    startStepClock();
+    changed();
+}
+
 void RunController::setNote(const QString& note) {
     if (m_run.note == note) return;
     m_run.note = note;
@@ -209,7 +231,7 @@ void RunController::setNote(const QString& note) {
 }
 
 void RunController::mark(StepResult result) {
-    if (m_run.caseId.isEmpty() || m_run.idx < 0 || m_run.idx >= m_run.results.size()) return;
+    if (m_run.caseId.isEmpty() || m_run.paused || m_run.idx < 0 || m_run.idx >= m_run.results.size()) return;
     const int current = m_run.idx;
     StepRecord& rec = m_run.results[current];
     rec.result = result;
@@ -226,7 +248,7 @@ void RunController::mark(StepResult result) {
 }
 
 void RunController::goTo(int index) {
-    if (m_run.caseId.isEmpty() || m_run.results.isEmpty()) return;
+    if (m_run.caseId.isEmpty() || m_run.paused || m_run.results.isEmpty()) return;
     const int target = std::clamp(index, 0, static_cast<int>(m_run.results.size()) - 1);
     if (target == m_run.idx && !m_run.finished) return;
     // Volver a un paso reabre una ejecución que ya estaba terminada: sus veredictos siguen ahí y
@@ -257,7 +279,7 @@ bool RunController::goToCase(const QString& caseId) {
 }
 
 void RunController::setResult(int index, StepResult result) {
-    if (m_run.caseId.isEmpty() || index < 0 || index >= m_run.results.size()) return;
+    if (m_run.caseId.isEmpty() || m_run.paused || index < 0 || index >= m_run.results.size()) return;
     if (m_run.results[index].marked && m_run.results[index].result == result) return;
     m_run.results[index].result = result;
     m_run.results[index].marked = true;

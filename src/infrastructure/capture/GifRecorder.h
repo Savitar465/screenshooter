@@ -2,6 +2,7 @@
 
 #include "core/services/IScreenRecorder.h"
 #include "infrastructure/capture/GifEncoder.h"
+#include "infrastructure/capture/ScreenPicker.h"
 
 #include <QElapsedTimer>
 #include <QObject>
@@ -15,8 +16,8 @@ namespace qaflow {
 class RecorderOverlay;
 
 /// Grabación a GIF con QScreen::grabWindow a intervalos fijos. Región: el usuario la elige con
-/// RegionSelector; pantalla completa: la pantalla bajo el cursor. La ventana principal se oculta
-/// durante la grabación (como en las capturas) y vuelve al terminar.
+/// RegionSelector; pantalla completa: la que elige `ScreenPicker`, como en las capturas. Si la
+/// ventana principal está en esa pantalla se oculta durante la grabación y vuelve al terminar.
 ///
 /// En Wayland grabWindow devuelve negro: `start()` falla con un mensaje claro.
 class GifRecorder : public QObject, public IScreenRecorder {
@@ -26,6 +27,8 @@ public:
     ~GifRecorder() override;
 
     void setAppWindow(QWidget* w) { m_appWindow = w; }
+    /// Pantalla a grabar (`CaptureSettings::screen` / `screenName`).
+    void setScreenTarget(CaptureScreen target, const QString& screenName) { m_picker.setTarget(target, screenName); }
 
     void start(const RecordingOptions& options, Done done) override;
     void stop() override;
@@ -37,6 +40,8 @@ private:
     void finish(bool keep, const QString& error = {});
 
     QPointer<QWidget> m_appWindow;
+    QPointer<QWidget> m_hiddenWindow;   // la ventana que se ocultó al empezar
+    ScreenPicker m_picker;
     QPointer<RecorderOverlay> m_overlay;
     RecordingOptions m_options;
     Done m_done;
@@ -48,7 +53,6 @@ private:
     QRect m_screenGeo;
     bool m_recording = false;
     bool m_starting = false;
-    bool m_hidAppWindow = false;
 };
 
 } // namespace qaflow

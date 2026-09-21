@@ -97,6 +97,7 @@ void StatusStrip::refresh() {
     } else {
         m_runText->setText(running ? tr("%1 · %2 · paso %3 de %4").arg(running->id, ui::elide(running->title, 34)).arg(r.idx + 1).arg(running->steps.size())
                                    : tr("Sin ejecución en curso"));
+        if (m_run.isPaused()) m_runText->setText(m_runText->text() + tr(" · en pausa"));
     }
     m_runText->setStyleSheet(QStringLiteral("font-size:12px;color:%1;").arg(planInProgress || running ? theme::Text : theme::Muted));
 

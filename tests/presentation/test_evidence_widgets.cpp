@@ -9,6 +9,7 @@
 
 #include <QLabel>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalSpy>
 #include <QtTest>
 
@@ -116,6 +117,31 @@ private slots:
         QVERIFY(blurActive);
     }
 
+    void editorOpensWithTheImageFittedToTheWindow() {
+        AnnotationEditor editor(white(4000, 3000));
+        editor.resize(900, 700);
+        editor.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&editor));
+        auto* scroll = editor.findChild<QScrollArea*>();
+        QVERIFY(scroll);
+        const QSize viewport = scroll->viewport()->size();
+        QTRY_VERIFY(scroll->widget()->width() <= viewport.width() && scroll->widget()->height() <= viewport.height());
+        // Ajustada: ocupa todo el ancho o todo el alto disponible, no una fracción.
+        QVERIFY(scroll->widget()->width() >= viewport.width() - 4 || scroll->widget()->height() >= viewport.height() - 4);
+    }
+
+    void editorToolbarFitsASmallScreen() {
+        AnnotationEditor editor(white(3000, 400));   // captura muy apaisada
+        editor.show();
+        // La barra (sólo iconos) cabe en una pantalla de 800 px y la ayuda no ensancha la ventana.
+        QVERIFY2(editor.minimumSizeHint().width() <= 800, qPrintable(QString::number(editor.minimumSizeHint().width())));
+        auto* save = editor.findChild<QPushButton*>(QStringLiteral("annotationSave"));
+        QVERIFY(save);
+        QCOMPARE(save->property("role").toString(), QStringLiteral("primary"));
+        // Ningún contenedor del editor pisa el estilo de los botones con un fondo sin selector.
+        for (auto* w = save->parentWidget(); w && w != &editor; w = w->parentWidget()) QVERIFY(w->styleSheet().isEmpty());
+    }
+
     // ---- ImageViewer ---------------------------------------------------------------------
 
     void viewerNavigatesAndZooms() {
@@ -161,7 +187,7 @@ private slots:
 
     // ---- Thumbnail y ShotCard --------------------------------------------------------------
 
-    void thumbnailClickOpensAndCardOffersAnnotateOnlyForImages() {
+    void thumbnailClickAnnotatesImagesAndOpensOtherFiles() {
         QTemporaryDir dir;
         const Screenshot image{1, 0, QStringLiteral("cap_001.png"), save(dir, QStringLiteral("cap_001.png"), white(40, 30))};
         const Screenshot log{2, 0, QStringLiteral("adj_002_x.log"), dir.filePath(QStringLiteral("adj_002_x.log"))};
@@ -170,11 +196,14 @@ private slots:
         ShotCard card(image, {}, ShotCard::Layout::Grid);
         card.show();
         QSignalSpy open(&card, &ShotCard::openRequested);
+        QSignalSpy annotate(&card, &ShotCard::annotateRequested);
         auto* thumb = card.findChild<Thumbnail*>();
         QVERIFY(thumb);
         QTest::mouseClick(thumb, Qt::LeftButton);
-        QCOMPARE(open.count(), 1);
-        QCOMPARE(open.first().at(0).toInt(), 1);
+        // Una imagen fija va directa al editor de anotaciones.
+        QCOMPARE(annotate.count(), 1);
+        QCOMPARE(annotate.first().at(0).toInt(), 1);
+        QCOMPARE(open.count(), 0);
         int annotateButtons = 0;
         for (auto* b : card.findChildren<QPushButton*>()) if (b->text() == QStringLiteral("✎") && !b->isHidden()) ++annotateButtons;
         QCOMPARE(annotateButtons, 1);
@@ -186,6 +215,10 @@ private slots:
         QCOMPARE(hiddenAnnotate, 1);
         QVERIFY(!log.isImage());
         QVERIFY(!logCard.findChild<Thumbnail*>()->toolTip().isEmpty());
+        // Lo que no se puede anotar se abre en el visor.
+        QSignalSpy openLog(&logCard, &ShotCard::openRequested);
+        QTest::mouseClick(logCard.findChild<Thumbnail*>(), Qt::LeftButton);
+        QCOMPARE(openLog.count(), 1);
     }
 };
 

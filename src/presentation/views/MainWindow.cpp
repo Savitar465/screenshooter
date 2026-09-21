@@ -559,6 +559,11 @@ void MainWindow::buildMenus() {
     m_actStepNext = runMenu->addAction(tr("Paso si&guiente"), this, [this]() { m_ctx.run->next(); announceRunStep(); });
     m_actStepNext->setObjectName(QStringLiteral("actStepNext"));
     for (QAction* a : {m_actStepPass, m_actStepFail, m_actStepBack, m_actStepNext}) a->setShortcutContext(Qt::ApplicationShortcut);
+    // Pausar para el cronómetro: el tiempo en pausa no cuenta para el paso ni para la ejecución.
+    m_actPause = runMenu->addAction(tr("Pa&usar ejecución"), QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_Space), this,
+                                    [this]() { m_ctx.run->togglePause(); });
+    m_actPause->setObjectName(QStringLiteral("actPause"));
+    m_actPause->setShortcutContext(Qt::ApplicationShortcut);
 
     // Ayuda
     QMenu* help = bar->addMenu(tr("A&yuda"));
@@ -638,8 +643,11 @@ void MainWindow::updateActions() {
     m_actRecord->setEnabled(hasSelection || m_ctx.evidence->isRecording());
     m_actAttach->setEnabled(hasSelection);
     m_actReportBug->setEnabled(hasSelection);
-    m_actStepPass->setEnabled(m_ctx.run->isRunning());
-    m_actStepFail->setEnabled(m_ctx.run->isRunning());
+    const bool stepping = m_ctx.run->isRunning() && !m_ctx.run->isPaused();
+    m_actStepPass->setEnabled(stepping);
+    m_actStepFail->setEnabled(stepping);
+    m_actPause->setEnabled(m_ctx.run->isRunning());
+    m_actPause->setText(m_ctx.run->isPaused() ? tr("Rea&nudar ejecución") : tr("Pa&usar ejecución"));
     m_actStepBack->setEnabled(m_ctx.run->canGoBack());
     m_actStepNext->setEnabled(m_ctx.run->canGoNext());
     if (m_trayToggle) m_trayToggle->setText(window()->isVisible() ? tr("Ocultar QAflow") : tr("Mostrar QAflow"));

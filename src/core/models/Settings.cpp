@@ -202,6 +202,30 @@ QString label(CaptureMode m) {
     return {};
 }
 
+QString toString(CaptureScreen s) {
+    switch (s) {
+        case CaptureScreen::UnderCursor: return QStringLiteral("cursor");
+        case CaptureScreen::AwayFromApp: return QStringLiteral("away");
+        case CaptureScreen::Fixed: return QStringLiteral("fixed");
+    }
+    return {};
+}
+
+CaptureScreen captureScreenFromString(const QString& s) {
+    if (s == QStringLiteral("away")) return CaptureScreen::AwayFromApp;
+    if (s == QStringLiteral("fixed")) return CaptureScreen::Fixed;
+    return CaptureScreen::UnderCursor;
+}
+
+QString label(CaptureScreen s) {
+    switch (s) {
+        case CaptureScreen::UnderCursor: return QCoreApplication::translate("core", "Bajo el cursor");
+        case CaptureScreen::AwayFromApp: return QCoreApplication::translate("core", "Donde no está QAflow");
+        case CaptureScreen::Fixed: return QCoreApplication::translate("core", "Pantalla fija");
+    }
+    return {};
+}
+
 void CaptureSettings::clamp() {
     delaySecs = std::clamp(delaySecs, 0, 60);
     gifFps = std::clamp(gifFps, 5, 20);

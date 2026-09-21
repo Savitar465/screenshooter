@@ -403,6 +403,73 @@ private slots:
         QVERIFY(!f.run.parkedRun(QStringLiteral("TC-104")));
     }
 
+    // ---- Pausa -----------------------------------------------------------------------------
+
+    // En pausa el reloj no corre y no se marca ni se cambia de paso; al reanudar, todo sigue igual.
+    void pausingFreezesTheClockAndTheSteps() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-101"));   // 3 pasos
+        f.run.pause();
+        QVERIFY(f.run.isPaused());
+        QVERIFY(f.run.isRunning());
+        QVERIFY(!f.run.state().stepStartedAt.isValid());
+        const QDateTime later = QDateTime::currentDateTime().addSecs(3600);
+        QCOMPARE(f.run.state().currentStepSecs(later), f.run.state().stepElapsedSecs);   // la hora en pausa no cuenta
+
+        f.run.mark(StepResult::Pass);
+        f.run.next();
+        f.run.setResult(1, StepResult::Fail);
+        QCOMPARE(f.run.state().idx, 0);
+        QCOMPARE(f.run.state().markedCount(), 0);
+        QVERIFY(!f.run.canGoNext());
+
+        f.run.resume();
+        QVERIFY(!f.run.isPaused());
+        QVERIFY(f.run.state().stepStartedAt.isValid());
+        f.run.mark(StepResult::Pass);
+        QCOMPARE(f.run.state().idx, 1);
+        QCOMPARE(f.run.state().markedCount(), 1);
+    }
+
+    void aFinishedRunCannotBePaused() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-103"));   // 1 paso
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.state().finished);
+        f.run.togglePause();
+        QVERIFY(!f.run.isPaused());
+        QVERIFY(!f.run.state().paused);
+    }
+
+    void aPausedRunStaysPausedAfterRestart() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-104"));
+        f.run.mark(StepResult::Pass);
+        f.run.pause();
+        f.run.persistSessionNow();
+
+        RunController again(f.store, f.history, f.sessionRepo);
+        again.load();
+        QVERIFY(again.isPaused());
+        QVERIFY(!again.state().stepStartedAt.isValid());
+        QCOMPARE(again.state().idx, 1);
+        again.resume();
+        QVERIFY(!again.isPaused());
+        QVERIFY(again.state().stepStartedAt.isValid());
+    }
+
+    // Ir a otro caso del ciclo es ponerse a probar: el nuevo no hereda la pausa, y el aparcado se retoma sin ella.
+    void goingToAnotherCaseLeavesThePause() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-104"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        f.run.pause();
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-107")));
+        QVERIFY(!f.run.isPaused());
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-104")));
+        QVERIFY(!f.run.isPaused());
+        QVERIFY(f.run.state().stepStartedAt.isValid());
+    }
+
     // ---- Sesión persistente ------------------------------------------------------------
 
     void parkedCasesSurviveRestart() {

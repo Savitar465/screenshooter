@@ -8,6 +8,7 @@
 #include "presentation/theme/Theme.h"
 #include "presentation/views/MainWindow.h"
 #include "presentation/views/RunView.h"
+#include "presentation/widgets/AnnotationEditor.h"
 
 #include <QApplication>
 #include <QDir>
@@ -129,6 +130,9 @@ void reportBug(AppContext& ctx, const QString& key, const QString& title, const 
 void run(MainWindow& window, AppContext& ctx) {
     const QString dir = qEnvironmentVariable("QAFLOW_SNAPSHOT_DIR");
     QDir().mkpath(dir);
+    // QAFLOW_SNAPSHOT_SIZE=1100x720: para ver cómo se acomodan las pantallas a una ventana más chica.
+    if (const QStringList size = qEnvironmentVariable("QAFLOW_SNAPSHOT_SIZE").split(QLatin1Char('x')); size.size() == 2)
+        window.window()->resize(size[0].toInt(), size[1].toInt());
 
     // `target` (opcional) devuelve la ventana que hay que fotografiar; por defecto, la principal.
     struct Shot { const char* name; std::function<void()> prepare; std::function<QWidget*()> target = {}; };
@@ -277,6 +281,22 @@ void run(MainWindow& window, AppContext& ctx) {
             window.navigate(Screen::Casos);
             window.showToast(QStringLiteral("Captura guardada en ~/QAflow/capturas"), theme::Cyan);
         }},
+        // El editor de anotaciones sobre una muestra, con un par de anotaciones. Se abre sin modal
+        // (en la app va con exec) para poder fotografiarlo.
+        {"12-anotar", [&window, dir] {
+            const QString sample = sampleShot(QDir(dir).filePath(QStringLiteral("muestras")), 3, false);
+            auto* editor = new AnnotationEditor(QImage(sample), &window);
+            editor->setObjectName(QStringLiteral("snapshotEditor"));
+            Annotation box;
+            box.tool = Annotation::Tool::Rectangle;
+            box.from = QPointF(120, 90); box.to = QPointF(520, 260);
+            editor->addAnnotation(box);
+            Annotation arrow;
+            arrow.tool = Annotation::Tool::Arrow;
+            arrow.from = QPointF(760, 480); arrow.to = QPointF(540, 270);
+            editor->addAnnotation(arrow);
+            editor->show();
+        }, [&]() -> QWidget* { return window.findChild<AnnotationEditor*>(QStringLiteral("snapshotEditor")); }},
     };
 
     auto* timer = new QTimer(&window);

@@ -7,7 +7,7 @@ namespace qaflow {
 
 /// Miniatura 16:10 de una evidencia con la etiqueta del paso en la esquina. Las imágenes se
 /// muestran reducidas; los demás ficheros (logs, vídeos…) con su extensión. Un clic emite
-/// `clicked()` (abrir a tamaño completo).
+/// `clicked()` (abrir la evidencia: anotarla si es una imagen fija).
 class Thumbnail : public QWidget {
     Q_OBJECT
 public:

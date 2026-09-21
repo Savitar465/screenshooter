@@ -82,6 +82,9 @@ private slots:
         c.format = QStringLiteral("WebP");
         QCOMPARE(c.extension(), QStringLiteral("webp"));
         for (auto m : {CaptureMode::FullScreen, CaptureMode::ActiveWindow, CaptureMode::Region}) QCOMPARE(static_cast<int>(captureModeFromString(toString(m))), static_cast<int>(m));
+        for (auto t : {CaptureScreen::UnderCursor, CaptureScreen::AwayFromApp, CaptureScreen::Fixed}) QCOMPARE(static_cast<int>(captureScreenFromString(toString(t))), static_cast<int>(t));
+        QCOMPARE(static_cast<int>(captureScreenFromString(QStringLiteral("???"))), static_cast<int>(CaptureScreen::UnderCursor));
+        QCOMPARE(static_cast<int>(CaptureSettings().screen), static_cast<int>(CaptureScreen::UnderCursor));
     }
 
     void captureClampKeepsValuesInRange() {

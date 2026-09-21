@@ -5,7 +5,6 @@
 
 #include <QCoreApplication>
 #include <QApplication>
-#include <QCursor>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QScreen>
@@ -25,36 +24,35 @@ QString ScreenCaptureService::backendName() const {
 }
 
 void ScreenCaptureService::capture(CaptureMode mode, Callback done) {
-    if (m_usePortal) { captureViaPortal(mode, std::move(done)); return; }
+    QScreen* screen = m_picker.pick(appWindow());
+    if (m_usePortal) { captureViaPortal(mode, screen, std::move(done)); return; }
     switch (mode) {
-        case CaptureMode::FullScreen: grabFullScreen(std::move(done)); break;
-        case CaptureMode::ActiveWindow: grabActiveWindow(std::move(done)); break;
-        case CaptureMode::Region: grabRegion(std::move(done)); break;
+        case CaptureMode::FullScreen: grabFullScreen(screen, std::move(done)); break;
+        case CaptureMode::ActiveWindow: grabActiveWindow(screen, std::move(done)); break;
+        case CaptureMode::Region: grabRegion(screen, std::move(done)); break;
     }
 }
 
-QPixmap ScreenCaptureService::grabScreenUnderCursor(QRect* screenGeometry) {
-    QScreen* screen = QGuiApplication::screenAt(QCursor::pos());
-    if (!screen) screen = QGuiApplication::primaryScreen();
-    if (screenGeometry) *screenGeometry = screen->geometry();
-    return screen->grabWindow(0);
+QWidget* ScreenCaptureService::appWindow() const {
+    return m_appWindow ? m_appWindow.data() : ScreenPicker::findAppWindow();
 }
 
-/// Oculta la ventana, espera a que el compositor repinte y ejecuta `body`, que recibe
-/// una función `restore` para volver a mostrar la ventana cuando termine.
-void ScreenCaptureService::withWindowHidden(const std::function<void(std::function<void()> restore)>& body) {
-    QPointer<QWidget> win = m_appWindow;
-    const bool wasVisible = win && win->isVisible();
-    if (wasVisible) win->hide();
-    auto restore = [win, wasVisible]() {
-        if (wasVisible && win) { win->show(); win->raise(); win->activateWindow(); }
+void ScreenCaptureService::withWindowHidden(QScreen* screen, const std::function<void(QScreen*, std::function<void()> restore)>& body) {
+    QPointer<QWidget> win = appWindow();
+    const bool hide = ScreenPicker::isOnScreen(win, screen);
+    if (hide) win->hide();
+    auto restore = [win, hide]() {
+        if (hide && win) { win->show(); win->raise(); win->activateWindow(); }
     };
-    QTimer::singleShot(wasVisible ? 250 : 0, [body, restore]() { body(restore); });
+    QPointer<QScreen> target = screen;
+    QTimer::singleShot(hide ? 250 : 0, [body, restore, target]() {
+        body(target ? target.data() : QGuiApplication::primaryScreen(), restore);
+    });
 }
 
-void ScreenCaptureService::grabFullScreen(Callback done) {
-    withWindowHidden([done](std::function<void()> restore) {
-        const QPixmap pm = grabScreenUnderCursor();
+void ScreenCaptureService::grabFullScreen(QScreen* screen, Callback done) {
+    withWindowHidden(screen, [done](QScreen* screen, std::function<void()> restore) {
+        const QPixmap pm = screen->grabWindow(0);
         restore();
         if (pm.isNull()) done(CaptureResult{false, {}, QCoreApplication::translate("infrastructure", "No se pudo capturar la pantalla")});
         else done(CaptureResult{true, pm.toImage(), {}});
@@ -62,11 +60,11 @@ void ScreenCaptureService::grabFullScreen(Callback done) {
 }
 
 /// Ventana activa: usa xdotool (X11) para conocer la geometría de la ventana enfocada.
-/// Si no está disponible, recorta nada y devuelve la pantalla completa.
-void ScreenCaptureService::grabActiveWindow(Callback done) {
-    withWindowHidden([done](std::function<void()> restore) {
-        QRect screenGeo;
-        const QPixmap full = grabScreenUnderCursor(&screenGeo);
+/// Si no está disponible, o la ventana activa no está en la pantalla elegida, devuelve la pantalla completa.
+void ScreenCaptureService::grabActiveWindow(QScreen* screen, Callback done) {
+    withWindowHidden(screen, [done](QScreen* screen, std::function<void()> restore) {
+        const QRect screenGeo = screen->geometry();
+        const QPixmap full = screen->grabWindow(0);
         restore();
         if (full.isNull()) { done(CaptureResult{false, {}, QCoreApplication::translate("infrastructure", "No se pudo capturar la pantalla")}); return; }
 
@@ -107,27 +105,27 @@ void ScreenCaptureService::selectRegion(const QPixmap& full, const QRect& screen
     selector->activateWindow();
 }
 
-void ScreenCaptureService::grabRegion(Callback done) {
-    withWindowHidden([done](std::function<void()> restore) {
-        QRect screenGeo;
-        const QPixmap full = grabScreenUnderCursor(&screenGeo);
+void ScreenCaptureService::grabRegion(QScreen* screen, Callback done) {
+    withWindowHidden(screen, [done](QScreen* screen, std::function<void()> restore) {
+        const QRect screenGeo = screen->geometry();
+        const QPixmap full = screen->grabWindow(0);
         if (full.isNull()) { restore(); done(CaptureResult{false, {}, QCoreApplication::translate("infrastructure", "No se pudo capturar la pantalla")}); return; }
         selectRegion(full, screenGeo, std::move(restore), std::move(done));
     });
 }
 
 /// Wayland: el portal devuelve el escritorio completo (todas las pantallas, en píxeles físicos).
-/// Para «Pantalla completa» y «Región» se recorta la pantalla bajo el cursor; «Ventana activa»
+/// Para «Pantalla completa» y «Región» se recorta la pantalla elegida; «Ventana activa»
 /// delega en el selector interactivo del compositor.
-void ScreenCaptureService::captureViaPortal(CaptureMode mode, Callback done) {
-    withWindowHidden([this, mode, done](std::function<void()> restore) {
+void ScreenCaptureService::captureViaPortal(CaptureMode mode, QScreen* screen, Callback done) {
+    withWindowHidden(screen, [this, mode, done](QScreen* chosen, std::function<void()> restore) {
         const bool interactive = mode == CaptureMode::ActiveWindow;
-        m_portal->take(interactive, [mode, restore, done](const QImage& image, const QString& error) {
+        QPointer<QScreen> target = chosen;
+        m_portal->take(interactive, [mode, target, restore, done](const QImage& image, const QString& error) {
             if (image.isNull()) { restore(); done(CaptureResult{false, {}, error}); return; }
             if (mode == CaptureMode::ActiveWindow) { restore(); done(CaptureResult{true, image, {}}); return; }
 
-            QScreen* screen = QGuiApplication::screenAt(QCursor::pos());
-            if (!screen) screen = QGuiApplication::primaryScreen();
+            QScreen* screen = target ? target.data() : QGuiApplication::primaryScreen();
             const QRect screenGeo = screen->geometry();
             const qreal dpr = screen->devicePixelRatio();
             // Recorte de la pantalla actual dentro del escritorio virtual (si la imagen lo abarca).

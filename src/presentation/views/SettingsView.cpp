@@ -15,10 +15,12 @@
 #include <QCompleter>
 #include <QFileDialog>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPointer>
 #include <QPushButton>
+#include <QScreen>
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QStringListModel>
@@ -418,6 +420,9 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     m_mode = new QComboBox;
     for (auto m : {CaptureMode::FullScreen, CaptureMode::ActiveWindow, CaptureMode::Region}) m_mode->addItem(label(m), static_cast<int>(m));
     m_mode->setToolTip(tr("Las grabaciones usan «Pantalla completa» o, en los demás modos, una región elegida con el ratón"));
+    m_screen = new QComboBox;
+    m_screen->setToolTip(tr("Con varios monitores: qué pantalla se captura y se graba. "
+                            "Si QAflow está en otra pantalla no se oculta al capturar"));
     m_delay = new QComboBox;
     for (int secs : {0, 3, 5, 10}) m_delay->addItem(secs == 0 ? tr("Sin retardo") : tr("%1 s").arg(secs), secs);
     m_delay->setToolTip(tr("Cuenta atrás antes de capturar, para abrir menús o tooltips"));
@@ -435,6 +440,7 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     cg->addWidget(field(tr("Atajo de grabación"), m_recordShortcut), 1, 0);
     cg->addWidget(field(tr("GIF · fotogramas"), m_gifFps), 1, 1);
     cg->addWidget(field(tr("GIF · duración máxima"), m_gifMaxSecs), 1, 2);
+    cg->addWidget(field(tr("Pantalla"), m_screen), 1, 3);
     for (int i = 0; i < 4; ++i) cg->setColumnStretch(i, 1);
     cb->addWidget(crow);
     m_globalShortcut = new QCheckBox(tr("Atajos globales: capturar y avanzar de paso aunque QAflow no tenga el foco"));
@@ -548,6 +554,20 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     connect(m_folder, &QLineEdit::textEdited, this, [this](const QString& t) {
         m_selfEdit = true; m_settings.updateCapture([&](CaptureSettings& c) { c.folder = t; }); m_selfEdit = false;
     });
+    connect(m_screen, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (m_selfEdit) return;
+        const QString value = m_screen->currentData().toString();
+        const CaptureScreen target = value.startsWith(QLatin1String("fixed:")) ? CaptureScreen::Fixed : captureScreenFromString(value);
+        const QString name = target == CaptureScreen::Fixed ? value.mid(6) : QString();
+        m_selfEdit = true;
+        m_settings.updateCapture([&](CaptureSettings& c) {
+            c.screen = target;
+            if (target == CaptureScreen::Fixed) c.screenName = name;   // se recuerda aunque se vuelva a otro modo
+        });
+        m_selfEdit = false;
+    });
+    connect(qApp, &QGuiApplication::screenAdded, this, &SettingsView::refreshScreens);
+    connect(qApp, &QGuiApplication::screenRemoved, this, &SettingsView::refreshScreens);
 
     connect(&m_settings, &SettingsStore::trackerChanged, this, &SettingsView::refreshTracker);
     connect(&m_settings, &SettingsStore::captureChanged, this, &SettingsView::refreshCapture);
@@ -635,6 +655,7 @@ void SettingsView::refreshCapture() {
     m_format->setCurrentText(c.format);
     m_mode->setCurrentIndex(std::max(0, m_mode->findData(static_cast<int>(c.mode))));
     m_delay->setCurrentIndex(std::max(0, m_delay->findData(c.delaySecs)));
+    refreshScreens();
     m_gifFps->setValue(c.gifFps);
     m_gifMaxSecs->setValue(c.gifMaxSecs);
     m_globalShortcut->setChecked(c.globalShortcut);
@@ -643,6 +664,30 @@ void SettingsView::refreshCapture() {
     m_folder->setText(c.folder);
     m_selfEdit = false;
     refreshCaptureStatus();
+}
+
+void SettingsView::refreshScreens() {
+    const bool wasSelfEdit = m_selfEdit;
+    m_selfEdit = true;
+    const CaptureSettings& c = m_settings.capture();
+    m_screen->clear();
+    m_screen->addItem(label(CaptureScreen::UnderCursor), toString(CaptureScreen::UnderCursor));
+    m_screen->addItem(label(CaptureScreen::AwayFromApp), toString(CaptureScreen::AwayFromApp));
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    bool savedConnected = false;
+    for (int i = 0; i < screens.size(); ++i) {
+        const QScreen* s = screens[i];
+        QString text = tr("Pantalla %1 · %2 (%3×%4)").arg(i + 1).arg(s->name()).arg(s->geometry().width()).arg(s->geometry().height());
+        if (s == QGuiApplication::primaryScreen()) text += tr(" · principal");
+        m_screen->addItem(text, QStringLiteral("fixed:") + s->name());
+        savedConnected = savedConnected || s->name() == c.screenName;
+    }
+    // La pantalla fija guardada sigue en la lista aunque ahora no esté conectada.
+    if (!savedConnected && !c.screenName.isEmpty())
+        m_screen->addItem(tr("%1 · desconectada (se usa la del cursor)").arg(c.screenName), QStringLiteral("fixed:") + c.screenName);
+    const QString current = c.screen == CaptureScreen::Fixed ? QStringLiteral("fixed:") + c.screenName : toString(c.screen);
+    m_screen->setCurrentIndex(std::max(0, m_screen->findData(current)));
+    m_selfEdit = wasSelfEdit;
 }
 
 void SettingsView::refreshRunShortcuts() {

@@ -29,6 +29,13 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     publish = std::make_unique<TestPublishService>(std::make_shared<ZephyrClient>(), *cases, *history, *settings, *bugLedger);
     capture = std::make_shared<ScreenCaptureService>();
     recorder = std::make_shared<GifRecorder>();
+    // Capturas y grabaciones siguen la pantalla elegida en Ajustes (conectado antes de `load()`).
+    QObject::connect(settings.get(), &SettingsStore::captureChanged, capture.get(),
+                     [store = settings.get(), cap = capture.get(), rec = recorder.get()]() {
+                         const CaptureSettings& c = store->capture();
+                         cap->setScreenTarget(c.screen, c.screenName);
+                         rec->setScreenTarget(c.screen, c.screenName);
+                     });
     evidence = std::make_unique<EvidenceService>(capture, *cases, *run, *settings);
     evidence->setRecorder(recorder);
     evidence->setProjectId(id);

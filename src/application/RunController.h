@@ -47,8 +47,10 @@ public:
     bool isQueued(const QString& caseId) const { return m_queue.contains(caseId); }
     /// Estado con el que se dejó un caso del ciclo para ir a otro; nullptr si no se ha empezado.
     const RunState* parkedRun(const QString& caseId) const;
-    bool canGoBack() const { return !m_run.caseId.isEmpty() && (m_run.finished || m_run.idx > 0); }
-    bool canGoNext() const { return !m_run.caseId.isEmpty() && m_run.idx + 1 < m_run.results.size(); }
+    bool canGoBack() const { return !m_run.caseId.isEmpty() && !m_run.paused && (m_run.finished || m_run.idx > 0); }
+    bool canGoNext() const { return !m_run.caseId.isEmpty() && !m_run.paused && m_run.idx + 1 < m_run.results.size(); }
+    /// La ejecución en curso está en pausa: sus cronómetros no corren y no admite veredictos ni moverse de paso.
+    bool isPaused() const { return isRunning() && m_run.paused; }
 
     void start(const QString& caseId);
     /// Ejecuta los casos en orden; `finish()` pasa al siguiente automáticamente. `environment` es el
@@ -61,6 +63,11 @@ public:
     /// Falso si el ciclo no existe, no terminó, no dejó nada roto o ninguno de sus casos sigue estando.
     bool continueCycle(const QString& planRunId, const QString& environment = QString());
     void restart();
+    /// Pone en pausa la ejecución en curso: el tiempo que pase hasta reanudarla no cuenta para el paso ni
+    /// para la ejecución. Sólo una ejecución activa (no terminada) se pausa. Sobrevive al cierre.
+    void pause();
+    void resume();
+    void togglePause() { if (isPaused()) resume(); else pause(); }
     /// La nota se guarda en disco con retardo; `persistSessionNow()` fuerza la escritura.
     void setNote(const QString& note);
     /// Fuerza la escritura de la sesión. Falso (y `saveFailed`) si no se pudo.
@@ -101,6 +108,8 @@ private:
     void resumeFrom(const RunRecord& previous, const TestCase& c);
     /// Vuelca al registro del paso en pantalla su nota y lo que lleva corriendo su cronómetro.
     void holdStep();
+    /// Arranca el cronómetro del paso en pantalla, salvo en pausa (entonces se queda parado).
+    void startStepClock();
     /// Pone en pantalla el paso `index`: guarda lo del anterior y retoma la nota y el reloj del nuevo.
     void enterStep(int index);
     void recomputeFinished();

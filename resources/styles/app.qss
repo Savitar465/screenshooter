@@ -90,6 +90,14 @@ QPushButton[role="chip"]:hover { border-color: @blue; }
 QPushButton[role="chip"][active="true"] { background: @tint(blue,30); color: @blue; border-color: @blue; }
 QPushButton[role="chip-lg"] { background: transparent; color: @text; border: 1px solid @border; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; }
 QPushButton[role="chip-lg"]:hover { border-color: @blue; }
+/* Barra del editor de anotaciones: herramientas con icono, la activa resaltada. */
+QFrame[role="editor-bar"] { background: @panel; border: none; border-bottom: 1px solid @border; }
+QFrame[role="editor-status"] { background: @panel; border: none; border-top: 1px solid @border; }
+QFrame[role="editor-sep"] { background: @border; border: none; }
+QPushButton[role="tool"] { background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 0; }
+QPushButton[role="tool"]:hover { background: @elevated; border-color: @border; }
+QPushButton[role="tool"][active="true"] { background: @tint(blue,30); border-color: @blue; }
+QPushButton[role="tool"]:disabled { background: transparent; border-color: transparent; }
 QPushButton[role="icon"] { background: transparent; border: none; color: @muted; padding: 0 4px; font-size: 16px; border-radius: 6px; }
 QPushButton[role="icon"]:hover { color: @red; background: @tint(red,20); }
 QPushButton[role="icon-move"] { background: transparent; border: 1px solid @border; color: @muted; padding: 2px 6px; font-size: 10px; border-radius: 5px; }

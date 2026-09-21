@@ -739,6 +739,18 @@
         <source>Este gestor no cierra issues desde QAflow</source>
         <translation>This tracker does not close issues from QAflow</translation>
     </message>
+    <message>
+        <source>Bajo el cursor</source>
+        <translation>Under the cursor</translation>
+    </message>
+    <message>
+        <source>Donde no está QAflow</source>
+        <translation>Where QAflow isn&apos;t</translation>
+    </message>
+    <message>
+        <source>Pantalla fija</source>
+        <translation>Fixed screen</translation>
+    </message>
 </context>
 <context>
     <name>infrastructure</name>
@@ -1281,32 +1293,16 @@
         <translation>Annotate screenshot</translation>
     </message>
     <message>
-        <source>Flecha</source>
-        <translation>Arrow</translation>
-    </message>
-    <message>
         <source>Flecha (A)</source>
         <translation>Arrow (A)</translation>
-    </message>
-    <message>
-        <source>Rectángulo</source>
-        <translation>Rectangle</translation>
     </message>
     <message>
         <source>Rectángulo (R)</source>
         <translation>Rectangle (R)</translation>
     </message>
     <message>
-        <source>Elipse</source>
-        <translation>Ellipse</translation>
-    </message>
-    <message>
         <source>Elipse (E)</source>
         <translation>Ellipse (E)</translation>
-    </message>
-    <message>
-        <source>Marcador</source>
-        <translation>Highlighter</translation>
     </message>
     <message>
         <source>Resaltar una zona (M)</source>
@@ -1321,28 +1317,12 @@
         <translation>Text: click where you want to write (T)</translation>
     </message>
     <message>
-        <source>Difuminar</source>
-        <translation>Blur</translation>
-    </message>
-    <message>
         <source>Pixelar datos sensibles (D)</source>
         <translation>Pixelate sensitive data (D)</translation>
     </message>
     <message>
         <source>Color</source>
         <translation>Colour</translation>
-    </message>
-    <message>
-        <source>Grosor</source>
-        <translation>Width</translation>
-    </message>
-    <message>
-        <source>Arrastra para dibujar · Ctrl+Z deshace · Ctrl+rueda amplía</source>
-        <translation>Drag to draw · Ctrl+Z undoes · Ctrl+wheel zooms</translation>
-    </message>
-    <message>
-        <source>Deshacer</source>
-        <translation>Undo</translation>
     </message>
     <message>
         <source>Deshacer la última anotación (Ctrl+Z)</source>
@@ -1363,6 +1343,30 @@
     <message>
         <source>Texto de la anotación</source>
         <translation>Annotation text</translation>
+    </message>
+    <message>
+        <source>Arrastra para dibujar · Ctrl+Z deshace · Ctrl+rueda amplía · 0 ajusta</source>
+        <translation>Drag to draw · Ctrl+Z undoes · Ctrl+wheel zooms · 0 fits</translation>
+    </message>
+    <message>
+        <source>Trazo fino</source>
+        <translation>Thin stroke</translation>
+    </message>
+    <message>
+        <source>Trazo medio</source>
+        <translation>Medium stroke</translation>
+    </message>
+    <message>
+        <source>Trazo grueso</source>
+        <translation>Thick stroke</translation>
+    </message>
+    <message>
+        <source>Ajustar a la ventana (0)</source>
+        <translation>Fit to window (0)</translation>
+    </message>
+    <message>
+        <source>Cerrar sin guardar (Esc)</source>
+        <translation>Close without saving (Esc)</translation>
     </message>
 </context>
 <context>
@@ -2269,6 +2273,10 @@
     <message>
         <source>Sin paso</source>
         <translation>No step</translation>
+    </message>
+    <message>
+        <source>%1 · clic para anotarla</source>
+        <translation>%1 · click to annotate it</translation>
     </message>
 </context>
 <context>
@@ -4491,6 +4499,14 @@ Create another one anyway?</translation>
         <source>Bugs</source>
         <translation>Bugs</translation>
     </message>
+    <message>
+        <source>Pa&amp;usar ejecución</source>
+        <translation>Pa&amp;use run</translation>
+    </message>
+    <message>
+        <source>Rea&amp;nudar ejecución</source>
+        <translation>Resu&amp;me run</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::PlanStore</name>
@@ -6252,6 +6268,34 @@ Press “Capture” or drop a file on the window.</translation>
         <source>(caso eliminado)</source>
         <translation>(deleted case)</translation>
     </message>
+    <message>
+        <source>❚❚ Pausar</source>
+        <translation>❚❚ Pause</translation>
+    </message>
+    <message>
+        <source>❚❚ %1</source>
+        <translation>❚❚ %1</translation>
+    </message>
+    <message>
+        <source>▶ Reanudar</source>
+        <translation>▶ Resume</translation>
+    </message>
+    <message>
+        <source>Reanuda la ejecución: los cronómetros vuelven a correr (Ctrl+Alt+Espacio)</source>
+        <translation>Resume the run: the timers start again (Ctrl+Alt+Space)</translation>
+    </message>
+    <message>
+        <source>Pausa la ejecución: el tiempo en pausa no cuenta (Ctrl+Alt+Espacio)</source>
+        <translation>Pause the run: time spent paused doesn't count (Ctrl+Alt+Space)</translation>
+    </message>
+    <message>
+        <source>%1 · EN PAUSA</source>
+        <translation>%1 · PAUSED</translation>
+    </message>
+    <message>
+        <source>EN PAUSA · PASO %1 / %2</source>
+        <translation>PAUSED · STEP %1 / %2</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::SettingsDialog</name>
@@ -6705,6 +6749,26 @@ Press “Capture” or drop a file on the window.</translation>
         <source>Pasa al siguiente sin darle veredicto a este</source>
         <translation>Moves to the next step without giving this one a verdict</translation>
     </message>
+    <message>
+        <source>Con varios monitores: qué pantalla se captura y se graba. Si QAflow está en otra pantalla no se oculta al capturar</source>
+        <translation>With several monitors: which screen is captured and recorded. If QAflow is on another screen it isn&apos;t hidden while capturing</translation>
+    </message>
+    <message>
+        <source>Pantalla</source>
+        <translation>Screen</translation>
+    </message>
+    <message>
+        <source>Pantalla %1 · %2 (%3×%4)</source>
+        <translation>Screen %1 · %2 (%3×%4)</translation>
+    </message>
+    <message>
+        <source> · principal</source>
+        <translation> · primary</translation>
+    </message>
+    <message>
+        <source>%1 · desconectada (se usa la del cursor)</source>
+        <translation>%1 · disconnected (the one under the cursor is used)</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ShotCard</name>
@@ -6869,6 +6933,10 @@ Press “Capture” or drop a file on the window.</translation>
     <message>
         <source>un ciclo terminado</source>
         <translation>one finished cycle</translation>
+    </message>
+    <message>
+        <source> · en pausa</source>
+        <translation> · paused</translation>
     </message>
 </context>
 <context>

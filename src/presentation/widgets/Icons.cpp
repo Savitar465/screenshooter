@@ -113,6 +113,79 @@ void drawAnnotate(QPainter& p) {
     p.drawLine(QPointF(13, 7), QPointF(17, 11));
 }
 
+/// Flecha diagonal con punta.
+void drawArrow(QPainter& p) {
+    p.drawLine(QPointF(5, 19), QPointF(18.5, 5.5));
+    p.drawLine(QPointF(18.5, 5.5), QPointF(11, 5.5));
+    p.drawLine(QPointF(18.5, 5.5), QPointF(18.5, 13));
+}
+
+void drawRectangle(QPainter& p) { p.drawRoundedRect(QRectF(4, 6, 16, 12), 1.5, 1.5); }
+
+void drawEllipse(QPainter& p) { p.drawEllipse(QPointF(12, 12), 8.5, 6.5); }
+
+/// Rotulador inclinado sobre un trazo ancho y translúcido: resaltar una zona.
+void drawHighlight(QPainter& p) {
+    QPainterPath body;
+    body.moveTo(9, 14.5);
+    body.lineTo(15.5, 4);
+    body.lineTo(19.5, 6.5);
+    body.lineTo(13, 17);
+    body.closeSubpath();
+    p.drawPath(body);
+    p.drawLine(QPointF(9, 14.5), QPointF(8, 17.5));
+    p.drawLine(QPointF(8, 17.5), QPointF(13, 17));
+    QColor c = p.pen().color();
+    c.setAlphaF(0.45);
+    p.setPen(QPen(c, 3.2, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(QPointF(4, 21), QPointF(20, 21));
+}
+
+/// Letra T: añadir texto.
+void drawText(QPainter& p) {
+    p.drawLine(QPointF(5.5, 5.5), QPointF(18.5, 5.5));
+    p.drawLine(QPointF(5.5, 5.5), QPointF(5.5, 7.5));
+    p.drawLine(QPointF(18.5, 5.5), QPointF(18.5, 7.5));
+    p.drawLine(QPointF(12, 5.5), QPointF(12, 19));
+    p.drawLine(QPointF(9, 19), QPointF(15, 19));
+}
+
+/// Cuadrícula de píxeles de distinta intensidad: difuminar datos sensibles.
+void drawBlur(QPainter& p) {
+    const QColor base = p.pen().color();
+    const qreal alpha[3][3] = {{1.0, 0.35, 0.7}, {0.35, 0.8, 0.25}, {0.7, 0.25, 1.0}};
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; c < 3; ++c) {
+            QColor fill = base;
+            fill.setAlphaF(alpha[r][c]);
+            p.fillRect(QRectF(4.5 + c * 5.2, 4.5 + r * 5.2, 4.6, 4.6), fill);
+        }
+}
+
+/// Flecha curva hacia atrás: deshacer.
+void drawUndo(QPainter& p) {
+    QPainterPath curve;
+    curve.moveTo(6.5, 9);
+    curve.lineTo(14, 9);
+    curve.quadTo(19.5, 9, 19.5, 13.75);
+    curve.quadTo(19.5, 18.5, 14, 18.5);
+    curve.lineTo(9.5, 18.5);
+    p.drawPath(curve);
+    p.drawLine(QPointF(6.5, 9), QPointF(10, 5.5));
+    p.drawLine(QPointF(6.5, 9), QPointF(10, 12.5));
+}
+
+/// Encuadre con la imagen dentro: ajustar a la ventana.
+void drawFit(QPainter& p) {
+    QPainterPath c;
+    c.moveTo(4, 8.5); c.lineTo(4, 4); c.lineTo(8.5, 4);
+    c.moveTo(15.5, 4); c.lineTo(20, 4); c.lineTo(20, 8.5);
+    c.moveTo(20, 15.5); c.lineTo(20, 20); c.lineTo(15.5, 20);
+    c.moveTo(8.5, 20); c.lineTo(4, 20); c.lineTo(4, 15.5);
+    p.drawPath(c);
+    p.drawRoundedRect(QRectF(8, 9, 8, 6), 1, 1);
+}
+
 } // namespace
 
 QPixmap pixmap(Glyph g, const QString& color, int size) {
@@ -137,6 +210,14 @@ QPixmap pixmap(Glyph g, const QString& color, int size) {
         case Glyph::Capture: drawCapture(p); break;
         case Glyph::Focus: drawFocus(p); break;
         case Glyph::Annotate: drawAnnotate(p); break;
+        case Glyph::Arrow: drawArrow(p); break;
+        case Glyph::Rectangle: drawRectangle(p); break;
+        case Glyph::Ellipse: drawEllipse(p); break;
+        case Glyph::Highlight: drawHighlight(p); break;
+        case Glyph::Text: drawText(p); break;
+        case Glyph::Blur: drawBlur(p); break;
+        case Glyph::Undo: drawUndo(p); break;
+        case Glyph::Fit: drawFit(p); break;
     }
     return pm;
 }

@@ -41,7 +41,10 @@ void EvidencePreview::reload() {
     m_pixmap = QPixmap();
     m_extension.clear();
     setCursor(m_shot.id ? Qt::PointingHandCursor : Qt::ArrowCursor);
-    setToolTip(m_shot.id ? tr("%1 · clic para abrirla a tamaño completo").arg(m_shot.fileName) : QString());
+    const bool annotatable = m_shot.isImage() && !m_shot.isAnimation();
+    setToolTip(!m_shot.id ? QString()
+               : annotatable ? tr("%1 · clic para anotarla").arg(m_shot.fileName)
+                             : tr("%1 · clic para abrirla a tamaño completo").arg(m_shot.fileName));
     if (m_shot.isImage()) {
         QImageReader reader(m_shot.path);
         reader.setScaledSize(reader.size().scaled(kMaxWidth, kMaxHeight, Qt::KeepAspectRatio));

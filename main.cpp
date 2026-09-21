@@ -132,17 +132,17 @@ int main(int argc, char* argv[]) {
         hotkey.bind(QStringLiteral("capture"), c.shortcut, [&]() { current->evidence->captureForSelectedCase(); });
         hotkey.bind(QStringLiteral("record"), c.recordShortcut, [&]() { current->evidence->toggleRecording(); });
         hotkey.bind(QStringLiteral("step-pass"), r.passAndNext, [&]() {
-            if (!current->run->isRunning()) return;
+            if (!current->run->isRunning() || current->run->isPaused()) return;
             current->run->mark(StepResult::Pass);
             current->window->announceRunStep();
         });
         hotkey.bind(QStringLiteral("step-fail"), r.failAndNext, [&]() {
-            if (!current->run->isRunning()) return;
+            if (!current->run->isRunning() || current->run->isPaused()) return;
             current->run->mark(StepResult::Fail);
             current->window->announceRunStep();
         });
         hotkey.bind(QStringLiteral("step-back"), r.previous, [&]() {
-            if (current->run->state().caseId.isEmpty()) return;
+            if (current->run->state().caseId.isEmpty() || current->run->isPaused()) return;
             current->run->back();
             current->window->announceRunStep();
         });

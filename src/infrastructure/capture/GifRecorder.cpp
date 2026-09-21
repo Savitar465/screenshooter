@@ -5,7 +5,6 @@
 
 #include <QApplication>
 #include <QCoreApplication>
-#include <QCursor>
 #include <QFile>
 #include <QScreen>
 
@@ -31,20 +30,21 @@ void GifRecorder::start(const RecordingOptions& options, Done done) {
     m_done = std::move(done);
     m_starting = true;
 
-    QScreen* screen = QGuiApplication::screenAt(QCursor::pos());
-    if (!screen) screen = QGuiApplication::primaryScreen();
+    QWidget* app = m_appWindow ? m_appWindow.data() : ScreenPicker::findAppWindow();
+    QPointer<QScreen> screen = m_picker.pick(app);
     const QRect screenGeo = screen->geometry();
 
-    // La ventana principal se oculta durante toda la grabación.
-    m_hidAppWindow = m_appWindow && m_appWindow->isVisible();
-    if (m_hidAppWindow) m_appWindow->hide();
+    // Si la ventana principal está en la pantalla grabada, se oculta durante toda la grabación.
+    m_hiddenWindow = ScreenPicker::isOnScreen(app, screen) ? app : nullptr;
+    if (m_hiddenWindow) m_hiddenWindow->hide();
+    const int settle = m_hiddenWindow ? 250 : 0;
 
     if (options.mode == CaptureMode::FullScreen) {
-        QTimer::singleShot(m_hidAppWindow ? 250 : 0, this, [this, screenGeo]() { begin(QRect(QPoint(0, 0), screenGeo.size()), screenGeo); });
+        QTimer::singleShot(settle, this, [this, screenGeo]() { begin(QRect(QPoint(0, 0), screenGeo.size()), screenGeo); });
         return;
     }
-    QTimer::singleShot(m_hidAppWindow ? 250 : 0, this, [this, screen, screenGeo]() {
-        const QPixmap full = screen->grabWindow(0);
+    QTimer::singleShot(settle, this, [this, screen, screenGeo]() {
+        const QPixmap full = screen ? screen->grabWindow(0) : QPixmap();
         if (full.isNull()) { m_starting = false; finish(false, QCoreApplication::translate("infrastructure", "No se pudo capturar la pantalla")); return; }
         auto* selector = new RegionSelector(full);
         selector->setGeometry(screenGeo);
@@ -122,8 +122,8 @@ void GifRecorder::finish(bool keep, const QString& error) {
         QFile::remove(m_options.outputPath);
     }
     if (m_overlay) { m_overlay->close(); m_overlay = nullptr; }
-    if (m_hidAppWindow && m_appWindow) { m_appWindow->show(); m_appWindow->raise(); m_appWindow->activateWindow(); }
-    m_hidAppWindow = false;
+    if (m_hiddenWindow) { m_hiddenWindow->show(); m_hiddenWindow->raise(); m_hiddenWindow->activateWindow(); }
+    m_hiddenWindow = nullptr;
     if (Done done = std::move(m_done)) { m_done = nullptr; done(r); }
 }
 

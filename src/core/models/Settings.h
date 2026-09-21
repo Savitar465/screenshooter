@@ -75,6 +75,18 @@ CaptureMode captureModeFromString(const QString& s);
 /// Texto para mostrar en el idioma de la interfaz.
 QString label(CaptureMode m);
 
+/// Pantalla que se captura (y se graba) con varios monitores:
+///  - UnderCursor: la pantalla bajo el cursor.
+///  - AwayFromApp: una pantalla distinta a la de la ventana de QAflow (la app en un monitor, la prueba en otro).
+///  - Fixed:       la pantalla `CaptureSettings::screenName`; si no está conectada, la del cursor.
+enum class CaptureScreen { UnderCursor, AwayFromApp, Fixed };
+
+/// Valor canónico (se persiste en los ajustes). No traducir.
+QString toString(CaptureScreen s);
+CaptureScreen captureScreenFromString(const QString& s);
+/// Texto para mostrar en el idioma de la interfaz.
+QString label(CaptureScreen s);
+
 /// Preferencias generales de la aplicación (idioma, tema, bandeja).
 enum class AppLanguage { System, Spanish, English };
 enum class AppTheme { Dark, Light, System };
@@ -105,6 +117,8 @@ struct CaptureSettings {
     QString recordShortcut = QStringLiteral("Ctrl+Shift+G");   // iniciar / detener la grabación de GIF
     QString format = QStringLiteral("PNG");   // PNG, JPG, WebP
     CaptureMode mode = CaptureMode::ActiveWindow;
+    CaptureScreen screen = CaptureScreen::UnderCursor;
+    QString screenName;                        // QScreen::name() de la pantalla fija (screen == Fixed)
     QString folder;                            // por defecto ~/QAflow/capturas
     int delaySecs = 0;                         // cuenta atrás antes de capturar (0 = inmediata)
     bool globalShortcut = true;                // registrar el atajo en el sistema (funciona sin foco)

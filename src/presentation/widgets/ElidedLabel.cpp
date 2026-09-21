@@ -15,6 +15,12 @@ void ElidedLabel::setFullText(const QString& text) {
     updateElided();
 }
 
+QSize ElidedLabel::sizeHint() const {
+    const QSize hint = QLabel::sizeHint();
+    const QFontMetrics fm = fontMetrics();
+    return {hint.width() + fm.horizontalAdvance(m_full) - fm.horizontalAdvance(text()), hint.height()};
+}
+
 QSize ElidedLabel::minimumSizeHint() const { return {0, QLabel::minimumSizeHint().height()}; }
 
 void ElidedLabel::resizeEvent(QResizeEvent* e) {

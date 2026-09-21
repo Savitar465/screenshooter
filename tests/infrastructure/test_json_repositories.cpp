@@ -158,7 +158,7 @@ private slots:
         RunSession s;
         s.run.caseId = QStringLiteral("TC-104"); s.run.idx = 1; s.run.note = QStringLiteral("nota");
         s.run.results = {StepRecord{StepResult::Fail, QStringLiteral("no descuenta"), 12}};
-        s.run.startedAt = QDateTime(QDate(2026, 3, 1), QTime(10, 0)); s.run.stepElapsedSecs = 7;
+        s.run.startedAt = QDateTime(QDate(2026, 3, 1), QTime(10, 0)); s.run.stepElapsedSecs = 7; s.run.paused = true;
         s.queue = {QStringLiteral("TC-105")}; s.planRunId = QStringLiteral("PR-0003");
         QVERIFY(repo.saveSession(s));
         const auto loaded = repo.loadSession();
@@ -169,6 +169,7 @@ private slots:
         QCOMPARE(static_cast<int>(loaded->run.results[0].result), static_cast<int>(StepResult::Fail));
         QCOMPARE(loaded->run.results[0].durationSecs, 12);
         QCOMPARE(loaded->run.stepElapsedSecs, 7);
+        QVERIFY(loaded->run.paused);
         QCOMPARE(loaded->queue, QStringList{QStringLiteral("TC-105")});
         QCOMPARE(loaded->planRunId, QStringLiteral("PR-0003"));
         QVERIFY(loaded->parked.isEmpty());

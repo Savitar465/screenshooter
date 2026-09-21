@@ -26,6 +26,7 @@
 #include "presentation/views/RunView.h"
 #include "presentation/views/Sidebar.h"
 #include "presentation/views/StatusStrip.h"
+#include "presentation/widgets/AnnotationEditor.h"
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/ImageViewer.h"
@@ -290,8 +291,9 @@ private slots:
         QTRY_VERIFY(visibleThumb());
     }
 
-    // La evidencia de una ejecución se ve en su ficha del historial, y desde ahí se abre el visor.
-    void clickingAThumbnailOpensTheViewer() {
+    // La evidencia de una ejecución se ve en su ficha del historial; un clic en una captura abre
+    // directamente el editor de anotaciones.
+    void clickingAThumbnailOpensTheAnnotationEditor() {
         WindowFixture f;
         const QString id = f.app.store.selectedId();
         f.app.run.start(id);
@@ -311,11 +313,16 @@ private slots:
             return nullptr;
         };
         QTRY_VERIFY(visibleThumb() != nullptr);
+        // El editor es modal (exec): se cierra desde el bucle de eventos que abre.
+        bool opened = false;
+        QTimer::singleShot(0, [&opened]() {
+            auto* editor = qobject_cast<AnnotationEditor*>(QApplication::activeModalWidget());
+            opened = editor != nullptr;
+            if (editor) editor->reject();
+        });
         QTest::mouseClick(visibleThumb(), Qt::LeftButton);
-        QTRY_VERIFY(f.window->findChild<ImageViewer*>() != nullptr);
-        auto* viewer = f.window->findChild<ImageViewer*>();
-        QCOMPARE(viewer->current().fileName, f.app.store.find(id)->shots[0].fileName);
-        viewer->close();
+        QVERIFY(opened);
+        QVERIFY(f.window->findChild<ImageViewer*>() == nullptr);
     }
 
     void captureCountdownShowsAToastAndCanBeCancelled() {

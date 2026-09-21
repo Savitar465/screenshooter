@@ -1,10 +1,12 @@
 #include "AnnotationEditor.h"
 
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/Icons.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QApplication>
 #include <QFontMetrics>
+#include <QGuiApplication>
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
@@ -14,7 +16,7 @@
 #include <QPushButton>
 #include <QScreen>
 #include <QScrollArea>
-#include <QSpinBox>
+#include <QTimer>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -129,6 +131,7 @@ public:
     void setColor(const QColor& c) { m_color = c; }
     QColor color() const { return m_color; }
     void setWidth(int w) { m_width = w; }
+    int width() const { return m_width; }
 
     QSize sizeHint() const override { return (QSizeF(m_base.size()) * m_zoom).toSize().expandedTo(QSize(1, 1)); }
 
@@ -186,41 +189,78 @@ private:
 
 // ---- Editor ------------------------------------------------------------------------------------
 
+namespace {
+/// Botón cuadrado con el glifo; el color del icono lo fija `updateToolButtons()` (activo o no).
+QPushButton* toolButton(icons::Glyph glyph, const QString& tip) {
+    auto* b = ui::button(QString(), "tool");
+    b->setFixedSize(32, 32);
+    b->setIconSize(QSize(20, 20));
+    b->setIcon(QIcon(icons::pixmap(glyph, theme::TextSoft, 20)));
+    b->setToolTip(tip);
+    b->setAccessibleName(tip);
+    b->setProperty("glyph", static_cast<int>(glyph));
+    return b;
+}
+
+/// Trazo horizontal del grosor `width`: el icono de cada botón de grosor.
+QIcon strokeIcon(int width, const QString& color) {
+    const qreal dpr = qGuiApp ? qGuiApp->devicePixelRatio() : 1.0;
+    QPixmap pm(QSize(20, 20) * dpr);
+    pm.setDevicePixelRatio(dpr);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(QColor(color), width, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(QPointF(4, 10), QPointF(16, 10));
+    return QIcon(pm);
+}
+
+QFrame* separator() {
+    auto* line = new QFrame;
+    line->setProperty("role", QStringLiteral("editor-sep"));
+    line->setFixedSize(1, 24);
+    return line;
+}
+} // namespace
+
 AnnotationEditor::AnnotationEditor(const QImage& image, QWidget* parent) : QDialog(parent) {
     setWindowTitle(tr("Anotar captura"));
     setModal(true);
     setStyleSheet(QStringLiteral("QDialog{background:%1;}").arg(theme::Bg));
-    if (QScreen* s = parent ? parent->screen() : QApplication::primaryScreen()) resize(s->availableSize() * 0.85);
 
     auto* v = ui::vbox(this, 0, 0);
-    auto* bar = new QWidget;
-    bar->setStyleSheet(QStringLiteral("background:%1;border-bottom:1px solid %2;").arg(theme::Panel, theme::Border));
-    auto* h = ui::hbox(bar, 10, 6);
+    // Barra: herramientas · color y grosor · deshacer y ajustar · cancelar y guardar. Sólo iconos
+    // (con tooltip y atajo) para que quepa en pantallas pequeñas.
+    auto* bar = new QFrame;
+    bar->setProperty("role", QStringLiteral("editor-bar"));
+    auto* h = ui::hbox(bar, 10, 4);
+    h->setContentsMargins(10, 8, 10, 8);
 
     m_canvas = new AnnotationCanvas(image);
 
-    const struct { Annotation::Tool tool; QString label; QString tip; } tools[] = {
-        {Annotation::Tool::Arrow, tr("Flecha"), tr("Flecha (A)")},
-        {Annotation::Tool::Rectangle, tr("Rectángulo"), tr("Rectángulo (R)")},
-        {Annotation::Tool::Ellipse, tr("Elipse"), tr("Elipse (E)")},
-        {Annotation::Tool::Highlight, tr("Marcador"), tr("Resaltar una zona (M)")},
-        {Annotation::Tool::Text, tr("Texto"), tr("Texto: clic donde quieras escribir (T)")},
-        {Annotation::Tool::Blur, tr("Difuminar"), tr("Pixelar datos sensibles (D)")},
+    const struct { Annotation::Tool tool; icons::Glyph glyph; QString tip; } tools[] = {
+        {Annotation::Tool::Arrow, icons::Glyph::Arrow, tr("Flecha (A)")},
+        {Annotation::Tool::Rectangle, icons::Glyph::Rectangle, tr("Rectángulo (R)")},
+        {Annotation::Tool::Ellipse, icons::Glyph::Ellipse, tr("Elipse (E)")},
+        {Annotation::Tool::Highlight, icons::Glyph::Highlight, tr("Resaltar una zona (M)")},
+        {Annotation::Tool::Text, icons::Glyph::Text, tr("Texto: clic donde quieras escribir (T)")},
+        {Annotation::Tool::Blur, icons::Glyph::Blur, tr("Pixelar datos sensibles (D)")},
     };
     for (const auto& t : tools) {
-        auto* b = ui::button(t.label, "chip-lg");
-        b->setToolTip(t.tip);
+        auto* b = toolButton(t.glyph, t.tip);
         b->setProperty("tool", static_cast<int>(t.tool));
         connect(b, &QPushButton::clicked, this, [this, tool = t.tool]() { setTool(tool); });
         h->addWidget(b);
         m_toolButtons << b;
     }
-    h->addSpacing(10);
+    h->addSpacing(4);
+    h->addWidget(separator());
+    h->addSpacing(4);
     const QString colors[] = {QStringLiteral("#ef4444"), QStringLiteral("#f59e0b"), QStringLiteral("#10b981"),
                               QStringLiteral("#3b82f6"), QStringLiteral("#ffffff"), QStringLiteral("#111827")};
     for (const auto& c : colors) {
         auto* b = new QPushButton;
-        b->setFixedSize(22, 22);
+        b->setFixedSize(20, 20);
         b->setCursor(Qt::PointingHandCursor);
         b->setProperty("color", c);
         b->setToolTip(tr("Color"));
@@ -228,28 +268,40 @@ AnnotationEditor::AnnotationEditor(const QImage& image, QWidget* parent) : QDial
         h->addWidget(b);
         m_colorButtons << b;
     }
-    h->addSpacing(10);
-    auto* widthLabel = ui::label(tr("Grosor"), "muted-sm");
-    h->addWidget(widthLabel);
-    m_width = new QSpinBox;
-    m_width->setRange(1, 12);
-    m_width->setValue(3);
-    m_width->setFixedWidth(56);
-    connect(m_width, &QSpinBox::valueChanged, this, [this](int w) { m_canvas->setWidth(w); });
-    h->addWidget(m_width);
+    h->addSpacing(6);
+    // Grosor del trazo (y tamaño del texto): fino, medio o grueso.
+    const struct { int width; QString tip; } strokes[] = {
+        {2, tr("Trazo fino")}, {3, tr("Trazo medio")}, {6, tr("Trazo grueso")},
+    };
+    for (const auto& st : strokes) {
+        auto* b = ui::button(QString(), "tool");
+        b->setFixedSize(28, 32);
+        b->setIconSize(QSize(20, 20));
+        b->setToolTip(st.tip);
+        b->setAccessibleName(st.tip);
+        b->setProperty("stroke", st.width);
+        connect(b, &QPushButton::clicked, this, [this, w = st.width]() { m_canvas->setWidth(w); updateToolButtons(); });
+        h->addWidget(b);
+        m_strokeButtons << b;
+    }
     h->addStretch(1);
-    m_hint = ui::label(tr("Arrastra para dibujar · Ctrl+Z deshace · Ctrl+rueda amplía"), "muted-sm");
-    h->addWidget(m_hint);
-    h->addSpacing(10);
-    m_undo = ui::button(tr("Deshacer"), "ghost");
-    m_undo->setToolTip(tr("Deshacer la última anotación (Ctrl+Z)"));
+    m_undo = toolButton(icons::Glyph::Undo, tr("Deshacer la última anotación (Ctrl+Z)"));
     connect(m_undo, &QPushButton::clicked, this, &AnnotationEditor::undo);
     h->addWidget(m_undo);
+    auto* fit = toolButton(icons::Glyph::Fit, tr("Ajustar a la ventana (0)"));
+    connect(fit, &QPushButton::clicked, this, &AnnotationEditor::fitToWindow);
+    h->addWidget(fit);
+    h->addSpacing(4);
+    h->addWidget(separator());
+    h->addSpacing(4);
     auto* cancel = ui::button(tr("Cancelar"), "ghost");
+    cancel->setToolTip(tr("Cerrar sin guardar (Esc)"));
     connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
     h->addWidget(cancel);
     auto* save = ui::button(tr("Guardar"), "primary");
+    save->setObjectName(QStringLiteral("annotationSave"));
     save->setToolTip(tr("Sustituye la captura por la versión anotada (Ctrl+S)"));
+    save->setDefault(true);
     connect(save, &QPushButton::clicked, this, &QDialog::accept);
     h->addWidget(save);
     v->addWidget(bar);
@@ -262,6 +314,18 @@ AnnotationEditor::AnnotationEditor(const QImage& image, QWidget* parent) : QDial
     m_scroll->viewport()->installEventFilter(this);
     v->addWidget(m_scroll, 1);
 
+    // Pie: ayuda (se recorta si no cabe, nunca ensancha la ventana) y zoom actual.
+    auto* status = new QFrame;
+    status->setProperty("role", QStringLiteral("editor-status"));
+    auto* sh = ui::hbox(status, 0, 8);
+    sh->setContentsMargins(12, 5, 12, 5);
+    m_hint = ui::label(tr("Arrastra para dibujar · Ctrl+Z deshace · Ctrl+rueda amplía · 0 ajusta"), "muted-sm");
+    m_hint->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    sh->addWidget(m_hint, 1);
+    m_zoomLabel = ui::label(QString(), "muted-sm");
+    sh->addWidget(m_zoomLabel);
+    v->addWidget(status);
+
     connect(m_canvas, &AnnotationCanvas::changed, this, [this]() { m_undo->setEnabled(!m_canvas->items().isEmpty()); });
     connect(m_canvas, &AnnotationCanvas::textRequested, this, [this](const QPointF& at) {
         bool ok = false;
@@ -272,13 +336,24 @@ AnnotationEditor::AnnotationEditor(const QImage& image, QWidget* parent) : QDial
             a.from = a.to = at;
             a.text = text.trimmed();
             a.color = m_canvas->color();
-            a.width = m_width->value();
+            a.width = m_canvas->width();
             m_canvas->add(a);
         }
     });
     m_undo->setEnabled(false);
     setTool(Annotation::Tool::Arrow);
     updateToolButtons();
+
+    // Tamaño: el de la imagen más la barra y el pie, sin pasar del 85 % de la pantalla ni bajar del
+    // mínimo que necesita la barra. Así una captura pequeña no abre una ventana enorme y una grande
+    // no se sale de un portátil.
+    if (QScreen* screen = parent ? parent->screen() : QApplication::primaryScreen()) {
+        const QSize avail = screen->availableSize() * 0.85;
+        const QSize chrome(2, bar->sizeHint().height() + status->sizeHint().height() + 2);
+        const QSize wanted = image.size().scaled(avail - chrome, Qt::KeepAspectRatio).boundedTo(image.size()) + chrome;
+        const QSize minimum(std::min(bar->minimumSizeHint().width(), avail.width()), std::min(420, avail.height()));
+        resize(wanted.expandedTo(minimum).boundedTo(screen->availableSize()));
+    }
 }
 
 void AnnotationEditor::setTool(Annotation::Tool tool) {
@@ -287,12 +362,27 @@ void AnnotationEditor::setTool(Annotation::Tool tool) {
 }
 
 void AnnotationEditor::updateToolButtons() {
-    for (auto* b : m_toolButtons) ui::setFlag(b, "active", b->property("tool").toInt() == static_cast<int>(m_canvas->tool()));
+    for (auto* b : m_toolButtons) {
+        const bool active = b->property("tool").toInt() == static_cast<int>(m_canvas->tool());
+        ui::setFlag(b, "active", active);
+        b->setIcon(QIcon(icons::pixmap(static_cast<icons::Glyph>(b->property("glyph").toInt()), active ? theme::Blue : theme::TextSoft, 20)));
+    }
     for (auto* b : m_colorButtons) {
         const QString c = b->property("color").toString();
         const bool active = QColor(c) == m_canvas->color();
-        b->setStyleSheet(QStringLiteral("QPushButton{background:%1;border:%2;border-radius:11px;}").arg(c, active ? QStringLiteral("3px solid ") + theme::Blue : QStringLiteral("1px solid ") + theme::Border));
+        b->setStyleSheet(QStringLiteral("QPushButton{background:%1;border:%2;border-radius:10px;padding:0;}")
+                             .arg(c, active ? QStringLiteral("2px solid ") + theme::Blue : QStringLiteral("1px solid ") + theme::Border));
     }
+    for (auto* b : m_strokeButtons) {
+        const int w = b->property("stroke").toInt();
+        const bool active = w == m_canvas->width();
+        ui::setFlag(b, "active", active);
+        b->setIcon(strokeIcon(w, active ? theme::Blue : theme::TextSoft));
+    }
+}
+
+void AnnotationEditor::updateZoomLabel() {
+    m_zoomLabel->setText(QStringLiteral("%1 %").arg(qRound(m_canvas->zoom() * 100)));
 }
 
 void AnnotationEditor::addAnnotation(const Annotation& a) { m_canvas->add(a); }
@@ -301,23 +391,38 @@ QImage AnnotationEditor::result() const { return m_canvas->rendered(); }
 const QList<Annotation>& AnnotationEditor::annotations() const { return m_canvas->items(); }
 
 void AnnotationEditor::fitToWindow() {
-    const QSize avail = m_scroll->viewport()->size() - QSize(2, 2);
+    m_fit = true;
+    // Sin barras de desplazamiento: con la imagen ajustada no hacen falta.
+    const QSize avail = m_scroll->maximumViewportSize() - QSize(2, 2);
     const QImage& img = m_canvas->base();
     if (img.isNull()) return;
     const double z = std::min(static_cast<double>(avail.width()) / img.width(), static_cast<double>(avail.height()) / img.height());
     m_canvas->setZoom(std::clamp(std::min(z, 1.0), 0.05, 1.0));
+    updateZoomLabel();
+}
+
+void AnnotationEditor::zoomBy(double factor) {
+    m_fit = false;
+    m_canvas->setZoom(m_canvas->zoom() * factor);
+    updateZoomLabel();
 }
 
 void AnnotationEditor::resizeEvent(QResizeEvent* e) {
     QDialog::resizeEvent(e);
-    fitToWindow();
+    if (m_fit) fitToWindow();
+}
+
+void AnnotationEditor::showEvent(QShowEvent* e) {
+    QDialog::showEvent(e);
+    // Al abrirse la ventana aún no tiene su tamaño definitivo: se ajusta cuando el layout ya se aplicó.
+    QTimer::singleShot(0, this, [this]() { if (m_fit) fitToWindow(); });
 }
 
 bool AnnotationEditor::eventFilter(QObject* watched, QEvent* e) {
     if (watched == m_scroll->viewport() && e->type() == QEvent::Wheel) {
         auto* we = static_cast<QWheelEvent*>(e);
         if (we->modifiers() & Qt::ControlModifier) {
-            m_canvas->setZoom(m_canvas->zoom() * (we->angleDelta().y() > 0 ? 1.15 : 1 / 1.15));
+            zoomBy(we->angleDelta().y() > 0 ? 1.15 : 1 / 1.15);
             return true;
         }
     }
@@ -327,8 +432,8 @@ bool AnnotationEditor::eventFilter(QObject* watched, QEvent* e) {
 void AnnotationEditor::keyPressEvent(QKeyEvent* e) {
     if (e->matches(QKeySequence::Undo)) { undo(); return; }
     if (e->matches(QKeySequence::Save)) { accept(); return; }
-    if (e->matches(QKeySequence::ZoomIn)) { m_canvas->setZoom(m_canvas->zoom() * 1.25); return; }
-    if (e->matches(QKeySequence::ZoomOut)) { m_canvas->setZoom(m_canvas->zoom() / 1.25); return; }
+    if (e->matches(QKeySequence::ZoomIn)) { zoomBy(1.25); return; }
+    if (e->matches(QKeySequence::ZoomOut)) { zoomBy(1 / 1.25); return; }
     if (e->key() == Qt::Key_Escape) { reject(); return; }
     if (e->key() == Qt::Key_0) { fitToWindow(); return; }
     if (e->modifiers() == Qt::NoModifier) {

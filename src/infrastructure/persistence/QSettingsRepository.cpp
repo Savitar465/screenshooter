@@ -87,6 +87,8 @@ CaptureSettings QSettingsRepository::loadCapture() {
     c.recordShortcut = s.value(QStringLiteral("recordShortcut"), c.recordShortcut).toString();
     c.format = s.value(QStringLiteral("format"), c.format).toString();
     c.mode = captureModeFromString(s.value(QStringLiteral("mode"), toString(c.mode)).toString());
+    c.screen = captureScreenFromString(s.value(QStringLiteral("screen"), toString(c.screen)).toString());
+    c.screenName = s.value(QStringLiteral("screenName"), c.screenName).toString();
     c.folder = s.value(QStringLiteral("folder"), c.folder).toString();
     c.delaySecs = s.value(QStringLiteral("delaySecs"), c.delaySecs).toInt();
     c.globalShortcut = s.value(QStringLiteral("globalShortcut"), c.globalShortcut).toBool();
@@ -105,6 +107,8 @@ void QSettingsRepository::saveCapture(const CaptureSettings& c) {
     s.setValue(QStringLiteral("recordShortcut"), c.recordShortcut);
     s.setValue(QStringLiteral("format"), c.format);
     s.setValue(QStringLiteral("mode"), toString(c.mode));
+    s.setValue(QStringLiteral("screen"), toString(c.screen));
+    s.setValue(QStringLiteral("screenName"), c.screenName);
     s.setValue(QStringLiteral("folder"), c.folder);
     s.setValue(QStringLiteral("delaySecs"), c.delaySecs);
     s.setValue(QStringLiteral("globalShortcut"), c.globalShortcut);

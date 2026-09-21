@@ -35,10 +35,12 @@ struct RunState {
     QString note;            // observación del paso en pantalla (se vuelca a su registro al salir)
     QDateTime startedAt;
     bool finished = false;   // todos los pasos marcados y sin reabrir
+    /// Ejecución en pausa: los cronómetros no corren y no se marca ni se cambia de paso hasta reanudarla.
+    bool paused = false;
 
     // Cronómetro del paso actual. `stepElapsedSecs` acumula lo transcurrido en visitas anteriores
     // (la ejecución sobrevive al cierre de la aplicación y se puede volver a un paso ya visto);
-    // `stepStartedAt` marca desde cuándo corre en esta visita.
+    // `stepStartedAt` marca desde cuándo corre en esta visita (inválido mientras está en pausa).
     QDateTime stepStartedAt;
     int stepElapsedSecs = 0;
 
@@ -95,7 +97,7 @@ struct RunState {
     }
     /// Segundos del paso actual (acumulados + los de esta visita).
     int currentStepSecs(const QDateTime& now = QDateTime::currentDateTime()) const {
-        return stepElapsedSecs + (stepStartedAt.isValid() && !finished ? static_cast<int>(stepStartedAt.secsTo(now)) : 0);
+        return stepElapsedSecs + (stepStartedAt.isValid() && !finished && !paused ? static_cast<int>(stepStartedAt.secsTo(now)) : 0);
     }
     /// Segundos de toda la ejecución: lo que se lleva en cada paso visitado + el paso actual.
     int elapsedSecs(const QDateTime& now = QDateTime::currentDateTime()) const {

@@ -147,7 +147,7 @@ private slots:
         CaptureSettings c;
         c.shortcut = QStringLiteral("Ctrl+Alt+S"); c.format = QStringLiteral("JPG"); c.mode = CaptureMode::Region; c.folder = QStringLiteral("/tmp/caps");
         c.recordShortcut = QStringLiteral("F8"); c.delaySecs = 5; c.globalShortcut = false; c.openEditor = true; c.copyToClipboard = true;
-        c.gifFps = 15; c.gifMaxSecs = 45;
+        c.gifFps = 15; c.gifMaxSecs = 45; c.screen = CaptureScreen::Fixed; c.screenName = QStringLiteral("HDMI-1");
         repo.saveCapture(c);
         const CaptureSettings lc = repo.loadCapture();
         QCOMPARE(lc.shortcut, c.shortcut);
@@ -161,6 +161,8 @@ private slots:
         QVERIFY(lc.copyToClipboard);
         QCOMPARE(lc.gifFps, 15);
         QCOMPARE(lc.gifMaxSecs, 45);
+        QCOMPARE(static_cast<int>(lc.screen), static_cast<int>(CaptureScreen::Fixed));
+        QCOMPARE(lc.screenName, QStringLiteral("HDMI-1"));
         // Valores fuera de rango editados a mano en el fichero se corrigen al cargar.
         QSettings().setValue(QStringLiteral("capture/gifFps"), 500);
         QCOMPARE(repo.loadCapture().gifFps, 20);

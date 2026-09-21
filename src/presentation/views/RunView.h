@@ -43,6 +43,9 @@ class TextArea;
 ///     un ciclo, «Casos», los del plan con cómo va cada uno, para saltar de uno a otro— y al pie,
 ///     siempre a mano, los veredictos, capturar, reportar bug y ir y venir de paso.
 ///
+/// La ejecución se puede **pausar** (botón de la barra del caso o del modo foco): los cronómetros se
+/// paran y los veredictos y el ir y venir de paso quedan desactivados hasta reanudarla.
+///
 /// El **modo foco** (F11, o el botón del visor) deja la evidencia a toda la ventana: se esconden el
 /// caso, el inspector, la tira y el marco de la ventana principal, y un mando al pie mantiene el paso
 /// y sus veredictos para seguir marcando sin salir. Esc vuelve.
@@ -87,6 +90,8 @@ private:
     QWidget* buildFooter();
     /// Los cuatro veredictos en un grupo; hay dos: el del inspector y el del modo foco.
     QWidget* buildVerdicts();
+    /// «Pausar» / «Reanudar» la ejecución; hay dos: el de la barra del caso y el del modo foco.
+    QPushButton* pauseButton(const char* name);
     /// «Capturar» con su icono; el del inspector lleva además el atajo (`shortcut`).
     QPushButton* captureButton(QLabel** shortcut);
 
@@ -142,6 +147,7 @@ private:
     QLabel* m_stateText;
     ElidedLabel* m_caseTitle;
     QLabel* m_caseStats;
+    QPushButton* m_pause;
     QPushButton* m_finish;
     QWidget* m_continuation;   // aviso de que esta ejecución continúa una revisión
     QLabel* m_continuationText;
@@ -210,6 +216,7 @@ private:
     ElidedLabel* m_focusAction;
     QWidget* m_focusVerdicts;
     QPushButton* m_focusReportBug;
+    QPushButton* m_focusPause;
     QShortcut* m_exitFocus;
 
     /// Fichas de bug abiertas, por clave: pulsar otra vez el mismo bug trae la suya al frente.

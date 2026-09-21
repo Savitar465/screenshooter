@@ -9,7 +9,8 @@ namespace qaflow {
 
 /// Visor grande de la evidencia seleccionada en la pantalla de ejecución: la imagen ajustada al
 /// hueco (sin recortar), con la etiqueta del paso y el nombre del fichero encima. Los ficheros que
-/// no son imagen muestran su extensión. Un clic pide abrirla a tamaño completo (ImageViewer).
+/// no son imagen muestran su extensión. Un clic pide abrirla: la vista decide si
+/// en el editor de anotaciones (imágenes fijas) o en el visor (GIF y demás ficheros).
 class EvidencePreview : public QWidget {
     Q_OBJECT
 public:

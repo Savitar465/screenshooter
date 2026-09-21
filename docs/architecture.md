@@ -487,10 +487,14 @@ abre el informe cuando el ciclo no prueba ningún requerimiento (ver «Fin de un
 
 ## Captura de pantalla
 
-`ScreenCaptureService` oculta la ventana principal, espera al compositor y usa
-`QScreen::grabWindow(0)`.
+`ScreenCaptureService` elige la pantalla con `ScreenPicker` según `CaptureSettings::screen`
+(Ajustes → «Pantalla»): **bajo el cursor** (por defecto), **donde no está QAflow** (la app en un
+monitor y la prueba en otro) o una **pantalla fija** guardada por `QScreen::name()`, que vuelve a la
+del cursor si no está conectada. Si la ventana principal está en esa pantalla la oculta y espera al
+compositor; si está en otra, captura sin tocarla. Después usa `QScreen::grabWindow(0)`. `GifRecorder`
+graba con la misma pantalla.
 
-* **Pantalla completa**: la pantalla bajo el cursor.
+* **Pantalla completa**: la pantalla elegida.
 * **Ventana activa**: en X11 usa `xdotool getactivewindow getwindowgeometry` para recortar;
   si no está instalado devuelve la pantalla completa.
 * **Región**: overlay `RegionSelector` a pantalla completa; arrastrar para elegir, Esc cancela.
@@ -498,7 +502,7 @@ abre el informe cuando el ciclo no prueba ningún requerimiento (ver «Fin de un
 **Wayland.** `grabWindow` devuelve negro, así que si la sesión es Wayland y hay un
 `xdg-desktop-portal` con la interfaz `org.freedesktop.portal.Screenshot`, `ScreenCaptureService`
 delega en `PortalScreenshot` (QtDBus, `QAFLOW_HAS_DBUS`): «Pantalla completa» y «Región» piden una
-captura silenciosa del escritorio (se recorta la pantalla bajo el cursor y, para la región, se
+captura silenciosa del escritorio (se recorta la pantalla elegida y, para la región, se
 reutiliza el overlay); «Ventana activa» pide la captura interactiva, en la que el compositor deja
 elegir pantalla, ventana o zona. `AppContext::captureBackend` lleva el nombre del método a Ajustes.
 

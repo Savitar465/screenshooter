@@ -148,7 +148,7 @@ RunView::RunView(TestCaseStore& cases, RunController& run, RunHistoryStore& hist
                             std::pair{Qt::Key_B, StepResult::Block}, std::pair{Qt::Key_S, StepResult::Skip}}) {
         auto* sc = new QShortcut(QKeySequence(key), this);
         sc->setContext(Qt::WindowShortcut);
-        connect(sc, &QShortcut::activated, this, [this, res]() { if (isVisible() && m_run.isRunning()) m_run.mark(res); });
+        connect(sc, &QShortcut::activated, this, [this, res]() { if (isVisible() && m_run.isRunning() && !m_run.isPaused()) m_run.mark(res); });
     }
     // Ir y venir por los pasos sin tocar sus veredictos.
     const struct { QKeySequence key; int delta; } moves[] = {
@@ -278,7 +278,12 @@ QWidget* RunView::buildStage() {
     m_preview = new EvidencePreview;
     m_preview->setObjectName(QStringLiteral("evidencePreview"));
     m_preview->setCaptionVisible(false);
-    connect(m_preview, &EvidencePreview::clicked, this, &RunView::openSelectedShot);
+    // Clic en la evidencia: una imagen fija se abre directamente para anotarla; lo demás, en el visor.
+    connect(m_preview, &EvidencePreview::clicked, this, [this]() {
+        const Screenshot* shot = selectedShot();
+        if (shot && shot->isImage() && !shot->isAnimation()) annotateSelectedShot();
+        else openSelectedShot();
+    });
     // Recorrer las evidencias sin salir del visor: flechas a los lados y la posición abajo.
     const auto arrow = [this](const QString& text, const char* name, const QString& tip, int delta) {
         auto* b = new QPushButton(text, m_preview);
@@ -343,6 +348,9 @@ QWidget* RunView::buildCaseBar() {
     h->addWidget(m_caseTitle, 1);
     m_caseStats = ui::label(QString(), "mono-muted");
     h->addWidget(m_caseStats);
+    m_pause = pauseButton("runPause");
+    m_pause->setFixedHeight(32);
+    h->addWidget(m_pause);
     m_finish = ui::button(tr("Cerrar ejecución"), "outline");
     m_finish->setObjectName(QStringLiteral("runFinish"));
     m_finish->setFixedHeight(32);
@@ -456,6 +464,14 @@ QWidget* RunView::buildVerdicts() {
     return group;
 }
 
+QPushButton* RunView::pauseButton(const char* name) {
+    auto* b = ui::button(tr("❚❚ Pausar"), "outline");
+    b->setObjectName(QString::fromLatin1(name));
+    b->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    connect(b, &QPushButton::clicked, this, [this]() { m_run.togglePause(); });
+    return b;
+}
+
 QPushButton* RunView::captureButton(QLabel** shortcut) {
     auto* b = ui::button(QString(), "primary");
     b->setMinimumHeight(kActionHeight);
@@ -502,6 +518,9 @@ QWidget* RunView::buildFocusBar() {
     m_focusReportBug->setObjectName(QStringLiteral("focusReportBug"));
     connect(m_focusReportBug, &QPushButton::clicked, this, [this]() { emit reportBugRequested(bugStepIndex()); });
     h->addWidget(m_focusReportBug);
+    m_focusPause = pauseButton("focusPause");
+    m_focusPause->setFixedHeight(kActionHeight);
+    h->addWidget(m_focusPause);
     auto* exit = ui::button(tr("Salir · Esc"), "outline");
     exit->setObjectName(QStringLiteral("focusExit"));
     exit->setFixedHeight(kActionHeight);
@@ -730,7 +749,7 @@ QWidget* RunView::stepGroupHeader(int step, const TestCase& c) const {
 void RunView::tick() {
     const RunState& r = m_run.state();
     if (r.caseId.isEmpty()) { m_clock.stop(); return; }
-    if (!r.finished) m_stepClock->setText(tr("⏱ %1").arg(formatDuration(r.currentStepSecs())));
+    if (!r.finished) m_stepClock->setText((r.paused ? tr("❚❚ %1") : tr("⏱ %1")).arg(formatDuration(r.currentStepSecs())));
     const TestCase* c = m_cases.find(r.caseId);
     if (!c) return;
     m_caseStats->setText(tr("%1/%2 pasos · %3 capturas · ⏱ %4")
@@ -763,6 +782,18 @@ void RunView::refresh() {
     m_focusVerdicts->setVisible(active);
     m_doneActions->setVisible(hasRun && r.finished);
     m_continuation->setVisible(false);
+    // En pausa no se marca ni se cambia de paso: los veredictos siguen a la vista, apagados.
+    const bool paused = active && m_run.isPaused();
+    m_verdicts->setEnabled(!paused);
+    m_focusVerdicts->setEnabled(!paused);
+    for (auto* b : {m_pause, m_focusPause}) {
+        b->setVisible(active);
+        b->setText(paused ? tr("▶ Reanudar") : tr("❚❚ Pausar"));
+        b->setToolTip(paused ? tr("Reanuda la ejecución: los cronómetros vuelven a correr (Ctrl+Alt+Espacio)")
+                             : tr("Pausa la ejecución: el tiempo en pausa no cuenta (Ctrl+Alt+Espacio)"));
+        b->setStyleSheet(paused ? QStringLiteral("QPushButton{padding:0 12px;border-color:%1;color:%1;}").arg(theme::Amber)
+                                : QStringLiteral("QPushButton{padding:0 12px;}"));
+    }
     if (!hasRun) {
         m_clock.stop();
         ui::clearLayout(m_stepsLayout);
@@ -811,9 +842,10 @@ void RunView::refresh() {
 
     const int total = c->steps.size();
     if (active) {
-        m_stateDot->setStyleSheet(QStringLiteral("background:%1;border-radius:4px;").arg(theme::Green));
-        m_stateText->setText(tr("%1 · EJECUTANDO").arg(c->id));
-        m_stateText->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Green));
+        const QString stateColor = paused ? theme::Amber : theme::Green;
+        m_stateDot->setStyleSheet(QStringLiteral("background:%1;border-radius:4px;").arg(stateColor));
+        m_stateText->setText(paused ? tr("%1 · EN PAUSA").arg(c->id) : tr("%1 · EJECUTANDO").arg(c->id));
+        m_stateText->setStyleSheet(QStringLiteral("color:%1;").arg(stateColor));
         // Un paso ya marcado se puede volver a ver (y a marcar): el rótulo lo dice.
         m_stepCounter->setText(r.isMarked(r.idx)
                                    ? tr("PASO %1 DE %2 · %3").arg(r.idx + 1).arg(total).arg(resultLabel(r.results[r.idx].result))
@@ -832,7 +864,8 @@ void RunView::refresh() {
         m_back->setEnabled(m_run.canGoBack());
         m_next->setEnabled(m_run.canGoNext());
         m_finish->setText(tr("Cerrar ejecución"));
-        m_focusCounter->setText(tr("PASO %1 / %2").arg(r.idx + 1).arg(total));
+        m_focusCounter->setText(paused ? tr("EN PAUSA · PASO %1 / %2").arg(r.idx + 1).arg(total)
+                                       : tr("PASO %1 / %2").arg(r.idx + 1).arg(total));
         m_focusAction->setFullText(c->steps[r.idx].action);
     } else {
         const Verdict v = r.verdict();

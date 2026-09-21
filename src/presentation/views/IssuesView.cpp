@@ -10,6 +10,7 @@
 #include "presentation/views/RevisionPublishDialog.h"
 #include "presentation/views/RequirementImportDialog.h"
 #include "presentation/widgets/ChoiceDialog.h"
+#include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/Ui.h"
 
@@ -201,6 +202,12 @@ void IssuesView::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     refreshList();
     loadDetail();
+}
+
+void IssuesView::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+    // El panel no se come el tablero: como mucho, la mitad de la pantalla.
+    m_drawer->setMaximumWidth(std::clamp(width() / 2, m_drawer->minimumWidth(), 720));
 }
 
 void IssuesView::hideEvent(QHideEvent* e) { QWidget::hideEvent(e); }
@@ -437,12 +444,22 @@ void IssuesView::buildBoard(QVBoxLayout* root) {
     m_boardEmpty->setObjectName(QStringLiteral("issueBoardEmpty"));
     m_boardEmpty->setWordWrap(true);
     av->addWidget(m_boardEmpty);
+    // Si la ventana no da para las cinco columnas, el tablero se desplaza de lado en vez de apretarlas.
+    auto* columnsScroll = new QScrollArea;
+    columnsScroll->setObjectName(QStringLiteral("issueBoardScroll"));
+    columnsScroll->setWidgetResizable(true);
+    columnsScroll->setFrameShape(QFrame::NoFrame);
+    columnsScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    columnsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    columnsScroll->setStyleSheet(QStringLiteral("QScrollArea#issueBoardScroll{background:transparent;}"));
     auto* columns = new QWidget;
+    columns->setStyleSheet(QStringLiteral("background:transparent;"));
+    columnsScroll->setWidget(columns);
     auto* ch = ui::hbox(columns, 0, 8);
     for (int i = 0; i < kColumns; ++i) {
         const ColumnInfo info = columnInfo(static_cast<Column>(i));
         auto* column = new QWidget;
-        column->setMinimumWidth(170);
+        column->setMinimumWidth(160);
         auto* cv = ui::vbox(column, 0, 6);
         auto* top = new QWidget;
         auto* th = ui::hbox(top, 0, 8);
@@ -481,7 +498,7 @@ void IssuesView::buildBoard(QVBoxLayout* root) {
         cv->addWidget(well, 1);
         ch->addWidget(column, 1);
     }
-    av->addWidget(columns, 1);
+    av->addWidget(columnsScroll, 1);
     m_boardSplit->addWidget(boardArea);
     buildDrawer(m_boardSplit);
     m_boardSplit->setStretchFactor(0, 1);
@@ -524,8 +541,14 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     auto* top = new QWidget;
     auto* th = ui::hbox(top, 0, 6);
     th->addWidget(ui::label(issue.isImported() ? issue.requirement.data.id : issue.id, "mono-muted"));
-    if (issue.isImported() && !issue.requirement.data.systemCode.isEmpty())
-        th->addWidget(ui::pill(issue.requirement.data.systemCode, theme::tint(theme::Muted, 26), theme::Muted));
+    if (issue.isImported() && !issue.requirement.data.systemCode.isEmpty()) {
+        // Con la columna estrecha el sistema se recorta con «…» (entero en el tooltip), no a media letra.
+        auto* system = new ElidedLabel(issue.requirement.data.systemCode);
+        system->setProperty("role", QStringLiteral("pill"));
+        system->setStyleSheet(QStringLiteral("background:%1;color:%2;").arg(theme::tint(theme::Muted, 26), theme::Muted));
+        system->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+        th->addWidget(system, 0);
+    }
     th->addStretch(1);
     if (!issue.revisions.isEmpty()) {
         auto* rev = ui::label(tr("REV %1").arg(s.number), "muted-sm");

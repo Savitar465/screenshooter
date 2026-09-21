@@ -51,6 +51,8 @@ private:
     void refreshCapture();
     void refreshRunShortcuts();
     void refreshCaptureStatus();
+    /// Rellena el selector de pantalla con las pantallas conectadas (cambia al conectar un monitor).
+    void refreshScreens();
     void testConnection();
     void testZephyr();
     void refreshZephyr();
@@ -110,6 +112,7 @@ private:
     QLineEdit* m_recordShortcut;
     QComboBox* m_format;
     QComboBox* m_mode;
+    QComboBox* m_screen;
     QComboBox* m_delay;
     QLineEdit* m_folder;
     QCheckBox* m_globalShortcut;

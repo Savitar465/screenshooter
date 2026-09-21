@@ -11,7 +11,6 @@
 class QLabel;
 class QPushButton;
 class QScrollArea;
-class QSpinBox;
 
 namespace qaflow {
 
@@ -35,7 +34,7 @@ QImage renderAnnotations(const QImage& base, const QList<Annotation>& items);
 class AnnotationCanvas;
 
 /// Editor de anotaciones de una captura: flechas, rectángulos, elipses, marcador, texto y
-/// difuminado de datos sensibles. Deshacer (Ctrl+Z), color y grosor. `Guardar` devuelve
+/// difuminado de datos sensibles. Deshacer (Ctrl+Z), color y grosor (fino, medio, grueso). `Guardar` devuelve
 /// `QDialog::Accepted` y `result()` la imagen anotada.
 class AnnotationEditor : public QDialog {
     Q_OBJECT
@@ -54,19 +53,26 @@ public:
 protected:
     void keyPressEvent(QKeyEvent* e) override;
     void resizeEvent(QResizeEvent* e) override;
+    void showEvent(QShowEvent* e) override;
     bool eventFilter(QObject* watched, QEvent* e) override;
 
 private:
+    /// Ajusta la imagen a la ventana (sin ampliarla por encima del 100 %) y la mantiene ajustada al redimensionar.
     void fitToWindow();
+    /// Zoom manual: deja de ajustarse al redimensionar hasta pulsar 0.
+    void zoomBy(double factor);
     void updateToolButtons();
+    void updateZoomLabel();
 
     AnnotationCanvas* m_canvas;
     QScrollArea* m_scroll;
     QList<QPushButton*> m_toolButtons;
     QList<QPushButton*> m_colorButtons;
-    QSpinBox* m_width;
+    QList<QPushButton*> m_strokeButtons;
     QPushButton* m_undo;
     QLabel* m_hint;
+    QLabel* m_zoomLabel;
+    bool m_fit = true;
 };
 
 } // namespace qaflow

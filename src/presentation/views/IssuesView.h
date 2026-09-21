@@ -99,6 +99,7 @@ signals:
 
 protected:
     void showEvent(QShowEvent* e) override;
+    void resizeEvent(QResizeEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 

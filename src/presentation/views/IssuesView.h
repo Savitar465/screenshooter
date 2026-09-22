@@ -117,6 +117,11 @@ private:
         bool published = false;
         int number = 1;          // número de la ronda en curso (o de la última)
         QString continuable;     // ciclo de la ronda que se puede continuar; vacío si ninguno
+        /// Qué lleva hecho cada paso, en el orden en que se hacen (plan, ejecución, bugs, acta, cierre
+        /// y publicación): es lo que marca el visto y de lo que sale `nextStep`. Un paso posterior puede
+        /// estar hecho y uno anterior no —se publica un resultado sin haber levantado el acta—, así que
+        /// no basta con comparar con `nextStep`.
+        bool done[6] = {};
         int nextStep = 1;
     };
     RevisionSnapshot snapshotOf(const Issue& issue) const;
@@ -131,6 +136,11 @@ private:
         QString button;   // el botón del panel
         QString shortButton;   // el de la tarjeta, que es estrecha
         std::function<void(QWidget*)> run;   // vacía si no hay nada que lanzar desde aquí
+        /// Lo otro razonable que se puede hacer ahora, al lado de lo que toca: con la ronda cerrada,
+        /// volver a probar **sólo lo que se rompió** en vez de repetir el plan entero. Vacío si no hay.
+        QString also;
+        QString alsoTip;
+        std::function<void(QWidget*)> alsoRun;
     };
     NextAction nextActionOf(const Issue& issue, const RevisionSnapshot& snapshot, Column column);
     /// El menú de una tarjeta (clic derecho o «⋯»): abrir, lo siguiente, ejecutar, continuar, el plan,

@@ -309,9 +309,28 @@ IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
     const QList<IssueLink> bugs = bugsOf(issue);
     s.openBugs = int(std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
     s.hasRecord = last && last->hasDocument();
-    s.published = last && (!last->jira.isEmpty() || !last->gesreq.isEmpty());
+    // Publicada es la ronda a la que no le falta ningún destino, y eso lo sabe el servicio que publica:
+    // mira los tres (Zephyr, el gestor y GESREQ), no sólo lo que quedó anotado en la revisión. Sólo se
+    // le pregunta por una ronda ya cerrada, que es cuando se publica; sin él (contexto mínimo de los
+    // tests) vale con lo anotado.
+    if (m_revisionPublish && s.closed) {
+        bool arrived = false, missing = false;
+        for (const auto& destination : m_revisionPublish->stepsFor(issue.id, s.number)) {
+            // Cerrar el issue en el gestor sólo le toca a una ronda conforme: a una observada no le falta.
+            const bool close = destination.destination == RevisionPublishService::Destination::Close;
+            if (close && issue.lastOutcome() != QaOutcome::Conforme) continue;
+            if (destination.done && !close) arrived = true;
+            if (!destination.done && destination.available) missing = true;
+        }
+        s.published = arrived && !missing;
+    } else {
+        s.published = last && (!last->jira.isEmpty() || !last->gesreq.isEmpty());
+    }
     s.continuable = continuableCycle(issue, s.number);
-    const bool done[] = {s.hasPlan, s.executed, s.openBugs == 0, s.hasRecord, s.closed, s.published};
+    // Los bugs de una ronda cerrada ya no son un paso pendiente: se cerró sabiéndolos (es lo que la deja
+    // observada), así que el trabajo sigue con el acta y la publicación en vez de quedarse ahí parado.
+    const bool done[] = {s.hasPlan, s.executed, s.openBugs == 0 || s.closed, s.hasRecord, s.closed, s.published};
+    std::copy(std::begin(done), std::end(done), std::begin(s.done));
     s.nextStep = 7;
     for (int i = 0; i < 6; ++i)
         if (!done[i]) { s.nextStep = i + 1; break; }
@@ -319,6 +338,10 @@ IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
 }
 
 IssuesView::Column IssuesView::columnOf(const Issue& issue, const RevisionSnapshot& s) const {
+    // Una revisión cerrada como Observado no termina nada: el requerimiento espera a que lo corrijan
+    // y se vuelva a probar, hasta que se abra la revisión siguiente.
+    if (issue.state != IssueState::Pending && !issue.currentRevision() && issue.lastOutcome() == QaOutcome::Observado)
+        return Column::Broken;
     switch (issue.state) {
         case IssueState::Done: return Column::Done;
         case IssueState::Pending: return Column::Pending;
@@ -347,8 +370,8 @@ ColumnInfo columnInfo(IssuesView::Column c) {
         case IssuesView::Column::Preparing: return {IssuesView::tr("EN PREPARACIÓN"), IssuesView::tr("Plan en composición"), theme::Violet};
         case IssuesView::Column::Testing: return {IssuesView::tr("EN PRUEBAS"), IssuesView::tr("Ejecutándose, sin fallos"), theme::Blue};
         case IssuesView::Column::Broken:
-            return {IssuesView::tr("FALLIDO / BLOQUEADO"), IssuesView::tr("Quedaron casos rotos: continuar lo fallado"), theme::Red};
-        case IssuesView::Column::Done: return {IssuesView::tr("FINALIZADO"), IssuesView::tr("Revisión cerrada"), theme::Green};
+            return {IssuesView::tr("FALLIDO / BLOQUEADO"), IssuesView::tr("Casos rotos o revisión observada: volver a probar"), theme::Red};
+        case IssuesView::Column::Done: return {IssuesView::tr("FINALIZADO"), IssuesView::tr("Revisión cerrada conforme"), theme::Green};
     }
     return {};
 }
@@ -642,7 +665,10 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
 IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const RevisionSnapshot& s, Column column) {
     NextAction a;
     const QString issueId = issue.id;
-    if (column == Column::Broken && !s.continuable.isEmpty()) {
+    // Lo fallado se continúa mientras la ronda sigue abierta. Cerrada (observada, que es lo que la lleva
+    // a esta columna), sus ciclos ya son historia: lo que toca es acabar con ella —el acta y publicar el
+    // resultado— y, después, volver a probar en la ronda siguiente.
+    if (column == Column::Broken && s.open && !s.continuable.isEmpty()) {
         const int broken = int(m_history.report(s.continuable).brokenCaseIds().size());
         a.title = tr("Continuar lo fallado");
         a.why = tr("%1 dejó %2 fallido(s) y %3 bloqueado(s): se repiten desde el paso que se rompió, en la misma revisión.")
@@ -678,7 +704,10 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
             break;
         case 4:
             a.title = tr("Generar el acta (R-213)");
-            a.why = tr("Con lo del requerimiento, la ejecución elegida y los bugs de la revisión");
+            a.why = s.closed ? tr("Revisión %1 cerrada como %2: el acta la levanta con lo que se probó, y con ella se publica el resultado")
+                                   .arg(s.number)
+                                   .arg(label(issue.lastOutcome()))
+                             : tr("Con lo del requerimiento, la ejecución elegida y los bugs de la revisión");
             a.hint = tr("Generar el acta");
             a.button = tr("Generar acta…");
             a.shortButton = tr("Generar acta");
@@ -694,7 +723,9 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
             break;
         case 6:
             a.title = tr("Publicar el resultado");
-            a.why = tr("Los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ");
+            a.why = tr("Revisión %1 cerrada como %2: los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ")
+                        .arg(s.number)
+                        .arg(label(issue.lastOutcome()));
             a.hint = tr("Publicar el resultado");
             a.button = tr("Publicar…");
             a.shortButton = tr("Publicar");
@@ -708,11 +739,29 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
             a.run = [this](QWidget*) { openRevision(); };
             break;
     }
+    // Cerrada la ronda, lo que se rompió se puede repetir ya, sin esperar al acta ni a la publicación:
+    // continuar el ciclo abre la revisión siguiente (`notePlanStarted`) y el ciclo nuevo es de ella, así
+    // que es el camino corto de «volver a probar» cuando sólo hay que rehacer lo fallado. Se ofrece al
+    // lado de lo que toca, no en su lugar: el acta y el resultado siguen siendo de la ronda cerrada.
+    if (s.closed && !s.continuable.isEmpty()) {
+        const int broken = int(m_history.report(s.continuable).brokenCaseIds().size());
+        a.also = tr("▶ Continuar lo fallado (%1)").arg(broken);
+        a.alsoTip = tr("Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) del ciclo %2 en la revisión %3, "
+                       "cada uno desde el paso que se rompió")
+                        .arg(broken)
+                        .arg(s.continuable)
+                        .arg(s.number + 1);
+        a.alsoRun = [this, cycle = s.continuable](QWidget*) { emit continueCycleRequested(cycle); };
+    }
     // Lo que lanza la acción trabaja sobre el issue elegido: desde una tarjeta, primero se elige el suyo.
-    if (a.run) a.run = [this, issueId, run = a.run](QWidget* anchor) {
-        m_issues.select(issueId);
-        run(anchor);
+    const auto onSelected = [this, issueId](const std::function<void(QWidget*)>& run) {
+        return [this, issueId, run](QWidget* anchor) {
+            m_issues.select(issueId);
+            run(anchor);
+        };
     };
+    if (a.run) a.run = onSelected(a.run);
+    if (a.alsoRun) a.alsoRun = onSelected(a.alsoRun);
     return a;
 }
 
@@ -781,7 +830,9 @@ void IssuesView::moveToColumn(const QString& issueId, Column column) {
     // Con casos rotos en la ronda, el issue se queda en fallidos aunque cambie su estado: se avisa, para
     // que no parezca que el arrastre no hizo nada.
     if (const Issue* now = m_issues.find(issueId); now && columnOf(*now, snapshotOf(*now)) == Column::Broken)
-        emit toast(tr("%1 sigue en «Fallido / bloqueado»: su revisión tiene casos rotos. Continúa lo fallado para sacarlo.").arg(issueId),
+        emit toast(!now->currentRevision() && now->lastOutcome() == QaOutcome::Observado
+                       ? tr("%1 sigue en «Fallido / bloqueado»: su revisión se cerró como observada. Vuelve a probarlo para sacarlo.").arg(issueId)
+                       : tr("%1 sigue en «Fallido / bloqueado»: su revisión tiene casos rotos. Continúa lo fallado para sacarlo.").arg(issueId),
                    theme::Amber);
     else
         emit toast(tr("%1 · %2").arg(issueId, label(state)), theme::Green);
@@ -930,6 +981,13 @@ void IssuesView::refreshDrawer() {
         connect(go, &QPushButton::clicked, this, [go, run = action.run]() { run(go); });
         bh->addWidget(go);
     }
+    // Y al lado, la otra salida razonable: con la ronda cerrada, repetir sólo lo que se rompió.
+    if (action.alsoRun) {
+        auto* also = smallButton(action.also, "outline", action.alsoTip);
+        also->setObjectName(QStringLiteral("issueNextAlso"));
+        connect(also, &QPushButton::clicked, this, [also, run = action.alsoRun]() { run(also); });
+        bh->addWidget(also);
+    }
     auto* openButton = smallButton(tr("Abrir el issue"), "outline");
     openButton->setObjectName(QStringLiteral("issueOpenDetail"));
     connect(openButton, &QPushButton::clicked, this, [this]() { showDetail(true); });
@@ -950,7 +1008,7 @@ void IssuesView::refreshDrawer() {
     auto* list = new QWidget;
     auto* lv = ui::vbox(list, 0, 6);
     for (int i = 0; i < steps; ++i) {
-        const bool done = i + 1 < s.nextStep && i < 6;
+        const bool done = i < 6 && s.done[i];
         const bool current = i + 1 == s.nextStep;
         const QString color = done ? theme::Green : (current ? (column == Column::Broken ? theme::Red : theme::Amber) : theme::Muted);
         auto* row = new QWidget;
@@ -987,7 +1045,10 @@ void IssuesView::refreshDrawer() {
             auto* tag = ui::label(destinationTag(step.destination) + (step.done ? QStringLiteral(" ✓") : QString()), "eyebrow");
             tag->setStyleSheet(QStringLiteral("color:%1;").arg(color));
             bv->addWidget(tag);
-            const QString text = step.done ? tr("Hecho") : (step.available ? tr("Pendiente") : tr("No disponible"));
+            // Hecho, con qué quedó: el resultado registrado en GESREQ, los ciclos que fueron a Zephyr o
+            // la clave del gestor. Lo largo (la fecha, el estado del requerimiento) va en el tooltip.
+            const QString text = step.done ? (step.state.isEmpty() ? tr("Hecho") : step.state)
+                                           : (step.available ? tr("Pendiente") : tr("No disponible"));
             auto* state = ui::label(text, "muted-sm");
             state->setWordWrap(true);
             bv->addWidget(state);
@@ -1414,14 +1475,16 @@ void IssuesView::refreshRevision(const Issue& issue) {
         run->setEnabled(!runnablePlans(issue).isEmpty());
         connect(run, &QPushButton::clicked, this, [this, run]() { runPlan(run); });
         actions->addWidget(run);
-        // Lo que quedó roto no obliga a repetir el plan entero: se continúa la ronda por donde se quedó.
+        // Lo que quedó roto no obliga a repetir el plan entero: se continúa la ronda por donde se quedó
+        // y, si ya está cerrada, la continuación abre la siguiente y es de ella.
         if (const QString pending = snapshot.continuable; !pending.isEmpty()) {
             const PlanReport report = m_history.report(pending);
             auto* proceed = smallButton(tr("Continuar lo fallado…"), "outline",
-                                        tr("Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) del ciclo %2, "
-                                           "cada uno desde el paso que se rompió")
+                                        tr("Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) del ciclo %2 en la "
+                                           "revisión %3, cada uno desde el paso que se rompió")
                                             .arg(report.brokenCaseIds().size())
-                                            .arg(pending));
+                                            .arg(pending)
+                                            .arg(closed ? number + 1 : number));
             proceed->setObjectName(QStringLiteral("issueStepContinue"));
             connect(proceed, &QPushButton::clicked, this, [this, pending]() { emit continueCycleRequested(pending); });
             actions->addWidget(proceed);
@@ -1433,7 +1496,8 @@ void IssuesView::refreshRevision(const Issue& issue) {
     {
         const QList<IssueLink> bugs = bugsOf(issue);
         const int openBugs = int(std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
-        const StepRow row = step(openBugs == 0, tr("Revisar los bugs reportados"),
+        // Cerrada la ronda, sus bugs ya no son un paso pendiente: se cerró con ellos a la vista.
+        const StepRow row = step(snapshot.done[2], tr("Revisar los bugs reportados"),
                                  bugs.isEmpty() ? tr("Los que se reporten en sus ejecuciones salen aquí, cuentan en el acta y se "
                                                      "enlazan al publicar")
                                                 : tr("%1 bug(s) · %2 abierto(s)").arg(bugs.size()).arg(openBugs),
@@ -1475,22 +1539,48 @@ void IssuesView::refreshRevision(const Issue& issue) {
         }
     }
 
-    // 6 · Publicar el resultado donde toca.
+    // 6 · Publicar el resultado donde toca. Cómo está cada destino lo dice el servicio que publica, así
+    // que el paso, el panel del tablero y el historial cuentan lo mismo: si GESREQ ya tiene el resultado
+    // (y con cuál quedó el requerimiento), si los ciclos llegaron a Zephyr y qué falta.
     {
+        const QList<RevisionPublishService::Step> destinations =
+            m_revisionPublish && !issue.revisions.isEmpty() ? m_revisionPublish->stepsFor(issue.id, number)
+                                                            : QList<RevisionPublishService::Step>{};
         QStringList where;
-        if (last && !last->jira.isEmpty() && !last->jira.uncertain) where << tr("gestor");
-        if (last && !last->gesreq.isEmpty() && !last->gesreq.uncertain) where << tr("GESREQ");
-        auto* actions = step(published, tr("Publicar el resultado"),
-                             where.isEmpty() ? tr("Los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ")
-                                             : tr("Publicado en %1").arg(where.join(tr(" y ")))).actions;
-        auto* publish = smallButton(published ? tr("Publicar…") : tr("Publicar…"), "primary",
+        for (const auto& destination : destinations) {
+            if (!destination.done || destination.destination == RevisionPublishService::Destination::Close) continue;
+            const QString tag = destinationTag(destination.destination);
+            where << (destination.state.isEmpty() ? tag : tr("%1 (%2)").arg(tag, destination.state));
+        }
+        const StepRow row = step(published, tr("Publicar el resultado"),
+                                 where.isEmpty() ? tr("Los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ")
+                                                 : tr("Publicado en %1").arg(where.join(tr(" · "))),
+                                 QStringLiteral("issueStepPublishDetail"));
+        auto* publish = smallButton(published ? tr("Publicar…") : (where.isEmpty() ? tr("Publicar…") : tr("Completar publicación…")),
+                                    "primary",
                                     tr("Publica los planes con sus casos en Zephyr, deja el resultado y el acta en el gestor "
                                        "y registra el control de calidad en GESREQ"));
         publish->setObjectName(QStringLiteral("issuePublishRevision"));
         publish->setEnabled(m_revisionPublish != nullptr && closed);
         if (!closed) publish->setToolTip(tr("Cierra antes la revisión: se publica el resultado de una revisión terminada"));
         connect(publish, &QPushButton::clicked, this, [this]() { publishRevision(); });
-        actions->addWidget(publish);
+        row.actions->addWidget(publish);
+        // Y debajo, destino por destino: lo que llegó y lo que falta, con lo que dice de él la propia
+        // publicación. El cierre en el gestor sólo sale cuando está hecho: no es un destino del resultado.
+        for (const auto& destination : destinations) {
+            if (destination.destination == RevisionPublishService::Destination::Close && !destination.done) continue;
+            QHBoxLayout* h;
+            auto* line = listRow(&h);
+            const QString color = destination.done ? theme::Green : (destination.available ? theme::Amber : theme::Muted);
+            auto* tag = ui::pill(QStringLiteral("%1 %2").arg(destinationTag(destination.destination),
+                                                             destination.done ? QStringLiteral("✓") : QStringLiteral("—")),
+                                 theme::tint(color, 40), color);
+            h->addWidget(tag);
+            auto* what = ui::label(destination.done || destination.blocked.isEmpty() ? destination.detail : destination.blocked, "muted-sm");
+            what->setWordWrap(true);
+            h->addWidget(what, 1);
+            row.body->addWidget(line);
+        }
     }
 
     // Y, cerrada la ronda, la siguiente: un requerimiento observado vuelve a pruebas.
@@ -1504,6 +1594,20 @@ void IssuesView::refreshRevision(const Issue& issue) {
         next->setObjectName(QStringLiteral("issueNewRevision"));
         connect(next, &QPushButton::clicked, this, &IssuesView::openRevision);
         actions->addWidget(next);
+        // Volver a probar suele ser repetir sólo lo que se rompió: arrancarlo desde aquí abre igualmente
+        // la ronda siguiente, y el ciclo nuevo ya es de ella.
+        if (const QString pending = snapshot.continuable; closed && !pending.isEmpty()) {
+            const int broken = int(m_history.report(pending).brokenCaseIds().size());
+            auto* proceed = smallButton(tr("Continuar lo fallado (%1)…").arg(broken), "outline",
+                                        tr("Abre la revisión %1 y vuelve a ejecutar en ella los %2 caso(s) fallado(s) o "
+                                           "bloqueado(s) del ciclo %3, cada uno desde el paso que se rompió")
+                                            .arg(number + 1)
+                                            .arg(broken)
+                                            .arg(pending));
+            proceed->setObjectName(QStringLiteral("issueRetryBroken"));
+            connect(proceed, &QPushButton::clicked, this, [this, pending]() { emit continueCycleRequested(pending); });
+            actions->addWidget(proceed);
+        }
     }
 
     // Revisiones ya cerradas, de la más reciente a la más antigua: son el historial del requerimiento.

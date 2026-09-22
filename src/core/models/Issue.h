@@ -23,7 +23,8 @@ IssueState issueStateFromString(const QString& s);
 QString label(IssueState s);
 
 /// Resultado del control de calidad de una ronda de pruebas: es lo que se lleva al acta, a Jira y a
-/// GESREQ. No es el estado del issue (se puede finalizar el trabajo con el requerimiento observado).
+/// GESREQ. No es el estado del issue, aunque lo mueve: sólo Conforme lo finaliza; Observado lo
+/// devuelve a pruebas hasta que se abra la revisión siguiente.
 enum class QaOutcome { Pendiente, Conforme, Observado };
 
 /// Valor canónico (se persiste en issues.json y viaja a GESREQ). No traducir.

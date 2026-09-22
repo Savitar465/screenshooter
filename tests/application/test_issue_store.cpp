@@ -127,7 +127,7 @@ private slots:
 
         // Cerrada la revisión, volver a probar abre la siguiente.
         f.store.closeRevision(id, QaOutcome::Observado);
-        QVERIFY(f.store.find(id)->state == IssueState::Done);
+        QVERIFY(f.store.find(id)->state == IssueState::Testing);   // observado no es terminado
         f.store.notePlanStarted(QStringLiteral("PL-0001"));
         issue = f.store.find(id);
         QCOMPARE(issue->revisions.size(), 2);

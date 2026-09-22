@@ -29,6 +29,10 @@ void IssueStore::load() {
     const std::optional<QList<Issue>> loaded = m_repo ? m_repo->loadIssues() : std::optional<QList<Issue>>(QList<Issue>{});
     m_readOnly = !loaded.has_value();
     m_issues = loaded.value_or(QList<Issue>{});
+    // Antes, cerrar una revisión como Observado daba el issue por finalizado: un requerimiento
+    // observado no ha terminado, vuelve a pruebas cuando se corrija.
+    for (Issue& i : m_issues)
+        if (i.state == IssueState::Done && !i.currentRevision() && i.lastOutcome() == QaOutcome::Observado) i.state = IssueState::Testing;
     if (!find(m_selectedId)) m_selectedId = m_issues.isEmpty() ? QString() : m_issues.first().id;
     emit issuesChanged();
     emit selectionChanged(m_selectedId);
@@ -233,9 +237,10 @@ void IssueStore::closeRevision(const QString& issueId, QaOutcome outcome) {
         IssueRevision& revision = i.revisions.last();
         revision.outcome = outcome;
         revision.closedAt = QDateTime::currentDateTime();
-        // El trabajo de esta ronda está hecho: si el requerimiento queda observado, volver a probarlo
-        // abre la revisión siguiente (notePlanStarted / openRevision), no reabre ésta.
-        i.state = IssueState::Done;
+        // Sólo un requerimiento conforme termina el trabajo. Uno observado sigue pendiente de que lo
+        // corrijan y se vuelva a probar: eso abre la revisión siguiente (notePlanStarted /
+        // openRevision), no reabre ésta.
+        i.state = outcome == QaOutcome::Conforme ? IssueState::Done : IssueState::Testing;
     });
 }
 

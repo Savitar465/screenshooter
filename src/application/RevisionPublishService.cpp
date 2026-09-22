@@ -129,8 +129,15 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
     if (!m_zephyr || !m_zephyr->enabled()) zephyr.blocked = tr("Activa Zephyr en Ajustes para publicar los ciclos");
     else if (cycles.isEmpty()) zephyr.blocked = tr("La revisión no tiene ningún ciclo de plan ejecutado");
     else if (executed == 0) zephyr.blocked = tr("Ningún caso de esos ciclos llegó a ejecutarse");
-    zephyr.detail = zephyr.done ? tr("Ya publicados: se actualizan sus ejecuciones y evidencias")
-                                : tr("%1 caso(s) ejecutado(s); los ciclos ya publicados se actualizan").arg(executed);
+    if (zephyr.done) {
+        zephyr.state = tr("%1 ciclo(s)").arg(published);
+        zephyr.detail = tr("%1 ciclo(s) publicado(s) en Zephyr · al volver a publicar se actualizan sus ejecuciones y evidencias")
+                            .arg(published);
+    } else {
+        // Publicado a medias: se dice cuánto llegó, que es lo que se completa al publicar otra vez.
+        if (published > 0) zephyr.state = tr("%1 de %2").arg(published).arg(cycles.size());
+        zephyr.detail = tr("%1 caso(s) ejecutado(s); los ciclos ya publicados se actualizan").arg(executed);
+    }
 
     Step tracker;
     tracker.destination = Destination::Tracker;
@@ -144,6 +151,7 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
                               : tr("El issue no llegó a crearse en el gestor al importarlo: publícalo desde «Publicación en el gestor»");
     tracker.detail = tracker.done ? tr("El resultado ya se comentó el %1").arg(revision->jira.publishedAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")))
                                   : tr("Comentario con el resultado, los enlaces de Zephyr y el acta adjunta");
+    if (tracker.done) tracker.state = revision->jira.key.isEmpty() ? issue->publication.key : revision->jira.key;
 
     Step requirement;
     requirement.destination = Destination::Requirement;
@@ -171,6 +179,9 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
         }
     }
     if (requirement.done) {
+        // Con qué resultado quedó el requerimiento en el sistema: es lo que hay que poder ver desde el
+        // issue sin entrar en GESREQ («subido y con observaciones»).
+        requirement.state = qaflow::label(revision->gesreq.result);
         requirement.detail = tr("Registrado el %1 como %2").arg(revision->gesreq.registeredAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")),
                                                                 qaflow::label(revision->gesreq.result));
         if (!revision->gesreq.requirementState.isEmpty())
@@ -191,6 +202,7 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
                                              : tr("El issue no está en el gestor");
     close.detail = close.done ? tr("Ya está cerrado en el gestor (%1)").arg(issue->publication.status)
                               : tr("Sólo si el resultado es Conforme y lo demás se publica bien");
+    if (close.done) close.state = issue->publication.status;
 
     return {zephyr, tracker, requirement, close};
 }

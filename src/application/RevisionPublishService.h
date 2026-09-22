@@ -49,6 +49,10 @@ public:
         bool done = false;            // ya se hizo en esta revisión
         QString target;               // "Zephyr · 2 ciclos", "Jira · SUMA2-2907", "GESREQ · GREQ 2026997"
         QString detail;               // qué se haría, o qué se hizo ya
+        /// Cómo quedó el destino, en dos palabras y sólo cuando ya se publicó: el resultado con el que
+        /// se registró en GESREQ («Observado»), los ciclos que llegaron a Zephyr, la clave del gestor.
+        /// Es lo que cabe en un tag; lo largo (la fecha, el estado del requerimiento) está en `detail`.
+        QString state;
         QString blocked;              // por qué no se puede; vacío si se puede
         /// Lo bloquea una **regla del destino** (GESREQ no acepta ese resultado, falta el acta…), no la
         /// configuración: cambiar el resultado o generar el acta puede desbloquearlo, así que la

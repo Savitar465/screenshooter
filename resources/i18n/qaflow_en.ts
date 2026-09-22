@@ -1666,6 +1666,10 @@
         <source>%1 rechazó el bug · %2</source>
         <translation>%1 rejected the bug · %2</translation>
     </message>
+    <message>
+        <source>Ya hay una captura o una grabación en curso</source>
+        <translation>A capture or a recording is already in progress</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::BugReportService</name>
@@ -2312,6 +2316,10 @@
     <message>
         <source>Inicia la ejecución del caso para capturar: la evidencia es de la ejecución</source>
         <translation>Start the case&apos;s execution to capture: evidence belongs to the execution</translation>
+    </message>
+    <message>
+        <source>Ya hay una captura o una grabación en curso</source>
+        <translation>A capture or a recording is already in progress</translation>
     </message>
 </context>
 <context>
@@ -3545,14 +3553,6 @@ Create another one anyway?</translation>
         <translation>It is closed with the control result: compliant or with findings</translation>
     </message>
     <message>
-        <source>gestor</source>
-        <translation>tracker</translation>
-    </message>
-    <message>
-        <source>GESREQ</source>
-        <translation>GESREQ</translation>
-    </message>
-    <message>
         <source>Publicar el resultado</source>
         <translation>Publish the result</translation>
     </message>
@@ -3647,10 +3647,6 @@ Create another one anyway?</translation>
     <message>
         <source>Continuar lo fallado…</source>
         <translation>Continue what failed…</translation>
-    </message>
-    <message>
-        <source>Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) del ciclo %2, cada uno desde el paso que se rompió</source>
-        <translation>Runs the %1 failed or blocked case(s) of cycle %2 again, each from the step that broke</translation>
     </message>
     <message>
         <source>CONTINÚA %1</source>
@@ -3753,16 +3749,8 @@ Create another one anyway?</translation>
         <translation>FAILED / BLOCKED</translation>
     </message>
     <message>
-        <source>Quedaron casos rotos: continuar lo fallado</source>
-        <translation>Broken cases left: continue the failures</translation>
-    </message>
-    <message>
         <source>FINALIZADO</source>
         <translation>DONE</translation>
-    </message>
-    <message>
-        <source>Revisión cerrada</source>
-        <translation>Review closed</translation>
     </message>
     <message numerus="yes">
         <source>%n FALLIDO(S)</source>
@@ -3964,6 +3952,46 @@ Create another one anyway?</translation>
     <message>
         <source>%1 creado en el gestor para %2 y asignado a tu usuario</source>
         <translation>%1 created in the tracker for %2 and assigned to your user</translation>
+    </message>
+    <message>
+        <source>Casos rotos o revisión observada: volver a probar</source>
+        <translation>Broken cases or an observed revision: test again</translation>
+    </message>
+    <message>
+        <source>Revisión cerrada conforme</source>
+        <translation>Revision closed as compliant</translation>
+    </message>
+    <message>
+        <source>Revisión %1 cerrada como %2: el acta la levanta con lo que se probó, y con ella se publica el resultado</source>
+        <translation>Revision %1 closed as %2: the record is drawn up from what was tested, and the result is published with it</translation>
+    </message>
+    <message>
+        <source>Revisión %1 cerrada como %2: los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ</source>
+        <translation>Revision %1 closed as %2: the cycles to Zephyr, the result and the record to the tracker and the registration in GESREQ</translation>
+    </message>
+    <message>
+        <source>%1 sigue en «Fallido / bloqueado»: su revisión se cerró como observada. Vuelve a probarlo para sacarlo.</source>
+        <translation>%1 stays in «Failed / blocked»: its revision was closed as observed. Test it again to move it out.</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
+    </message>
+    <message>
+        <source> · </source>
+        <translation> · </translation>
+    </message>
+    <message>
+        <source>Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) del ciclo %2 en la revisión %3, cada uno desde el paso que se rompió</source>
+        <translation>Runs again the %1 failed or blocked case(s) of cycle %2 in revision %3, each from the step that broke</translation>
+    </message>
+    <message>
+        <source>Continuar lo fallado (%1)…</source>
+        <translation>Continue what failed (%1)…</translation>
+    </message>
+    <message>
+        <source>Abre la revisión %1 y vuelve a ejecutar en ella los %2 caso(s) fallado(s) o bloqueado(s) del ciclo %3, cada uno desde el paso que se rompió</source>
+        <translation>Opens revision %1 and runs in it the %2 failed or blocked case(s) of cycle %3, each from the step that broke</translation>
     </message>
 </context>
 <context>
@@ -5568,10 +5596,6 @@ Status: %4
         <translation>No case of those cycles was actually run</translation>
     </message>
     <message>
-        <source>Ya publicados: se actualizan sus ejecuciones y evidencias</source>
-        <translation>Already published: their executions and evidence are updated</translation>
-    </message>
-    <message>
         <source>%1 caso(s) ejecutado(s); los ciclos ya publicados se actualizan</source>
         <translation>%1 case(s) executed; cycles already published are updated</translation>
     </message>
@@ -5742,6 +5766,18 @@ Status: %4
     <message>
         <source>No se pudo cerrar %1 en el gestor · %2</source>
         <translation>%1 could not be closed in the tracker · %2</translation>
+    </message>
+    <message>
+        <source>%1 ciclo(s)</source>
+        <translation>%1 cycle(s)</translation>
+    </message>
+    <message>
+        <source>%1 ciclo(s) publicado(s) en Zephyr · al volver a publicar se actualizan sus ejecuciones y evidencias</source>
+        <translation>%1 cycle(s) published in Zephyr · publishing again updates their executions and evidence</translation>
+    </message>
+    <message>
+        <source>%1 de %2</source>
+        <translation>%1 of %2</translation>
     </message>
 </context>
 <context>
@@ -6286,7 +6322,7 @@ Press “Capture” or drop a file on the window.</translation>
     </message>
     <message>
         <source>Pausa la ejecución: el tiempo en pausa no cuenta (Ctrl+Alt+Espacio)</source>
-        <translation>Pause the run: time spent paused doesn't count (Ctrl+Alt+Space)</translation>
+        <translation>Pause the run: time spent paused doesn&apos;t count (Ctrl+Alt+Space)</translation>
     </message>
     <message>
         <source>%1 · EN PAUSA</source>

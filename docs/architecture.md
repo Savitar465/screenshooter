@@ -898,17 +898,25 @@ destaca; los hechos se marcan con un visto y se apagan.
 |------|--------------|-----------|---------------------|
 | 1 · Preparar el plan de pruebas | el issue tiene un plan y el plan, casos | crear el plan o abrirlo, «+ Otro plan» y «Vincular plan…» | sus planes, cada uno con sus casos y lo que dio la última ejecución de cada uno |
 | 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | **«Ejecutar plan…»**, que arranca el ciclo desde aquí, «Continuar lo fallado…» si la ronda dejó casos rotos, y «Ir al plan» para componerlo antes | los ciclos de sus planes, el más reciente primero, con su veredicto, sus cifras, de qué ronda y ambiente son, si están en Zephyr y las ejecuciones de cada caso |
-| 3 · Revisar los bugs reportados | no queda ninguno abierto | — | los bugs encontrados en los ciclos de sus planes (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en curso) |
+| 3 · Revisar los bugs reportados | no queda ninguno abierto, o la ronda ya se cerró (se cerró sabiéndolos: son lo que la deja observada) | — | los bugs encontrados en los ciclos de sus planes (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en curso) |
 | 4 · Generar el acta (R-213) | la revisión tiene su .docx | generar (o regenerar) el acta, y abrir la que hay | — |
 | 5 · Cerrar la revisión | la revisión está cerrada con su resultado | cerrarla, eligiendo conforme u observado | — |
-| 6 · Publicar el resultado | se publicó en el gestor o en GESREQ | «Publicar…», sólo con la revisión cerrada | — |
-| 7 · Volver a probar | — | abrir la ronda siguiente (un requerimiento observado vuelve a pruebas) | — |
+| 6 · Publicar el resultado | no le falta ningún destino (lo dice `RevisionPublishService::stepsFor`) | «Publicar…», sólo con la revisión cerrada, o **«Completar publicación…»** si algo ya llegó | una fila por destino: ✓/— y qué se hizo o qué lo bloquea |
+| 7 · Volver a probar | — | abrir la ronda siguiente (un requerimiento observado vuelve a pruebas) y, al lado, **«Continuar lo fallado»**: repetir sólo lo que se rompió, que abre esa misma ronda y ejecuta en ella | — |
 
 En «Revisiones anteriores» cada ronda cerrada enseña **a dónde llegó su resultado** —un chip por destino
 (`ZEPHYR`/`GESTOR`/`GESREQ`, ✓ hecho, — pendiente, con el detalle en el tooltip; los que ni están hechos ni
 se pueden hacer no se enseñan)— y ofrece lo que le falta: «Generar acta…» si no tiene acta y **«Completar
 publicación…»** si algún destino sigue pendiente. Chips y botón salen de `RevisionPublishService::stepsFor`
 y `pendingFor`, así que el historial y el diálogo dicen lo mismo.
+
+**Dónde está el resultado se ve sin abrir nada.** Cada destino cuenta cómo quedó en `Step::state`, en dos
+palabras: el resultado con el que se registró en GESREQ («Observado»), los ciclos que llegaron a Zephyr y
+la clave del gestor. Con eso, el paso 6 se lee «Publicado en GESREQ (Observado) · ZEPHYR (1 ciclo(s))», las
+cajas de destino del panel del tablero enseñan eso en vez de un «Hecho» pelado, y debajo del paso queda una
+fila por destino con la frase entera (`Step::detail`: la fecha del registro y el estado en el que GESREQ
+dejó el requerimiento, «CONTROL DE CALIDAD OBSERVADO»). Lo que ese registro cambió en el sistema también se
+ve en la tarjeta del requerimiento, que `noteRequirementState` pone al día sin volver a consultar la bandeja.
 
 Cada paso son dos filas: la suya (número, qué es, cómo va y sus botones) y, debajo y a lo ancho, lo que
 cuelga de él, así lo de dentro no compite en anchura con los botones del paso. No hay tarjeta de casos ni
@@ -957,10 +965,10 @@ acta es el de la ronda.
 | Momento | Qué pasa |
 |---------|----------|
 | Arranca un ciclo del plan del issue (desde el issue o desde el plan) | Se abre la revisión (la primera, o la siguiente si la anterior está cerrada) y el issue pasa a «En pruebas» |
-| Se continúa un ciclo con lo que quedó roto | El ciclo nuevo hereda el issue y la revisión de aquél: es la misma ronda, y sus resultados sustituyen a los de los casos que repite |
+| Se continúa un ciclo con lo que quedó roto | El ciclo nuevo hereda el issue y la revisión de aquél: es la misma ronda, y sus resultados sustituyen a los de los casos que repite. Si esa ronda **ya se cerró**, `notePlanStarted` abre la siguiente y el ciclo de la continuación es de ella: continuar lo fallado es el camino corto de volver a probar |
 | Durante la ronda | `issueProgress()` (core, función pura) cuenta la **última ejecución de cada caso dentro de la revisión** y los bugs del issue: de ahí salen los contadores y el resultado que se propone |
 | Se genera el acta | `QualityRecordService` la arma con el **ciclo de plan** que se elija (`cyclesFor`), la escribe y la guarda en la revisión, con lo escrito en ella y con cuál fue ese ciclo (`IssueRevision::planRunId`) |
-| Se cierra la revisión | Queda con su resultado (Conforme u Observado) y el issue, Finalizado. Volver a probar abre la siguiente |
+| Se cierra la revisión | Queda con su resultado. **Conforme** finaliza el issue; **Observado** lo devuelve a «En pruebas» y a la columna «Fallido / bloqueado», y el trabajo sigue en la misma ronda: el acta y la publicación del resultado. Volver a probar abre la siguiente |
 | Se publica el resultado | Con la revisión cerrada aparece «Publicar…»: los ciclos a Zephyr, el resultado y el acta al gestor y el registro a GESREQ (`RevisionPublishService`) |
 
 El **resultado** (`QaOutcome`: Pendiente, Conforme, Observado) es una propuesta hasta que alguien lo

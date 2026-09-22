@@ -189,15 +189,19 @@ bool RunController::continueCycle(const QString& planRunId, const QString& envir
         resume.insert(row.caseId, row.run);
     }
     if (caseIds.isEmpty()) return false;
+    // Lo que hace falta del ciclo que se continúa se copia ahora: apuntar un ciclo nuevo reubica la
+    // lista del historial y el puntero deja de valer. Con él se iba el plan del aviso de arranque, y
+    // sin plan nadie abría la revisión siguiente ni sellaba con ella el ciclo de la continuación.
+    const QString name = cycle->name, planId = cycle->planId, previous = cycle->id;
 
     commitRun(false);
     closePlan();
     m_resume = resume;
-    m_planRunId = m_history.startPlan(cycle->name, caseIds, cycle->planId, environment, cycle->id);
+    m_planRunId = m_history.startPlan(name, caseIds, planId, environment, previous);
     m_queue = caseIds.mid(1);
     begin(caseIds.first());
     changed();
-    emit planStarted(m_planRunId, cycle->planId);
+    emit planStarted(m_planRunId, planId);
     return true;
 }
 

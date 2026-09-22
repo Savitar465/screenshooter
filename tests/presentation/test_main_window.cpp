@@ -1864,6 +1864,89 @@ private slots:
         dialog->close();
     }
 
+    // Cerrada la revisión como observada, el trabajo sigue: lo siguiente es el acta y publicar el
+    // resultado (no continuar lo fallado, que es de una ronda abierta), y publicado se ve desde el issue
+    // que GESREQ lo recibió con la observación y que los ciclos llegaron a Zephyr.
+    void anObservedRevisionContinuesWithTheRecordAndThePublication() {
+        WindowFixture f;
+        f.app.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
+        f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) {
+            r.url = QStringLiteral("http://gesreq.test:7401/greq");
+            r.user = QStringLiteral("jmaidana");
+            r.password = QStringLiteral("secreto");
+            r.connected = true;
+        });
+        ExternalRequirement requirement;
+        requirement.id = QStringLiteral("2026997");
+        requirement.systemCode = QStringLiteral("SUMA2");
+        requirement.summary = QStringLiteral("Integración de nuevos servicios");
+        requirement.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+        f.app.issues.importRequirements({requirement}, QStringLiteral("http://gesreq.test:7401/greq"));
+        const QString id = f.app.issues.issues().first().id;
+        f.app.issues.updateIssue(id, [](Issue& i) {
+            i.publication.tracker = QStringLiteral("Jira");
+            i.publication.key = QStringLiteral("SHOP-12");
+            i.publication.publishedAt = QDateTime::currentDateTime();
+        });
+        const QString planId = f.app.plans.createPlan(QStringLiteral("Plan GREQ 2026997"));
+        f.app.plans.toggle(QStringLiteral("TC-101"));
+        f.app.issues.linkPlan(id, planId);
+        f.app.issues.openRevision(id);
+        f.app.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Plan GREQ 2026997"), planId);
+        const QString firstCycle = f.app.run.planRunId();
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Fail);   // deja el caso fallado
+        f.app.run.finish();
+        f.app.issues.select(id);
+
+        f.window->navigate(Screen::Issues);
+        // Con la ronda abierta, lo que toca es repetir lo que se rompió.
+        QCOMPARE(f.liveLabel("issueNextTitle")->text(), QStringLiteral("Continuar lo fallado"));
+
+        // Cerrada como observada, el issue sigue en «fallido / bloqueado» pero lo siguiente ya es el acta.
+        f.app.issues.closeRevision(id, QaOutcome::Observado);
+        QTRY_COMPARE(f.liveLabel("issueNextTitle")->text(), QStringLiteral("Generar el acta (R-213)"));
+
+        // Sin acta se puede publicar igual: el acta se adjunta si la hay.
+        auto publishButton = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issuePublishRevision")); };
+        QTRY_VERIFY(publishButton() && publishButton()->isEnabled());
+        publishButton()->click();
+        auto* dialog = f.window->findChild<RevisionPublishDialog*>();
+        QVERIFY(dialog);
+        QCOMPARE(dialog->findChild<QComboBox*>(QStringLiteral("revisionPublishOutcome"))->currentText(), QStringLiteral("Observado"));
+        dialog->findChild<QPushButton*>(QStringLiteral("revisionPublishAccept"))->click();
+        dialog->close();
+
+        QCOMPARE(f.app.requirementSource->registrations.first().result, QStringLiteral("Observado"));
+        const IssueRevision& revision = f.app.issues.find(id)->revisions.last();
+        QVERIFY(revision.gesreq.registeredAt.isValid());
+        QCOMPARE(revision.gesreq.requirementState, QStringLiteral("CONTROL DE CALIDAD OBSERVADO"));
+
+        // Y el paso de publicar lo cuenta: cada destino con lo que quedó en él.
+        const QString detail = f.liveLabel("issueStepPublishDetail")->text();
+        QVERIFY2(detail.contains(QStringLiteral("GESREQ (Observado)")), qPrintable(detail));
+        QVERIFY2(detail.contains(QStringLiteral("ZEPHYR")), qPrintable(detail));
+        // El acta sigue sin levantarse, así que eso es lo que se propone; publicar y cerrar la revisión
+        // están hechos y así se ven, aunque el paso de antes siga pendiente.
+        QTRY_COMPARE(f.liveLabel("issueNextTitle")->text(), QStringLiteral("Generar el acta (R-213)"));
+        QVERIFY2(f.liveLabel("issueStepPublishDetail")->text().startsWith(QStringLiteral("Publicado en")),
+                 qPrintable(f.liveLabel("issueStepPublishDetail")->text()));
+
+        // Y al lado de lo que toca se ofrece volver a probar sólo lo que se rompió: eso abre la revisión
+        // siguiente y el ciclo nuevo es de ella, no de la ronda ya cerrada.
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* retry = f.window->findChild<QPushButton*>(QStringLiteral("issueNextAlso"));
+        QVERIFY(retry);
+        QVERIFY2(retry->text().contains(QStringLiteral("Continuar lo fallado")), qPrintable(retry->text()));
+        retry->click();
+        QVERIFY(f.answerCycleDialog());
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+        const PlanRun* cycle = f.app.history.findPlan(f.app.run.planRunId());
+        QVERIFY(cycle);
+        QCOMPARE(cycle->continuesCycleId, firstCycle);
+        // Que ese ciclo sea ya de la revisión siguiente lo pone en pie `ProjectSession` (esta ventana
+        // monta los servicios a mano): lo comprueba `startingAPlanCycleStampsTheIssueAndItsRevisionOnIt`.
+    }
+
     // Una ronda que se cerró sin publicar se termina desde su fila del historial: el issue ya está
     // probando la siguiente y aun así lo de la anterior llega a su sitio.
     void aPreviousRevisionIsFinishedFromTheHistory() {
@@ -2134,6 +2217,40 @@ private slots:
         connect(history, &HistoryView::openUrlRequested, this, [&opened](const QString& url) { opened = url; });
         f.window->findChild<QPushButton*>(QStringLiteral("openBug-SHOP-11"))->click();
         QCOMPARE(opened, QStringLiteral("https://acme.atlassian.net/browse/SHOP-11"));
+    }
+
+    // Un requerimiento observado no está terminado: su tarjeta va a «Fallido / bloqueado» hasta que se
+    // vuelva a probar, y sólo cerrarlo conforme lo lleva a «Finalizado».
+    void anObservedRevisionLeavesTheIssueInTheBrokenColumn() {
+        WindowFixture f;
+        const QString observed = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        const QString accepted = f.app.issues.createIssue(QStringLiteral("Exportar pedidos"));
+        for (const auto& id : {observed, accepted}) f.app.issues.openRevision(id);
+        f.app.issues.closeRevision(observed, QaOutcome::Observado);
+        f.app.issues.closeRevision(accepted, QaOutcome::Conforme);
+        QVERIFY(f.app.issues.find(observed)->state == IssueState::Testing);
+        QVERIFY(f.app.issues.find(accepted)->state == IssueState::Done);
+
+        f.window->navigate(Screen::Issues);
+        const auto columnOf = [&f](const QString& id) {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            auto* card = f.window->findChild<QPushButton*>(QStringLiteral("issueRow-") + id);
+            for (QWidget* w = card; w; w = w->parentWidget())
+                if (w->objectName().startsWith(QStringLiteral("issueBoardColumn-"))) return w->objectName();
+            return QString();
+        };
+        const QString broken = QStringLiteral("issueBoardColumn-%1").arg(static_cast<int>(IssuesView::Column::Broken));
+        const QString done = QStringLiteral("issueBoardColumn-%1").arg(static_cast<int>(IssuesView::Column::Done));
+        QCOMPARE(columnOf(observed), broken);
+        QCOMPARE(columnOf(accepted), done);
+
+        // Aunque se marque a mano como finalizado (o venga así de antes), sigue siendo observado.
+        f.app.issues.updateIssue(observed, [](Issue& i) { i.state = IssueState::Done; });
+        QTRY_COMPARE(columnOf(observed), broken);
+
+        // Volver a probarlo abre la revisión siguiente y lo saca de ahí.
+        f.app.issues.openRevision(observed);
+        QTRY_VERIFY(columnOf(observed) != broken);
     }
 
     // El tablero de issues reparte por cómo va el trabajo de QA, con una columna para lo que dejó casos

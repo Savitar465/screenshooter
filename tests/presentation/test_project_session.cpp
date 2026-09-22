@@ -245,8 +245,21 @@ private slots:
         QVERIFY(second);
         QCOMPARE(second->revision, 2);
         QCOMPARE(second->environment, QStringLiteral("Producción"));
+        const QString secondId = second->id;   // los ciclos nuevos reubican la lista: el puntero no sirve luego
         QCOMPARE(IssueStore::cyclesOfRevision(*session.issues->find(issueId), *session.history, 1).size(), 1);
         QCOMPARE(IssueStore::cyclesOfRevision(*session.issues->find(issueId), *session.history, 2).size(), 1);
+
+        // Y continuar lo que se rompió en una ronda ya cerrada es volver a probar: abre la siguiente y
+        // el ciclo de la continuación es de ella, no de la ronda que quedó observada.
+        session.run->mark(StepResult::Fail);
+        session.run->finish();
+        session.issues->closeRevision(issueId, QaOutcome::Observado);
+        QVERIFY(session.run->continueCycle(secondId, QStringLiteral("QA")));
+        const PlanRun* third = session.history->findPlan(session.run->planRunId());
+        QVERIFY(third);
+        QCOMPARE(third->continuesCycleId, secondId);
+        QCOMPARE(third->revision, 3);
+        QCOMPARE(session.issues->find(issueId)->revisions.size(), 3);
     }
 
     void projectsKeepDataAndJiraCodesSeparateButShareSettingsAndSuites() {

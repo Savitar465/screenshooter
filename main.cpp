@@ -31,7 +31,7 @@
 namespace {
 
 #ifndef QAFLOW_VERSION
-#define QAFLOW_VERSION "1.2.0"
+#define QAFLOW_VERSION "1.2.2"
 #endif
 
 /// Idioma efectivo: el elegido o, con "sistema", el del entorno (español si el sistema es español).
@@ -129,7 +129,7 @@ int main(int argc, char* argv[]) {
         const RunShortcuts& r = current->settings->runShortcuts();
         for (const char* id : {"capture", "record", "step-pass", "step-fail", "step-back"}) hotkey.unbind(QString::fromLatin1(id));
         if (!c.globalShortcut) return;
-        hotkey.bind(QStringLiteral("capture"), c.shortcut, [&]() { current->evidence->captureForSelectedCase(); });
+        hotkey.bind(QStringLiteral("capture"), c.shortcut, [&]() { current->window->captureScreen(); });
         hotkey.bind(QStringLiteral("record"), c.recordShortcut, [&]() { current->evidence->toggleRecording(); });
         hotkey.bind(QStringLiteral("step-pass"), r.passAndNext, [&]() {
             if (!current->run->isRunning() || current->run->isPaused()) return;

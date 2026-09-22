@@ -42,9 +42,11 @@ void copyToClipboard(EvidenceService& service, TestCaseStore& cases, const QStri
 }
 
 void showInFolder(TestCaseStore& cases, const QString& caseId, int shotId) {
-    const Screenshot* s = findShot(cases, caseId, shotId);
-    if (!s) return;
-    const QFileInfo info(s->path);
+    if (const Screenshot* s = findShot(cases, caseId, shotId)) showInFolder(s->path);
+}
+
+void showInFolder(const QString& path) {
+    const QFileInfo info(path);
 #if defined(Q_OS_WIN)
     if (info.exists() && QProcess::startDetached(QStringLiteral("explorer"), {QStringLiteral("/select,"), QDir::toNativeSeparators(info.absoluteFilePath())})) return;
 #elif defined(Q_OS_MACOS)

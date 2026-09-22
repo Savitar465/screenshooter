@@ -77,6 +77,9 @@ public:
     /// Abre el parte de bug en su ventana, con el borrador del caso y del paso que se indique
     /// (-1 = el paso que vio la ejecución). No cambia de pantalla: el parte se escribe encima.
     void reportBug(int stepIndex = -1);
+    /// Captura de pantalla (menú, bandeja y atajo global): con un parte de bug abierto va al parte;
+    /// si no, a la ejecución en curso.
+    void captureScreen();
     /// Ventana de ajustes mientras esté abierta; nullptr si no lo está. La usan la reconstrucción
     /// de la ventana al cambiar de idioma o tema y las capturas de la documentación.
     QWidget* settingsWindow() const;

@@ -145,6 +145,41 @@ private slots:
                  QStringLiteral("GREQ 2026997 · Rev. 2 · Regresión Sprint 14 · Cont. 1 · 12/05/2026 · QA"));
     }
 
+    // Zephyr rechaza con un 406 genérico un ciclo cuyo nombre o descripción pasan de 255
+    // caracteres; con el título de un requerimiento real (168) la descripción se pasaba.
+    void aLongRequirementTitleStillFitsInTheCycle() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
+        publish.setIssues(&f.issues);
+
+        ExternalRequirement requirement;
+        requirement.id = QStringLiteral("2025749");
+        requirement.summary = QStringLiteral("Adecuar el sistema SA- GESTION ARCHIVO DESARCHIVO, con la adición de los reportes, "
+                                             "con las funcioanlidades para los archivos Digitales, (puntos B Y C del GREQ 2025749).");
+        const QString issueId = f.issues.openForRequirement(requirement, QStringLiteral("http://servidor:7401/greq"));
+        QVERIFY(!issueId.isEmpty());
+
+        PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
+        report.plan.name = QStringLiteral("IS-0001 · ") + requirement.summary + QStringLiteral(" ") + requirement.summary;
+        report.plan.issueId = issueId;
+        report.plan.revision = 1;
+        report.plan.environment = QStringLiteral("QA");
+
+        const QString name = publish.cycleName(report);
+        QVERIFY(name.size() <= PublishRequest::kMaxCycleField);
+        QVERIFY(name.startsWith(QStringLiteral("GREQ 2025749 · Rev. 1 · IS-0001 · Adecuar")));
+        QVERIFY(name.endsWith(QStringLiteral("… · 12/05/2026 · QA")));   // se acorta el plan, no lo demás
+
+        publish.publish(report, [](const PublishResult&) {});
+        const PublishRequest& sent = zephyr->published[0];
+        QCOMPARE(sent.cycleName, name);
+        QVERIFY2(sent.description.size() <= PublishRequest::kMaxCycleField, qPrintable(QString::number(sent.description.size())));
+        QVERIFY(sent.description.contains(QStringLiteral("GREQ 2025749")));
+        QVERIFY(sent.description.contains(QStringLiteral("Ambiente: QA")));
+    }
+
     void casesWhoseTestWillBeCreatedAreListedBeforePublishing() {
         AppFixture f;
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });

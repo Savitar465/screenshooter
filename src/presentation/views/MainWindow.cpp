@@ -369,6 +369,7 @@ void MainWindow::askCycleEnvironment(const QString& planId, const QString& planN
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, planId, dialog]() { beginPlanRun(planId, dialog->environment()); });
     dialog->open();
+    updateActions();
 }
 
 void MainWindow::beginPlanRun(const QString& planId, const QString& environment) {
@@ -414,6 +415,7 @@ void MainWindow::continueCycleRun(const QString& planRunId) {
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, planRunId, dialog]() { beginContinuation(planRunId, dialog->environment()); });
     dialog->open();
+    updateActions();
 }
 
 void MainWindow::beginContinuation(const QString& planRunId, const QString& environment) {
@@ -535,7 +537,7 @@ void MainWindow::buildMenus() {
     QMenu* runMenu = bar->addMenu(tr("E&jecución"));
     m_actRun = runMenu->addAction(tr("&Ejecutar selección de la barra superior"), QKeySequence(Qt::Key_F5), this, &MainWindow::runSelectedTarget);
     m_actRun->setObjectName(QStringLiteral("actRun"));
-    m_actCapture = runMenu->addAction(tr("&Capturar pantalla"), this, [this]() { m_ctx.evidence->captureForSelectedCase(); });
+    m_actCapture = runMenu->addAction(tr("&Capturar pantalla"), this, &MainWindow::captureScreen);
     m_actCapture->setObjectName(QStringLiteral("actCapture"));
     m_actCapture->setShortcutContext(Qt::ApplicationShortcut);
     m_actRecord = runMenu->addAction(tr("&Grabar GIF"), this, [this]() { m_ctx.evidence->toggleRecording(); });
@@ -614,7 +616,7 @@ void MainWindow::buildTray() {
         else { frame->show(); frame->raise(); frame->activateWindow(); }
         updateActions();
     });
-    menu->addAction(tr("Capturar pantalla"), this, [this]() { m_ctx.evidence->captureForSelectedCase(); });
+    menu->addAction(tr("Capturar pantalla"), this, &MainWindow::captureScreen);
     if (m_ctx.evidence->canRecord()) {
         m_trayRecord = menu->addAction(tr("Grabar GIF"), this, [this]() { m_ctx.evidence->toggleRecording(); });
     }
@@ -639,7 +641,7 @@ void MainWindow::updateActions() {
     m_actRun->setEnabled(m_navRun->isEnabled());
     m_actDuplicate->setEnabled(hasSelection);
     m_actDelete->setEnabled(hasSelection);
-    m_actCapture->setEnabled(hasSelection);
+    m_actCapture->setEnabled(hasSelection || m_bugDialog);   // el parte captura aunque no haya caso
     m_actRecord->setEnabled(hasSelection || m_ctx.evidence->isRecording());
     m_actAttach->setEnabled(hasSelection);
     m_actReportBug->setEnabled(hasSelection);
@@ -728,7 +730,7 @@ void MainWindow::wirePlan() {
 void MainWindow::wireRun() {
     connect(m_run, &RunView::toast, this, &MainWindow::showToast);
     connect(m_run, &RunView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
-    connect(m_run, &RunView::captureRequested, m_ctx.evidence, &EvidenceService::captureForSelectedCase);
+    connect(m_run, &RunView::captureRequested, this, &MainWindow::captureScreen);
     connect(m_run, &RunView::reportBugRequested, this, &MainWindow::reportBug);
     connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
     // El modo foco deja la evidencia sola: la ventana esconde su marco mientras dura.
@@ -760,6 +762,11 @@ void MainWindow::wireBug() {
 
 QWidget* MainWindow::bugWindow() const { return m_bugDialog; }
 
+void MainWindow::captureScreen() {
+    if (m_bugDialog) m_bugDialog->captureScreen();
+    else m_ctx.evidence->captureForSelectedCase();
+}
+
 void MainWindow::reportBug(int stepIndex) {
     if (m_bugDialog) {   // ya hay un parte a medias: se trae al frente con el paso que se pida
         m_bugDialog->loadDraft(stepIndex);
@@ -772,10 +779,16 @@ void MainWindow::reportBug(int stepIndex) {
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &BugDialog::toast, this, &MainWindow::showToast);
     m_bugDialog = dialog;
+    // El parte es modal y tapa los atajos de esta ventana: el de captura se le presta para que
+    // también funcione con el parte delante (y la captura va al parte, ver `captureScreen`).
+    dialog->addAction(m_actCapture);
+    // Un parte cerrado (se borra después, WA_DeleteOnClose) ya no recibe capturas.
+    connect(dialog, &QDialog::finished, this, [this]() { m_bugDialog = nullptr; updateActions(); });
     dialog->loadDraft(stepIndex);
     // `open()` y no `exec()`: es modal, pero sin bucle propio (uno anidado cuelga los tests y deja
     // fuera de juego a los atajos globales de la ejecución).
     dialog->open();
+    updateActions();
 }
 
 void MainWindow::wireIssues() {

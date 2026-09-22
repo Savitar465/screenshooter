@@ -13,6 +13,7 @@
 #include "presentation/views/BugDetailWindow.h"
 #include "presentation/views/BugDialog.h"
 #include "presentation/views/BugView.h"
+#include "presentation/widgets/ShotCard.h"
 #include "presentation/views/CasesView.h"
 #include "presentation/views/IssuesView.h"
 #include "presentation/views/CycleStartDialog.h"
@@ -36,6 +37,7 @@
 #include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QFileInfo>
 #include <QFrame>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -601,6 +603,59 @@ private slots:
         auto* severity = f.window->findChild<QComboBox*>(QStringLiteral("bugSeverity"));
         QVERIFY(severity);
         QCOMPARE(severity->currentData().toString(), QStringLiteral("Bloqueante"));
+    }
+
+    /// El parte arranca con una copia de la última captura de la ejecución, no con todas; quitarla
+    /// o añadir otras no toca la evidencia de la ejecución, y lo que se crea lleva las del parte.
+    void theBugReportHasItsOwnAttachments() {
+        WindowFixture f;
+        f.action("actRun")->trigger();
+        const QString id = f.app.store.selectedId();
+        f.action("actCapture")->trigger();
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 2);
+        const QList<Screenshot> runShots = f.app.store.find(id)->shots;
+
+        f.window->reportBug();
+        BugDialog* dialog = f.bugDialog();
+        QVERIFY(dialog);
+        QCOMPARE(dialog->attachments().size(), 1);
+        const Screenshot copy = dialog->attachments().first();
+        QVERIFY(copy.path != runShots.last().path);
+        QCOMPARE(QFileInfo(copy.path).size(), QFileInfo(runShots.last().path).size());
+
+        // Quitarla del parte no la quita de la ejecución.
+        auto* card = dialog->findChild<ShotCard*>();
+        QVERIFY(card);
+        emit card->removeRequested(card->shot().id);
+        QVERIFY(dialog->attachments().isEmpty());
+        QVERIFY(!QFile::exists(copy.path));
+        QCOMPARE(f.app.store.find(id)->shots.size(), 2);
+        for (const auto& s : runShots) QVERIFY(QFile::exists(s.path));
+
+        // Capturar desde el parte añade al parte, no a la ejecución.
+        auto* capture = dialog->findChild<QPushButton*>(QStringLiteral("bugCapture"));
+        QVERIFY(capture);
+        capture->click();
+        QTRY_COMPARE(dialog->attachments().size(), 1);
+        QCOMPARE(f.app.store.find(id)->shots.size(), 2);
+        // Y el atajo de captura, con el parte abierto, también va al parte.
+        QVERIFY(dialog->actions().contains(f.action("actCapture")));
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(dialog->attachments().size(), 2);
+        QCOMPARE(f.app.store.find(id)->shots.size(), 2);
+        const QString captured = dialog->attachments().first().path;
+        const QString byShortcut = dialog->attachments().last().path;
+
+        // Cancelar el parte borra sus adjuntos.
+        dialog->reject();
+        QVERIFY(!QFile::exists(captured));
+        QVERIFY(!QFile::exists(byShortcut));
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        // Sin parte, el atajo vuelve a capturar para la ejecución.
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 3);
+        for (const auto& s : runShots) QVERIFY(QFile::exists(s.path));
     }
 
     /// El bug que se crea pertenece al paso del que se reportó: el formulario lo trae puesto, se

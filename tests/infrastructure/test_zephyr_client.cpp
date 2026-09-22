@@ -360,6 +360,29 @@ private slots:
         QVERIFY(bodyOf(*last)[QStringLiteral("startDate")].toString().isEmpty());
     }
 
+    // Lo que no cabe en las columnas del ciclo (255) hace que Zephyr lo rechace entero: se recorta.
+    void cycleFieldsAreCutToWhatZephyrStores() {
+        FakeHttpServer server;
+        routeProject(server);
+        routeMyself(server, "es_ES");
+        routeZephyr(server, "/rest/zapi/latest");
+
+        PublishRequest request = requestOf({caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado, {StepResult::Pass})});
+        request.cycleName = QString(300, QLatin1Char('n'));
+        request.description = QString(400, QLatin1Char('d'));
+        request.environment = QStringLiteral("QA");
+        ZephyrClient client;
+        bool done = false;
+        client.publish(settingsFor(server.baseUrl()), request, [&](const PublishResult&) { done = true; });
+        QTRY_VERIFY(done);
+        const QJsonObject body = firstCycleBody(server, "/rest/zapi/latest");
+        QCOMPARE(body[QStringLiteral("name")].toString().size(), PublishRequest::kMaxCycleField);
+        QCOMPARE(body[QStringLiteral("description")].toString().size(), PublishRequest::kMaxCycleField);
+        QVERIFY(body[QStringLiteral("description")].toString().endsWith(QStringLiteral("…")));
+        QCOMPARE(body[QStringLiteral("environment")].toString(), QStringLiteral("QA"));
+        QCOMPARE(ZephyrClient::fitCycleField(QStringLiteral("corto")), QStringLiteral("corto"));
+    }
+
     // Zephyr contesta a los datos inválidos con un 406 y un objeto plano campo→motivo. Sin leerlo,
     // el usuario sólo veía el "Error transferring…" de Qt y no había por dónde empezar.
     void zephyrValidationErrorsReachTheUser() {

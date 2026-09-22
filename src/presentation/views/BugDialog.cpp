@@ -5,8 +5,10 @@
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/AnnotationEditor.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlowLayout.h"
+#include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/TextArea.h"
 #include "presentation/widgets/Ui.h"
@@ -17,6 +19,7 @@
 #include <QGuiApplication>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QScreen>
 #include <QScrollArea>
@@ -93,16 +96,23 @@ BugDialog::BugDialog(TestCaseStore& cases, SettingsStore& settings, BugReportSer
 
     buildForm(v);
 
+    // El paso elegido se describe con los pasos del caso: si el caso cambia, se repinta.
     connect(&m_cases, &TestCaseStore::caseChanged, this, [this](const QString& id) { if (id == m_cases.selectedId()) refreshShots(); });
     connect(&m_settings, &SettingsStore::trackerChanged, this, [this]() { refreshHeader(); refreshTrackerFields(); });
     connect(&m_bugs, &BugReportService::metadataChanged, this, &BugDialog::refreshTrackerFields);
-    // La captura se hace con el diálogo escondido: vuelve en cuanto la evidencia entra (o falla).
-    connect(&m_evidence, &EvidenceService::shotAdded, this, [this](const QString&, int, const QString&) {
+    // La captura se hace con el diálogo escondido: vuelve en cuanto la imagen llega (o falla). Es
+    // del parte, no de la ejecución: no pasa por el caso.
+    connect(&m_evidence, &EvidenceService::bugShotCaptured, this, [this](const Screenshot& shot) {
         if (!m_capturing) return;
         m_capturing = false;
         show();
         raise();
         activateWindow();
+        addShots({shot});
+        if (m_settings.capture().openEditor && shot.isImage() && !shot.isAnimation()) {
+            const int id = m_shots.last().id;
+            QTimer::singleShot(0, this, [this, id]() { annotateShot(id); });
+        }
     });
     connect(&m_evidence, &EvidenceService::failed, this, [this](const QString&) {
         if (!m_capturing) return;
@@ -234,12 +244,13 @@ void BugDialog::buildForm(QVBoxLayout* v) {
     m_shotsHeader = ui::label(QString(), "eyebrow");
     shh->addWidget(m_shotsHeader, 1);
     auto* capture = ui::button(tr("+ Capturar pantalla"), "dashed");
+    capture->setObjectName(QStringLiteral("bugCapture"));
     capture->setToolTip(tr("La ventana se esconde mientras se captura y vuelve con la imagen adjunta"));
     connect(capture, &QPushButton::clicked, this, &BugDialog::captureScreen);
     shh->addWidget(capture);
     auto* attach = ui::button(tr("+ Adjuntar archivo…"), "dashed");
     attach->setToolTip(tr("Adjunta logs, vídeos o imágenes existentes; se suben al gestor con el bug"));
-    connect(attach, &QPushButton::clicked, this, [this]() { m_evidence.attachFiles(evidence::pickFiles(this)); });
+    connect(attach, &QPushButton::clicked, this, [this]() { addShots(m_evidence.copyForBug(evidence::pickFiles(this))); });
     shh->addWidget(attach);
     sv->addWidget(shHead);
     auto* shots = new QWidget;
@@ -319,6 +330,13 @@ void BugDialog::loadDraft(int stepIndex) {
     m_steps->setTextSilently(d.stepsToReproduce);
     m_expected->setTextSilently(d.expected);
     m_actual->setTextSilently(d.actual);
+    // El parte arranca con una copia de la última captura de la ejecución; el resto se añade a mano.
+    clearShots(true);
+    if (const TestCase* c = m_cases.selected()) {
+        const QList<Screenshot> run = c->latestEvidence();
+        const auto last = std::max_element(run.cbegin(), run.cend(), [](const Screenshot& a, const Screenshot& b) { return a.id < b.id; });
+        if (last != run.cend()) addShots(m_evidence.copyForBug({last->path}));
+    }
     refreshShots();
     refreshTrackerFields();
     if (m_settings.tracker().connected && !m_bugs.hasMetadata()) loadMetadata(false);
@@ -338,29 +356,106 @@ void BugDialog::refreshStepOptions(int step) {
 
 void BugDialog::refreshShots() {
     ui::clearLayout(m_shotsRow);
+    m_shotsHeader->setText(tr("ADJUNTOS · %1").arg(m_shots.size()));
     const TestCase* c = m_cases.selected();
-    // El bug sale de una ejecución: se adjunta la evidencia de la más reciente (la que está en
-    // curso si la hay), no todo lo que el caso haya acumulado en su historia.
-    const QList<Screenshot> shots = c ? c->latestEvidence() : QList<Screenshot>{};
-    m_shotsHeader->setText(tr("ADJUNTOS · %1").arg(shots.size()));
-    if (!c) return;
-    const QString id = c->id;
-    for (const auto& s : shots) {
-        auto* card = new ShotCard(s, c->steps, ShotCard::Layout::Compact);
-        connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_cases.removeShot(id, shotId); });
-        evidence::wireCard(card, this, m_cases, m_evidence, id);
+    const QList<TestStep> steps = c ? c->steps : QList<TestStep>{};
+    for (const auto& s : m_shots) {
+        auto* card = new ShotCard(s, steps, ShotCard::Layout::Compact);
+        connect(card, &ShotCard::removeRequested, this, &BugDialog::removeShot);
+        connect(card, &ShotCard::openRequested, this, &BugDialog::openShot);
+        connect(card, &ShotCard::annotateRequested, this, [this, card](int id) { if (annotateShot(id)) card->reloadThumbnail(); });
+        connect(card, &ShotCard::copyRequested, this, [this](int id) { if (const Screenshot* s = findShot(id)) m_evidence.copyToClipboard(s->path); });
+        connect(card, &ShotCard::openFolderRequested, this, &BugDialog::showShotInFolder);
         m_shotsRow->addWidget(card);
     }
+}
+
+// ---- Adjuntos del parte --------------------------------------------------------------------
+// Son copias del parte: quitarlos o anotarlos no toca la evidencia de la ejecución.
+
+void BugDialog::addShots(const QList<Screenshot>& shots) {
+    if (shots.isEmpty()) return;
+    for (Screenshot s : shots) {
+        s.id = m_nextShotId++;
+        m_shots << s;
+    }
+    refreshShots();
+}
+
+void BugDialog::removeShot(int shotId) {
+    for (int i = 0; i < m_shots.size(); ++i) {
+        if (m_shots[i].id != shotId) continue;
+        m_evidence.discardBugFiles({m_shots.takeAt(i).path});
+        refreshShots();
+        return;
+    }
+}
+
+void BugDialog::clearShots(bool deleteFiles) {
+    if (deleteFiles) {
+        QStringList paths;
+        for (const auto& s : m_shots) paths << s.path;
+        m_evidence.discardBugFiles(paths);
+    }
+    m_shots.clear();
+}
+
+const Screenshot* BugDialog::findShot(int shotId) const {
+    for (const auto& s : m_shots) if (s.id == shotId) return &s;
+    return nullptr;
+}
+
+void BugDialog::openShot(int shotId) {
+    if (m_shots.isEmpty()) return;
+    int index = 0;
+    for (int i = 0; i < m_shots.size(); ++i) if (m_shots[i].id == shotId) index = i;
+    auto* viewer = new ImageViewer(m_shots, index, this);
+    QPointer<ImageViewer> guard(viewer);
+    connect(viewer, &ImageViewer::copyRequested, viewer, [this](int id) { if (const Screenshot* s = findShot(id)) m_evidence.copyToClipboard(s->path); });
+    connect(viewer, &ImageViewer::openFolderRequested, viewer, [this](int id) { showShotInFolder(id); });
+    connect(viewer, &ImageViewer::annotateRequested, viewer, [this, guard](int id) {
+        if (!annotateShot(id)) return;
+        if (guard) guard->reload();
+        refreshShots();
+    });
+    viewer->show();
+    viewer->raise();
+    viewer->activateWindow();
+}
+
+bool BugDialog::annotateShot(int shotId) {
+    const Screenshot* s = findShot(shotId);
+    if (!s || !s->isImage() || s->isAnimation()) return false;
+    const QImage base(s->path);
+    if (base.isNull()) return false;
+    const QString path = s->path;
+    const QImage edited = AnnotationEditor::edit(base, this);
+    return !edited.isNull() && m_evidence.replaceBugImage(path, edited);
+}
+
+void BugDialog::showShotInFolder(int shotId) const {
+    if (const Screenshot* s = findShot(shotId)) evidence::showInFolder(s->path);
+}
+
+void BugDialog::done(int result) {
+    // Un parte cancelado se lleva sus adjuntos; uno creado (o encolado) los necesita: el gestor
+    // los sube, o los subirá al reintentar.
+    if (result == QDialog::Rejected) clearShots(true);
+    QDialog::done(result);
 }
 
 // ---- Acciones ------------------------------------------------------------------------------
 
 void BugDialog::captureScreen() {
-    // Sin ejecución en curso no hay de qué colgar la evidencia: que lo diga el servicio, pero sin
-    // esconder la ventana para nada.
+    // La captura es del parte: no hace falta ejecución en curso ni se añade a la de la ejecución.
+    if (m_capturing && m_evidence.isCountingDown()) { m_evidence.cancelCountdown(); return; }
+    if (m_evidence.isBusy() || m_evidence.isCountingDown() || m_evidence.isRecording()) {
+        emit toast(tr("Ya hay una captura o una grabación en curso"), theme::Amber);
+        return;
+    }
     m_capturing = true;
     hide();
-    m_evidence.captureForSelectedCase();
+    m_evidence.captureForBug();
 }
 
 void BugDialog::loadMetadata(bool force) {
@@ -421,7 +516,7 @@ BugReport BugDialog::collect() const {
     b.components = parseTags(m_components->text());
     b.affectsVersions = parseTags(m_versions->text());
     b.labels = parseTags(m_labels->text());
-    if (const TestCase* c = m_cases.selected()) for (const auto& s : c->latestEvidence()) b.attachmentPaths << s.path;
+    for (const auto& s : m_shots) b.attachmentPaths << s.path;
     return b;
 }
 

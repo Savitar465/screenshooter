@@ -41,6 +41,8 @@ public:
     static QString testTypeName(const TrackerSettings& s);
     /// Descripción del Test creado a partir de un caso: sus precondiciones y de dónde sale.
     static QString testDescription(const PublishCase& c, const QString& cycleName);
+    /// Texto recortado a lo que cabe en un campo del ciclo (`PublishRequest::kMaxCycleField`).
+    static QString fitCycleField(const QString& text);
 
 private:
     struct Job;   // estado de una publicación en curso (encadena decenas de peticiones)

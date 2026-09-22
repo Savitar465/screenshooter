@@ -5,8 +5,11 @@
 #include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
+#include "core/Text.h"
 
 #include <QFileInfo>
+
+#include <algorithm>
 
 namespace qaflow {
 
@@ -58,18 +61,25 @@ int TestPublishService::continuationDepth(const PlanRun& plan) const {
 QString TestPublishService::cycleName(const PlanReport& report) const {
     const PlanRun& plan = report.plan;
     QStringList parts;
+    int planPart = -1;
     // El requerimiento primero: en Zephyr los ciclos de un mismo control de calidad se buscan por él.
     if (const Issue* issue = m_issues && !plan.issueId.isEmpty() ? m_issues->find(plan.issueId) : nullptr)
         if (issue->isImported()) parts << tr("GREQ %1").arg(issue->requirement.data.id);
     if (plan.revision > 0) parts << tr("Rev. %1").arg(plan.revision);
     // Y el plan, que es lo que distingue los ciclos de una misma ronda entre sí.
-    if (!plan.name.trimmed().isEmpty()) parts << plan.name.trimmed();
+    if (!plan.name.trimmed().isEmpty()) { planPart = parts.size(); parts << plan.name.trimmed(); }
     // Una continuación repite plan, revisión y, casi siempre, día y ambiente: sin decir por dónde va la
     // cadena, su ciclo se llamaría igual que aquel al que continúa.
     if (const int depth = continuationDepth(plan); depth > 0) parts << tr("Cont. %1").arg(depth);
     if (plan.startedAt.isValid()) parts << plan.startedAt.toString(QStringLiteral("dd/MM/yyyy"));
     if (!plan.environment.trimmed().isEmpty()) parts << plan.environment.trimmed();
-    return parts.isEmpty() ? plan.name : parts.join(QStringLiteral(" · "));
+    if (parts.isEmpty()) return elideTitle(plan.name, PublishRequest::kMaxCycleField);
+    // El nombre del plan suele llevar el título del issue, que puede ser larguísimo: se acorta él
+    // para que el ciclo quepa en Zephyr sin perder requerimiento, revisión, fecha ni ambiente.
+    const QString sep = QStringLiteral(" · ");
+    if (const int overflow = parts.join(sep).size() - PublishRequest::kMaxCycleField; overflow > 0 && planPart >= 0)
+        parts[planPart] = elideTitle(parts[planPart], std::max(1, int(parts[planPart].size()) - overflow));
+    return elideTitle(parts.join(sep), PublishRequest::kMaxCycleField);
 }
 
 PublishRequest TestPublishService::requestFor(const PlanReport& report, bool update) const {
@@ -86,7 +96,7 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report, bool upd
     // Zephyr lo ve sin tener que volver a QAflow.
     if (const Issue* issue = m_issues && !report.plan.issueId.isEmpty() ? m_issues->find(report.plan.issueId) : nullptr) {
         if (issue->isImported())
-            req.description += tr("\nRequerimiento GREQ %1 · %2").arg(issue->requirement.data.id, issue->title);
+            req.description += tr("\nRequerimiento GREQ %1 · %2").arg(issue->requirement.data.id, elideTitle(issue->title, 80));
         if (report.plan.revision > 0) req.description += tr("\nRevisión %1 del control de calidad").arg(report.plan.revision);
     }
     if (!req.environment.isEmpty()) req.description += tr("\nAmbiente: %1").arg(req.environment);

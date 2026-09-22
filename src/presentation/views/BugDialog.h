@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/models/BugReport.h"
+#include "core/models/TestCase.h"
 #include "core/services/IIssueTracker.h"
 
 #include <QDialog>
@@ -38,6 +39,17 @@ public:
     /// (0-based) es el paso del que se reporta; -1 deja que lo decida la ejecución.
     void loadDraft(int stepIndex = -1);
 
+    /// Adjuntos del parte: copias propias, independientes de la evidencia de la ejecución.
+    const QList<Screenshot>& attachments() const { return m_shots; }
+    /// Se quita de en medio, captura y vuelve con la captura adjunta al parte. Es lo que hace el
+    /// atajo de captura mientras hay un parte abierto; una segunda pulsación durante la cuenta
+    /// atrás la cancela.
+    void captureScreen();
+
+public slots:
+    /// Al cancelar se borran los ficheros de los adjuntos, que ya no son de nadie.
+    void done(int result) override;
+
 signals:
     void toast(const QString& message, const QString& color);
     /// Bug creado en el gestor (`key`) o encolado sin conexión (`key` vacío).
@@ -47,6 +59,15 @@ private:
     void buildForm(QVBoxLayout* v);
     void refreshHeader();
     void refreshShots();
+    /// Añade copias al parte (numeradas con ids propios) y repinta.
+    void addShots(const QList<Screenshot>& shots);
+    void removeShot(int shotId);
+    /// Suelta los adjuntos actuales; con `deleteFiles` borra también sus ficheros.
+    void clearShots(bool deleteFiles);
+    const Screenshot* findShot(int shotId) const;
+    void openShot(int shotId);
+    bool annotateShot(int shotId);
+    void showShotInFolder(int shotId) const;
     /// Opciones del combo de paso, con los pasos del caso seleccionado.
     void refreshStepOptions(int step);
     void refreshTrackerFields();
@@ -55,8 +76,6 @@ private:
     void searchAssignees();
     /// Sustituye las opciones del combo sin tocar lo que se está escribiendo.
     void setAssigneeOptions(const QList<Assignee>& people);
-    /// Se quita de en medio, captura y vuelve con la evidencia puesta.
-    void captureScreen();
     void submit();
     BugReport collect() const;
 
@@ -68,6 +87,8 @@ private:
     bool m_sending = false;
     bool m_busy = false;
     bool m_capturing = false;      // escondido mientras se captura la pantalla
+    QList<Screenshot> m_shots;     // adjuntos del parte, copias en la carpeta de bugs
+    int m_nextShotId = 1;
 
     QLabel* m_eyebrow;
     QLineEdit* m_title;

@@ -24,6 +24,8 @@ void openViewer(QWidget* parent, TestCaseStore& cases, EvidenceService& service,
 bool annotate(QWidget* parent, TestCaseStore& cases, EvidenceService& service, const QString& caseId, int shotId);
 void copyToClipboard(EvidenceService& service, TestCaseStore& cases, const QString& caseId, int shotId);
 void showInFolder(TestCaseStore& cases, const QString& caseId, int shotId);
+/// Abre la carpeta del fichero, seleccionándolo donde el sistema lo permite.
+void showInFolder(const QString& path);
 /// Diálogo «Adjuntar archivos» (logs, vídeos, imágenes…). Devuelve las rutas elegidas.
 QStringList pickFiles(QWidget* parent);
 

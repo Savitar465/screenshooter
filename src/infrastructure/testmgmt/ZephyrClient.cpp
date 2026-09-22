@@ -297,17 +297,24 @@ void ZephyrClient::assignTest(const std::shared_ptr<Job>& job, const QString& ke
                });
 }
 
+QString ZephyrClient::fitCycleField(const QString& text) {
+    const int max = PublishRequest::kMaxCycleField;
+    const QString t = text.trimmed();
+    return t.size() <= max ? t : t.left(max - 1).trimmed() + QStringLiteral("…");
+}
+
 void ZephyrClient::createCycle(const std::shared_ptr<Job>& job, bool withDates) {
+    // Lo que no cabe en las columnas del ciclo hace que Zephyr lo rechace entero: se recorta aquí.
     const QJsonObject body{
-        {"name", job->request.cycleName},
+        {"name", fitCycleField(job->request.cycleName)},
         {"projectId", job->project.id},
         {"versionId", job->project.versionId},
-        {"description", job->request.description},
+        {"description", fitCycleField(job->request.description)},
         {"startDate", withDates ? cycleDate(job->request.startedAt, job->locale) : QString()},
         {"endDate", withDates ? cycleDate(job->request.finishedAt, job->locale) : QString()},
         {"build", QString()},
         // Dónde se probó: Zephyr lo enseña en la cabecera del ciclo y se puede filtrar por él.
-        {"environment", job->request.environment},
+        {"environment", fitCycleField(job->request.environment)},
     };
     postJson(zephyr(job->settings, QStringLiteral("/cycle")), QJsonDocument(body), [this, job, withDates](const Response& r) {
         if (!r.ok) {

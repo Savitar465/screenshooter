@@ -11,6 +11,8 @@
 #include <QGuiApplication>
 #include <QImage>
 
+#include <utility>
+
 namespace qaflow {
 
 EvidenceService::EvidenceService(std::shared_ptr<IScreenCapture> capture, TestCaseStore& cases, RunController& run,
@@ -57,13 +59,7 @@ bool EvidenceService::ensureFolder(const QString& folder, QString* error) const 
 // ---- Captura ---------------------------------------------------------------------------------
 
 void EvidenceService::captureForSelectedCase() {
-    if (m_countdownLeft > 0) {   // segunda pulsación durante la cuenta atrás: cancelar
-        m_countdown.stop();
-        m_countdownLeft = 0;
-        emit countdown(0);
-        emit failed(tr("Cuenta atrás cancelada"));
-        return;
-    }
+    if (m_countdownLeft > 0) { cancelCountdown(); return; }   // segunda pulsación durante la cuenta atrás
     if (m_busy || !m_capture || isRecording()) return;
     if (targetCaseId().isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return; }
     const int delay = m_settings.capture().delaySecs;
@@ -73,7 +69,45 @@ void EvidenceService::captureForSelectedCase() {
     m_countdown.start();
 }
 
+void EvidenceService::cancelCountdown() {
+    if (m_countdownLeft <= 0) return;
+    m_countdown.stop();
+    m_countdownLeft = 0;
+    m_forBug = false;
+    emit countdown(0);
+    emit failed(tr("Cuenta atrás cancelada"));
+}
+
+void EvidenceService::captureForBug() {
+    if (m_busy || m_countdownLeft > 0 || !m_capture || isRecording()) { emit failed(tr("Ya hay una captura o una grabación en curso")); return; }
+    m_forBug = true;
+    const int delay = m_settings.capture().delaySecs;
+    if (delay <= 0) { grabNow(); return; }
+    m_countdownLeft = delay;
+    emit countdown(m_countdownLeft);
+    m_countdown.start();
+}
+
 void EvidenceService::grabNow() {
+    if (std::exchange(m_forBug, false)) {
+        m_busy = true;
+        const CaptureSettings cfg = m_settings.capture();
+        const QString folder = bugFolder();
+        m_capture->capture(cfg.mode, [this, cfg, folder](const CaptureResult& r) {
+            m_busy = false;
+            if (!r.ok) { emit failed(r.error); return; }
+            QString error;
+            if (!ensureFolder(folder, &error)) { emit failed(error); return; }
+            const QString name = freeBugName(QDir(folder), QStringLiteral(".") + cfg.extension());
+            const QString path = QDir(folder).filePath(name);
+            const char* fmt = cfg.extension() == QStringLiteral("jpg") ? "JPG" : cfg.extension() == QStringLiteral("webp") ? "WEBP" : "PNG";
+            if (!r.image.save(path, fmt)) { emit failed(tr("No se pudo guardar %1").arg(path)); return; }
+            if (cfg.copyToClipboard) if (QClipboard* cb = QGuiApplication::clipboard()) cb->setImage(r.image);
+            emit bugShotCaptured(Screenshot{0, 0, name, path});
+            emit captured(path);
+        });
+        return;
+    }
     const QString caseId = targetCaseId();
     if (caseId.isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return; }
     m_busy = true;
@@ -169,6 +203,55 @@ bool EvidenceService::replaceImage(const QString& caseId, int shotId, const QIma
         return true;
     }
     return false;
+}
+
+// ---- Adjuntos de un parte de bug ------------------------------------------------------------
+
+QString EvidenceService::bugFolder() const { return QDir(captureFolder()).filePath(QStringLiteral("bugs")); }
+
+QString EvidenceService::freeBugName(const QDir& dir, const QString& suffix) {
+    const QString sep = suffix.startsWith(QLatin1Char('.')) ? QString() : QStringLiteral("_");
+    for (int n = 1;; ++n) {
+        const QString name = QStringLiteral("bug_%1%2%3").arg(n, 3, 10, QLatin1Char('0')).arg(sep, suffix);
+        if (!dir.exists(name)) return name;
+    }
+}
+
+QList<Screenshot> EvidenceService::copyForBug(const QStringList& paths) {
+    QList<Screenshot> out;
+    if (paths.isEmpty()) return out;
+    const QString folder = bugFolder();
+    QString error;
+    if (!ensureFolder(folder, &error)) { emit failed(error); return out; }
+    const QDir dir(folder);
+    for (const QString& src : paths) {
+        const QFileInfo info(src);
+        if (!info.isFile()) { emit failed(tr("No existe %1").arg(src)); continue; }
+        const QString name = freeBugName(dir, info.fileName());
+        const QString dst = dir.filePath(name);
+        if (!QFile::copy(src, dst)) { emit failed(tr("No se pudo copiar %1 a la carpeta de capturas").arg(info.fileName())); continue; }
+        QFile::setPermissions(dst, QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther);
+        out << Screenshot{0, 0, name, dst};
+    }
+    return out;
+}
+
+bool EvidenceService::replaceBugImage(const QString& path, const QImage& image) {
+    if (image.isNull()) return false;
+    Screenshot s;
+    s.path = path;
+    const QString ext = s.extension();
+    const char* fmt = ext == QStringLiteral("jpg") || ext == QStringLiteral("jpeg") ? "JPG" : ext == QStringLiteral("webp") ? "WEBP" : "PNG";
+    if (!image.save(path, fmt)) { emit failed(tr("No se pudo guardar %1").arg(path)); return false; }
+    return true;
+}
+
+void EvidenceService::discardBugFiles(const QStringList& paths) {
+    const QString folder = QFileInfo(bugFolder()).absoluteFilePath();
+    for (const QString& p : paths) {
+        const QFileInfo info(p);
+        if (info.absolutePath() == folder && info.isFile()) QFile::remove(info.absoluteFilePath());
+    }
 }
 
 bool EvidenceService::copyToClipboard(const QString& path) {

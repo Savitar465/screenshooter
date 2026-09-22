@@ -47,6 +47,11 @@ struct PublishCase {
 
 /// Un ciclo de plan terminado: lo que QAflow publica de una vez.
 struct PublishRequest {
+    /// Zephyr guarda el nombre, la descripción y el ambiente del ciclo en columnas de 255
+    /// caracteres; si algo no cabe, rechaza el ciclo entero con un 406 genérico («Error al
+    /// crear/actualizar el ciclo») que no dice qué campo sobra.
+    static constexpr int kMaxCycleField = 255;
+
     /// Ciclo de Zephyr que se actualiza (el informe ya se publicó en él): se reutilizan sus
     /// ejecuciones, se fijan los veredictos de nuevo y se suben sólo las evidencias que falten.
     /// Vacío = crear un ciclo nuevo.

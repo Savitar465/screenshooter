@@ -316,6 +316,43 @@ private slots:
         QVERIFY(!f.evidence.copyToClipboard(QStringLiteral("/no/existe.png")));
         QCOMPARE(failed.count(), 1);
     }
+
+    /// Los adjuntos de un parte de bug son del bug: copias en `bugs/` que no pasan por el caso, se
+    /// capturan sin ejecución en curso y se borran sin tocar la evidencia de la ejecución.
+    void bugAttachmentsAreIndependentOfTheRunEvidence() {
+        Fixture f;
+        f.evidence.captureForSelectedCase();
+        const Screenshot runShot = f.selected().shots.last();
+
+        const QList<Screenshot> copies = f.evidence.copyForBug({runShot.path});
+        QCOMPARE(copies.size(), 1);
+        QVERIFY(copies.first().path != runShot.path);
+        QVERIFY(copies.first().path.startsWith(f.evidence.bugFolder()));
+        QVERIFY(QFile::exists(copies.first().path));
+        QCOMPARE(f.selected().shots.size(), 1);
+
+        QImage red(8, 6, QImage::Format_ARGB32);
+        red.fill(Qt::red);
+        QVERIFY(f.evidence.replaceBugImage(copies.first().path, red));
+        QCOMPARE(QImage(runShot.path).pixelColor(1, 1), QColor(Qt::green));   // la de la ejecución, intacta
+
+        f.app.run.finish();
+        QSignalSpy captured(&f.evidence, &EvidenceService::bugShotCaptured);
+        QSignalSpy added(&f.evidence, &EvidenceService::shotAdded);
+        f.evidence.captureForBug();
+        QCOMPARE(captured.count(), 1);
+        QCOMPARE(added.count(), 0);
+        const Screenshot bugShot = captured.first().at(0).value<Screenshot>();
+        QVERIFY(QFile::exists(bugShot.path));
+        QVERIFY(bugShot.path != copies.first().path);
+        QCOMPARE(f.selected().shots.size(), 1);
+
+        // Sólo se borra lo de la carpeta de bugs.
+        f.evidence.discardBugFiles({copies.first().path, bugShot.path, runShot.path});
+        QVERIFY(!QFile::exists(copies.first().path));
+        QVERIFY(!QFile::exists(bugShot.path));
+        QVERIFY(QFile::exists(runShot.path));
+    }
 };
 
 QTEST_MAIN(EvidenceServiceTest)

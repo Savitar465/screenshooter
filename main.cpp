@@ -13,6 +13,7 @@
 #include "presentation/DevSnapshot.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/views/WorkspaceWindow.h"
+#include "presentation/widgets/WheelGuard.h"
 
 #include <QApplication>
 #include <QFont>
@@ -31,7 +32,7 @@
 namespace {
 
 #ifndef QAFLOW_VERSION
-#define QAFLOW_VERSION "1.2.2"
+#define QAFLOW_VERSION "1.2.3"
 #endif
 
 /// Idioma efectivo: el elegido o, con "sistema", el del entorno (español si el sistema es español).
@@ -78,6 +79,8 @@ int main(int argc, char* argv[]) {
     f.setFamilies({QStringLiteral("Segoe UI"), QStringLiteral("Inter"), QStringLiteral("Noto Sans"), QStringLiteral("DejaVu Sans"), QStringLiteral("sans-serif")});
     f.setPixelSize(13);
     app.setFont(f);
+    // La rueda desplaza la pantalla; no cambia combos ni spin boxes al pasar por encima.
+    qaflow::WheelGuard::install();
 
     using namespace qaflow;
 

@@ -69,5 +69,6 @@ qaflow_add_test(infrastructure test_docx_writer LIBS qaflow_infrastructure)
 qaflow_add_test(presentation test_main_window LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
 qaflow_add_test(presentation test_evidence_widgets LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
 qaflow_add_test(presentation test_choice_dialog LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
+qaflow_add_test(presentation test_wheel_guard LIBS qaflow_presentation)
 
 qaflow_add_test(presentation test_project_session LIBS qaflow_presentation qaflow_infrastructure SOURCES ${CMAKE_SOURCE_DIR}/src/bootstrap/ProjectSession.cpp)

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(qaflow VERSION 1.2.2 LANGUAGES CXX)
+project(qaflow VERSION 1.2.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -246,6 +246,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/EvidenceActions.cpp
         src/presentation/widgets/ChoiceDialog.h
         src/presentation/widgets/ChoiceDialog.cpp
+        src/presentation/widgets/WheelGuard.h
+        src/presentation/widgets/WheelGuard.cpp
         src/presentation/views/Sidebar.h
         src/presentation/views/Sidebar.cpp
         src/presentation/views/StatusStrip.h

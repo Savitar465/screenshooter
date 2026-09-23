@@ -203,6 +203,26 @@ std::pair<int, int> TestCaseStore::mergeCases(const QList<TestCase>& incoming) {
     return {added, updated};
 }
 
+QStringList TestCaseStore::addCases(QList<TestCase> incoming) {
+    if (incoming.isEmpty()) return {};
+    commitUndo();
+    const QStringList existing = suites();
+    const QString fallbackSuite = existing.isEmpty() ? QStringLiteral("General") : existing.first();
+    int next = nextCaseId().mid(3).toInt();
+    QStringList ids;
+    for (auto& c : incoming) {
+        c.id = QStringLiteral("TC-%1").arg(next++);
+        if (c.suite.trimmed().isEmpty()) c.suite = fallbackSuite;
+        c.shots.clear();
+        c.lastRun = LastRun{};
+        m_cases.append(c);
+        ids << c.id;
+    }
+    scheduleSave();
+    emit casesChanged();
+    return ids;
+}
+
 void TestCaseStore::addStep(const QString& id) {
     updateCase(id, [](TestCase& c) { c.steps.append(TestStep{}); });
 }

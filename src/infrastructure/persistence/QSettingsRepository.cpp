@@ -79,6 +79,44 @@ void QSettingsRepository::saveRequirementSource(const RequirementSourceSettings&
     else s.setValue(QStringLiteral("password"), r.password);   // sólo llega aquí sin llavero disponible
 }
 
+AiSettings QSettingsRepository::loadAi() {
+    QSettings s;
+    s.beginGroup(QStringLiteral("ai"));
+    AiSettings a;
+    a.provider = aiProviderFromString(s.value(QStringLiteral("provider"), toString(a.provider)).toString());
+    a.maxTokens = s.value(QStringLiteral("maxTokens"), a.maxTokens).toInt();
+    for (int i = 0; i < kAiProviders; ++i) {
+        const auto provider = static_cast<AiProvider>(i);
+        AiProviderSettings& p = a.of(provider);
+        s.beginGroup(toString(provider));
+        p.model = s.value(QStringLiteral("model")).toString();
+        p.baseUrl = s.value(QStringLiteral("baseUrl")).toString();
+        p.connected = s.value(QStringLiteral("connected"), false).toBool();
+        p.apiKey = s.value(QStringLiteral("apiKey")).toString();   // sólo sin llavero: SettingsStore la migra en cuanto lo hay
+        s.endGroup();
+    }
+    a.clamp();
+    return a;
+}
+
+void QSettingsRepository::saveAi(const AiSettings& a) {
+    QSettings s;
+    s.beginGroup(QStringLiteral("ai"));
+    s.setValue(QStringLiteral("provider"), toString(a.provider));
+    s.setValue(QStringLiteral("maxTokens"), a.maxTokens);
+    for (int i = 0; i < kAiProviders; ++i) {
+        const auto provider = static_cast<AiProvider>(i);
+        const AiProviderSettings& p = a.of(provider);
+        s.beginGroup(toString(provider));
+        s.setValue(QStringLiteral("model"), p.model);
+        s.setValue(QStringLiteral("baseUrl"), p.baseUrl);
+        s.setValue(QStringLiteral("connected"), p.connected);
+        if (p.apiKey.isEmpty()) s.remove(QStringLiteral("apiKey"));
+        else s.setValue(QStringLiteral("apiKey"), p.apiKey);   // sólo llega aquí sin llavero disponible
+        s.endGroup();
+    }
+}
+
 CaptureSettings QSettingsRepository::loadCapture() {
     QSettings s;
     s.beginGroup(QStringLiteral("capture"));

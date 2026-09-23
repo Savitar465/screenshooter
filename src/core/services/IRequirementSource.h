@@ -26,6 +26,18 @@ public:
     /// Catálogo de sistemas, con el mismo código que usa la bandeja: de ahí se elige el de cada proyecto.
     virtual void fetchSystems(const RequirementSourceSettings& s, std::function<void(const RequirementSystemsResult&)> done) = 0;
 
+    /// Descarga un adjunto de la ficha (`RequirementAttachment::url`) con la sesión del sistema. Sólo
+    /// lee: sirve para llevar su contenido al texto con el que se generan los casos.
+    virtual void downloadAttachment(const RequirementSourceSettings& s, const RequirementAttachment& attachment,
+                                    std::function<void(const RequirementAttachmentResult&)> done) {
+        Q_UNUSED(s);
+        RequirementAttachmentResult result;
+        result.fileName = attachment.fileName;
+        result.failure = RequirementSourceFailure::Configuration;
+        result.error = QCoreApplication::translate("core", "Este conector no descarga adjuntos");
+        done(result);
+    }
+
     /// ¿Sabe este conector registrar el resultado del control de calidad? Es la única operación que
     /// cambia algo en el sistema, así que se pregunta antes de ofrecerla.
     virtual bool canRegisterResult() const { return false; }

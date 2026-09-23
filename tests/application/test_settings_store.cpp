@@ -114,6 +114,62 @@ private slots:
         QCOMPARE(repo->requirementSource.url, QStringLiteral("http://gesreq.test:7401/greq"));
     }
 
+    // ---- IA ------------------------------------------------------------------------------
+
+    void eachAiProviderKeepsItsKeyInTheSecretStore() {
+        auto repo = std::make_shared<MemorySettingsRepository>();
+        auto secrets = std::make_shared<MemorySecretStore>();
+        SettingsStore store(repo, secrets);
+        store.load();
+        QSignalSpy changed(&store, &SettingsStore::aiChanged);
+        store.updateAi([](AiSettings& a) { a.of(AiProvider::Anthropic).apiKey = QStringLiteral("sk-ant-1"); });
+        store.updateAi([](AiSettings& a) {
+            a.provider = AiProvider::Gemini;
+            a.of(AiProvider::Gemini).apiKey = QStringLiteral("AIza-2");
+            a.of(AiProvider::Gemini).model = QStringLiteral("gemini-x");
+        });
+        QCOMPARE(changed.count(), 2);
+        QCOMPARE(secrets->values.value(QStringLiteral("ai/anthropic/apiKey")), QStringLiteral("sk-ant-1"));
+        QCOMPARE(secrets->values.value(QStringLiteral("ai/gemini/apiKey")), QStringLiteral("AIza-2"));
+        for (const auto& p : repo->ai.providers) QVERIFY(p.apiKey.isEmpty());   // nunca en el fichero
+        QCOMPARE(toString(repo->ai.provider), toString(AiProvider::Gemini));
+        QCOMPARE(repo->ai.of(AiProvider::Gemini).model, QStringLiteral("gemini-x"));
+
+        SettingsStore reloaded(repo, secrets);
+        reloaded.load();
+        QCOMPARE(reloaded.ai().active().apiKey, QStringLiteral("AIza-2"));
+        QCOMPARE(reloaded.ai().of(AiProvider::Anthropic).apiKey, QStringLiteral("sk-ant-1"));
+        QCOMPARE(reloaded.ai().model(), QStringLiteral("gemini-x"));
+        reloaded.updateAi([](AiSettings& a) { a.of(AiProvider::Anthropic).apiKey.clear(); });
+        QVERIFY(!secrets->values.contains(QStringLiteral("ai/anthropic/apiKey")));
+    }
+
+    void plainAiKeysAreMigratedToSecretStore() {
+        auto repo = std::make_shared<MemorySettingsRepository>();
+        repo->ai.of(AiProvider::OpenAI).apiKey = QStringLiteral("sk-old");
+        auto secrets = std::make_shared<MemorySecretStore>();
+        SettingsStore store(repo, secrets);
+        store.load();
+        QCOMPARE(store.ai().of(AiProvider::OpenAI).apiKey, QStringLiteral("sk-old"));
+        QCOMPARE(secrets->values.value(QStringLiteral("ai/openai/apiKey")), QStringLiteral("sk-old"));
+        QVERIFY(repo->ai.of(AiProvider::OpenAI).apiKey.isEmpty());
+    }
+
+    void aiDefaultsAndLimits() {
+        AiSettings a;
+        QVERIFY(!a.isConfigured());
+        QCOMPARE(a.model(), AiSettings::defaultModel(AiProvider::Anthropic));
+        a.provider = AiProvider::OpenAI;
+        a.of(AiProvider::OpenAI).baseUrl = QStringLiteral("http://localhost:11434/v1/");
+        QCOMPARE(a.baseUrl(), QStringLiteral("http://localhost:11434/v1"));
+        a.of(AiProvider::OpenAI).apiKey = QStringLiteral("  ");
+        QVERIFY(!a.isConfigured());
+        a.maxTokens = 5;
+        a.clamp();
+        QCOMPARE(a.maxTokens, 8192);
+        QCOMPARE(toString(aiProviderFromString(toString(AiProvider::Gemini))), toString(AiProvider::Gemini));
+    }
+
     void captureFolderDefaultsToHome() {
         SettingsStore store(std::make_shared<MemorySettingsRepository>());
         store.load();

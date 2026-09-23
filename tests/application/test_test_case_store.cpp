@@ -91,6 +91,28 @@ private slots:
         QCOMPARE(f.store.nextCaseId(), QStringLiteral("TC-501"));
     }
 
+    void addCasesAssignsConsecutiveIdsAndDefaultSuite() {
+        AppFixture f;
+        const QString first = f.store.nextCaseId();
+        TestCase a;
+        a.title = QStringLiteral("Generado A");
+        a.suite = QStringLiteral("Propia");
+        TestCase b;
+        b.title = QStringLiteral("Generado B");
+        b.shots = {Screenshot{9, 1, QStringLiteral("x.png"), {}}};
+        QSignalSpy changed(&f.store, &TestCaseStore::casesChanged);
+
+        const QStringList ids = f.store.addCases({a, b});
+        QCOMPARE(ids.size(), 2);
+        QCOMPARE(ids.first(), first);
+        QCOMPARE(ids.last(), QStringLiteral("TC-%1").arg(first.mid(3).toInt() + 1));
+        QCOMPARE(f.store.find(ids.first())->suite, QStringLiteral("Propia"));
+        QVERIFY(!f.store.find(ids.last())->suite.isEmpty());   // la de siempre, nunca sin suite
+        QVERIFY(f.store.find(ids.last())->shots.isEmpty());
+        QCOMPARE(changed.count(), 1);
+        QVERIFY(f.store.addCases({}).isEmpty());
+    }
+
     // ---- Pasos -------------------------------------------------------------------------
 
     void removingStepReassignsShots() {

@@ -2,6 +2,7 @@
 
 #include "core/models/QualityRecord.h"   // ObservationCount: el resumen del acta que pide GESREQ
 
+#include <QByteArray>
 #include <QDate>
 #include <QDateTime>
 #include <QList>
@@ -112,6 +113,17 @@ struct RequirementDetailResult {
     bool ok = false;
     RequirementDetail detail;
     QDateTime fetchedAt;
+    RequirementSourceFailure failure = RequirementSourceFailure::None;
+    QString error;
+
+    bool retryable() const { return failure == RequirementSourceFailure::Network; }
+};
+
+/// Un adjunto de la ficha descargado: el fichero tal cual lo sirve el sistema.
+struct RequirementAttachmentResult {
+    bool ok = false;
+    QByteArray data;
+    QString fileName;         // el del adjunto, o el que declaró el servidor
     RequirementSourceFailure failure = RequirementSourceFailure::None;
     QString error;
 

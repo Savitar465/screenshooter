@@ -4,6 +4,7 @@
 #include "core/Text.h"
 #include "core/models/BugReport.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/views/AiCaseGenerationDialog.h"
 #include "presentation/views/JiraPublishDialog.h"
 #include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/QualityRecordDialog.h"
@@ -154,7 +155,7 @@ QPushButton* unlinkButton(const QString& tip) {
 
 IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
     : QWidget(parent), m_issues(*ctx.issues), m_cases(*ctx.cases), m_plans(*ctx.plan), m_history(*ctx.history),
-      m_requirements(ctx.requirements), m_publish(ctx.issuePublish), m_revisionPublish(ctx.revisionPublish),
+      m_requirements(ctx.requirements), m_attachmentText(ctx.attachmentText), m_ai(ctx.ai), m_publish(ctx.issuePublish), m_revisionPublish(ctx.revisionPublish),
       m_bugs(ctx.bugs), m_bugLedger(ctx.bugLedger), m_records(ctx.records),
       m_projects(ctx.projects),
       m_projectId(ctx.projectId) {
@@ -1442,6 +1443,11 @@ void IssuesView::refreshRevision(const Issue& issue) {
         link->setObjectName(QStringLiteral("issueLinkPlan"));
         connect(link, &QPushButton::clicked, this, &IssuesView::pickPlan);
         row.actions->addWidget(link);
+        auto* generate = smallButton(tr("Generar con IA…"), "ghost",
+                                     tr("Arma un prompt con el requerimiento para ChatGPT u otra IA y añade al plan los casos que devuelva"));
+        generate->setObjectName(QStringLiteral("issueGenerateCases"));
+        connect(generate, &QPushButton::clicked, this, &IssuesView::generateCases);
+        row.actions->addWidget(generate);
         fillPlans(issue, row.body);
     }
 
@@ -2430,6 +2436,67 @@ void IssuesView::pickPlan() {
                                     [choices](const ChoiceDialog::Loaded& done) { done(choices, {}); }, QString(), this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &ChoiceDialog::chosen, this, [this, issueId](const QString& planId) { m_issues.linkPlan(issueId, planId); });
+    dialog->open();
+}
+
+void IssuesView::generateCases() {
+    const Issue* issue = selected();
+    if (!issue) return;
+    const QString issueId = issue->id;
+    const RequirementDetail& detail = issue->requirement.detail;
+    const ExternalRequirement& data = issue->requirement.data;
+
+    // Lo que se propone contar a la IA: el alcance de la ficha (o, sin ficha, la fila de la bandeja) y
+    // las notas del issue. El usuario lo revisa en el diálogo antes de que salga del equipo.
+    ai::GenerationRequest request;
+    request.requirementId = data.id;
+    request.title = issue->title;
+    request.system = data.system.isEmpty() ? detail.systemCode : data.system;
+    request.requestType = detail.requestType;
+    QStringList source;
+    if (!detail.description.trimmed().isEmpty()) source << detail.description.trimmed();
+    else if (!data.summary.trimmed().isEmpty()) source << data.summary.trimmed();
+    if (!issue->notes.trimmed().isEmpty()) source << tr("Notas de QA:") + QLatin1Char('\n') + issue->notes.trimmed();
+    request.source = source.join(QStringLiteral("\n\n"));
+
+    const QString planId = issue->planIds.isEmpty() ? QString() : issue->planIds.first();
+    const TestPlan* plan = planId.isEmpty() ? nullptr : m_plans.find(planId);
+    const QString target = plan ? tr("al plan %1 (%2)").arg(plan->id, plan->name) : tr("a un plan nuevo de %1").arg(issueId);
+
+    // Los adjuntos se leen con la sesión de GESREQ; sin esa conexión, el diálogo pide copiarlos a mano.
+    AiCaseGenerationDialog::AttachmentLoader loader;
+    if (m_attachmentText && issue->isImported())
+        loader = [service = QPointer<AttachmentTextService>(m_attachmentText)](const RequirementAttachment& a,
+                                                                               std::function<void(const DocumentText&)> done) {
+            if (!service) { done(DocumentText{false, {}, tr("La conexión con GESREQ ya no está disponible")}); return; }
+            service->read(a, std::move(done));
+        };
+    auto* dialog = new AiCaseGenerationDialog(request, target, detail.attachments, loader, this);
+    // Con una clave de IA en Ajustes se genera sin copiar ni pegar; sin ella, el diálogo sigue siendo manual.
+    if (m_ai && m_ai->isConfigured())
+        dialog->setGenerator(m_ai->destination(), [service = QPointer<AiService>(m_ai)](const QString& prompt,
+                                                                                      std::function<void(const AiCompletion&)> done) {
+            if (!service) { done(AiCompletion{false, {}, false, {}, tr("La IA ya no está disponible"), false}); return; }
+            service->generate(prompt, std::move(done));
+        });
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &QDialog::accepted, this, [this, dialog, issueId]() {
+        const QList<TestCase> chosen = dialog->chosenCases();
+        const Issue* issue = m_issues.find(issueId);
+        if (chosen.isEmpty() || !issue) return;
+        // El plan se resuelve al aceptar: mientras el diálogo estaba abierto pudo crearse o desvincularse.
+        QString planId;
+        for (const auto& id : issue->planIds)
+            if (m_plans.find(id)) { planId = id; break; }
+        if (planId.isEmpty()) {
+            planId = m_plans.createPlan(planNameFor(*issue));
+            m_issues.linkPlan(issueId, planId);
+        }
+        const QStringList ids = m_cases.addCases(chosen);
+        m_plans.addCases(planId, ids);
+        emit toast(tr("%1 caso(s) generados en Borrador y añadidos a %2: revísalos antes de ejecutarlos").arg(ids.size()).arg(planId),
+                   theme::Green);
+    });
     dialog->open();
 }
 

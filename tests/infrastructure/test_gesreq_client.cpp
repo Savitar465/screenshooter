@@ -106,6 +106,7 @@ public:
     QList<FormPart> saved;   // el último envío recibido, campo a campo
     QSet<QByteArray> authenticated;
     bool keepsSessions = true;
+    QByteArray attachmentBody = "%PDF-1.4 especificación";
 
     FakeGesreq() {
         const QByteArray login = fixture("login.html");
@@ -163,6 +164,16 @@ public:
             saved = multipartParts(r);
             return HttpResponse{saveStatus, saveResponse, saveContentType, {}};
         });
+        // Descarga de adjuntos: el fichero con sesión; sin ella, el formulario de login (como el GESREQ real).
+        server.route("GET", "/greq/docDownload.do", [this, login](const HttpRequest& r) {
+            if (!signedIn(r)) return page(login);
+            const QString doc = query(r).queryItemValue(QStringLiteral("doc"), QUrl::FullyDecoded);
+            if (doc.endsWith(QLatin1String("error.pdf"))) return page("<html><body>Error al descargar</body></html>");
+            if (!doc.endsWith(QLatin1String(".pdf"))) return HttpResponse{404, "no existe", "text/plain", {}};
+            HttpResponse res{200, attachmentBody, "application/octet-stream", {}};
+            res.extraHeaders.insert("Content-Disposition", "attachment; filename=\"REQ.pdf\"");
+            return res;
+        });
         server.route("GET", "/greq/poai.do", [this, login](const HttpRequest& r) { return page(signedIn(r) ? tracking : login); });
         server.route("GET", "/greq/registroadicional.do", [this, login](const HttpRequest& r) { return page(signedIn(r) ? additional : login); });
     }
@@ -215,6 +226,18 @@ RequirementRegistration observedRegistration(const QString& document) {
     return registration;
 }
 } // namespace
+
+/// Descarga un adjunto de la aplicación falsa y espera al resultado.
+RequirementAttachmentResult download(FakeGesreq& gesreq, GesreqClient& client, const QString& doc,
+                                     const QString& fileName = QStringLiteral("2025101REQ.pdf")) {
+    RequirementAttachmentResult out;
+    bool done = false;
+    const RequirementAttachment a{QStringLiteral("Archivo de respaldo"), fileName,
+                                  gesreq.server.baseUrl() + QStringLiteral("/greq/docDownload.do?doc=") + doc};
+    client.downloadAttachment(gesreq.settings(), a, [&](const RequirementAttachmentResult& r) { out = r; done = true; });
+    if (!QTest::qWaitFor([&] { return done; }, 10000)) qFatal("La descarga no terminó");
+    return out;
+}
 
 class GesreqClientTest : public QObject {
     Q_OBJECT
@@ -370,6 +393,56 @@ private slots:
         QCOMPARE(out.detail.state, QStringLiteral("CONTROL DE CALIDAD OBSERVADO"));
         QCOMPARE(out.detail.attachments.size(), 2);
         QCOMPARE(out.detail.attachments[0].url, gesreq.server.baseUrl() + QStringLiteral("/greq/docDownload.do?doc=2025/2025101REQ20250314183739.pdf"));
+    }
+
+    // ---- Adjuntos -------------------------------------------------------------------------------
+    void downloadsAnAttachmentWithTheSession() {
+        FakeGesreq gesreq;
+        GesreqClient client;
+        const auto out = download(gesreq, client, QStringLiteral("2025/2025101REQ.pdf"));
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.data, gesreq.attachmentBody);
+        QCOMPARE(out.fileName, QStringLiteral("2025101REQ.pdf"));
+        QCOMPARE(gesreq.logins(), 1);
+        // Sin nombre en el enlace, vale el que declara el servidor.
+        QCOMPARE(download(gesreq, client, QStringLiteral("x.pdf"), QString()).fileName, QStringLiteral("REQ.pdf"));
+        QCOMPARE(gesreq.logins(), 1);
+    }
+
+    void anExpiredSessionWhileDownloadingLogsInAgainOnce() {
+        FakeGesreq gesreq;
+        GesreqClient client;
+        QVERIFY(download(gesreq, client, QStringLiteral("a.pdf")).ok);
+        gesreq.expireSessions();
+        const auto out = download(gesreq, client, QStringLiteral("a.pdf"));
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.data, gesreq.attachmentBody);
+        QCOMPARE(gesreq.logins(), 2);
+    }
+
+    void aPageInsteadOfTheFileIsAnErrorNotTheDocument() {
+        FakeGesreq gesreq;
+        GesreqClient client;
+        const auto html = download(gesreq, client, QStringLiteral("error.pdf"));
+        QVERIFY(!html.ok);
+        QCOMPARE(html.failure, RequirementSourceFailure::NotFound);
+        const auto missing = download(gesreq, client, QStringLiteral("borrado.docx"), QStringLiteral("borrado.docx"));
+        QVERIFY(!missing.ok);
+        QCOMPARE(missing.failure, RequirementSourceFailure::NotFound);
+        QVERIFY(missing.error.contains(QStringLiteral("borrado.docx")));
+    }
+
+    void neverSendsTheSessionToAnotherServer() {
+        FakeGesreq gesreq;
+        GesreqClient client;
+        RequirementAttachmentResult out;
+        bool done = false;
+        const RequirementAttachment foreign{QStringLiteral("Otro"), QStringLiteral("x.pdf"), QStringLiteral("http://otro.example/greq/docDownload.do?doc=x.pdf")};
+        client.downloadAttachment(gesreq.settings(), foreign, [&](const RequirementAttachmentResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(!out.ok);
+        QCOMPARE(out.failure, RequirementSourceFailure::Configuration);
+        QVERIFY(gesreq.server.requests.isEmpty());
     }
 
     // Con sesión, un número que no existe trae su ficha sin datos: es NotFound en el acto, sin renovar

@@ -1282,6 +1282,32 @@ private slots:
 
     // La conexión con GESREQ es general y su contraseña va al llavero; el sistema de GESREQ es del proyecto,
     // se elige en su configuración y no puede ser el de otro proyecto.
+    void eachAiProviderKeepsItsOwnKeyAndModelInSettings() {
+        WindowFixture f;
+        f.window->openSettings();
+        QWidget* dialog = f.window->settingsWindow();
+        QVERIFY(dialog);
+        auto* provider = dialog->findChild<QComboBox*>(QStringLiteral("settingsAiProvider"));
+        auto* key = dialog->findChild<QLineEdit*>(QStringLiteral("settingsAiKey"));
+        auto* model = dialog->findChild<QLineEdit*>(QStringLiteral("settingsAiModel"));
+        QVERIFY(provider && key && model);
+        QCOMPARE(model->placeholderText(), AiSettings::defaultModel(AiProvider::Anthropic));
+
+        QTest::keyClicks(key, "sk-ant-123");
+        QCOMPARE(f.app.secrets->values.value(QStringLiteral("ai/anthropic/apiKey")), QStringLiteral("sk-ant-123"));
+        provider->setCurrentIndex(provider->findData(static_cast<int>(AiProvider::Gemini)));
+        QCOMPARE(toString(f.app.settings.ai().provider), toString(AiProvider::Gemini));
+        QVERIFY(key->text().isEmpty());   // la clave de Gemini, todavía vacía
+        QCOMPARE(model->placeholderText(), AiSettings::defaultModel(AiProvider::Gemini));
+        QTest::keyClicks(key, "AIza-9");
+        QTest::keyClicks(model, "gemini-x");
+        provider->setCurrentIndex(provider->findData(static_cast<int>(AiProvider::Anthropic)));
+        QCOMPARE(key->text(), QStringLiteral("sk-ant-123"));
+        QVERIFY(model->text().isEmpty());
+        QCOMPARE(f.app.settings.ai().of(AiProvider::Gemini).model, QStringLiteral("gemini-x"));
+        QCOMPARE(f.app.secrets->values.value(QStringLiteral("ai/gemini/apiKey")), QStringLiteral("AIza-9"));
+    }
+
     void gesreqConnectionIsGeneralAndItsSystemBelongsToTheProject() {
         WindowFixture f;
         ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());

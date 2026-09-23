@@ -30,6 +30,8 @@ class PlanStore;
 class RunHistoryStore;
 class IssuePublishService;
 class RequirementSourceService;
+class AttachmentTextService;
+class AiService;
 class QualityRecordService;
 class RevisionPublishService;
 class BugReportService;
@@ -188,6 +190,9 @@ private:
     /// Deja listo el plan con el que se prueba el requerimiento recién importado, si no tiene ninguno.
     QString ensurePlan(const QString& issueId);
     void pickPlan();
+    /// Genera casos para el plan del issue con una IA externa (prompt copiado, respuesta pegada), revisados
+    /// antes de añadirlos. Sin plan, se le crea uno al aceptar.
+    void generateCases();
     void loadRequirementDetail();
     /// Resuelve en qué proyecto se prueba el requerimiento y, según sea éste u otro, lo abre o lo pide.
     void startTesting(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt);
@@ -233,6 +238,8 @@ private:
     PlanStore& m_plans;
     RunHistoryStore& m_history;
     RequirementSourceService* m_requirements;
+    AttachmentTextService* m_attachmentText = nullptr;
+    AiService* m_ai = nullptr;
     IssuePublishService* m_publish;
     RevisionPublishService* m_revisionPublish;
     BugReportService* m_bugs;   // sólo para ofrecer el código Jira al crear un proyecto desde la bandeja

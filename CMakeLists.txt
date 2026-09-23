@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(qaflow VERSION 1.2.3 LANGUAGES CXX)
+project(qaflow VERSION 1.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,6 +50,8 @@ add_library(qaflow_core STATIC
         src/core/models/CaseFilter.h
         src/core/models/CaseFormats.h
         src/core/models/CaseFormats.cpp
+        src/core/models/AiCaseDraft.h
+        src/core/models/AiCaseDraft.cpp
         src/core/models/Requirement.h
         src/core/models/Requirement.cpp
         src/core/models/Issue.h
@@ -73,6 +75,8 @@ add_library(qaflow_core STATIC
         src/core/services/IIssueTracker.h
         src/core/services/ITestManagement.h
         src/core/services/ISecretStore.h
+        src/core/services/IDocumentReader.h
+        src/core/services/IAiClient.h
         src/core/services/IBugRepository.h
 )
 target_include_directories(qaflow_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -105,6 +109,10 @@ add_library(qaflow_application STATIC
         src/application/CaseTransferService.cpp
         src/application/TestPublishService.h
         src/application/TestPublishService.cpp
+        src/application/AiService.h
+        src/application/AiService.cpp
+        src/application/AttachmentTextService.h
+        src/application/AttachmentTextService.cpp
         src/application/RequirementSourceService.h
         src/application/RequirementSourceService.cpp
         src/application/IssueStore.h
@@ -171,6 +179,12 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/tracker/TrackerRouter.cpp
         src/infrastructure/testmgmt/ZephyrClient.h
         src/infrastructure/testmgmt/ZephyrClient.cpp
+        src/infrastructure/ai/AiClient.h
+        src/infrastructure/ai/AiClient.cpp
+        src/infrastructure/documents/DocumentFormats.h
+        src/infrastructure/documents/DocumentFormats.cpp
+        src/infrastructure/documents/DocumentReader.h
+        src/infrastructure/documents/DocumentReader.cpp
         src/infrastructure/report/ZipWriter.h
         src/infrastructure/report/ZipWriter.cpp
         src/infrastructure/report/DocxWriter.h
@@ -183,6 +197,15 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/requirements/GesreqClient.cpp
 )
 target_link_libraries(qaflow_infrastructure PUBLIC qaflow_core Qt6::Gui Qt6::Widgets Qt6::Network PRIVATE qaflow_warnings)
+# zlib descomprime los .docx y .odt de los adjuntos. Sin ella QAflow compila igual y esos formatos se
+# copian a mano (en Linux y macOS viene con el sistema; en Windows, con vcpkg o el SDK de Qt).
+find_package(ZLIB QUIET)
+if (ZLIB_FOUND)
+    target_link_libraries(qaflow_infrastructure PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(qaflow_infrastructure PRIVATE QAFLOW_HAS_ZLIB)
+else ()
+    message(STATUS "zlib no encontrada: los adjuntos .docx y .odt no se podrán leer")
+endif ()
 if (WIN32)
     target_link_libraries(qaflow_infrastructure PUBLIC crypt32 user32)   # DPAPI para el token del gestor; RegisterHotKey
 elseif (APPLE)
@@ -274,6 +297,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/QualityRecordDialog.cpp
         src/presentation/views/JiraPublishDialog.h
         src/presentation/views/JiraPublishDialog.cpp
+        src/presentation/views/AiCaseGenerationDialog.h
+        src/presentation/views/AiCaseGenerationDialog.cpp
         src/presentation/views/RequirementImportDialog.h
         src/presentation/views/RequirementImportDialog.cpp
         src/presentation/views/ProjectSetupDialog.h

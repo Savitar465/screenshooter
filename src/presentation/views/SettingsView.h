@@ -18,6 +18,7 @@ class SettingsStore;
 class BugReportService;
 class TestPublishService;
 class RequirementSourceService;
+class AiService;
 class ProjectStore;
 class IGlobalHotkey;
 
@@ -45,6 +46,10 @@ private:
     void commitRequirementSystem();
     void refreshRequirementSource();
     void testRequirementSource();
+    /// La IA con la que se generan casos: el proveedor elegido con su clave, modelo y dirección.
+    void refreshAi();
+    void testAi();
+    void pickAiModel();
     /// Elegir el código Jira o el sistema de GESREQ entre los que hay en cada sistema, con búsqueda.
     void pickJiraProject();
     void pickRequirementSystem();
@@ -61,6 +66,7 @@ private:
     BugReportService& m_bugs;
     TestPublishService* m_publish;
     RequirementSourceService* m_requirements;
+    AiService* m_ai;
     ProjectStore* m_projects;
     QString m_projectId;
     IGlobalHotkey* m_hotkey;
@@ -103,6 +109,13 @@ private:
     QLineEdit* m_zephyrTestType;
     QPushButton* m_zephyrTest;
     QLabel* m_zephyrNote;
+    QPushButton* m_aiBadge;
+    QComboBox* m_aiProvider;
+    QLineEdit* m_aiKey;
+    QLineEdit* m_aiModel;
+    QLineEdit* m_aiBaseUrl;
+    QSpinBox* m_aiMaxTokens;
+    QLabel* m_aiSecretNote;
     QPushButton* m_gesreqBadge;
     QLineEdit* m_gesreqUrl;
     QLineEdit* m_gesreqUser;

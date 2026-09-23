@@ -1,6 +1,7 @@
 #include "SettingsView.h"
 
 #include "application/AppContext.h"
+#include "application/AiService.h"
 #include "application/BugReportService.h"
 #include "application/SettingsStore.h"
 #include "application/TestPublishService.h"
@@ -95,7 +96,7 @@ QString hintFor(const TrackerSettings& t) {
 } // namespace
 
 SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
-    : QWidget(parent), m_settings(*ctx.settings), m_bugs(*ctx.bugs), m_publish(ctx.publish), m_requirements(ctx.requirements),
+    : QWidget(parent), m_settings(*ctx.settings), m_bugs(*ctx.bugs), m_publish(ctx.publish), m_requirements(ctx.requirements), m_ai(ctx.ai),
       m_projects(ctx.projects), m_projectId(ctx.projectId), m_hotkey(ctx.hotkey), m_captureBackend(ctx.captureBackend) {
     auto* root = ui::hbox(this, 0, 0);
     QWidget* content;
@@ -400,6 +401,83 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     bindGesreq(m_gesreqUser, [](RequirementSourceSettings& r, const QString& t) { r.user = t; });
     bindGesreq(m_gesreqPassword, [](RequirementSourceSettings& r, const QString& t) { r.password = t; });
 
+    // IA: con qué proveedor se generan casos desde QAflow. Sin clave, el diálogo sigue ofreciendo
+    // copiar el prompt y pegar la respuesta.
+    m_aiBadge = ui::button(QString(), "badge");
+    m_aiBadge->setObjectName(QStringLiteral("settingsAiBadge"));
+    m_aiBadge->setToolTip(tr("Probar la clave con el proveedor"));
+    m_aiBadge->setVisible(m_ai != nullptr);
+    connect(m_aiBadge, &QPushButton::clicked, this, &SettingsView::testAi);
+    QVBoxLayout* aiBody;
+    auto* aiCard = section(theme::Violet, tr("IA para generar casos"),
+                           tr("Con una clave de API, «Generar con IA» envía el prompt revisado al proveedor y trae los casos sin copiar ni pegar. "
+                              "Sin clave, se sigue pudiendo copiar el prompt a ChatGPT u otra IA."),
+                           m_aiBadge, &aiBody);
+    aiCard->setObjectName(QStringLiteral("aiSettings"));
+    auto* aiGrid = new QWidget;
+    auto* ag = new QGridLayout(aiGrid);
+    ag->setContentsMargins(0, 0, 0, 0);
+    ag->setHorizontalSpacing(12);
+    ag->setVerticalSpacing(12);
+    m_aiProvider = new QComboBox;
+    m_aiProvider->setObjectName(QStringLiteral("settingsAiProvider"));
+    for (const auto p : {AiProvider::Anthropic, AiProvider::OpenAI, AiProvider::Gemini})
+        m_aiProvider->addItem(label(p), static_cast<int>(p));
+    m_aiKey = new QLineEdit;
+    m_aiKey->setObjectName(QStringLiteral("settingsAiKey"));
+    m_aiKey->setEchoMode(QLineEdit::Password);
+    m_aiModel = new QLineEdit;
+    m_aiModel->setObjectName(QStringLiteral("settingsAiModel"));
+    auto* pickModel = ui::button(QStringLiteral("…"), "outline");
+    pickModel->setObjectName(QStringLiteral("settingsAiModelPick"));
+    pickModel->setToolTip(tr("Elegir entre los modelos disponibles para la clave"));
+    connect(pickModel, &QPushButton::clicked, this, &SettingsView::pickAiModel);
+    m_aiBaseUrl = new QLineEdit;
+    m_aiBaseUrl->setObjectName(QStringLiteral("settingsAiBaseUrl"));
+    m_aiBaseUrl->setToolTip(tr("Sólo si se usa un proxy de la organización o un servidor compatible; vacío = la API oficial"));
+    m_aiMaxTokens = new QSpinBox;
+    m_aiMaxTokens->setObjectName(QStringLiteral("settingsAiMaxTokens"));
+    m_aiMaxTokens->setRange(1024, 64000);
+    m_aiMaxTokens->setSingleStep(1024);
+    m_aiMaxTokens->setToolTip(tr("Tope de la respuesta: si los casos llegan cortados, súbelo"));
+    ag->addWidget(field(tr("Proveedor"), m_aiProvider), 0, 0);
+    ag->addWidget(field(tr("Clave de API"), m_aiKey), 0, 1);
+    ag->addWidget(field(tr("Modelo"), withButton(m_aiModel, pickModel)), 1, 0);
+    ag->addWidget(field(tr("Tope de tokens de la respuesta"), m_aiMaxTokens), 1, 1);
+    ag->addWidget(field(tr("Dirección de la API (opcional)"), m_aiBaseUrl), 2, 0, 1, 2);
+    ag->setColumnStretch(0, 1);
+    ag->setColumnStretch(1, 1);
+    aiBody->addWidget(aiGrid);
+    m_aiSecretNote = ui::label(QString(), "muted-sm");
+    m_aiSecretNote->setWordWrap(true);
+    aiBody->addWidget(m_aiSecretNote);
+    v->addWidget(aiCard);
+    connect(m_aiProvider, &QComboBox::currentIndexChanged, this, [this]() {
+        if (m_selfEdit) return;
+        const auto provider = static_cast<AiProvider>(m_aiProvider->currentData().toInt());
+        m_settings.updateAi([provider](AiSettings& a) { a.provider = provider; });   // cada uno conserva lo suyo
+    });
+    auto bindAi = [this](QLineEdit* e, void (*apply)(AiProviderSettings&, const QString&)) {
+        connect(e, &QLineEdit::textEdited, this, [this, apply](const QString& t) {
+            m_selfEdit = true;
+            m_settings.updateAi([&](AiSettings& a) {
+                AiProviderSettings& p = a.of(a.provider);
+                apply(p, t);
+                p.connected = false;
+            });
+            m_selfEdit = false;
+        });
+    };
+    bindAi(m_aiKey, [](AiProviderSettings& p, const QString& t) { p.apiKey = t.trimmed(); });
+    bindAi(m_aiModel, [](AiProviderSettings& p, const QString& t) { p.model = t.trimmed(); });
+    bindAi(m_aiBaseUrl, [](AiProviderSettings& p, const QString& t) { p.baseUrl = t.trimmed(); });
+    connect(m_aiMaxTokens, &QSpinBox::valueChanged, this, [this](int n) {
+        if (m_selfEdit) return;
+        m_selfEdit = true;
+        m_settings.updateAi([n](AiSettings& a) { a.maxTokens = n; });
+        m_selfEdit = false;
+    });
+
     // Capturas
     QVBoxLayout* cb;
     auto* cap = section(theme::Cyan, tr("Capturas de pantalla y grabaciones"),
@@ -574,6 +652,7 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     connect(&m_settings, &SettingsStore::appChanged, this, &SettingsView::refreshGeneral);
     connect(&m_settings, &SettingsStore::runShortcutsChanged, this, &SettingsView::refreshRunShortcuts);
     connect(&m_settings, &SettingsStore::requirementSourceChanged, this, &SettingsView::refreshRequirementSource);
+    connect(&m_settings, &SettingsStore::aiChanged, this, &SettingsView::refreshAi);
     if (m_projects) connect(m_projects, &ProjectStore::projectsChanged, this, &SettingsView::refreshProject);
     if (m_requirements) connect(m_requirements, &RequirementSourceService::systemsChanged, this, &SettingsView::refreshProject);
     refreshGeneral();
@@ -581,6 +660,7 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     refreshCapture();
     refreshRunShortcuts();
     refreshRequirementSource();
+    refreshAi();
     refreshCaptureStatus();
 }
 
@@ -822,6 +902,64 @@ void SettingsView::testRequirementSource() {
         if (r.ok) emit toast(tr("Conectado a GESREQ · %1").arg(r.displayName), theme::Green);
         else emit toast(tr("No se pudo conectar con GESREQ · %1").arg(r.error), theme::Red);
     });
+}
+
+void SettingsView::refreshAi() {
+    const AiSettings& a = m_settings.ai();
+    const AiProviderSettings& p = a.active();
+    ui::setFlag(m_aiBadge, "active", p.connected);
+    if (m_aiBadge->isEnabled()) m_aiBadge->setText(p.connected ? tr("●  Conectado") : tr("●  Sin probar"));
+    const bool secure = m_settings.secretsAreSecure();
+    m_aiSecretNote->setText(secure ? tr("🔒 Clave · se guarda en: %1. Lo que se envía es sólo el prompt que revisas en el diálogo.").arg(m_settings.secretBackend())
+                                   : tr("⚠ Clave · se guarda %1. Instala un llavero (secret-tool / libsecret en Linux) para cifrar el dato.").arg(m_settings.secretBackend()));
+    m_aiSecretNote->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;").arg(secure ? theme::Muted : theme::AmberSoft));
+    m_aiModel->setPlaceholderText(AiSettings::defaultModel(a.provider));
+    m_aiBaseUrl->setPlaceholderText(AiSettings::defaultBaseUrl(a.provider));
+    m_aiKey->setPlaceholderText(a.provider == AiProvider::Anthropic ? QStringLiteral("sk-ant-…")
+                                : a.provider == AiProvider::OpenAI  ? QStringLiteral("sk-…")
+                                                                    : QStringLiteral("AIza…"));
+    if (m_selfEdit) return;
+    m_selfEdit = true;
+    m_aiProvider->setCurrentIndex(std::max(0, m_aiProvider->findData(static_cast<int>(a.provider))));
+    m_aiKey->setText(p.apiKey);
+    m_aiModel->setText(p.model);
+    m_aiBaseUrl->setText(p.baseUrl);
+    m_aiMaxTokens->setValue(a.maxTokens);
+    m_selfEdit = false;
+}
+
+void SettingsView::testAi() {
+    if (!m_ai) return;
+    m_aiBadge->setEnabled(false);
+    m_aiBadge->setText(tr("●  Probando…"));
+    QPointer<SettingsView> self(this);
+    m_ai->testConnection([self](const ConnectionResult& r) {
+        if (!self) return;
+        self->m_aiBadge->setEnabled(true);
+        self->refreshAi();
+        if (r.ok) emit self->toast(tr("Conectado · %1").arg(r.displayName), r.displayName.contains(QStringLiteral("«")) ? theme::Amber : theme::Green);
+        else emit self->toast(tr("No se pudo conectar con la IA · %1").arg(r.error), theme::Red);
+    });
+}
+
+void SettingsView::pickAiModel() {
+    if (!m_ai) return;
+    const AiSettings& a = m_settings.ai();
+    auto* dialog = new ChoiceDialog(tr("Modelo de %1").arg(label(a.provider)), tr("Consultando los modelos disponibles…"),
+                                    [this](const ChoiceDialog::Loaded& done) {
+                                        m_ai->fetchModels([done](const AiModelList& r) {
+                                            if (!r.ok) { done({}, r.error); return; }
+                                            QList<Choice> choices;
+                                            for (const auto& id : r.models) choices << Choice{id, id, {}};
+                                            done(choices, {});
+                                        });
+                                    },
+                                    a.model(), this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &ChoiceDialog::chosen, this, [this](const QString& id) {
+        m_settings.updateAi([&id](AiSettings& s) { s.of(s.provider).model = id; });
+    });
+    dialog->open();
 }
 
 void SettingsView::pickJiraProject() {

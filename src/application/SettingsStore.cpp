@@ -14,10 +14,13 @@ QString SettingsStore::tokenKey(TrackerKind kind) {
 
 QString SettingsStore::requirementPasswordKey() { return QStringLiteral("gesreq/password"); }
 
+QString SettingsStore::aiKeyKey(AiProvider provider) { return QStringLiteral("ai/%1/apiKey").arg(toString(provider)); }
+
 void SettingsStore::load() {
     if (m_repo) {
         m_tracker = m_repo->loadTracker();
         m_requirementSource = m_repo->loadRequirementSource();
+        m_ai = m_repo->loadAi();
         m_capture = m_repo->loadCapture();
         m_capture.clamp();
         m_app = m_repo->loadApp();
@@ -45,10 +48,26 @@ void SettingsStore::load() {
             m_requirementSource.password = *stored;
         }
     }
+    if (m_secrets) {
+        // Las claves de IA, igual: la que quedó en el fichero pasa al llavero; si no, se lee de él.
+        bool migrated = false;
+        for (int i = 0; i < kAiProviders; ++i) {
+            const auto provider = static_cast<AiProvider>(i);
+            AiProviderSettings& p = m_ai.of(provider);
+            if (!p.apiKey.isEmpty()) migrated = m_secrets->write(aiKeyKey(provider), p.apiKey) || migrated;
+            else if (const auto stored = m_secrets->read(aiKeyKey(provider))) p.apiKey = *stored;
+        }
+        if (migrated && m_repo) {
+            AiSettings clean = m_ai;
+            for (auto& p : clean.providers) p.apiKey.clear();
+            m_repo->saveAi(clean);
+        }
+    }
     if (m_capture.folder.isEmpty())
         m_capture.folder = QDir(QStandardPaths::writableLocation(QStandardPaths::HomeLocation)).filePath(QStringLiteral("QAflow/capturas"));
     emit trackerChanged();
     emit requirementSourceChanged();
+    emit aiChanged();
     emit captureChanged();
     emit appChanged();
     emit runShortcutsChanged();
@@ -91,6 +110,28 @@ void SettingsStore::updateRequirementSource(const std::function<void(Requirement
         m_repo->saveRequirementSource(persisted);
     }
     emit requirementSourceChanged();
+    emit saved();
+}
+
+void SettingsStore::updateAi(const std::function<void(AiSettings&)>& mutate) {
+    QString keysBefore[kAiProviders];
+    for (int i = 0; i < kAiProviders; ++i) keysBefore[i] = m_ai.providers[i].apiKey;
+    mutate(m_ai);
+    m_ai.clamp();
+    if (m_secrets) {
+        for (int i = 0; i < kAiProviders; ++i) {
+            const QString& key = m_ai.providers[i].apiKey;
+            if (key == keysBefore[i]) continue;
+            if (key.isEmpty()) m_secrets->remove(aiKeyKey(static_cast<AiProvider>(i)));
+            else m_secrets->write(aiKeyKey(static_cast<AiProvider>(i)), key);
+        }
+    }
+    if (m_repo) {
+        AiSettings persisted = m_ai;
+        if (m_secrets) for (auto& p : persisted.providers) p.apiKey.clear();   // las claves no viajan al fichero
+        m_repo->saveAi(persisted);
+    }
+    emit aiChanged();
     emit saved();
 }
 

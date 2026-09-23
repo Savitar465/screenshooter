@@ -36,6 +36,9 @@ public:
     void setArchived(const QString& id, bool archived);
     void removePlan(const QString& id);
 
+    /// Añade al final de ese plan (activo o no) los casos que todavía no tiene, en el orden dado.
+    void addCases(const QString& planId, const QStringList& caseIds);
+
     // Contenido del plan activo
     void setName(const QString& name);
     void toggle(const QString& caseId);           // añade al final o quita

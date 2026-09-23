@@ -94,6 +94,23 @@ public:
         }
         done(r);
     }
+
+    QMap<QString, QByteArray> files;                    // adjuntos que sirve, por dirección
+    QStringList downloads;                              // direcciones pedidas, en orden
+
+    void downloadAttachment(const RequirementSourceSettings&, const RequirementAttachment& attachment,
+                            std::function<void(const RequirementAttachmentResult&)> done) override {
+        downloads << attachment.url;
+        RequirementAttachmentResult r;
+        r.fileName = attachment.fileName;
+        r.ok = reachable && files.contains(attachment.url);
+        if (r.ok) r.data = files.value(attachment.url);
+        else {
+            r.failure = reachable ? RequirementSourceFailure::NotFound : RequirementSourceFailure::Network;
+            r.error = reachable ? QStringLiteral("GESREQ ya no tiene el adjunto") : QStringLiteral("No se pudo conectar con GESREQ");
+        }
+        done(r);
+    }
 };
 
 } // namespace qaflow::testing

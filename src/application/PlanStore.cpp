@@ -153,6 +153,15 @@ void PlanStore::setName(const QString& name) {
     if (auto* p = activePlan()) { p->name = name; persist(); emit plansChanged(); }
 }
 
+void PlanStore::addCases(const QString& planId, const QStringList& caseIds) {
+    const auto it = std::find_if(m_plans.begin(), m_plans.end(), [&planId](const TestPlan& p) { return p.id == planId; });
+    if (it == m_plans.end()) return;
+    bool changed = false;
+    for (const auto& id : caseIds)
+        if (!it->contains(id)) { it->caseIds.append(id); changed = true; }
+    if (changed) persist();
+}
+
 void PlanStore::toggle(const QString& caseId) {
     auto* p = activePlan();
     if (!p) return;

@@ -56,6 +56,9 @@ public:
     /// Sustituye (mismo id) o añade los casos dados. Devuelve {añadidos, actualizados}.
     std::pair<int, int> mergeCases(const QList<TestCase>& incoming);
     QString nextCaseId() const;
+    /// Añade casos nuevos (generados, sin id) con ids consecutivos a partir de `nextCaseId()`. Los que no
+    /// traen suite van a la del primer caso existente o a "General". Devuelve los ids asignados, en orden.
+    QStringList addCases(QList<TestCase> incoming);
 
     // Pasos
     void addStep(const QString& id);

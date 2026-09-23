@@ -19,6 +19,10 @@ public:
     virtual RequirementSourceSettings loadRequirementSource() = 0;
     virtual void saveRequirementSource(const RequirementSourceSettings& s) = 0;
 
+    /// Proveedores de IA. Como el gestor, `loadAi()` puede traer claves que quedaron en el fichero: se migran.
+    virtual AiSettings loadAi() = 0;
+    virtual void saveAi(const AiSettings& s) = 0;
+
     virtual CaptureSettings loadCapture() = 0;
     virtual void saveCapture(const CaptureSettings& s) = 0;
 

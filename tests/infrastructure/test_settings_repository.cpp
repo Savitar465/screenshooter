@@ -204,6 +204,34 @@ private slots:
         QVERIFY(!QSettings().contains(QStringLiteral("gesreq/password")));
     }
 
+    void aiSettingsAreSharedPerProviderAndNeverWriteAnEmptyKey() {
+        QSettingsRepository a(QStringLiteral("a")), b(QStringLiteral("b"));
+        QCOMPARE(toString(a.loadAi().provider), toString(AiProvider::Anthropic));
+        AiSettings ai;
+        ai.provider = AiProvider::OpenAI;
+        ai.maxTokens = 16000;
+        ai.of(AiProvider::OpenAI).model = QStringLiteral("gpt-x");
+        ai.of(AiProvider::OpenAI).baseUrl = QStringLiteral("http://localhost:11434/v1");
+        ai.of(AiProvider::OpenAI).connected = true;
+        ai.of(AiProvider::Gemini).model = QStringLiteral("gemini-x");
+        a.saveAi(ai);
+        QVERIFY(!QSettings().contains(QStringLiteral("ai/openai/apiKey")));
+        const AiSettings loaded = b.loadAi();
+        QCOMPARE(toString(loaded.provider), toString(AiProvider::OpenAI));
+        QCOMPARE(loaded.maxTokens, 16000);
+        QCOMPARE(loaded.model(), QStringLiteral("gpt-x"));
+        QCOMPARE(loaded.baseUrl(), QStringLiteral("http://localhost:11434/v1"));
+        QVERIFY(loaded.active().connected);
+        QCOMPARE(loaded.of(AiProvider::Gemini).model, QStringLiteral("gemini-x"));
+
+        ai.of(AiProvider::Gemini).apiKey = QStringLiteral("plain");   // sin llavero: SettingsStore la manda en claro
+        a.saveAi(ai);
+        QCOMPARE(b.loadAi().of(AiProvider::Gemini).apiKey, QStringLiteral("plain"));
+        ai.of(AiProvider::Gemini).apiKey.clear();
+        a.saveAi(ai);
+        QVERIFY(!QSettings().contains(QStringLiteral("ai/gemini/apiKey")));
+    }
+
     void plainSecretStoreKeepsValuesInSettings() {
         PlainSettingsSecretStore store;
         QVERIFY(!store.isSecure());

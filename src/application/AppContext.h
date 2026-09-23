@@ -1,5 +1,7 @@
 #pragma once
 
+#include "application/AiService.h"
+#include "application/AttachmentTextService.h"
 #include "application/BugReportService.h"
 #include "application/BugStore.h"
 #include "application/CaseTransferService.h"
@@ -48,6 +50,10 @@ struct AppContext {
     TestPublishService* publish = nullptr;
     /// Conexión con GESREQ, del que se importan los requerimientos (puede ser nullptr en tests).
     RequirementSourceService* requirements = nullptr;
+    /// Texto de los adjuntos de GESREQ para generar casos con IA (puede ser nullptr en tests).
+    AttachmentTextService* attachmentText = nullptr;
+    /// IA con la clave del usuario, para generar casos sin salir de QAflow (puede ser nullptr en tests).
+    AiService* ai = nullptr;
     /// Atajo global del sistema (puede ser nullptr en tests). Ajustes muestra su `status()`.
     IGlobalHotkey* hotkey = nullptr;
     /// Directorio de datos (cases.json, history.json…), para mostrarlo o abrirlo desde la UI.

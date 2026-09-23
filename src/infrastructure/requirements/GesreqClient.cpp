@@ -222,6 +222,83 @@ void GesreqClient::fetchDetail(const RequirementSourceSettings& s, const QString
     loadDetail(s, id.trimmed(), false, std::move(done));
 }
 
+void GesreqClient::downloadAttachment(const RequirementSourceSettings& s, const RequirementAttachment& attachment,
+                                      std::function<void(const RequirementAttachmentResult&)> done) {
+    RequirementAttachmentResult result;
+    result.fileName = attachment.fileName;
+    if (const Failure invalid = checkSettings(s); invalid.failed()) {
+        result.failure = invalid.kind;
+        result.error = invalid.error;
+        done(result);
+        return;
+    }
+    const QString url = s.resolve(attachment.url);
+    if (!url.startsWith(s.baseUrl() + QLatin1Char('/'))) {
+        result.failure = RequirementSourceFailure::Configuration;
+        result.error = QCoreApplication::translate("infrastructure", "El adjunto no es de esta conexión de GESREQ: %1").arg(attachment.url);
+        done(result);
+        return;
+    }
+    RequirementAttachment resolved = attachment;
+    resolved.url = url;
+    loadAttachment(s, resolved, false, std::move(done));
+}
+
+void GesreqClient::loadAttachment(const RequirementSourceSettings& s, const RequirementAttachment& attachment, bool retried,
+                                  std::function<void(const RequirementAttachmentResult&)> done) {
+    ensureSession(s, [this, s, attachment, retried, done](const Failure& session, bool fresh) {
+        RequirementAttachmentResult result;
+        result.fileName = attachment.fileName;
+        if (session.failed()) {
+            result.failure = session.kind;
+            result.error = session.error;
+            done(result);
+            return;
+        }
+        get(pageRequest(attachment.url), [this, s, attachment, retried, fresh, done, result](const Response& r) mutable {
+            if (!r.ok) {
+                const Failure failure = r.status == 404
+                    ? Failure{RequirementSourceFailure::NotFound,
+                              QCoreApplication::translate("infrastructure", "GESREQ ya no tiene el adjunto %1").arg(attachment.fileName)}
+                    : transportFailure(r);
+                result.failure = failure.kind;
+                result.error = failure.error;
+                done(result);
+                return;
+            }
+            // Un fichero nunca llega como página: si llega HTML, o es el login (sesión caducada) o un error.
+            if (r.header("content-type").toLower().contains("text/html")) {
+                const QString html = decode(r);
+                if (gesreq::isLoginPage(html)) {
+                    if (m_session == sessionKey(s)) m_session.clear();
+                    if (!fresh && !retried) { loadAttachment(s, attachment, true, done); return; }
+                    result.failure = RequirementSourceFailure::Credentials;
+                    result.error = QCoreApplication::translate("infrastructure", "GESREQ no conserva la sesión al descargar el adjunto");
+                    done(result);
+                    return;
+                }
+                if (!attachment.fileName.endsWith(QLatin1String(".html"), Qt::CaseInsensitive)
+                    && !attachment.fileName.endsWith(QLatin1String(".htm"), Qt::CaseInsensitive)) {
+                    result.failure = RequirementSourceFailure::NotFound;
+                    result.error = QCoreApplication::translate("infrastructure", "GESREQ respondió con una página en lugar del adjunto %1")
+                                       .arg(attachment.fileName);
+                    done(result);
+                    return;
+                }
+            }
+            static const QRegularExpression declared(QStringLiteral("filename\\*?=\\s*\"?(?:UTF-8'')?([^\";]+)"),
+                                                     QRegularExpression::CaseInsensitiveOption);
+            if (result.fileName.isEmpty()) {
+                const auto m = declared.match(QString::fromLatin1(r.header("content-disposition")));
+                if (m.hasMatch()) result.fileName = QUrl::fromPercentEncoding(m.captured(1).trimmed().toLatin1());
+            }
+            result.ok = true;
+            result.data = r.body;
+            done(result);
+        });
+    });
+}
+
 void GesreqClient::loadDetail(const RequirementSourceSettings& s, const QString& id, bool retried,
                               std::function<void(const RequirementDetailResult&)> done) {
     getPage(s, gesreq::detailPath(id), retried, [this, s, id, retried, done](const QString& html, const Failure& failure, bool fresh) {

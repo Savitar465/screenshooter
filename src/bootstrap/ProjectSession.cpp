@@ -5,6 +5,8 @@
 #include "infrastructure/persistence/JsonBugRepository.h"
 #include "infrastructure/persistence/JsonIssueRepository.h"
 #include "infrastructure/persistence/QSettingsRepository.h"
+#include "infrastructure/ai/AiClient.h"
+#include "infrastructure/documents/DocumentReader.h"
 #include "infrastructure/report/QualityRecordDocx.h"
 #include "infrastructure/requirements/GesreqClient.h"
 #include "infrastructure/testmgmt/ZephyrClient.h"
@@ -47,6 +49,8 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     records = std::make_unique<QualityRecordService>(*issues, *cases, *plan, *history, *bugLedger, *settings,
                                                      std::make_shared<QualityRecordDocx>(), publish.get());
     requirements = std::make_unique<RequirementSourceService>(requirementSource ? requirementSource : std::make_shared<GesreqClient>(), *settings);
+    attachmentText = std::make_unique<AttachmentTextService>(*requirements, std::make_shared<DocumentReader>());
+    ai = std::make_unique<AiService>(std::make_shared<AiClient>(), *settings);
     revisionPublish = std::make_unique<RevisionPublishService>(*issues, *history, *records, publish.get(), issuePublish.get(),
                                                                requirements.get());
     // El issue sigue a sus pruebas: arrancar un ciclo de uno de sus planes lo pasa a «En pruebas» y
@@ -77,6 +81,8 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     ctx.run = run.get(); ctx.plan = plan.get(); ctx.bugLedger = bugLedger.get();
     ctx.bugs = bugs.get(); ctx.publish = publish.get(); ctx.evidence = evidence.get(); ctx.transfer = transfer.get();
     ctx.issues = issues.get(); ctx.issuePublish = issuePublish.get(); ctx.requirements = requirements.get();
+    ctx.attachmentText = attachmentText.get();
+    ctx.ai = ai.get();
     ctx.records = records.get();
     ctx.revisionPublish = revisionPublish.get();
     ctx.captureBackend = capture->backendName();

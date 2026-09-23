@@ -32,6 +32,11 @@ void RequirementSourceService::fetchDetail(const QString& id, std::function<void
     m_source->fetchDetail(m_settings.requirementSource(), id, std::move(done));
 }
 
+void RequirementSourceService::downloadAttachment(const RequirementAttachment& attachment,
+                                                  std::function<void(const RequirementAttachmentResult&)> done) {
+    m_source->downloadAttachment(m_settings.requirementSource(), attachment, std::move(done));
+}
+
 void RequirementSourceService::fetchSystems(std::function<void(const RequirementSystemsResult&)> done) {
     m_source->fetchSystems(m_settings.requirementSource(), std::move(done));
 }

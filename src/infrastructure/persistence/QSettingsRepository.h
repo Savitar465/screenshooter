@@ -18,6 +18,8 @@ public:
     void saveTracker(const TrackerSettings& s) override;
     RequirementSourceSettings loadRequirementSource() override;
     void saveRequirementSource(const RequirementSourceSettings& s) override;
+    AiSettings loadAi() override;
+    void saveAi(const AiSettings& s) override;
     CaptureSettings loadCapture() override;
     void saveCapture(const CaptureSettings& s) override;
     AppSettings loadApp() override;

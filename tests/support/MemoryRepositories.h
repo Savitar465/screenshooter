@@ -89,6 +89,7 @@ class MemorySettingsRepository : public ISettingsRepository {
 public:
     TrackerSettings tracker;
     RequirementSourceSettings requirementSource;
+    AiSettings ai;
     CaptureSettings capture;
     AppSettings app;
     RunShortcuts runShortcuts;
@@ -97,6 +98,8 @@ public:
     void saveTracker(const TrackerSettings& s) override { tracker = s; }
     RequirementSourceSettings loadRequirementSource() override { return requirementSource; }
     void saveRequirementSource(const RequirementSourceSettings& s) override { requirementSource = s; }
+    AiSettings loadAi() override { return ai; }
+    void saveAi(const AiSettings& s) override { ai = s; }
     CaptureSettings loadCapture() override { return capture; }
     void saveCapture(const CaptureSettings& c) override { capture = c; }
     AppSettings loadApp() override { return app; }

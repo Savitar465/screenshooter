@@ -240,4 +240,62 @@ CaptureMode captureModeFromString(const QString& s) {
     return CaptureMode::ActiveWindow;
 }
 
+QString toString(AiProvider p) {
+    switch (p) {
+        case AiProvider::Anthropic: return QStringLiteral("anthropic");
+        case AiProvider::OpenAI: return QStringLiteral("openai");
+        case AiProvider::Gemini: return QStringLiteral("gemini");
+    }
+    return {};
+}
+
+AiProvider aiProviderFromString(const QString& s) {
+    if (s.compare(QStringLiteral("openai"), Qt::CaseInsensitive) == 0) return AiProvider::OpenAI;
+    if (s.compare(QStringLiteral("gemini"), Qt::CaseInsensitive) == 0) return AiProvider::Gemini;
+    return AiProvider::Anthropic;
+}
+
+QString label(AiProvider p) {
+    switch (p) {
+        case AiProvider::Anthropic: return QStringLiteral("Anthropic (Claude)");
+        case AiProvider::OpenAI: return QStringLiteral("OpenAI (ChatGPT)");
+        case AiProvider::Gemini: return QStringLiteral("Google (Gemini)");
+    }
+    return {};
+}
+
+QString AiSettings::defaultModel(AiProvider p) {
+    switch (p) {
+        case AiProvider::Anthropic: return QStringLiteral("claude-sonnet-5");
+        case AiProvider::OpenAI: return QStringLiteral("gpt-4.1");
+        case AiProvider::Gemini: return QStringLiteral("gemini-2.5-flash");
+    }
+    return {};
+}
+
+QString AiSettings::defaultBaseUrl(AiProvider p) {
+    switch (p) {
+        case AiProvider::Anthropic: return QStringLiteral("https://api.anthropic.com");
+        case AiProvider::OpenAI: return QStringLiteral("https://api.openai.com/v1");
+        case AiProvider::Gemini: return QStringLiteral("https://generativelanguage.googleapis.com/v1beta");
+    }
+    return {};
+}
+
+QString AiSettings::model() const {
+    const QString m = active().model.trimmed();
+    return m.isEmpty() ? defaultModel(provider) : m;
+}
+
+QString AiSettings::baseUrl() const {
+    QString url = active().baseUrl.trimmed();
+    if (url.isEmpty()) url = defaultBaseUrl(provider);
+    while (url.endsWith(QLatin1Char('/'))) url.chop(1);
+    return url;
+}
+
+void AiSettings::clamp() {
+    if (maxTokens < 1024 || maxTokens > 64000) maxTokens = 8192;
+}
+
 } // namespace qaflow

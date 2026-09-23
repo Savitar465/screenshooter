@@ -30,6 +30,12 @@ public:
                      std::function<void(const RequirementDetailResult&)> done) override;
     void fetchSystems(const RequirementSourceSettings& s, std::function<void(const RequirementSystemsResult&)> done) override;
 
+    /// Descarga por `docDownload.do` con la sesión. Si en vez del fichero llega el formulario de login, la
+    /// sesión caducó: se entra otra vez y se repite una sola vez. Sólo se piden enlaces de la misma
+    /// aplicación, para no mandar la cookie de sesión a otro servidor.
+    void downloadAttachment(const RequirementSourceSettings& s, const RequirementAttachment& attachment,
+                            std::function<void(const RequirementAttachmentResult&)> done) override;
+
     bool canRegisterResult() const override { return true; }
     /// Las reglas del formulario del control de calidad, comprobadas sin tocar la red: el acta que
     /// GESREQ exige y la coherencia entre el resultado y el resumen de observaciones.
@@ -71,6 +77,8 @@ private:
     /// GET de una página con sesión. Si la respuesta es el formulario de login, la sesión caducó: se
     /// inicia otra y se repite una vez (`retried` evita la segunda).
     void getPage(const RequirementSourceSettings& s, const QString& path, bool retried, PageHandler done);
+    void loadAttachment(const RequirementSourceSettings& s, const RequirementAttachment& attachment, bool retried,
+                        std::function<void(const RequirementAttachmentResult&)> done);
     void loadDetail(const RequirementSourceSettings& s, const QString& id, bool retried,
                     std::function<void(const RequirementDetailResult&)> done);
     /// Envía el formulario del control con el resultado, el comentario y el acta de QAflow. No se

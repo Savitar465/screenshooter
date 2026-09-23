@@ -76,6 +76,18 @@ private slots:
         QCOMPARE(f.plans.orderedCaseIds(), (QStringList{QStringLiteral("TC-105"), QStringLiteral("TC-104")}));
     }
 
+    void addCasesAppendsToAnyPlanWithoutDuplicates() {
+        AppFixture f;
+        const QString other = f.plans.createPlan(QStringLiteral("Del requerimiento"));
+        f.plans.setActive(QStringLiteral("PL-0001"));
+        const QStringList before = f.plans.orderedCaseIds();
+        f.plans.addCases(other, {QStringLiteral("TC-103"), QStringLiteral("TC-101")});
+        f.plans.addCases(other, {QStringLiteral("TC-101"), QStringLiteral("TC-105")});
+        QCOMPARE(f.plans.orderedCaseIds(other), (QStringList{QStringLiteral("TC-103"), QStringLiteral("TC-101"), QStringLiteral("TC-105")}));
+        QCOMPARE(f.plans.orderedCaseIds(), before);   // el activo no se toca
+        f.plans.addCases(QStringLiteral("PL-9999"), {QStringLiteral("TC-101")});   // plan inexistente: nada
+    }
+
     void moveCaseAndSortByPriority() {
         AppFixture f;
         f.plans.selectNone();

@@ -112,6 +112,42 @@ struct RunShortcuts {
     QString next = QStringLiteral("Ctrl+Alt+D");
 };
 
+/// Proveedores de IA con los que QAflow genera casos de prueba directamente, con la clave del usuario.
+enum class AiProvider { Anthropic, OpenAI, Gemini };
+constexpr int kAiProviders = 3;
+
+QString toString(AiProvider p);   // "anthropic", "openai", "gemini": se persiste
+AiProvider aiProviderFromString(const QString& s);
+QString label(AiProvider p);      // "Anthropic (Claude)"…
+
+/// Lo de cada proveedor: su clave (nunca en claro: va al llavero, como el token del gestor), el modelo y,
+/// si se usa un servidor compatible o un proxy de la organización, otra dirección de la API.
+struct AiProviderSettings {
+    QString apiKey;
+    QString model;       // vacío = `defaultModel()`
+    QString baseUrl;     // vacío = `defaultBaseUrl()`
+    bool connected = false;   // la última prueba con esta clave entró
+};
+
+struct AiSettings {
+    AiProvider provider = AiProvider::Anthropic;
+    int maxTokens = 8192;   // tope de la respuesta: los casos de un requerimiento grande ocupan varios miles
+    AiProviderSettings providers[kAiProviders];
+
+    AiProviderSettings& of(AiProvider p) { return providers[static_cast<int>(p)]; }
+    const AiProviderSettings& of(AiProvider p) const { return providers[static_cast<int>(p)]; }
+    const AiProviderSettings& active() const { return of(provider); }
+
+    /// Hay clave para el proveedor elegido: se puede generar sin salir de QAflow.
+    bool isConfigured() const { return !active().apiKey.trimmed().isEmpty(); }
+    QString model() const;     // el configurado o el de por defecto
+    QString baseUrl() const;   // sin barra final
+    static QString defaultModel(AiProvider p);
+    static QString defaultBaseUrl(AiProvider p);
+    /// Valores fuera de rango vuelven a un valor razonable.
+    void clamp();
+};
+
 struct CaptureSettings {
     QString shortcut = QStringLiteral("Ctrl+Shift+S");
     QString recordShortcut = QStringLiteral("Ctrl+Shift+G");   // iniciar / detener la grabación de GIF

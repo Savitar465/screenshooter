@@ -20,6 +20,7 @@ endfunction()
 
 # core: modelos y funciones puras
 qaflow_add_test(core test_text LIBS qaflow_core)
+qaflow_add_test(core test_jira_markup LIBS qaflow_core)
 qaflow_add_test(core test_test_case LIBS qaflow_core)
 qaflow_add_test(core test_test_run LIBS qaflow_core)
 qaflow_add_test(core test_bug_report LIBS qaflow_core)
@@ -70,5 +71,6 @@ qaflow_add_test(presentation test_main_window LIBS qaflow_presentation SOURCES $
 qaflow_add_test(presentation test_evidence_widgets LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
 qaflow_add_test(presentation test_choice_dialog LIBS qaflow_presentation SOURCES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
 qaflow_add_test(presentation test_wheel_guard LIBS qaflow_presentation)
+qaflow_add_test(presentation test_markup_editor LIBS qaflow_presentation)
 
 qaflow_add_test(presentation test_project_session LIBS qaflow_presentation qaflow_infrastructure SOURCES ${CMAKE_SOURCE_DIR}/src/bootstrap/ProjectSession.cpp)

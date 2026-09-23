@@ -13,6 +13,29 @@
     </message>
 </context>
 <context>
+    <name>MarkupEditorDialog</name>
+    <message>
+        <source>Rojo</source>
+        <translation>Red</translation>
+    </message>
+    <message>
+        <source>Verde</source>
+        <translation>Green</translation>
+    </message>
+    <message>
+        <source>Azul</source>
+        <translation>Blue</translation>
+    </message>
+    <message>
+        <source>Naranja</source>
+        <translation>Orange</translation>
+    </message>
+    <message>
+        <source>Gris</source>
+        <translation>Grey</translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message>
         <source>Publicado desde QAflow · %1 de %2 casos ejecutados · %3 % de éxito</source>
@@ -750,6 +773,10 @@
     <message>
         <source>Pantalla fija</source>
         <translation>Fixed screen</translation>
+    </message>
+    <message>
+        <source>Columna %1</source>
+        <translation>Column %1</translation>
     </message>
 </context>
 <context>
@@ -1982,10 +2009,6 @@
         <translation>More actions</translation>
     </message>
     <message>
-        <source>Duplicar caso</source>
-        <translation>Duplicate case</translation>
-    </message>
-    <message>
         <source>Ver historial de ejecuciones</source>
         <translation>View run history</translation>
     </message>
@@ -2102,10 +2125,6 @@
         <translation>%1 moved to the &quot;%2&quot; suite</translation>
     </message>
     <message>
-        <source>%1 duplicado como %2</source>
-        <translation>%1 duplicated as %2</translation>
-    </message>
-    <message>
         <source>Se eliminará el caso con sus %1 pasos</source>
         <translation>The test case will be deleted along with its %1 steps</translation>
     </message>
@@ -2184,6 +2203,42 @@
     <message>
         <source>Datos de la prueba: usuario, importe, archivo… Es el campo «data» del paso de Zephyr.</source>
         <translation>Test data: user, amount, file… It is the «data» field of the Zephyr step.</translation>
+    </message>
+    <message>
+        <source>Clonar caso</source>
+        <translation>Clone case</translation>
+    </message>
+    <message>
+        <source>Clonar</source>
+        <translation>Clone</translation>
+    </message>
+    <message>
+        <source>Crear una copia de este caso con sus pasos, en Borrador y sin ejecuciones (Ctrl+D)</source>
+        <translation>Create a copy of this case with its steps, as Draft and without runs (Ctrl+D)</translation>
+    </message>
+    <message>
+        <source>Precondiciones</source>
+        <translation>Preconditions</translation>
+    </message>
+    <message>
+        <source>Paso %1 · Acción</source>
+        <translation>Step %1 · Action</translation>
+    </message>
+    <message>
+        <source>Paso %1 · Datos de la prueba</source>
+        <translation>Step %1 · Test data</translation>
+    </message>
+    <message>
+        <source>Paso %1 · Resultado esperado</source>
+        <translation>Step %1 · Expected result</translation>
+    </message>
+    <message>
+        <source>Clonar paso debajo</source>
+        <translation>Clone step below</translation>
+    </message>
+    <message>
+        <source>%1 clonado como %2</source>
+        <translation>%1 cloned as %2</translation>
     </message>
 </context>
 <context>
@@ -4104,10 +4159,6 @@ Create another one anyway?</translation>
         <translation>&amp;Find case</translation>
     </message>
     <message>
-        <source>D&amp;uplicar caso</source>
-        <translation>&amp;Duplicate case</translation>
-    </message>
-    <message>
         <source>&amp;Eliminar caso…</source>
         <translation>De&amp;lete case…</translation>
     </message>
@@ -4488,10 +4539,6 @@ Create another one anyway?</translation>
         <translation>&amp;Next step</translation>
     </message>
     <message>
-        <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Iniciar o detener la grabación de GIF&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Adjuntar archivos como evidencia (o arrástralos a la ventana)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en una miniatura&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Falla el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vuelve al paso anterior, sin tocar su veredicto (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa al siguiente sin darle veredicto a este (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir los ajustes&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso · Alt+← · Alt+→&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Moverse por los pasos de la ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en un paso de la lista&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ir a ese paso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
-        <translation>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Duplicate case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take a screenshot (system-wide when the system allows it; press again to cancel the countdown)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Start or stop the GIF recording&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Attach files as evidence (or drag them onto the window)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a thumbnail&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the evidence at full size (← → navigate, Ctrl+E annotates, Ctrl+C copies)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pass the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Fail the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go back to the previous step, leaving its verdict alone (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Move to the next step without giving this one a verdict (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the settings&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict of the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace · Alt+← · Alt+→&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Move through the steps of the run&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a step in the list&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to that step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
-    </message>
-    <message>
         <source>GREQ %1</source>
         <translation>GREQ %1</translation>
     </message>
@@ -4534,6 +4581,169 @@ Create another one anyway?</translation>
     <message>
         <source>Rea&amp;nudar ejecución</source>
         <translation>Resu&amp;me run</translation>
+    </message>
+    <message>
+        <source>C&amp;lonar caso</source>
+        <translation>C&amp;lone case</translation>
+    </message>
+    <message>
+        <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Clonar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Iniciar o detener la grabación de GIF&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Adjuntar archivos como evidencia (o arrástralos a la ventana)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en una miniatura&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Falla el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vuelve al paso anterior, sin tocar su veredicto (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa al siguiente sin darle veredicto a este (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir los ajustes&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso · Alt+← · Alt+→&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Moverse por los pasos de la ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en un paso de la lista&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ir a ese paso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
+        <translation>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Clone case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take a screenshot (system-wide when the system allows it; press again to cancel the countdown)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Start or stop the GIF recording&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Attach files as evidence (or drag them onto the window)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a thumbnail&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the evidence at full size (← → navigate, Ctrl+E annotates, Ctrl+C copies)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pass the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Fail the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go back to the previous step, leaving its verdict alone (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Move to the next step without giving this one a verdict (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the settings&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict of the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace · Alt+← · Alt+→&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Move through the steps of the run&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a step in the list&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to that step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::MarkupEditorDialog</name>
+    <message>
+        <source>Negrita (Ctrl+B)</source>
+        <translation>Bold (Ctrl+B)</translation>
+    </message>
+    <message>
+        <source>texto</source>
+        <translation>text</translation>
+    </message>
+    <message>
+        <source>Cursiva (Ctrl+I)</source>
+        <translation>Italic (Ctrl+I)</translation>
+    </message>
+    <message>
+        <source>Subrayado (Ctrl+U)</source>
+        <translation>Underline (Ctrl+U)</translation>
+    </message>
+    <message>
+        <source>Tachado</source>
+        <translation>Strikethrough</translation>
+    </message>
+    <message>
+        <source>Monoespaciado: valores, rutas, comandos</source>
+        <translation>Monospace: values, paths, commands</translation>
+    </message>
+    <message>
+        <source>valor</source>
+        <translation>value</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Colour</translation>
+    </message>
+    <message>
+        <source>Color del texto</source>
+        <translation>Text colour</translation>
+    </message>
+    <message>
+        <source>Otro…</source>
+        <translation>Other…</translation>
+    </message>
+    <message>
+        <source>Título</source>
+        <translation>Title</translation>
+    </message>
+    <message>
+        <source>Título de sección</source>
+        <translation>Section heading</translation>
+    </message>
+    <message>
+        <source>Título %1</source>
+        <translation>Heading %1</translation>
+    </message>
+    <message>
+        <source>Lista</source>
+        <translation>List</translation>
+    </message>
+    <message>
+        <source>Lista con viñetas</source>
+        <translation>Bulleted list</translation>
+    </message>
+    <message>
+        <source>Lista numerada</source>
+        <translation>Numbered list</translation>
+    </message>
+    <message>
+        <source>Tabla</source>
+        <translation>Table</translation>
+    </message>
+    <message>
+        <source>Insertar una tabla o convertir en tabla lo copiado de una hoja de cálculo</source>
+        <translation>Insert a table or turn what was copied from a spreadsheet into one</translation>
+    </message>
+    <message>
+        <source>Insertar tabla…</source>
+        <translation>Insert table…</translation>
+    </message>
+    <message>
+        <source>Pegar como tabla (desde Excel / hoja de cálculo)</source>
+        <translation>Paste as table (from Excel / spreadsheet)</translation>
+    </message>
+    <message>
+        <source>Enlace</source>
+        <translation>Link</translation>
+    </message>
+    <message>
+        <source>Enlace a una URL</source>
+        <translation>Link to a URL</translation>
+    </message>
+    <message>
+        <source>Código</source>
+        <translation>Code</translation>
+    </message>
+    <message>
+        <source>Bloque de código o texto sin formato</source>
+        <translation>Code block or unformatted text</translation>
+    </message>
+    <message>
+        <source>código</source>
+        <translation>code</translation>
+    </message>
+    <message>
+        <source>Salto de línea dentro de una celda de tabla</source>
+        <translation>Line break inside a table cell</translation>
+    </message>
+    <message>
+        <source>MARCADO DE JIRA</source>
+        <translation>JIRA MARKUP</translation>
+    </message>
+    <message>
+        <source>VISTA PREVIA · así se ve en Zephyr</source>
+        <translation>PREVIEW · how it looks in Zephyr</translation>
+    </message>
+    <message>
+        <source>*negrita*  _cursiva_  +subrayado+  -tachado-  {{mono}}  ||cabecera||  |celda|  * viñeta  # número  [texto|https://…]</source>
+        <translation>*bold*  _italic_  +underline+  -strikethrough-  {{mono}}  ||header||  |cell|  * bullet  # number  [text|https://…]</translation>
+    </message>
+    <message>
+        <source>Aplicar</source>
+        <translation>Apply</translation>
+    </message>
+    <message>
+        <source>Ctrl+Intro</source>
+        <translation>Ctrl+Enter</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Insertar tabla</source>
+        <translation>Insert table</translation>
+    </message>
+    <message>
+        <source>Filas (sin la cabecera)</source>
+        <translation>Rows (without the header)</translation>
+    </message>
+    <message>
+        <source>Columnas</source>
+        <translation>Columns</translation>
+    </message>
+    <message>
+        <source>Insertar enlace</source>
+        <translation>Insert link</translation>
+    </message>
+    <message>
+        <source>Texto</source>
+        <translation>Text</translation>
+    </message>
+    <message>
+        <source>URL</source>
+        <translation>URL</translation>
     </message>
 </context>
 <context>
@@ -7047,6 +7257,21 @@ Environment: %1</translation>
 Continúa el ciclo %1: sólo sus casos fallados y bloqueados</source>
         <translation>
 Continues cycle %1: only its failed and blocked cases</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::TextArea</name>
+    <message>
+        <source>Editar con formato: negrita, tablas, listas… (lo que acepta Jira / Zephyr)</source>
+        <translation>Edit with formatting: bold, tables, lists… (what Jira / Zephyr accept)</translation>
+    </message>
+    <message>
+        <source>Editar con formato</source>
+        <translation>Edit with formatting</translation>
+    </message>
+    <message>
+        <source>Editar con formato…</source>
+        <translation>Edit with formatting…</translation>
     </message>
 </context>
 <context>

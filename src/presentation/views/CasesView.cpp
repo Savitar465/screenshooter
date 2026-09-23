@@ -244,6 +244,13 @@ void CasesView::refreshList() {
         for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
         const QString id = c.id;
         connect(row, &QPushButton::clicked, this, [this, id]() { m_store.select(id); });
+        row->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(row, &QWidget::customContextMenuRequested, this, [this, row, id](const QPoint& pos) {
+            QMenu menu(row);
+            menu.addAction(tr("Clonar caso"), this, [this, id]() { m_store.select(id); duplicateSelected(); });
+            menu.addAction(tr("Eliminar caso…"), this, [this, id]() { m_store.select(id); removeSelected(); });
+            menu.exec(row->mapToGlobal(pos));
+        });
         m_listLayout->addWidget(row);
     }
     if (shown == 0) {
@@ -296,11 +303,16 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     more->setToolTip(tr("Más acciones"));
     more->setFixedWidth(40);
     auto* menu = new QMenu(more);
-    menu->addAction(tr("Duplicar caso"), this, &CasesView::duplicateSelected);
+    menu->addAction(tr("Clonar caso"), this, &CasesView::duplicateSelected);
     menu->addAction(tr("Ver historial de ejecuciones"), this, [this]() { if (!m_store.selectedId().isEmpty()) emit historyRequested(m_store.selectedId()); });
     menu->addSeparator();
     menu->addAction(tr("Eliminar caso…"), this, &CasesView::removeSelected);
     more->setMenu(menu);
+    auto* clone = ui::button(tr("Clonar"), "outline");
+    clone->setObjectName(QStringLiteral("cloneCase"));
+    clone->setToolTip(tr("Crear una copia de este caso con sus pasos, en Borrador y sin ejecuciones (Ctrl+D)"));
+    connect(clone, &QPushButton::clicked, this, &CasesView::duplicateSelected);
+    hh->addWidget(clone, 0, Qt::AlignTop);
     hh->addWidget(save, 0, Qt::AlignTop);
     hh->addWidget(more, 0, Qt::AlignTop);
     v->addWidget(head);
@@ -360,6 +372,7 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_pre = new TextArea(2);
     m_pre->setProperty("role", QStringLiteral("panel"));
     m_pre->setPlaceholderText(tr("Estado inicial del sistema, datos de prueba, cuenta…"));
+    m_pre->enableMarkupEditor(tr("Precondiciones"));
     connect(m_pre, &TextArea::edited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.preconditions = t; }); }); });
     pv->addWidget(m_pre);
     v->addWidget(preBlock);
@@ -385,7 +398,7 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     cg->addWidget(ui::label(tr("DATOS DE LA PRUEBA"), "eyebrow"), 0, 2);
     cg->addWidget(ui::label(tr("RESULTADO ESPERADO"), "eyebrow"), 0, 3);
     cg->setColumnMinimumWidth(0, 28);
-    cg->setColumnMinimumWidth(4, 60);
+    cg->setColumnMinimumWidth(4, 88);
     cg->setColumnStretch(1, 1);
     cg->setColumnStretch(2, 1);
     cg->setColumnStretch(3, 1);
@@ -464,17 +477,20 @@ void CasesView::refreshSteps() {
         auto* action = new TextArea(2);
         action->setPlaceholderText(tr("Qué hace el tester…"));
         action->setTextSilently(c->steps[i].action);
+        action->enableMarkupEditor(tr("Paso %1 · Acción").arg(i + 1));
         connect(action, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.action = t; }); }); });
         g->addWidget(action, 0, 1);
         auto* data = new TextArea(2);
         data->setPlaceholderText(tr("Con qué datos…"));
         data->setToolTip(tr("Datos de la prueba: usuario, importe, archivo… Es el campo «data» del paso de Zephyr."));
         data->setTextSilently(c->steps[i].data);
+        data->enableMarkupEditor(tr("Paso %1 · Datos de la prueba").arg(i + 1));
         connect(data, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.data = t; }); }); });
         g->addWidget(data, 0, 2);
         auto* expected = new TextArea(2);
         expected->setPlaceholderText(tr("Qué debe ocurrir…"));
         expected->setTextSilently(c->steps[i].expected);
+        expected->enableMarkupEditor(tr("Paso %1 · Resultado esperado").arg(i + 1));
         connect(expected, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.expected = t; }); }); });
         g->addWidget(expected, 0, 3);
 
@@ -494,15 +510,19 @@ void CasesView::refreshSteps() {
         auto* insert = ui::button(QStringLiteral("+"), "icon-move");
         insert->setToolTip(tr("Insertar paso debajo"));
         connect(insert, &QPushButton::clicked, this, [this, id, i]() { m_store.insertStep(id, i + 1); });
+        auto* cloneStep = ui::button(QStringLiteral("⧉"), "icon-move");
+        cloneStep->setToolTip(tr("Clonar paso debajo"));
+        connect(cloneStep, &QPushButton::clicked, this, [this, id, i]() { m_store.duplicateStep(id, i); });
         auto* remove = ui::button(QStringLiteral("×"), "icon");
         remove->setToolTip(tr("Eliminar paso (se puede deshacer)"));
         connect(remove, &QPushButton::clicked, this, [this, id, i]() { m_store.removeStep(id, i); });
-        for (auto* b : {up, down, insert}) b->setFixedSize(26, 22);
+        for (auto* b : {up, down, insert, cloneStep}) b->setFixedSize(26, 22);
         remove->setFixedSize(26, 22);
         tg->addWidget(up, 0, 0);
         tg->addWidget(down, 0, 1);
+        tg->addWidget(remove, 0, 2);
         tg->addWidget(insert, 1, 0);
-        tg->addWidget(remove, 1, 1);
+        tg->addWidget(cloneStep, 1, 1);
         g->addWidget(tools, 0, 4, Qt::AlignTop);
         g->setColumnStretch(1, 1);
         g->setColumnStretch(2, 1);
@@ -586,7 +606,7 @@ void CasesView::duplicateSelected() {
     const QString src = m_store.selectedId();
     if (src.isEmpty()) return;
     const QString id = m_store.duplicateCase(src);
-    if (!id.isEmpty()) emit toast(tr("%1 duplicado como %2").arg(src, id), theme::Green);
+    if (!id.isEmpty()) emit toast(tr("%1 clonado como %2").arg(src, id), theme::Green);
 }
 
 void CasesView::removeSelected() {

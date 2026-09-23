@@ -30,6 +30,8 @@ target_compile_options(qaflow_warnings INTERFACE $<$<CXX_COMPILER_ID:MSVC>:/utf-
 add_library(qaflow_core STATIC
         src/core/Text.h
         src/core/Text.cpp
+        src/core/JiraMarkup.h
+        src/core/JiraMarkup.cpp
         src/core/models/TestCase.h
         src/core/models/TestCase.cpp
         src/core/models/TestRun.h
@@ -234,6 +236,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/Thumbnail.cpp
         src/presentation/widgets/TextArea.h
         src/presentation/widgets/TextArea.cpp
+        src/presentation/widgets/MarkupEditorDialog.h
+        src/presentation/widgets/MarkupEditorDialog.cpp
         src/presentation/widgets/ShotCard.h
         src/presentation/widgets/ShotCard.cpp
         src/presentation/widgets/EvidencePreview.h

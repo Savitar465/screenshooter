@@ -491,7 +491,7 @@ void MainWindow::buildMenus() {
     edit->addSeparator();
     auto* find = edit->addAction(tr("&Buscar caso"), QKeySequence::Find, this, [this]() { navigate(Screen::Casos); casesView()->focusSearch(); });
     find->setObjectName(QStringLiteral("actFind"));
-    m_actDuplicate = edit->addAction(tr("D&uplicar caso"), QKeySequence(Qt::CTRL | Qt::Key_D), this, [this]() { navigate(Screen::Casos); casesView()->duplicateSelected(); });
+    m_actDuplicate = edit->addAction(tr("C&lonar caso"), QKeySequence(Qt::CTRL | Qt::Key_D), this, [this]() { navigate(Screen::Casos); casesView()->duplicateSelected(); });
     m_actDuplicate->setObjectName(QStringLiteral("actDuplicate"));
     m_actDelete = edit->addAction(tr("&Eliminar caso…"), QKeySequence(Qt::CTRL | Qt::Key_Delete), this, [this]() { navigate(Screen::Casos); casesView()->removeSelected(); });
 
@@ -581,7 +581,7 @@ void MainWindow::buildMenus() {
                                  tr("<table cellspacing='6'>"
                                     "<tr><td><b>Ctrl+N</b></td><td>Nuevo caso</td></tr>"
                                     "<tr><td><b>Ctrl+F</b></td><td>Buscar caso</td></tr>"
-                                    "<tr><td><b>Ctrl+D</b></td><td>Duplicar caso</td></tr>"
+                                    "<tr><td><b>Ctrl+D</b></td><td>Clonar caso</td></tr>"
                                     "<tr><td><b>Ctrl+Z</b></td><td>Deshacer el último borrado</td></tr>"
                                     "<tr><td><b>F5</b></td><td>Ejecutar el caso seleccionado</td></tr>"
                                     "<tr><td><b>%1</b></td><td>Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)</td></tr>"

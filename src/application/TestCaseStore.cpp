@@ -215,6 +215,16 @@ void TestCaseStore::insertStep(const QString& id, int index) {
     });
 }
 
+void TestCaseStore::duplicateStep(const QString& id, int index) {
+    updateCase(id, [index](TestCase& c) {
+        if (index < 0 || index >= c.steps.size()) return;
+        const int at = index + 1;
+        c.steps.insert(at, c.steps[index]);
+        // Las capturas se quedan con el original: la copia todavía no se ha ejecutado.
+        remapShotSteps(c, [at](int step) { return step > at ? step + 1 : step; });
+    });
+}
+
 void TestCaseStore::removeStep(const QString& id, int index) {
     const TestCase* c = find(id);
     if (!c || index < 0 || index >= c->steps.size()) return;

@@ -129,6 +129,26 @@ private slots:
         QCOMPARE(f.store.find(id)->steps.size(), 5);
     }
 
+    void duplicateStepCopiesItBelowAndShiftsLaterShots() {
+        AppFixture f;
+        const QString id = QStringLiteral("TC-104");
+        f.store.updateStep(id, 0, [](TestStep& s) { s.action = QStringLiteral("*Abrir* el carrito"); s.data = QStringLiteral("||a||b||\n|1|2|"); });
+        f.store.addShot(id, Screenshot{1, 1, QStringLiteral("a.png"), {}});
+        f.store.addShot(id, Screenshot{2, 2, QStringLiteral("b.png"), {}});
+        const int before = f.store.find(id)->steps.size();
+        f.store.duplicateStep(id, 0);
+        const TestCase* c = f.store.find(id);
+        QCOMPARE(c->steps.size(), before + 1);
+        QCOMPARE(c->steps[1].action, c->steps[0].action);
+        QCOMPARE(c->steps[1].data, c->steps[0].data);
+        QCOMPARE(c->steps[1].expected, c->steps[0].expected);
+        QCOMPARE(c->shots[0].step, 1);   // la captura se queda con el original
+        QCOMPARE(c->shots[1].step, 3);   // el antiguo paso 2 es ahora el 3
+
+        f.store.duplicateStep(id, 99);   // fuera de rango: sin efecto
+        QCOMPARE(f.store.find(id)->steps.size(), before + 1);
+    }
+
     // ---- Borrado y deshacer ------------------------------------------------------------
 
     void removeCaseSelectsNeighbourAndCanBeUndone() {

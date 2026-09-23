@@ -61,6 +61,8 @@ public:
     void addStep(const QString& id);
     /// Inserta un paso vacío en la posición `index` (0..n). Las capturas asignadas se desplazan.
     void insertStep(const QString& id, int index);
+    /// Inserta justo debajo del paso `index` una copia de su acción, datos y resultado esperado.
+    void duplicateStep(const QString& id, int index);
     void removeStep(const QString& id, int index);
     /// Mueve el paso `index` a `index + delta` (las capturas asignadas siguen a su paso).
     void moveStep(const QString& id, int index, int delta);

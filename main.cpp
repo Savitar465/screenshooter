@@ -32,7 +32,7 @@
 namespace {
 
 #ifndef QAFLOW_VERSION
-#define QAFLOW_VERSION "1.3.0"
+#define QAFLOW_VERSION "1.3.1"
 #endif
 
 /// Idioma efectivo: el elegido o, con "sistema", el del entorno (español si el sistema es español).

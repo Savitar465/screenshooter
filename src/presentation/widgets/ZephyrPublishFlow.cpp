@@ -20,7 +20,23 @@ void ZephyrPublishFlow::run(QWidget* parent, TestPublishService& service, const 
     const PlanRun& plan = report.plan;
     const QStringList nuevos = service.casesNeedingTest(report);
     QString aviso;
-    if (update) {
+    if (service.sharesPhaseCycle(report)) {
+        // El ciclo de un issue va al de su fase: no hay «ciclo nuevo» ni «actualizar» distintos.
+        const bool exists = !service.requestFor(report).cycleId.isEmpty();
+        aviso = exists ? tr("Los resultados van al ciclo «%1» de Zephyr, el de la fase %2 del requerimiento: se actualizan las "
+                            "ejecuciones de estos %3 caso(s) (veredicto, pasos y las evidencias que falten).")
+                             .arg(service.cycleName(report), service.phaseOf(report))
+                             .arg(report.executed)
+                       : tr("Se creará el ciclo «%1» de Zephyr, el de la fase %2 del requerimiento, con %3 ejecución(es). Las "
+                            "rondas y continuaciones siguientes de esa fase lo irán actualizando.")
+                             .arg(service.cycleName(report), service.phaseOf(report))
+                             .arg(report.executed);
+        if (!nuevos.isEmpty())
+            aviso += tr("\n\nAntes se crearán en Jira %1 Test(s), uno por caso, que el requerimiento usará en todas sus fases: %2.")
+                         .arg(nuevos.size())
+                         .arg(nuevos.join(QStringLiteral(", ")));
+        update = exists;
+    } else if (update) {
         aviso = tr("Se actualizará el ciclo %1 de Zephyr con las %2 ejecuciones del informe: el veredicto de cada caso y de cada paso, y las evidencias que aún no estén subidas.")
                     .arg(plan.zephyrCycleId).arg(report.executed);
         if (nuevos.isEmpty()) aviso += tr("\n\nCada ejecución va sobre el Test que ya tiene.");

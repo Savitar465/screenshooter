@@ -176,6 +176,44 @@ private slots:
         QCOMPARE(r.updated, 0);
     }
 
+    // Cerrar bugs verificados: cada uno con la transición de su flujo, el libro con el estado con el que
+    // quedaron, y uno que no se puede cerrar no para a los demás.
+    void closingBugsClosesThemInTheTrackerAndTheLedger() {
+        AppFixture f;
+        for (const auto& key : {QStringLiteral("SHOP-7"), QStringLiteral("SHOP-8")}) {
+            IssueLink bug;
+            bug.key = key;
+            bug.tracker = QStringLiteral("Jira");
+            f.bugLedger.recordIssue(bug);
+        }
+        QVERIFY(f.bugs.canCloseBugs());
+        f.tracker->statusToReturn = QStringLiteral("Cerrado");
+        BugReportService::CloseResult r;
+        f.bugs.closeBugs({QStringLiteral("SHOP-7"), QStringLiteral("SHOP-8")}, [&](const BugReportService::CloseResult& x) { r = x; });
+        QCOMPARE(r.closed, (QStringList{QStringLiteral("SHOP-7"), QStringLiteral("SHOP-8")}));
+        QVERIFY(r.failed.isEmpty());
+        QCOMPARE(f.tracker->closed, (QStringList{QStringLiteral("SHOP-7"), QStringLiteral("SHOP-8")}));
+        QVERIFY(f.bugLedger.findIssue(QStringLiteral("SHOP-7"))->resolved);
+        QCOMPARE(f.bugLedger.findIssue(QStringLiteral("SHOP-8"))->status, QStringLiteral("Cerrado"));
+
+        // Sin red, el cierre queda sin confirmar y el bug sigue abierto en el libro.
+        IssueLink other;
+        other.key = QStringLiteral("SHOP-9");
+        other.tracker = QStringLiteral("Jira");
+        f.bugLedger.recordIssue(other);
+        f.tracker->mode = testing::FakeIssueTracker::Mode::NetworkDown;
+        f.bugs.closeBugs({QStringLiteral("SHOP-9")}, [&](const BugReportService::CloseResult& x) { r = x; });
+        QCOMPARE(r.uncertain, QStringList{QStringLiteral("SHOP-9")});
+        QVERIFY(!f.bugLedger.findIssue(QStringLiteral("SHOP-9"))->resolved);
+
+        // Un gestor que no sabe cerrar lo dice por cada bug, sin tocar nada.
+        f.tracker->mode = testing::FakeIssueTracker::Mode::Succeed;
+        f.tracker->closesIssues = false;
+        QVERIFY(!f.bugs.canCloseBugs());
+        f.bugs.closeBugs({QStringLiteral("SHOP-9")}, [&](const BugReportService::CloseResult& x) { r = x; });
+        QCOMPARE(r.failed.size(), 1);
+    }
+
     /// La pantalla de bugs trae del gestor los que creó QAflow: los que ya están se actualizan con
     /// lo que diga hoy Jira y los que no (reportados desde otro equipo) entran en el libro, con su
     /// caso sacado de las etiquetas.

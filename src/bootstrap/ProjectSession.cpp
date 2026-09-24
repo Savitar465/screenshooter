@@ -43,6 +43,11 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     evidence->setProjectId(id);
     transfer = std::make_unique<CaseTransferService>(*cases);
     issues = std::make_unique<IssueStore>(std::make_shared<JsonIssueRepository>(dir));
+    // Las fases del control de calidad son del proyecto: deciden la fase de cada ronda nueva y cuál
+    // cierra el requerimiento.
+    issues->setPhases(projects.phasesOf(id));
+    QObject::connect(&projects, &ProjectStore::projectsChanged, issues.get(),
+                     [&projects, id, store = issues.get()]() { store->setPhases(projects.phasesOf(id)); });
     issuePublish = std::make_unique<IssuePublishService>(std::make_shared<TrackerRouter>(), *issues, *settings);
     // Los ciclos se publican con el requerimiento y la revisión de su control de calidad en el nombre.
     publish->setIssues(issues.get());
@@ -59,7 +64,9 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
                      [store = issues.get(), log = history.get()](const QString& planRunId, const QString& planId) {
                          // Y el ciclo se queda con el issue y la revisión que abre: así cada ejecución
                          // dice de qué ronda del control de calidad es, hoy y al publicarla en Zephyr.
-                         const IssueStore::RevisionRef started = store->notePlanStarted(planId);
+                         // En la fase en la que se arrancó: el ambiente que se eligió al arrancarlo.
+                         const PlanRun* cycle = log->findPlan(planRunId);
+                         const IssueStore::RevisionRef started = store->notePlanStarted(planId, cycle ? cycle->environment : QString());
                          if (!started.isEmpty()) log->noteCycleRevision(planRunId, started.issueId, started.revision);
                      });
     QObject::connect(settings.get(), &SettingsStore::saved, &projects, [&projects, source = settings.get()]() {

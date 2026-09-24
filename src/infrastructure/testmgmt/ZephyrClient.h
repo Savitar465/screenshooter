@@ -22,6 +22,7 @@ public:
 
     void testConnection(const TrackerSettings& s, std::function<void(const ConnectionResult&)> done) override;
     void publish(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) override;
+    void createTests(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) override;
 
     /// Ruta detectada de la API ("/rest/zapi/latest"); vacía mientras no se haya detectado.
     QString apiPath() const { return m_api; }

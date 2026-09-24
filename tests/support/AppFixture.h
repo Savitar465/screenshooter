@@ -67,6 +67,8 @@ struct AppFixture {
     AppFixture() {
         // Los informes de ciclo traen los bugs que se reportaron mientras corrían, como en la aplicación.
         history.setBugs(&bugLedger);
+        // Y los ciclos de un issue se publican en el ciclo de su fase, con los Tests del issue.
+        publish.setIssues(&issues);
         store.load();
         history.load();
         plans.load();

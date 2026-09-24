@@ -5,6 +5,7 @@
 #include "application/BugReportService.h"
 #include "application/SettingsStore.h"
 #include "application/TestPublishService.h"
+#include "core/models/Issue.h"   // defaultQaPhases, normalizedQaPhases
 #include "core/services/IGlobalHotkey.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/ChoiceDialog.h"
@@ -158,6 +159,16 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     projectBody->addWidget(m_requirementSystemNote);
     connect(m_requirementSystem, &QLineEdit::textEdited, this, &SettingsView::refreshRequirementSystemNote);
     connect(m_requirementSystem, &QLineEdit::editingFinished, this, &SettingsView::commitRequirementSystem);
+    // Las fases en las que se prueba cada requerimiento, en orden: una ronda conforme en una de ellas pasa
+    // a la siguiente, y sólo la última cierra el control.
+    m_phases = new QLineEdit;
+    m_phases->setObjectName(QStringLiteral("settingsQaPhases"));
+    m_phases->setPlaceholderText(defaultQaPhases().join(QStringLiteral(", ")));
+    m_phases->setToolTip(tr("Ambientes en los que se prueba cada requerimiento, en orden y separados por comas. Aprobado uno se "
+                            "pasa al siguiente; sólo el Conforme del último registra el OK en GESREQ y cierra el issue del gestor."));
+    m_phasesField = field(tr("Fases del control de calidad"), m_phases);
+    projectBody->addWidget(m_phasesField);
+    connect(m_phases, &QLineEdit::editingFinished, this, &SettingsView::commitPhases);
     v->addWidget(m_projectSection);
 
     // General: idioma, tema y bandeja
@@ -839,7 +850,18 @@ void SettingsView::refreshProject() {
         if (auto* model = qobject_cast<QStringListModel*>(m_systemCompleter->model())) model->setStringList(m_requirements->systems());
     // Lo que se está escribiendo no se pisa: se guarda al terminar de editar.
     if (project && !m_requirementSystem->hasFocus()) m_requirementSystem->setText(project->requirementSystem);
+    m_phasesField->setVisible(project != nullptr);
+    if (project && !m_phases->hasFocus()) m_phases->setText(m_projects->phasesOf(m_projectId).join(QStringLiteral(", ")));
     refreshRequirementSystemNote();
+}
+
+void SettingsView::commitPhases() {
+    const Project* project = m_projects ? m_projects->find(m_projectId) : nullptr;
+    if (!project) return;
+    const QStringList phases = normalizedQaPhases(m_phases->text().split(QLatin1Char(',')));
+    if (phases == m_projects->phasesOf(m_projectId)) return;
+    if (m_projects->setPhases(m_projectId, phases))
+        emit toast(tr("Fases del proyecto: %1").arg(phases.join(QStringLiteral(" → "))), theme::Green);
 }
 
 void SettingsView::refreshRequirementSystemNote() {

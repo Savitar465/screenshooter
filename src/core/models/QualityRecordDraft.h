@@ -19,6 +19,15 @@ namespace qaflow::quality {
 struct DraftContext {
     QString qaResource;                // recurso de QA (el usuario de la conexión con GESREQ)
     int revisionNumber = 1;
+    /// Fase de la ronda ("QA", "PRE") y las del proyecto: el resumen dice en qué fase se probó y si un
+    /// Conforme aprueba esa fase o cierra el control. Sin fase, el resumen no la menciona.
+    QString phase;
+    QStringList phases;
+    /// El acta es la del cierre del control (Conforme en la última fase): su resumen de observaciones
+    /// cuenta **todo lo encontrado** en el requerimiento, de todas las rondas y fases, y como correcciones
+    /// los bugs ya cerrados. Si no, las observaciones son las de esta ronda y las correcciones, las
+    /// cerradas de rondas anteriores.
+    bool closesControl = false;
     QualityRecord previous;            // última acta del proyecto; vacía la primera vez
     QList<IssueLink> previousBugs;     // observaciones levantadas en revisiones anteriores
     /// Enlace al ciclo de Zephyr de cada ciclo de plan publicado (`PlanRun::id` → URL).

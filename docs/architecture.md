@@ -256,7 +256,7 @@ de estilos de la aplicación y Qt repinta el árbol entero de las dos ventanas.
 | Ajustes (gestor, captura, atajos de la ejecución) | QSettings (`~/.config/QAflow/QAflow.conf`), sin el token |
 | Token del gestor       | `ISecretStore`: llavero del sistema; si no hay, QSettings en claro con aviso en Ajustes |
 | Conexión con GESREQ    | QSettings (grupo `gesreq`: URL, usuario, conectado); la contraseña, en `ISecretStore` (`gesreq/password`) |
-| Proyectos y su sistema de GESREQ | `$XDG_DATA_HOME/QAflow/QAflow/projects.json` (`requirementSystem` de cada proyecto) |
+| Proyectos, su sistema de GESREQ y sus fases | `$XDG_DATA_HOME/QAflow/QAflow/projects.json` (`requirementSystem` y `phases` de cada proyecto) |
 | Bugs y cola offline    | `$XDG_DATA_HOME/QAflow/QAflow/bugs.json`                    |
 | Issues (sus planes, lo importado de GESREQ, sus cambios, la publicación en el gestor y las revisiones con su ciclo y su acta) | `issues.json` en el directorio de datos de cada proyecto |
 | Bugs (el issue del gestor, la ejecución y el ciclo en los que se encontró, su caso y paso, su clasificación y su estado) | `bugs.json` en el directorio de datos de cada proyecto |
@@ -319,7 +319,8 @@ guarda además `issueId` y `revision` —el requerimiento cuyo control de calida
 ronda que estaba abierta al arrancar— y `environment`, el ambiente en el que se prueba. El ambiente se
 pregunta al arrancar (`CycleStartDialog`, con el último usado en el proyecto ya propuesto y el issue y
 la revisión a los que va a pertenecer a la vista); el issue y la revisión los pone `ProjectSession` al
-recibir `RunController::planStarted`, con lo que devuelve `IssueStore::notePlanStarted()`. Los tres
+recibir `RunController::planStarted`, con lo que devuelve `IssueStore::notePlanStarted()`. En un ciclo de un
+issue el ambiente no se elige: es la fase de su ronda (ver «Fases del control de calidad»). Los tres
 viajan a Zephyr con el ciclo (ver «Publicar en Zephyr») y se ven en el historial y en la pantalla del
 issue. Los ciclos anteriores a esto no los tienen: `IssueStore::cyclesOfRevision()` los reparte por la
 ventana de fechas de cada ronda, como se hacía antes. `PlanStore::latestCycle(planId)` devuelve el `PlanReport` del
@@ -682,6 +683,27 @@ se asignan los Tests nuevos y las ejecuciones nuevas; lo que no se pudo asignar 
 `PublishResult::warnings`, que se cuenta pero **no** hace fallar la publicación (no queda nada fuera, a
 diferencia de `skipped`).
 
+**Un requerimiento: un ciclo por fase y un Test por caso.** Un ciclo de plan que prueba un issue no crea
+un ciclo de Zephyr propio: va al **ciclo de su fase** («GREQ 2026997 · QA», «GREQ 2026997 · PRE»;
+`TestPublishService::phaseCycleName`), y cada caso del issue tiene **un Test**, el mismo en QA y en PRE.
+Los dos viven en el issue (`Issue::zephyr`: `tests` caso → clave, `cycles` y `cycleNames` fase → id y
+nombre, en `issues.json`). `requestFor` manda siempre el ciclo de la fase si ya existe (`PublishRequest::
+cycleId`), y el cliente entonces **actualiza** las ejecuciones de esos casos en él (las busca por Test y
+ciclo) en vez de crear otras; si no existe, lo crea y `send` lo anota con `IssueStore::noteZephyrCycle`. Así
+un reintento, una continuación o la ronda siguiente de la misma fase dejan en ese ciclo lo último probado,
+y en Zephyr quedan exactamente dos ciclos para un requerimiento que pasa por QA y PRE (uno si sólo pasa por
+una). La publicación de la revisión (`RevisionPublishService::runZephyr`) manda sus ciclos del más antiguo al
+más reciente, para que quede el último. Si el ciclo de la fase se borró en Zephyr, el cliente lo dice
+(`PublishResult::cycleMissing`, sin tocar nada) y `send` lo olvida y publica en uno nuevo.
+
+El Test de un caso del issue es `Issue::zephyr.tests[caso]` o, a falta de él, el que guardó su ejecución
+(ciclos publicados antes de esto, que así pasan a ser los del issue). Se pueden crear **antes de probar**:
+el paso 1 del issue ofrece «Crear Tests en Zephyr (N)…» (`RevisionPublishService::prepareTests` →
+`TestPublishService::createTests` → `ITestManagement::createTests`, que crea el Test y sus pasos sin ciclo
+ni ejecución) y los enlaza a su issue del gestor; si no, se crean al publicar el primer ciclo. Su descripción
+dice de qué requerimiento son (`PublishRequest::testContext`). Los ciclos **sueltos** (sin issue) siguen como
+se describe a continuación: ciclo propio y un Test por ejecución.
+
 **El nombre del ciclo dice de qué control de calidad es.** `TestPublishService::cycleName()` lo arma
 con lo que el `PlanRun` sabe: el requerimiento (`GREQ 2026997`, resuelto por `issueId` contra el
 `IssueStore` que le pasa `setIssues()`), la revisión (`Rev. 2`), el nombre del plan —lo que distingue
@@ -928,11 +950,11 @@ destaca; los hechos se marcan con un visto y se apagan.
 |------|--------------|-----------|---------------------|
 | 1 · Preparar el plan de pruebas | el issue tiene un plan y el plan, casos | crear el plan o abrirlo, «+ Otro plan» y «Vincular plan…» | sus planes, cada uno con sus casos y lo que dio la última ejecución de cada uno |
 | 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | **«Ejecutar plan…»**, que arranca el ciclo desde aquí, «Continuar lo fallado…» si la ronda dejó casos rotos, y «Ir al plan» para componerlo antes | los ciclos de sus planes, el más reciente primero, con su veredicto, sus cifras, de qué ronda y ambiente son, si están en Zephyr y las ejecuciones de cada caso |
-| 3 · Revisar los bugs reportados | no queda ninguno abierto, o la ronda ya se cerró (se cerró sabiéndolos: son lo que la deja observada) | — | los bugs encontrados en los ciclos de sus planes (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en curso) |
+| 3 · Revisar los bugs reportados | no queda ninguno abierto, o la ronda ya se cerró (se cerró sabiéndolos: son lo que la deja observada) | **«Cerrar verificados (N)…»** cuando alguno ya pasó el reintento (ver «Cerrar los bugs verificados») | los bugs encontrados en los ciclos de sus planes (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en curso) |
 | 4 · Generar el acta (R-213) | la revisión tiene su .docx | generar (o regenerar) el acta, y abrir la que hay | — |
 | 5 · Cerrar la revisión | la revisión está cerrada con su resultado | cerrarla, eligiendo conforme u observado | — |
 | 6 · Publicar el resultado | no le falta ningún destino (lo dice `RevisionPublishService::stepsFor`) | «Publicar…», sólo con la revisión cerrada, o **«Completar publicación…»** si algo ya llegó | una fila por destino: ✓/— y qué se hizo o qué lo bloquea |
-| 7 · Volver a probar | — | abrir la ronda siguiente (un requerimiento observado vuelve a pruebas) y, al lado, **«Continuar lo fallado»**: repetir sólo lo que se rompió, que abre esa misma ronda y ejecuta en ella | — |
+| 7 · Volver a probar (o «Probar en PRE») | — | abrir la ronda siguiente (un requerimiento observado vuelve a pruebas en su fase) y, al lado, **«Continuar lo fallado»**: repetir sólo lo que se rompió, que abre esa misma ronda y ejecuta en ella. Aprobada una fase que no es la última, **«▶ Empezar PRE…»** arranca el ciclo de la fase siguiente | — |
 
 En «Revisiones anteriores» cada ronda cerrada enseña **a dónde llegó su resultado** —un chip por destino
 (`ZEPHYR`/`GESTOR`/`GESREQ`, ✓ hecho, — pendiente, con el detalle en el tooltip; los que ni están hechos ni
@@ -1019,8 +1041,78 @@ acta es el de la ronda.
 | Se continúa un ciclo con lo que quedó roto | El ciclo nuevo hereda el issue y la revisión de aquél: es la misma ronda, y sus resultados sustituyen a los de los casos que repite. Si esa ronda **ya se cerró**, `notePlanStarted` abre la siguiente y el ciclo de la continuación es de ella: continuar lo fallado es el camino corto de volver a probar |
 | Durante la ronda | `issueProgress()` (core, función pura) cuenta la **última ejecución de cada caso dentro de la revisión** y los bugs del issue: de ahí salen los contadores y el resultado que se propone |
 | Se genera el acta | `QualityRecordService` la arma con el **ciclo de plan** que se elija (`cyclesFor`), la escribe y la guarda en la revisión, con lo escrito en ella y con cuál fue ese ciclo (`IssueRevision::planRunId`) |
-| Se cierra la revisión | Queda con su resultado. **Conforme** finaliza el issue; **Observado** lo devuelve a «En pruebas» y a la columna «Fallido / bloqueado», y el trabajo sigue en la misma ronda: el acta y la publicación del resultado. Volver a probar abre la siguiente |
+| Se cierra la revisión | Queda con su resultado. **Conforme en la última fase** finaliza el issue; Conforme en otra aprueba esa fase y deja el issue en pruebas para la siguiente (ver «Fases del control de calidad»); **Observado** lo devuelve a «En pruebas» y a la columna «Fallido / bloqueado», y el trabajo sigue en la misma ronda: el acta y la publicación del resultado. Volver a probar abre la siguiente |
 | Se publica el resultado | Con la revisión cerrada aparece «Publicar…»: los ciclos a Zephyr, el resultado y el acta al gestor y el registro a GESREQ (`RevisionPublishService`) |
+
+### Fases del control de calidad (QA → PRE)
+
+No todos los requerimientos pasan por todas: el menú «Fases…» de la pista elige las de cada issue
+(`Issue::phases`, `IssueStore::setIssuePhases`; vacío = las del proyecto, y `IssueStore::phasesOf` es la
+lista que usan todas las reglas). Sólo PRE: la primera ronda ya es de PRE. Sólo QA: su Conforme es el cierre
+del control. Una fase con revisiones **cerradas**, o en la que la revisión abierta ya tiene ciclos, queda
+atada (el menú lo dice junto a la fase); una revisión abierta sin ciclos no ata: si se quita su fase, pasa a
+la siguiente que quede.
+
+Un requerimiento no se prueba en un solo sitio: primero en **QA** y, aprobado ahí, en **PRE**. Cada ronda
+(`IssueRevision`) es de una **fase** (`IssueRevision::phase`), y las fases son del proyecto, en orden
+(`Project::phases` en `projects.json`; vacío = `defaultQaPhases()`, «QA, PRE»; se editan en «Configuración
+del proyecto» y se resuelven con `normalizedQaPhases`). `ProjectSession` se las pasa a su `IssueStore`
+(`setPhases`) y lo vuelve a hacer cuando el catálogo cambia.
+
+| Ronda que se cierra | Qué significa | Qué sigue |
+|---------------------|---------------|-----------|
+| Observado, en cualquier fase | El requerimiento vuelve a desarrollo | La ronda siguiente es de la **misma** fase; se registra en GESREQ como siempre |
+| Conforme en una fase que no es la última | «Aprobada en QA»: la fase queda aprobada | El issue sigue en pruebas y la ronda siguiente es de la fase que viene. **No** lleva acta ni se registra en GESREQ, ni cierra el issue del gestor |
+| Conforme en la última fase | El cierre del control (`closesRequirement`) | Finaliza el issue, registra el OK en GESREQ y cierra el issue del gestor |
+
+Las reglas son funciones puras de `core/models/Issue.h`: `phaseOf` (la fase de una ronda; las anteriores a
+las fases cuentan como de la primera, salvo una Conforme, que entonces cerraba el control y cuenta como de la
+última), `nextPhase` (la de la próxima ronda), `isFinalPhase`, `closesRequirement` y `outcomeLabel` («Aprobada
+en QA»). No hay un valor nuevo de `QaOutcome`: un QA limpio es Conforme; lo que cambia es qué desencadena, y
+eso sólo lo preguntan `IssueStore::closeRevision` (si finaliza el issue) y `RevisionPublishService`
+(`requirementProblem`, `pendingFor` y `runClose`: si se registra y si se cierra el gestor).
+
+**El ambiente del ciclo es la fase de su ronda.** `IssueStore::nextCycleContext(planId)` dice el issue, la
+ronda y la fase a las que pertenecería un ciclo que arrancara ahora —la misma regla que aplica
+`notePlanStarted` al arrancarlo—, y `MainWindow::cycleSetup` se la da al `CycleStartDialog`, que la propone
+y deja elegir otra de las fases del requerimiento (sin escribir ambientes sueltos). La elegida viaja como
+ambiente del ciclo y `ProjectSession` se la pasa a `notePlanStarted(planId, phase)`: la revisión nueva nace en
+ella, y una abierta sin ciclos pasa a ella. Si la revisión abierta ya tiene ciclos, las demás fases salen
+bloqueadas con el motivo («ciérrala antes») y el botón no arranca. Continuar un ciclo sigue en su fase. Un
+ciclo que no prueba ningún issue sigue eligiendo su ambiente libremente.
+Las revisiones se numeran seguidas entre fases (Rev 1 QA, Rev 2 QA, Rev 3 PRE): es el «Número de Revisión»
+del acta y la secuencia de registros de GESREQ. La fase va en el resumen («revisión 2 (QA): Aprobada en
+QA»), en el texto de ejecución del acta y en su nombre (`…_rev2_QA_<marca>.docx`).
+
+En la pantalla del issue, la tarjeta «Revisión» empieza por la **pista de fases** («QA ✓ → PRE ●»); el paso
+5 cierra con «Aprobada en QA → pasar a PRE» o «Conforme (cierre final)»; una fase limpia que no es la última
+salta el acta y la publicación; y el paso 7 pasa a ser **«Probar en PRE»**, con «▶ Empezar PRE…», que arranca
+el ciclo y con él la ronda de PRE. Tarjetas y panel dicen «REV 3 · PRE».
+
+**Cerrar un bug desde su ficha.** `BugDetailWindow` (la ficha que se abre desde la pantalla de bugs y desde
+la pestaña «Bugs» de la ejecución) ofrece «Cerrar en el gestor…» mientras el bug siga abierto y el gestor
+sepa cerrar issues (`setBugService`); pregunta y usa el mismo `BugReportService::closeBugs`.
+
+**Cerrar los bugs verificados.** Un bug se da por corregido cuando su paso **se volvió a probar y pasó**:
+`retestPassed` (core, `IssueProgress.h`) mira la última ejecución de su caso posterior al bug —sin contar la
+ejecución en la que se encontró—, y exige su paso probado de nuevo (no heredado de la ejecución que se
+continuaba, `RunRecordStep::inherited`) y superado; un bug del caso entero pide el caso superado. El paso 3
+de la revisión marca esos bugs con «VERIFICADO» y ofrece «Cerrar verificados (N)…» (también es lo siguiente
+del tablero), que pregunta con la lista y los cierra con `BugReportService::closeBugs`: por cada uno
+`IIssueTracker::closeIssue` (la misma transición a «hecho» que cierra el issue del requerimiento) y, hecho,
+el estado que da el gestor queda en el libro (`BugStore::updateStatus`, resuelto). Uno que falle no para a
+los demás; uno cortado sin respuesta queda **sin confirmar** y abierto en el libro. Cerrado, cuenta como
+corrección en el acta del cierre y en GESREQ.
+
+**Las cifras del cierre.** El acta de la ronda que cierra el control (`DraftContext::closesControl`: es de la
+última fase y termina —o, abierta, se propone que termine— conforme) no cuenta sólo lo de esa ronda: declara
+**todo lo encontrado** en el requerimiento, de QA y de PRE, como observaciones, y **lo ya cerrado** como
+correcciones, también un bug encontrado y cerrado dentro de la propia ronda de PRE. Las demás rondas siguen
+como antes: sus bugs son las observaciones y los cerrados de rondas anteriores, las correcciones. En GESREQ
+el «OK» vale si ninguna observación que no sea una recomendación queda **sin corregir**
+(`uncorrectedObservations`); «OBSERVADO» sigue pidiendo al menos una. Ojo: la columna «Correcciones» del
+formulario de GESREQ la pone el sistema (viene deshabilitada en el control de calidad y viaja en sus campos
+ocultos), así que lo que QAflow envía son las observaciones; las correcciones del acta son las suyas.
 
 El **resultado** (`QaOutcome`: Pendiente, Conforme, Observado) es una propuesta hasta que alguien lo
 confirma: se propone **Observado** si hay casos fallidos o bloqueados o bugs abiertos, **Conforme** si se
@@ -1074,10 +1166,10 @@ gestor ya empezaba por «Control de calidad GREQ X — revisión N».
 
 | Paso | Qué manda | Cuándo se puede |
 |------|-----------|-----------------|
-| Zephyr | Los ciclos de los planes del issue, con sus casos, pasos, evidencias y **defectos** —cada bug va en la ejecución y en el resultado del paso del que salió (`IssueLink::step`, el paso del que se levantó el parte)— (`TestPublishService`); los ya publicados se actualizan en vez de duplicarse | Zephyr activado en Ajustes y algún caso ejecutado en esos ciclos |
+| Zephyr | Los ciclos de los planes del issue —al ciclo de Zephyr de su fase, del más antiguo al más reciente—, con sus casos, pasos, evidencias y **defectos** —cada bug va en la ejecución y en el resultado del paso del que salió (`IssueLink::step`, el paso del que se levantó el parte)— (`TestPublishService`); los ya publicados se actualizan en vez de duplicarse | Zephyr activado en Ajustes y algún caso ejecutado en esos ciclos |
 | El gestor | Un comentario en el issue con el resumen de la revisión, los enlaces de los ciclos de Zephyr y el acta adjunta; y del issue se **cuelgan sus pruebas**: los bugs de la revisión y los Tests de Zephyr de sus ejecuciones, enlazados con `IIssueTracker::linkIssues()` (`RevisionPublishService::linkEvidence`) | El issue está en el gestor (lo está desde que se importó) y el gestor sabe comentar |
-| GESREQ | El registro del control de calidad: resultado, comentario, las cinco cifras A–E del acta y el acta adjunta. Al guardar, el sistema dice con qué **estado** queda el requerimiento y el issue se actualiza con él (`IssueStore::noteRequirementState`), sin volver a leer la bandeja | El issue viene de GESREQ, el conector sabe registrar, **el sistema aceptaría el registro** y el control **no se registró ya** |
-| Cerrar el issue del gestor | La transición a un estado resuelto (`IssuePublishService::close`), como **último paso** (`runClose`) | El resultado que se publica es **Conforme** (el diálogo sólo ofrece la casilla entonces), el gestor sabe cerrar y **todo lo elegido antes salió bien**; si algo falló, el issue sigue abierto y se dice. Observado no cierra: el requerimiento vuelve a desarrollo. En los chips de destino sólo cuenta como pendiente en una ronda conforme |
+| GESREQ | El registro del control de calidad: resultado, comentario, las cinco cifras A–E del acta y el acta adjunta. Al guardar, el sistema dice con qué **estado** queda el requerimiento y el issue se actualiza con él (`IssueStore::noteRequirementState`), sin volver a leer la bandeja | El issue viene de GESREQ, el conector sabe registrar, **el sistema aceptaría el registro**, el control **no se registró ya** y la ronda no es un Conforme de una fase que no es la última (eso no se registra: `requirementProblem` lo dice) |
+| Cerrar el issue del gestor | La transición a un estado resuelto (`IssuePublishService::close`), como **último paso** (`runClose`) | El resultado que se publica **cierra el control** —Conforme en la última fase, `RevisionPublishService::closesRequirement`— (el diálogo sólo ofrece la casilla entonces), el gestor sabe cerrar y **todo lo elegido antes salió bien**; si algo falló, el issue sigue abierto y se dice. Observado, o una fase aprobada antes de la última, no cierra. En los chips de destino sólo cuenta como pendiente en la ronda que cierra el control |
 
 El envío se escribe **byte a byte como el de un navegador** (`HttpClient::formData`): delimitador sin
 comillas, cada campo con sólo su `Content-Disposition` y el acta en el sitio que ocupa en el formulario
@@ -1094,8 +1186,8 @@ El comentario viaja recortado a lo que admite el campo del formulario (`kControl
 
 Las reglas de GESREQ se preguntan **antes** de enviar nada (`IRequirementSource::registrationProblem`, que
 `GesreqClient` responde con las mismas comprobaciones que hace al registrar): sin acta generada, con un
-resultado que no es Conforme ni Observado, con un «OK» que lleva observaciones que no son recomendaciones o
-con un «OBSERVADO» sin ninguna, el paso aparece bloqueado con el motivo en vez de fallar a mitad del
+resultado que no es Conforme ni Observado, con un «OK» que lleva observaciones sin corregir que no son
+recomendaciones o con un «OBSERVADO» sin ninguna, el paso aparece bloqueado con el motivo en vez de fallar a mitad del
 registro. Cambiar el resultado en el diálogo, o desmarcar el acta, vuelve a preguntarlo.
 
 **Registrar es definitivo y se hace una sola vez por ronda.** Cambia el estado del requerimiento en
@@ -1222,7 +1314,7 @@ comentario y las cinco cifras del resumen de observaciones, que son las clasific
 acta misma en `arch_funcional`. Se reproduce también lo que el script de la ventana deshabilita antes de
 enviar: los campos deshabilitados y la casilla visible de cada corrección, que si no viajaría dos veces.
 Las reglas del sistema se comprueban antes de pedir nada (acta obligatoria y con extensión admitida, «OK»
-sin observaciones que no sean recomendaciones y «OBSERVADO» con al menos una), para no dejar el resultado a
+sin observaciones sin corregir que no sean recomendaciones y «OBSERVADO» con al menos una), para no dejar el resultado a
 medias entre los dos sistemas; lo que aun así rechace GESREQ llega como `Rejected` con su motivo.
 
 `ExternalRequirement` es una fila de la bandeja: el número GREQ es el identificador estable, `systemCode`

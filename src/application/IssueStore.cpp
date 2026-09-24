@@ -140,18 +140,127 @@ void IssueStore::unlinkPlan(const QString& issueId, const QString& planId) {
 // ---- Flujo de la revisión ----------------------------------------------------------------------
 
 IssueRevision& IssueStore::revisionFor(Issue& issue, int number) {
-    if (issue.revisions.isEmpty()) {
-        IssueRevision first;
-        first.startedAt = QDateTime::currentDateTime();
-        issue.revisions << first;
-    }
+    if (issue.revisions.isEmpty()) appendRevision(issue);
     if (number > 0)
         for (auto& round : issue.revisions)
             if (round.number == number) return round;
     return issue.revisions.last();
 }
 
-IssueStore::RevisionRef IssueStore::notePlanStarted(const QString& planId) {
+QString IssueStore::validPhase(const Issue& issue, const QString& phase) const {
+    for (const QString& p : phasesOf(issue))
+        if (p.compare(phase.trimmed(), Qt::CaseInsensitive) == 0) return p;
+    return {};
+}
+
+const IssueRevision& IssueStore::appendRevision(Issue& issue, const QString& phase) const {
+    IssueRevision next;
+    next.number = issue.revisions.isEmpty() ? 1 : issue.revisions.last().number + 1;
+    const QString chosen = validPhase(issue, phase);
+    next.phase = chosen.isEmpty() ? nextPhase(issue, phasesOf(issue)) : chosen;
+    next.startedAt = QDateTime::currentDateTime();
+    issue.revisions << next;
+    return issue.revisions.last();
+}
+
+void IssueStore::setPhases(const QStringList& phases) {
+    const QStringList clean = normalizedQaPhases(phases);
+    if (clean == m_phases) return;
+    m_phases = clean;
+    emit issuesChanged();   // lo que se enseña de cada ronda (su fase, qué la cierra) depende de ellas
+}
+
+QStringList IssueStore::phasesOf(const Issue& issue) const {
+    if (issue.phases.isEmpty()) return m_phases;
+    // En el orden del proyecto; una que ya no está en él (se quitó después) va al final.
+    QStringList out;
+    for (const QString& phase : m_phases)
+        if (issue.phases.contains(phase, Qt::CaseInsensitive)) out << phase;
+    for (const QString& phase : issue.phases)
+        if (!out.contains(phase.trimmed(), Qt::CaseInsensitive)) out << phase.trimmed();
+    return normalizedQaPhases(out);
+}
+
+QString IssueStore::setIssuePhases(const QString& issueId, const QStringList& phases) {
+    const Issue* issue = find(issueId);
+    if (!issue) return tr("El issue ya no existe");
+    QStringList chosen;
+    for (const QString& phase : m_phases)
+        if (phases.contains(phase, Qt::CaseInsensitive)) chosen << phase;
+    for (const QString& phase : phases)
+        if (!phase.trimmed().isEmpty() && !chosen.contains(phase.trimmed(), Qt::CaseInsensitive)) chosen << phase.trimmed();
+    const QStringList effective = chosen.isEmpty() ? m_phases : chosen;
+    // Las fases con rondas cerradas se quedan: sus actas y sus resultados son de ellas.
+    const QStringList current = phasesOf(*issue);
+    for (const auto& round : issue->revisions) {
+        const QString used = phaseOf(round, current);
+        if (!round.isOpen() && !effective.contains(used, Qt::CaseInsensitive))
+            return tr("%1 ya tiene revisiones cerradas en %2: esa fase no se puede quitar").arg(issue->id, used);
+    }
+    // La ronda abierta en una fase que se quita pasa a la siguiente que quede (o a la última).
+    QString moveTo;
+    if (const IssueRevision* open = issue->currentRevision(); open && !effective.contains(phaseOf(*open, current), Qt::CaseInsensitive)) {
+        const int from = int(current.indexOf(phaseOf(*open, current)));
+        for (int k = from + 1; k < current.size() && moveTo.isEmpty(); ++k)
+            if (effective.contains(current.at(k), Qt::CaseInsensitive)) moveTo = current.at(k);
+        if (moveTo.isEmpty()) moveTo = effective.last();
+    }
+    const QStringList stored = effective == m_phases ? QStringList() : effective;
+    if (stored == issue->phases && moveTo.isEmpty()) return {};
+    updateIssue(issueId, [&stored, &moveTo](Issue& i) {
+        i.phases = stored;
+        if (!moveTo.isEmpty() && !i.revisions.isEmpty()) i.revisions.last().phase = moveTo;
+    });
+    return {};
+}
+
+void IssueStore::noteZephyrTests(const QString& issueId, const QHash<QString, QString>& tests) {
+    if (!find(issueId) || tests.isEmpty()) return;
+    updateIssue(issueId, [&tests](Issue& i) {
+        for (auto it = tests.cbegin(); it != tests.cend(); ++it)
+            if (!it.key().isEmpty() && !it.value().trimmed().isEmpty()) i.zephyr.tests.insert(it.key(), it.value().trimmed());
+    });
+}
+
+void IssueStore::noteZephyrCycle(const QString& issueId, const QString& phase, const QString& cycleId, const QString& name) {
+    const Issue* issue = find(issueId);
+    if (!issue || cycleId.trimmed().isEmpty()) return;
+    const QString key = IssueZephyr::phaseKey(phase);
+    if (issue->zephyr.cycles.value(key) == cycleId.trimmed() && issue->zephyr.cycleNames.value(key) == name) return;
+    updateIssue(issueId, [&](Issue& i) {
+        i.zephyr.cycles.insert(key, cycleId.trimmed());
+        i.zephyr.cycleNames.insert(key, name);
+    });
+}
+
+void IssueStore::forgetZephyrCycle(const QString& issueId, const QString& phase) {
+    if (!find(issueId)) return;
+    const QString key = IssueZephyr::phaseKey(phase);
+    updateIssue(issueId, [&key](Issue& i) {
+        i.zephyr.cycles.remove(key);
+        i.zephyr.cycleNames.remove(key);
+    });
+}
+
+IssueStore::RevisionRef IssueStore::nextCycleContext(const QString& planId) const {
+    RevisionRef next;
+    if (planId.isEmpty()) return next;
+    for (const auto& issue : m_issues) {
+        if (!issue.planIds.contains(planId)) continue;
+        next.issueId = issue.id;
+        if (const IssueRevision* open = issue.currentRevision()) {
+            next.revision = open->number;
+            next.phase = phaseOf(*open, phasesOf(issue));
+        } else {
+            next.revision = issue.revisions.isEmpty() ? 1 : issue.revisions.last().number + 1;
+            next.phase = nextPhase(issue, phasesOf(issue));
+        }
+        break;
+    }
+    return next;
+}
+
+IssueStore::RevisionRef IssueStore::notePlanStarted(const QString& planId, const QString& phase) {
     RevisionRef started;
     if (planId.isEmpty()) return started;
     QStringList changed;
@@ -159,11 +268,14 @@ IssueStore::RevisionRef IssueStore::notePlanStarted(const QString& planId) {
         if (!issue.planIds.contains(planId)) continue;
         const bool wasTesting = issue.state == IssueState::Testing;
         const bool hadOpenRevision = issue.currentRevision() != nullptr;
+        const QString chosen = validPhase(issue, phase);
+        bool rephased = false;
         if (!hadOpenRevision) {
-            IssueRevision next;
-            next.number = issue.revisions.isEmpty() ? 1 : issue.revisions.last().number + 1;
-            next.startedAt = QDateTime::currentDateTime();
-            issue.revisions << next;
+            appendRevision(issue, chosen);
+        } else if (!chosen.isEmpty() && phaseOf(issue.revisions.last(), phasesOf(issue)) != chosen) {
+            // Se arranca en otra fase una ronda que todavía no tenía ciclos: pasa a ser de ella.
+            issue.revisions.last().phase = chosen;
+            rephased = true;
         }
         issue.state = IssueState::Testing;
         // El ciclo se anota en el primer issue que lo agrupa: es el requerimiento cuyo control de
@@ -171,8 +283,9 @@ IssueStore::RevisionRef IssueStore::notePlanStarted(const QString& planId) {
         if (started.issueId.isEmpty()) {
             started.issueId = issue.id;
             started.revision = issue.revisions.last().number;
+            started.phase = phaseOf(issue.revisions.last(), phasesOf(issue));
         }
-        if (wasTesting && hadOpenRevision) continue;   // ya estaba probando esta misma ronda
+        if (wasTesting && hadOpenRevision && !rephased) continue;   // ya estaba probando esta misma ronda
         issue.updatedAt = QDateTime::currentDateTime();
         changed << issue.id;
     }
@@ -186,16 +299,9 @@ int IssueStore::openRevision(const QString& issueId) {
     const Issue* found = find(issueId);
     if (!found) return 0;
     int number = 0;
-    updateIssue(issueId, [&number](Issue& i) {
-        if (const IssueRevision* open = i.currentRevision()) {
-            number = open->number;
-        } else {
-            IssueRevision next;
-            next.number = i.revisions.isEmpty() ? 1 : i.revisions.last().number + 1;
-            next.startedAt = QDateTime::currentDateTime();
-            i.revisions << next;
-            number = next.number;
-        }
+    updateIssue(issueId, [this, &number](Issue& i) {
+        if (const IssueRevision* open = i.currentRevision()) number = open->number;
+        else number = appendRevision(i).number;
         i.state = IssueState::Testing;
     });
     return number;
@@ -227,14 +333,16 @@ void IssueStore::setRevisionRegistration(const QString& issueId, const RevisionR
 void IssueStore::closeRevision(const QString& issueId, QaOutcome outcome) {
     const Issue* issue = find(issueId);
     if (!issue || !issue->currentRevision()) return;
-    updateIssue(issueId, [outcome](Issue& i) {
+    updateIssue(issueId, [this, outcome](Issue& i) {
         IssueRevision& revision = i.revisions.last();
+        const QStringList phases = phasesOf(i);
+        if (revision.phase.isEmpty()) revision.phase = phaseOf(revision, phases);
         revision.outcome = outcome;
         revision.closedAt = QDateTime::currentDateTime();
-        // Sólo un requerimiento conforme termina el trabajo. Uno observado sigue pendiente de que lo
-        // corrijan y se vuelva a probar: eso abre la revisión siguiente (notePlanStarted /
-        // openRevision), no reabre ésta.
-        i.state = outcome == QaOutcome::Conforme ? IssueState::Done : IssueState::Testing;
+        // Sólo el Conforme de la última fase termina el trabajo. Conforme en otra aprueba ésa y queda
+        // la siguiente; uno observado sigue pendiente de que lo corrijan y se vuelva a probar. En los
+        // dos casos eso abre la revisión siguiente (notePlanStarted / openRevision), no reabre ésta.
+        i.state = closesRequirement(revision, phases) ? IssueState::Done : IssueState::Testing;
     });
 }
 

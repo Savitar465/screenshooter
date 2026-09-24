@@ -67,6 +67,7 @@ Issue fullIssue() {
 
     IssueRevision first;
     first.number = 1;
+    first.phase = QStringLiteral("QA");
     first.startedAt = QDateTime(QDate(2026, 9, 9), QTime(8, 0));
     first.closedAt = QDateTime(QDate(2026, 9, 10), QTime(18, 0));
     first.outcome = QaOutcome::Observado;
@@ -102,6 +103,10 @@ Issue fullIssue() {
     second.number = 2;
     second.startedAt = QDateTime(QDate(2026, 9, 14), QTime(9, 0));
     i.revisions = {first, second};
+    i.phases = {QStringLiteral("PRE")};
+    i.zephyr.tests.insert(QStringLiteral("TC-101"), QStringLiteral("SHOP-77"));
+    i.zephyr.cycles.insert(QStringLiteral("QA"), QStringLiteral("77"));
+    i.zephyr.cycleNames.insert(QStringLiteral("QA"), QStringLiteral("GREQ 2026997 · QA"));
     return i;
 }
 } // namespace
@@ -172,6 +177,14 @@ private slots:
         QCOMPARE(i.revisions.size(), 2);
         const IssueRevision& first = i.revisions.first();
         QCOMPARE(first.number, 1);
+        QCOMPARE(first.phase, QStringLiteral("QA"));
+        // Sus fases y lo que tiene en Zephyr: el Test de cada caso y el ciclo de cada fase.
+        QCOMPARE(i.phases, QStringList{QStringLiteral("PRE")});
+        QCOMPARE(i.zephyr.tests.value(QStringLiteral("TC-101")), QStringLiteral("SHOP-77"));
+        QCOMPARE(i.zephyr.cycleOf(QStringLiteral("qa")), QStringLiteral("77"));
+        QCOMPARE(i.zephyr.cycleNameOf(QStringLiteral("QA")), QStringLiteral("GREQ 2026997 · QA"));
+        QVERIFY(loaded->at(1).phases.isEmpty() && loaded->at(1).zephyr.isEmpty());
+        QVERIFY(i.revisions.last().phase.isEmpty());   // una ronda sin fase (anterior a las fases) se lee igual
         QCOMPARE(first.startedAt, expected.revisions.first().startedAt);
         QCOMPARE(first.closedAt, expected.revisions.first().closedAt);
         QVERIFY(first.outcome == QaOutcome::Observado);

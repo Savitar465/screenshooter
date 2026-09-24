@@ -44,6 +44,7 @@ private:
     /// Aviso bajo el sistema de GESREQ: qué implica, con qué proyecto choca lo escrito y qué sistemas hay en la bandeja.
     void refreshRequirementSystemNote();
     void commitRequirementSystem();
+    void commitPhases();
     void refreshRequirementSource();
     void testRequirementSource();
     /// La IA con la que se generan casos: el proveedor elegido con su clave, modelo y dirección.
@@ -92,6 +93,8 @@ private:
     QWidget* m_requirementSystemField;
     QPushButton* m_requirementSystemPick;
     QLabel* m_requirementSystemNote;
+    QWidget* m_phasesField;
+    QLineEdit* m_phases;
     QCompleter* m_systemCompleter;
     QWidget* m_authField;
     QComboBox* m_jiraAuth;

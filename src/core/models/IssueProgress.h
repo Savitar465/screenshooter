@@ -42,4 +42,10 @@ struct IssueProgress {
 IssueProgress issueProgress(const QStringList& caseIds, const QList<TestCase>& cases, const QList<RunRecord>& runs,
                             const QList<IssueLink>& bugs, const QDateTime& since = QDateTime());
 
+/// ¿Se volvió a probar lo que rompió este bug, y pasó? Mira la **última** ejecución de su caso posterior
+/// al bug (sin contar aquella en la que se encontró): el paso del bug tiene que estar ahí, probado de
+/// nuevo —no heredado de la ejecución que se continuaba— y superado; un bug del caso entero (paso 0)
+/// pide el caso superado. Es lo que permite dar un bug por corregido y cerrarlo en el gestor.
+bool retestPassed(const IssueLink& bug, const QList<RunRecord>& runs);
+
 } // namespace qaflow

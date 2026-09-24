@@ -165,16 +165,28 @@ QualityRecord draftFor(const Issue& issue, const QList<TestCase>& cases, const Q
         if (end.isValid() && (!record.to.isValid() || end > record.to)) record.to = end;
     }
 
-    // Resumen de observaciones: los bugs de esta ronda por tipo, y como correcciones los de las
-    // anteriores que ya están cerrados.
+    // Resumen de observaciones. En una ronda cualquiera: los bugs de esta ronda por tipo, y como
+    // correcciones los de las anteriores que ya están cerrados. En el cierre del control: todo lo que se
+    // encontró en el requerimiento, y como correcciones lo que ya está cerrado (un bug encontrado y
+    // cerrado dentro de la última ronda cuenta como corregido, no como pendiente).
+    QList<IssueLink> found = bugs;
+    QList<IssueLink> corrected = context.previousBugs;
+    if (context.closesControl) {
+        for (const auto& bug : context.previousBugs) {
+            const bool listed = std::any_of(found.cbegin(), found.cend(), [&bug](const IssueLink& other) {
+                return !bug.key.isEmpty() && other.key == bug.key;
+            });
+            if (!listed) found << bug;
+        }
+        corrected = found;
+    }
     for (auto& observation : record.observations) {
-        observation.observations = int(std::count_if(bugs.cbegin(), bugs.cend(), [&observation](const IssueLink& bug) {
+        observation.observations = int(std::count_if(found.cbegin(), found.cend(), [&observation](const IssueLink& bug) {
             return bug.classification == observation.type;
         }));
-        observation.corrections = int(std::count_if(context.previousBugs.cbegin(), context.previousBugs.cend(),
-                                                    [&observation](const IssueLink& bug) {
-                                                        return bug.classification == observation.type && bug.resolved;
-                                                    }));
+        observation.corrections = int(std::count_if(corrected.cbegin(), corrected.cend(), [&observation](const IssueLink& bug) {
+            return bug.classification == observation.type && bug.resolved;
+        }));
     }
 
     // «Elaboración de Casos de prueba»: dónde está el trabajo en el gestor y qué casos lo componen,
@@ -208,8 +220,11 @@ QualityRecord draftFor(const Issue& issue, const QList<TestCase>& cases, const Q
         const QString when = cycle.plan.isFinished() && cycle.plan.finishedAt.date() != cycle.plan.startedAt.date()
                                  ? QCoreApplication::translate("core", "%1 a %2").arg(day(cycle.plan.startedAt), day(cycle.plan.finishedAt))
                                  : day(cycle.plan.startedAt);
+        const QString where = cycle.plan.environment.isEmpty()
+                                  ? when
+                                  : QCoreApplication::translate("core", "%1 en %2").arg(when, cycle.plan.environment);
         execution << QCoreApplication::translate("core", "%1 · ciclo del %2 · %3 de %4 ejecutados: %5 superado(s), %6 fallido(s), %7 bloqueado(s)")
-                         .arg(cycle.plan.name, when)
+                         .arg(cycle.plan.name, where)
                          .arg(cycle.executed)
                          .arg(cycle.total())
                          .arg(cycle.passed)
@@ -237,10 +252,16 @@ QString summaryOf(const QualityRecord& record, QaOutcome outcome, const QList<Pl
     const Counts counts = countOf(cycles);
 
     QStringList out;
-    out << QCoreApplication::translate("core", "Control de calidad GREQ %1 — revisión %2: %3")
-               .arg(record.greq)
-               .arg(record.revisionNumber)
-               .arg(label(outcome));
+    if (context.phase.isEmpty())
+        out << QCoreApplication::translate("core", "Control de calidad GREQ %1 — revisión %2: %3")
+                   .arg(record.greq)
+                   .arg(record.revisionNumber)
+                   .arg(label(outcome));
+    else
+        out << QCoreApplication::translate("core", "Control de calidad GREQ %1 — revisión %2 (%3): %4")
+                   .arg(record.greq)
+                   .arg(record.revisionNumber)
+                   .arg(context.phase, outcomeLabel(outcome, context.phase, context.phases));
     if (!record.reviewDates().isEmpty()) out << QCoreApplication::translate("core", "Fecha de revisión: %1").arg(record.reviewDates());
     out << QCoreApplication::translate("core", "Casos ejecutados: %1 de %2 (%3 superados, %4 fallidos, %5 bloqueados)")
                .arg(counts.executed)
@@ -256,12 +277,22 @@ QString summaryOf(const QualityRecord& record, QaOutcome outcome, const QList<Pl
                                     .arg(cycle.plan.name, day(cycle.plan.startedAt), url));
     }
     if (record.totalObservations() > 0) {
-        out << QCoreApplication::translate("core", "Observaciones: %1").arg(record.totalObservations());
+        // En el cierre del control lo corregido va al lado de lo encontrado: es lo que lo deja conforme.
+        out << (context.closesControl
+                    ? QCoreApplication::translate("core", "Observaciones: %1 · corregidas: %2")
+                          .arg(record.totalObservations())
+                          .arg(record.totalCorrections())
+                    : QCoreApplication::translate("core", "Observaciones: %1").arg(record.totalObservations()));
         for (const auto& observation : record.observations)
             if (observation.observations > 0)
-                out << QStringLiteral("- %1 · %2: %3")
-                           .arg(observation.type, BugReport::classificationName(observation.type))
-                           .arg(observation.observations);
+                out << (context.closesControl
+                            ? QCoreApplication::translate("core", "- %1 · %2: %3 (%4 corregida(s))")
+                                  .arg(observation.type, BugReport::classificationName(observation.type))
+                                  .arg(observation.observations)
+                                  .arg(observation.corrections)
+                            : QStringLiteral("- %1 · %2: %3")
+                                  .arg(observation.type, BugReport::classificationName(observation.type))
+                                  .arg(observation.observations));
     } else {
         out << QCoreApplication::translate("core", "Sin observaciones");
     }

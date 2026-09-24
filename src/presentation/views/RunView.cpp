@@ -175,6 +175,12 @@ RunView::RunView(TestCaseStore& cases, RunController& run, RunHistoryStore& hist
     connect(&m_settings, &SettingsStore::captureChanged, this, &RunView::refresh);
     // Reportar un bug de un paso se ve en su tarjeta al volver a la ejecución.
     connect(&m_bugs, &BugStore::bugsChanged, this, &RunView::refresh);
+    // Las fichas abiertas enseñan lo último que se sabe de su bug.
+    connect(&m_bugs, &BugStore::bugsChanged, this, [this]() {
+        for (const auto& window : std::as_const(m_bugWindows))
+            if (window)
+                if (const IssueLink* bug = m_bugs.findIssue(window->bugKey())) window->setBug(*bug);
+    });
     m_clock.setInterval(1000);
     connect(&m_clock, &QTimer::timeout, this, &RunView::tick);
     refresh();
@@ -1256,6 +1262,7 @@ void RunView::openBug(const QString& key) {
     auto* window = new BugDetailWindow(*bug, c ? c->title : QString(), stepAction, this);
     window->setAttribute(Qt::WA_DeleteOnClose);
     connect(window, &BugDetailWindow::openUrlRequested, this, &RunView::openUrlRequested);
+    window->setBugService(m_bugService);
     m_bugWindows.insert(key, window);
     window->show();
 }

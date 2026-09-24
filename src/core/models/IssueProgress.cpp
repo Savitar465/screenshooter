@@ -15,6 +15,20 @@ QDateTime runTime(const RunRecord& run) { return run.finishedAt.isValid() ? run.
 
 } // namespace
 
+bool retestPassed(const IssueLink& bug, const QList<RunRecord>& runs) {
+    if (bug.caseId.isEmpty() || !bug.createdAt.isValid()) return false;
+    const RunRecord* latest = nullptr;
+    for (const auto& run : runs) {
+        if (run.caseId != bug.caseId || run.id == bug.runId || !run.startedAt.isValid() || run.startedAt < bug.createdAt) continue;
+        if (!latest || runTime(run) > runTime(*latest)) latest = &run;
+    }
+    if (!latest) return false;
+    if (bug.step <= 0) return latest->verdict == Verdict::Superado;
+    if (bug.step > latest->steps.size()) return false;
+    const RunRecordStep& step = latest->steps.at(bug.step - 1);
+    return step.result == StepResult::Pass && !step.inherited;
+}
+
 IssueProgress issueProgress(const QStringList& caseIds, const QList<TestCase>& cases, const QList<RunRecord>& runs,
                             const QList<IssueLink>& bugs, const QDateTime& since) {
     IssueProgress p;

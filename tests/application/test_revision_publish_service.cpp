@@ -94,6 +94,10 @@ QString anotherRound(AppFixture& f, const Finished& done) {
     return planRunId;
 }
 
+/// Un proyecto de una sola fase: el Conforme de su ronda es el final, el que se registra en GESREQ y
+/// cierra el issue del gestor. Las pruebas que no van de fases usan esto para hablar sólo de publicar.
+void singlePhase(AppFixture& f) { f.issues.setPhases({QStringLiteral("QA")}); }
+
 RevisionPublishService::Step stepOf(const QList<RevisionPublishService::Step>& steps, Destination destination) {
     for (const auto& step : steps)
         if (step.destination == destination) return step;
@@ -114,7 +118,7 @@ private slots:
         const auto zephyr = stepOf(steps, Destination::Zephyr);
         QVERIFY(zephyr.available);
         QVERIFY(!zephyr.done);
-        QVERIFY(zephyr.target.contains(QStringLiteral("1 ciclo")));
+        QVERIFY2(zephyr.target.contains(QStringLiteral("GREQ 2026997 · QA")), qPrintable(zephyr.target));   // el ciclo de la fase
 
         const auto tracker = stepOf(steps, Destination::Tracker);
         QVERIFY(tracker.available);
@@ -132,6 +136,7 @@ private slots:
     // Publicada como Conforme y con todo bien, el issue del gestor se cierra al final.
     void aConformePublicationClosesTheTrackerIssueAtTheEnd() {
         AppFixture f;
+        singlePhase(f);
         const Finished done = finishedRevision(f);
         f.tracker->resolvedToReturn = true;
         f.tracker->statusToReturn = QStringLiteral("Cerrada");
@@ -155,6 +160,7 @@ private slots:
     // Observado no cierra nada, y si algo de lo elegido falla, el issue sigue abierto.
     void theTrackerIssueStaysOpenWhenObservedOrWhenSomethingFailed() {
         AppFixture f;
+        singlePhase(f);
         const Finished done = finishedRevision(f);
         RevisionPublishService::Options options;
         options.outcome = QaOutcome::Observado;
@@ -166,6 +172,7 @@ private slots:
         for (const auto& step : result.steps) QVERIFY(step.destination != Destination::Close);
 
         AppFixture g;
+        singlePhase(g);
         const Finished other = finishedRevision(g);
         g.requirementSource->registrationCutOff = true;   // GESREQ no confirma
         options.outcome = QaOutcome::Conforme;
@@ -174,6 +181,94 @@ private slots:
         QVERIFY(g.tracker->closed.isEmpty());
         QCOMPARE(result.steps.last().destination, Destination::Close);
         QVERIFY(!result.steps.last().ok);
+    }
+
+    // QA aprobada no es el OK del requerimiento: ni se registra en GESREQ ni cierra el issue del gestor.
+    // Eso lo hace el Conforme de PRE, la última fase.
+    void onlyTheLastPhaseRegistersTheOkAndClosesTheTrackerIssue() {
+        AppFixture f;
+        const Finished done = finishedRevision(f);   // revisión 1, QA observada
+        anotherRound(f, done);                         // revisión 2, QA
+        QCOMPARE(f.revisionPublish.phaseFor(done.issueId), QStringLiteral("QA"));
+        QVERIFY(!f.revisionPublish.closesRequirement(done.issueId, QaOutcome::Conforme));
+        f.issues.closeRevision(done.issueId, QaOutcome::Conforme);
+
+        const auto requirement = stepOf(f.revisionPublish.stepsFor(done.issueId), Destination::Requirement);
+        QVERIFY(!requirement.available);
+        QVERIFY2(requirement.blocked.contains(QStringLiteral("Aprobada en QA")), qPrintable(requirement.blocked));
+        QVERIFY(!f.revisionPublish.pendingFor(done.issueId, 2).contains(Destination::Requirement));
+        QVERIFY(!f.revisionPublish.pendingFor(done.issueId, 2).contains(Destination::Close));
+
+        RevisionPublishService::Options options;
+        options.outcome = QaOutcome::Conforme;
+        options.comment = QStringLiteral("QA aprobada");
+        RevisionPublishService::Result result;
+        f.revisionPublish.publish(done.issueId, options, {}, [&result](const RevisionPublishService::Result& r) { result = r; });
+        QVERIFY(f.requirementSource->registrations.isEmpty());
+        QVERIFY(f.tracker->closed.isEmpty());
+
+        // PRE: la ronda siguiente es de la última fase, y su Conforme registra el OK y cierra.
+        anotherRound(f, done);
+        QCOMPARE(f.revisionPublish.phaseFor(done.issueId), QStringLiteral("PRE"));
+        QVERIFY(f.revisionPublish.closesRequirement(done.issueId, QaOutcome::Conforme));
+        f.tracker->resolvedToReturn = true;
+        options.comment = QStringLiteral("Conforme");
+        options.tracker = false;
+        f.revisionPublish.publish(done.issueId, options, {}, [&result](const RevisionPublishService::Result& r) { result = r; });
+        QVERIFY2(result.ok, qPrintable(result.steps.isEmpty() ? QString() : result.steps.last().message));
+        QCOMPARE(f.requirementSource->registrations.size(), 1);
+        QCOMPARE(f.tracker->closed, QStringList{QStringLiteral("SHOP-12")});
+        QVERIFY(f.issues.find(done.issueId)->state == IssueState::Done);
+    }
+
+    // Los ciclos de plan de una fase van todos al mismo ciclo de Zephyr, del más antiguo al más
+    // reciente: el primero lo crea y los siguientes actualizan sus ejecuciones.
+    void theCyclesOfAPhaseGoToTheSameZephyrCycleInOrder() {
+        AppFixture f;
+        const Finished done = finishedRevision(f);
+        // Otro ciclo del plan en la misma ronda, posterior al primero.
+        const QString later = f.history.startPlan(QStringLiteral("Plan GREQ 2026997"), {QStringLiteral("TC-101")}, done.planId,
+                                                  QStringLiteral("QA"));
+        f.history.noteCycleRevision(later, done.issueId, 1);
+        RunRecord run;
+        run.caseId = QStringLiteral("TC-101");
+        run.planRunId = later;
+        run.verdict = Verdict::Superado;
+        run.startedAt = QDateTime::currentDateTime().addSecs(60);
+        run.finishedAt = run.startedAt.addSecs(60);
+        f.history.addRun(run);
+        f.history.finishPlan(later);
+
+        RevisionPublishService::Options options;
+        options.outcome = QaOutcome::Observado;
+        options.tracker = false;
+        options.requirement = false;
+        options.close = false;
+        RevisionPublishService::Result result;
+        f.revisionPublish.publish(done.issueId, options, {}, [&result](const RevisionPublishService::Result& r) { result = r; });
+        QCOMPARE(f.zephyr->published.size(), 2);
+        QCOMPARE(f.zephyr->published[0].cycleName, QStringLiteral("GREQ 2026997 · QA"));
+        QVERIFY(f.zephyr->published[0].cycleId.isEmpty());                    // el primero crea el ciclo de la fase
+        QCOMPARE(f.zephyr->published[1].cycleId, QStringLiteral("77"));       // el siguiente lo actualiza
+        QVERIFY(f.zephyr->published[1].cases.first().verdict == Verdict::Superado);   // y queda lo último
+        QCOMPARE(f.issues.find(done.issueId)->zephyr.cycleOf(QStringLiteral("QA")), QStringLiteral("77"));
+    }
+
+    // Los Tests del requerimiento se crean antes de probarlo y se enlazan a su issue del gestor.
+    void theTestsOfTheRequirementAreCreatedAndLinkedToItsIssue() {
+        AppFixture f;
+        const Finished done = finishedRevision(f);
+        QVERIFY(f.revisionPublish.canPrepareTests());
+        const QStringList cases{QStringLiteral("TC-101")};
+        QCOMPARE(f.revisionPublish.casesWithoutTest(done.issueId, cases), cases);
+        RevisionPublishService::TestsPrepared out;
+        f.revisionPublish.prepareTests(done.issueId, cases, [&out](const RevisionPublishService::TestsPrepared& r) { out = r; });
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.created, 1);
+        QCOMPARE(out.linked, 1);
+        const QList<QPair<QString, QString>> expected{{QStringLiteral("SHOP-101"), QStringLiteral("SHOP-12")}};
+        QCOMPARE(f.tracker->links, expected);
+        QVERIFY(f.revisionPublish.casesWithoutTest(done.issueId, cases).isEmpty());
     }
 
     void publishingSendsTheCycleTheCommentAndTheRegistrationInOrder() {
@@ -270,6 +365,7 @@ private slots:
     // Observado vuelve a pruebas: la revisión siguiente sí se registra. Conforme cierra el control.
     void onlyAnObservedControlCanBeRegisteredAgain() {
         AppFixture f;
+        singlePhase(f);
         const Finished done = finishedRevision(f);
         RevisionPublishService::Options options;
         options.zephyr = false;
@@ -347,6 +443,7 @@ private slots:
     // Registrada ya una ronda posterior, la anterior no se registra: lo que sabe GESREQ es lo último.
     void aLaterRegistrationBlocksTheEarlierRound() {
         AppFixture f;
+        singlePhase(f);
         const Finished done = finishedRevision(f);
         anotherRound(f, done);
         f.issues.closeRevision(done.issueId, QaOutcome::Conforme);
@@ -384,7 +481,9 @@ private slots:
         bug.caseId = QStringLiteral("TC-101");
         bug.step = 2;
         bug.classification = QStringLiteral("A");
-        bug.createdAt = QDateTime::currentDateTime();
+        // Se reportó mientras la ronda estaba abierta (sin ejecución anotada, cuenta por fechas): justo al
+        // cerrarla. «Ahora» caería a veces un milisegundo después del cierre y el bug quedaría fuera.
+        bug.createdAt = f.issues.find(done.issueId)->revisions.last().closedAt;
         f.bugLedger.recordIssue(bug);
         // Un bug de otro caso, que no es de estas pruebas.
         IssueLink other = bug;
@@ -421,6 +520,7 @@ private slots:
 
     void whatIsNotChosenIsNotSent() {
         AppFixture f;
+        singlePhase(f);
         const Finished done = finishedRevision(f);
         RevisionPublishService::Options options;
         options.zephyr = false;

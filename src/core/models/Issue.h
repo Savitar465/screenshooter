@@ -6,6 +6,7 @@
 
 #include <QDateTime>
 #include <QList>
+#include <QMap>
 #include <QString>
 #include <QStringList>
 #include <optional>
@@ -115,8 +116,15 @@ struct RevisionRegistration {
 /// Una ronda de control de calidad del requerimiento: se abre al empezar a probar y se cierra con su
 /// resultado (Conforme u Observado), su acta y lo que se hizo con ella. Un requerimiento observado
 /// vuelve a pruebas y abre la revisión siguiente, que es el «Número de Revisión» del acta.
+///
+/// Cada ronda es de una **fase** (el ambiente en el que se prueba: QA, PRE…). Conforme en una fase que no
+/// es la última aprueba esa fase y la ronda siguiente es de la otra; sólo Conforme en la última cierra el
+/// control del requerimiento (ver `closesRequirement`).
 struct IssueRevision {
     int number = 1;
+    /// Fase de la ronda ("QA", "PRE"). Vacía en las rondas anteriores a que existieran las fases (ver
+    /// `phaseOf`).
+    QString phase;
     QDateTime startedAt;
     QDateTime closedAt;                        // inválida mientras la revisión sigue abierta
     QaOutcome outcome = QaOutcome::Pendiente;
@@ -135,6 +143,20 @@ struct IssueRevision {
     bool hasDocument() const { return !documentPath.trimmed().isEmpty(); }
 };
 
+/// Lo que el requerimiento tiene en Zephyr: **un Test por caso**, el mismo en todos sus ciclos, y **un
+/// ciclo por fase** («GREQ 2026997 · QA», «GREQ 2026997 · PRE»), al que van todas las rondas y
+/// continuaciones de esa fase actualizando sus ejecuciones. Las fases se guardan en mayúsculas.
+struct IssueZephyr {
+    QMap<QString, QString> tests;        // caso de QAflow → clave del Test (TC-104 → SHOP-77)
+    QMap<QString, QString> cycles;       // fase → id del ciclo en Zephyr
+    QMap<QString, QString> cycleNames;   // fase → nombre con el que se creó (su enlace lo busca por nombre)
+
+    bool isEmpty() const { return tests.isEmpty() && cycles.isEmpty(); }
+    static QString phaseKey(const QString& phase) { return phase.trimmed().toUpper(); }
+    QString cycleOf(const QString& phase) const { return cycles.value(phaseKey(phase)); }
+    QString cycleNameOf(const QString& phase) const { return cycleNames.value(phaseKey(phase)); }
+};
+
 /// Issue de QAflow: organiza el trabajo de QA de un requerimiento (o de algo que se crea a mano). Su
 /// identidad es local e independiente de la clave de Jira, que se le añade al publicarlo.
 struct Issue {
@@ -150,6 +172,10 @@ struct Issue {
     IssuePublication publication;  // vacío mientras no se publique ni se vincule
     /// Rondas de control de calidad, de la primera a la última. Vacío mientras no se haya empezado.
     QList<IssueRevision> revisions;
+    /// Fases en las que se prueba este requerimiento, si no son todas las del proyecto: hay los que sólo
+    /// pasan por QA, o sólo por PRE. Vacío = las del proyecto (`IssueStore::phasesOf`).
+    QStringList phases;
+    IssueZephyr zephyr;
     QDateTime createdAt;
     QDateTime updatedAt;
 
@@ -201,5 +227,30 @@ QList<RequirementChange> diffRequirement(const ExternalRequirement& before, cons
 QList<RequirementChange> mergeChanges(const QList<RequirementChange>& pending, const QList<RequirementChange>& incoming);
 /// Nombre para mostrar de un campo de `RequirementChange` ("Estado", "Descripción corta"…).
 QString requirementFieldLabel(const QString& field);
+
+// ---- Fases del control de calidad ----------------------------------------------------------------
+// Un requerimiento se prueba en fases ordenadas (por defecto QA y después PRE), cada una en una o más
+// rondas. Las fases son del proyecto (`Project::phases`); estas funciones reciben la lista ya resuelta.
+
+/// Las fases de un proyecto que no dice ninguna: QA y, aprobado ahí, PRE.
+QStringList defaultQaPhases();
+/// La lista tal y como se usa: sin espacios alrededor, sin vacías ni repetidas (sin distinguir
+/// mayúsculas) y, si no queda ninguna, las de por defecto.
+QStringList normalizedQaPhases(const QStringList& phases);
+/// Fase de una ronda: la suya o, en una anterior a las fases, la última si quedó Conforme (entonces eso
+/// cerraba el requerimiento) y la primera si no.
+QString phaseOf(const IssueRevision& revision, const QStringList& phases);
+/// ¿Es la última fase? Una fase que ya no está en la lista (se quitó de la configuración) cuenta como
+/// última: no hay a dónde avanzar desde ella.
+bool isFinalPhase(const QString& phase, const QStringList& phases);
+/// Fase de la próxima ronda del issue: la primera si no tiene ninguna; la misma si la última sigue
+/// abierta o quedó observada; la siguiente si la última aprobó una fase que no es la final.
+QString nextPhase(const Issue& issue, const QStringList& phases);
+/// ¿Cierra esta ronda el control de calidad del requerimiento? Sólo Conforme en la última fase: es lo
+/// único que registra el «OK» en GESREQ, finaliza el issue y cierra su issue del gestor.
+bool closesRequirement(const IssueRevision& revision, const QStringList& phases);
+/// Texto del resultado de una ronda de esa fase: Conforme en una fase que no es la última se lee
+/// «Aprobada en QA»; el resto, como `label(QaOutcome)`.
+QString outcomeLabel(QaOutcome outcome, const QString& phase, const QStringList& phases);
 
 } // namespace qaflow

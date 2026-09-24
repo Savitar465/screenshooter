@@ -51,7 +51,15 @@ BugView::BugView(TestCaseStore& cases, SettingsStore& settings, BugReportService
         if (value >= sa->verticalScrollBar()->maximum() - 8) loadMore();
     });
     connect(&m_settings, &SettingsStore::trackerChanged, this, [this]() { refreshHeader(); refreshIssues(); });
-    connect(&m_ledger, &BugStore::bugsChanged, this, [this]() { refreshHeader(); refreshIssues(); refreshPending(); });
+    connect(&m_ledger, &BugStore::bugsChanged, this, [this]() {
+        refreshHeader();
+        refreshIssues();
+        refreshPending();
+        // Las fichas abiertas enseñan lo último que se sabe de su bug (se cierra, cambia de estado…).
+        for (const auto& window : std::as_const(m_detailWindows))
+            if (window)
+                if (const IssueLink* bug = m_ledger.findIssue(window->bugKey())) window->setBug(*bug);
+    });
     refreshHeader();
     refreshIssues();
     refreshPending();
@@ -316,6 +324,7 @@ void BugView::openDetail(const QString& key) {
     auto* window = new BugDetailWindow(*bug, c ? c->title : QString(), stepAction, this);
     window->setAttribute(Qt::WA_DeleteOnClose);
     connect(window, &BugDetailWindow::openUrlRequested, this, &BugView::openIssueRequested);
+    window->setBugService(&m_bugs);
     m_detailWindows.insert(key, window);
     window->show();
 }

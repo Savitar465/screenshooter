@@ -136,6 +136,108 @@ private slots:
         QVERIFY(issue->lastOutcome() == QaOutcome::Observado);   // el de la revisión ya cerrada
     }
 
+    void eachRoundIsOfAPhaseAndOnlyTheLastOneFinishesTheIssue() {
+        Fixture f;
+        const QString id = f.store.createIssue(QStringLiteral("A"));
+        f.store.linkPlan(id, QStringLiteral("PL-0001"));
+        const QString plan = QStringLiteral("PL-0001");
+
+        // Lo que haría un ciclo antes de arrancarlo: la revisión 1, en QA.
+        IssueStore::RevisionRef next = f.store.nextCycleContext(plan);
+        QCOMPARE(next.issueId, id);
+        QCOMPARE(next.revision, 1);
+        QCOMPARE(next.phase, QStringLiteral("QA"));
+        IssueStore::RevisionRef started = f.store.notePlanStarted(plan);
+        QCOMPARE(started.revision, 1);
+        QCOMPARE(started.phase, QStringLiteral("QA"));
+        QCOMPARE(f.store.find(id)->currentRevision()->phase, QStringLiteral("QA"));
+
+        // QA observada: se corrige y se vuelve a probar en QA.
+        f.store.closeRevision(id, QaOutcome::Observado);
+        QCOMPARE(f.store.nextCycleContext(plan).phase, QStringLiteral("QA"));
+        started = f.store.notePlanStarted(plan);
+        QCOMPARE(started.revision, 2);
+        QCOMPARE(started.phase, QStringLiteral("QA"));
+
+        // QA aprobada: el issue sigue en pruebas y la ronda siguiente es de PRE.
+        f.store.closeRevision(id, QaOutcome::Conforme);
+        QVERIFY(f.store.find(id)->state == IssueState::Testing);
+        next = f.store.nextCycleContext(plan);
+        QCOMPARE(next.revision, 3);
+        QCOMPARE(next.phase, QStringLiteral("PRE"));
+        QCOMPARE(f.store.openRevision(id), 3);
+        QCOMPARE(f.store.find(id)->currentRevision()->phase, QStringLiteral("PRE"));
+
+        // PRE conforme: es el cierre del control.
+        f.store.closeRevision(id, QaOutcome::Conforme);
+        QVERIFY(f.store.find(id)->state == IssueState::Done);
+    }
+
+    // Hay requerimientos que sólo se prueban en una fase: en sólo PRE la primera ronda ya es de PRE, y
+    // en sólo QA su Conforme es el cierre del control.
+    void anIssueCanBeTestedInOnlyOnePhase() {
+        Fixture f;
+        const QString pre = f.store.createIssue(QStringLiteral("Sólo PRE"));
+        QVERIFY(f.store.setIssuePhases(pre, {QStringLiteral("PRE")}).isEmpty());
+        QCOMPARE(f.store.phasesOf(*f.store.find(pre)), QStringList{QStringLiteral("PRE")});
+        f.store.openRevision(pre);
+        QCOMPARE(f.store.find(pre)->currentRevision()->phase, QStringLiteral("PRE"));
+        f.store.closeRevision(pre, QaOutcome::Conforme);
+        QVERIFY(f.store.find(pre)->state == IssueState::Done);
+
+        const QString qa = f.store.createIssue(QStringLiteral("Sólo QA"));
+        QVERIFY(f.store.setIssuePhases(qa, {QStringLiteral("qa")}).isEmpty());
+        f.store.openRevision(qa);
+        QCOMPARE(f.store.find(qa)->currentRevision()->phase, QStringLiteral("QA"));
+        f.store.closeRevision(qa, QaOutcome::Conforme);
+        QVERIFY(f.store.find(qa)->state == IssueState::Done);
+        // Con una revisión cerrada en QA, esa fase ya no se puede quitar.
+        QVERIFY(!f.store.setIssuePhases(qa, {QStringLiteral("PRE")}).isEmpty());
+        QCOMPARE(f.store.phasesOf(*f.store.find(qa)), QStringList{QStringLiteral("QA")});
+
+        // Una revisión abierta (sin ciclos) no ata su fase: quitada, la revisión pasa a la que queda.
+        const QString moved = f.store.createIssue(QStringLiteral("Empezó en QA por error"));
+        f.store.openRevision(moved);
+        QCOMPARE(f.store.find(moved)->currentRevision()->phase, QStringLiteral("QA"));
+        QVERIFY(f.store.setIssuePhases(moved, {QStringLiteral("PRE")}).isEmpty());
+        QCOMPARE(f.store.find(moved)->currentRevision()->phase, QStringLiteral("PRE"));
+
+        // Elegir todas las del proyecto vuelve a «las del proyecto».
+        const QString both = f.store.createIssue(QStringLiteral("Las dos"));
+        QVERIFY(f.store.setIssuePhases(both, {QStringLiteral("PRE"), QStringLiteral("QA")}).isEmpty());
+        QVERIFY(f.store.find(both)->phases.isEmpty());
+    }
+
+    // El ciclo se arranca en la fase que se elige: una revisión nueva nace en ella y una abierta (sin
+    // ciclos todavía) pasa a ella. Una fase que no es del issue no cuenta.
+    void aCycleStartsInTheChosenPhase() {
+        Fixture f;
+        const QString id = f.store.createIssue(QStringLiteral("A"));
+        f.store.linkPlan(id, QStringLiteral("PL-0001"));
+        IssueStore::RevisionRef started = f.store.notePlanStarted(QStringLiteral("PL-0001"), QStringLiteral("pre"));
+        QCOMPARE(started.phase, QStringLiteral("PRE"));
+        QCOMPARE(f.store.find(id)->currentRevision()->phase, QStringLiteral("PRE"));
+        started = f.store.notePlanStarted(QStringLiteral("PL-0001"), QStringLiteral("QA"));
+        QCOMPARE(started.revision, 1);
+        QCOMPARE(f.store.find(id)->currentRevision()->phase, QStringLiteral("QA"));
+        started = f.store.notePlanStarted(QStringLiteral("PL-0001"), QStringLiteral("Staging"));
+        QCOMPARE(started.phase, QStringLiteral("QA"));   // no es una fase: sigue en la suya
+    }
+
+    void aProjectCanHaveItsOwnPhases() {
+        Fixture f;
+        f.store.setPhases({QStringLiteral("QA"), QStringLiteral("UAT"), QStringLiteral("PRE")});
+        const QString id = f.store.createIssue(QStringLiteral("A"));
+        f.store.openRevision(id);
+        f.store.closeRevision(id, QaOutcome::Conforme);
+        f.store.openRevision(id);
+        QCOMPARE(f.store.find(id)->currentRevision()->phase, QStringLiteral("UAT"));
+        f.store.closeRevision(id, QaOutcome::Conforme);
+        QVERIFY(f.store.find(id)->state == IssueState::Testing);
+        f.store.openRevision(id);
+        QCOMPARE(f.store.find(id)->currentRevision()->phase, QStringLiteral("PRE"));
+    }
+
     void theRevisionKeepsTheRecordThePublicationAndTheRegistration() {
         Fixture f;
         const QString id = f.store.createIssue(QStringLiteral("A"));
@@ -164,6 +266,8 @@ private slots:
         f.store.setRevisionRegistration(id, registered);
         QVERIFY(f.store.find(id)->currentRevision()->gesreq.result == QaOutcome::Conforme);
 
+        // Un proyecto de una sola fase: su Conforme cierra el control y finaliza el issue.
+        f.store.setPhases({QStringLiteral("QA")});
         f.store.closeRevision(id, QaOutcome::Conforme);
         const Issue* issue = f.store.find(id);
         QVERIFY(!issue->currentRevision());

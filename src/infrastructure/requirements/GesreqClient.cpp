@@ -353,10 +353,20 @@ QString observationField(const QString& classification) {
 
 /// Observaciones que GESREQ cuenta para decidir si el control puede ser «OK»: todas menos las
 /// recomendaciones, que no impiden dar por bueno el requerimiento.
+/// Observaciones de funcionamiento, datos, forma o vulnerabilidades (las recomendaciones no cuentan).
 int blockingObservations(const QList<ObservationCount>& observations) {
     int total = 0;
     for (const auto& o : observations)
         if (o.type.trimmed().toUpper() != QLatin1String("D")) total += std::max(0, o.observations);
+    return total;
+}
+
+/// De ésas, las que siguen sin corregir: el «OK» del cierre declara todo lo encontrado, y vale mientras
+/// cada una tenga su corrección.
+int uncorrectedObservations(const QList<ObservationCount>& observations) {
+    int total = 0;
+    for (const auto& o : observations)
+        if (o.type.trimmed().toUpper() != QLatin1String("D")) total += std::max(0, o.observations - std::max(0, o.corrections));
     return total;
 }
 
@@ -385,10 +395,12 @@ QString GesreqClient::registrationProblem(const RequirementRegistration& registr
                                            "GESREQ no admite adjuntos «%1»: el acta tiene que ser .doc, .docx, .pdf, .xls, .xlsx, .vsd, .jpg o .gif")
                 .arg(QFileInfo(registration.attachmentPath).suffix());
     const int blocking = blockingObservations(registration.observations);
-    if (conforme && blocking > 0)
+    const int uncorrected = uncorrectedObservations(registration.observations);
+    if (conforme && uncorrected > 0)
         return QCoreApplication::translate("infrastructure",
-                                           "GESREQ no acepta un control «OK» con %n observación(es) que no sean recomendaciones: registra esta ronda como observada",
-                                           nullptr, blocking);
+                                           "GESREQ no acepta un control «OK» con %n observación(es) sin corregir que no sean recomendaciones: "
+                                           "cierra sus bugs o registra esta ronda como observada",
+                                           nullptr, uncorrected);
     if (!conforme && blocking == 0)
         return QCoreApplication::translate("infrastructure",
                                            "GESREQ no acepta un control «OBSERVADO» sin ninguna observación de funcionamiento, datos, forma o vulnerabilidades");

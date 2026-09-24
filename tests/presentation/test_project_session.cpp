@@ -260,6 +260,20 @@ private slots:
         QCOMPARE(third->continuesCycleId, secondId);
         QCOMPARE(third->revision, 3);
         QCOMPARE(session.issues->find(issueId)->revisions.size(), 3);
+
+        // Las fases son las del proyecto, y cambiarlas llega a la sesión abierta: la ronda siguiente a una
+        // fase aprobada es de la que viene en la lista del proyecto.
+        QCOMPARE(session.issues->phases(), (QStringList{QStringLiteral("QA"), QStringLiteral("PRE")}));
+        QVERIFY(projects.setPhases(id, {QStringLiteral("QA"), QStringLiteral("UAT"), QStringLiteral("PRE")}));
+        QCOMPARE(session.issues->phases(), (QStringList{QStringLiteral("QA"), QStringLiteral("UAT"), QStringLiteral("PRE")}));
+        session.run->mark(StepResult::Pass);
+        session.run->finish();
+        session.issues->closeRevision(issueId, QaOutcome::Conforme);
+        QCOMPARE(session.issues->nextCycleContext(planId).phase, QStringLiteral("UAT"));
+
+        // Y el ciclo que se arranca en otra fase (elegida en el diálogo) abre la revisión en ella.
+        session.run->startSequence({caseId}, QStringLiteral("Regresión"), planId, QStringLiteral("PRE"));
+        QCOMPARE(session.issues->find(issueId)->currentRevision()->phase, QStringLiteral("PRE"));
     }
 
     void projectsKeepDataAndJiraCodesSeparateButShareSettingsAndSuites() {

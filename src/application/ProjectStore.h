@@ -27,6 +27,12 @@ public:
     /// Proyecto vinculado a ese sistema de GESREQ (sin distinguir mayúsculas ni espacios repetidos), sin
     /// contar `except`; vacío si ninguno.
     QString projectForRequirementSystem(const QString& system, const QString& except = QString()) const;
+    /// Fases del control de calidad del proyecto, ya resueltas (`normalizedQaPhases`): las suyas o las de
+    /// por defecto. Un proyecto que no existe tiene las de por defecto.
+    QStringList phasesOf(const QString& id) const;
+    /// Cambia las fases del proyecto, en orden. Las vacías y repetidas se descartan; dejar las de por
+    /// defecto (o ninguna) vuelve a ellas. Las rondas ya abiertas conservan la fase con la que nacieron.
+    bool setPhases(const QString& id, const QStringList& phases);
 signals:
     void projectsChanged();
     void suitesChanged();

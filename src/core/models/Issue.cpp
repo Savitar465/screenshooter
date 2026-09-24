@@ -176,4 +176,60 @@ QString requirementFieldLabel(const QString& field) {
     return field;
 }
 
+QStringList defaultQaPhases() { return {QStringLiteral("QA"), QStringLiteral("PRE")}; }
+
+QStringList normalizedQaPhases(const QStringList& phases) {
+    QStringList out;
+    for (const QString& raw : phases) {
+        const QString phase = raw.simplified();
+        if (phase.isEmpty()) continue;
+        const bool repeated = std::any_of(out.cbegin(), out.cend(), [&phase](const QString& p) {
+            return p.compare(phase, Qt::CaseInsensitive) == 0;
+        });
+        if (!repeated) out << phase;
+    }
+    return out.isEmpty() ? defaultQaPhases() : out;
+}
+
+namespace {
+int phaseIndex(const QString& phase, const QStringList& phases) {
+    for (int i = 0; i < phases.size(); ++i)
+        if (phases.at(i).compare(phase.trimmed(), Qt::CaseInsensitive) == 0) return i;
+    return -1;
+}
+} // namespace
+
+QString phaseOf(const IssueRevision& revision, const QStringList& phases) {
+    if (!revision.phase.trimmed().isEmpty()) return revision.phase.trimmed();
+    // Antes de las fases, Conforme cerraba el requerimiento: esa ronda fue la de la última fase. Las
+    // demás rondas antiguas son de la primera.
+    const QStringList list = normalizedQaPhases(phases);
+    return !revision.isOpen() && revision.outcome == QaOutcome::Conforme ? list.last() : list.first();
+}
+
+bool isFinalPhase(const QString& phase, const QStringList& phases) {
+    const QStringList list = normalizedQaPhases(phases);
+    const int index = phaseIndex(phase, list);
+    return index < 0 || index == list.size() - 1;
+}
+
+QString nextPhase(const Issue& issue, const QStringList& phases) {
+    const QStringList list = normalizedQaPhases(phases);
+    if (issue.revisions.isEmpty()) return list.first();
+    const IssueRevision& last = issue.revisions.last();
+    const QString phase = phaseOf(last, list);
+    if (last.isOpen() || last.outcome != QaOutcome::Conforme || isFinalPhase(phase, list)) return phase;
+    return list.at(phaseIndex(phase, list) + 1);
+}
+
+bool closesRequirement(const IssueRevision& revision, const QStringList& phases) {
+    return revision.outcome == QaOutcome::Conforme && isFinalPhase(phaseOf(revision, phases), phases);
+}
+
+QString outcomeLabel(QaOutcome outcome, const QString& phase, const QStringList& phases) {
+    if (outcome == QaOutcome::Conforme && !isFinalPhase(phase, phases))
+        return QCoreApplication::translate("core", "Aprobada en %1").arg(phase);
+    return label(outcome);
+}
+
 } // namespace qaflow

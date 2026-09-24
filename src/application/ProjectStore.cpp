@@ -1,4 +1,7 @@
 #include "ProjectStore.h"
+
+#include "core/models/Issue.h"
+
 #include <QUuid>
 #include <algorithm>
 
@@ -85,5 +88,22 @@ QString ProjectStore::projectForRequirementSystem(const QString& system, const Q
     for (const auto& p : projects())
         if (p.id != except && p.requirementSystem.compare(wanted, Qt::CaseInsensitive) == 0) return p.id;
     return {};
+}
+QStringList ProjectStore::phasesOf(const QString& id) const {
+    const Project* project = find(id);
+    return normalizedQaPhases(project ? project->phases : QStringList());
+}
+bool ProjectStore::setPhases(const QString& id, const QStringList& phases) {
+    const Project* project = find(id);
+    if (!project) return false;
+    const QStringList clean = normalizedQaPhases(phases);
+    const QStringList stored = clean == defaultQaPhases() ? QStringList() : clean;
+    if (project->phases == stored) return true;
+    auto next = m_collection;
+    for (auto& p : next.projects) if (p.id == id) p.phases = stored;
+    if (!m_repo->save(next)) { emit failed(tr("No se pudieron guardar las fases del proyecto.")); return false; }
+    m_collection = next;
+    emit projectsChanged();
+    return true;
 }
 } // namespace qaflow

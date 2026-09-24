@@ -8,6 +8,8 @@
 #include "application/TestCaseStore.h"
 #include "application/TestPublishService.h"
 
+#include <QRegularExpression>
+
 #include <QSet>
 
 #include <algorithm>
@@ -116,6 +118,16 @@ quality::DraftContext QualityRecordService::contextFor(const Issue& issue, const
     context.qaResource = m_settings.requirementSource().user;
     const int number = revisionNumber(issue, revision);
     context.revisionNumber = number > 0 ? number : 1;
+    if (const IssueRevision* round = issue.revision(number)) {
+        context.phases = m_issues.phasesOf(issue);
+        context.phase = phaseOf(*round, context.phases);
+        // El acta del cierre del control: la ronda es de la última fase y termina (o va a terminar, si
+        // sigue abierta) conforme.
+        IssueRevision closing = *round;
+        if (closing.isOpen()) closing.outcome = progressFor(issue.id).suggested;
+        closing.closedAt = QDateTime::currentDateTime();
+        context.closesControl = closesRequirement(closing, context.phases);
+    }
     context.previous = previousRecord(issue.id);
 
     // Los bugs de rondas anteriores, con la misma regla que los de la ronda (`revisionBugs`): los que
@@ -203,7 +215,13 @@ QString QualityRecordService::suggestedFileName(const QString& issueId, int revi
     // Un requerimiento observado levanta un acta por ronda: el número va en el nombre para que no se
     // confundan en el disco ni al adjuntarlas.
     const int number = issue ? revisionNumber(*issue, revision) : 0;
-    const QString round = number > 0 ? QStringLiteral("rev%1_").arg(number) : QString();
+    QString round = number > 0 ? QStringLiteral("rev%1_").arg(number) : QString();
+    // Y la fase: la misma revisión no se repite, pero así se ve de un vistazo qué acta es de QA y cuál de PRE.
+    if (const IssueRevision* r = issue && number > 0 ? issue->revision(number) : nullptr) {
+        QString phase = phaseOf(*r, m_issues.phasesOf(*issue));
+        phase.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9]+")), QStringLiteral("-"));
+        if (!phase.isEmpty()) round += phase + QLatin1Char('_');
+    }
     return QStringLiteral("ControlCalidad_%1_%2%3.docx").arg(name, round).arg(QDateTime::currentMSecsSinceEpoch());
 }
 

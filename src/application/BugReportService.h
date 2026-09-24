@@ -75,6 +75,18 @@ public:
     /// reciente; el `nextStart` del resultado es lo que hay que pasar para seguir.
     void importFromTracker(int startAt, std::function<void(const ImportResult&)> done);
 
+    /// ¿Sabe el gestor configurado cerrar bugs desde QAflow? Sólo Jira, por ahora.
+    bool canCloseBugs() const;
+    struct CloseResult {
+        QStringList closed;      // claves que quedaron cerradas (o ya lo estaban)
+        QStringList failed;      // «CLAVE: motivo» de las que no se pudieron cerrar
+        QStringList uncertain;   // claves cuyo cierre se cortó sin respuesta: pueden haberse cerrado
+    };
+    /// Cierra esos bugs en el gestor, uno tras otro, con la transición que ofrezca su flujo, y deja en
+    /// el libro el estado con el que quedaron. Uno que falle no para a los demás. Nada se cierra solo:
+    /// esto lo pide quien da los bugs por corregidos.
+    void closeBugs(const QStringList& keys, std::function<void(const CloseResult&)> done);
+
     void testConnection(std::function<void(const ConnectionResult&)> done);
 
     /// Metadatos del proyecto (tipos, prioridades, componentes, versiones, asignables). Se cachean
@@ -102,6 +114,7 @@ private:
     IssueLink linkFor(const BugReport& bug, const IssueResult& r) const;
     void retryNext(QList<QString> ids, RetryResult acc, std::function<void(const RetryResult&)> done);
     void refreshNext(QStringList keys, RefreshResult acc, std::function<void(const RefreshResult&)> done);
+    void closeNext(QStringList keys, CloseResult acc, std::function<void(const CloseResult&)> done);
 
     std::shared_ptr<IIssueTracker> m_tracker;
     TestCaseStore& m_cases;

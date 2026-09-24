@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "application/AppContext.h"
+#include "core/models/BugReport.h"   // BugReport::environments
 #include "core/models/RunHistory.h"   // label(Verdict)
 #include "presentation/theme/Theme.h"
 #include "presentation/views/BugDialog.h"
@@ -135,6 +136,7 @@ PlanView* MainWindow::planView() {
 RunView* MainWindow::runView() {
     if (m_run) return m_run;
     m_run = new RunView(*m_ctx.cases, *m_ctx.run, *m_ctx.history, *m_ctx.settings, *m_ctx.evidence, *m_ctx.bugLedger);
+    m_run->setBugService(m_ctx.bugs);
     m_stack->addWidget(m_run);
     wireRun();
     return m_run;
@@ -356,21 +358,40 @@ void MainWindow::startPlanRun(const QString& planId) {
     askCycleEnvironment(planId, plan->name);
 }
 
-QString MainWindow::cycleContext(const QString& planId) const {
-    const QList<Issue> issues = m_ctx.issues->issuesForPlan(planId);
-    if (issues.isEmpty()) return {};
-    // El ciclo se anota en el primer issue que agrupa el plan, igual que hace IssueStore al arrancarlo.
-    const Issue& issue = issues.first();
-    const IssueRevision* open = issue.currentRevision();
-    const int revision = open ? open->number : (issue.revisions.isEmpty() ? 1 : issue.revisions.last().number + 1);
-    const QString what = issue.isImported() ? tr("GREQ %1").arg(issue.requirement.data.id) : issue.id;
-    return tr("%1 · revisión %2").arg(what).arg(revision);
+CycleStartDialog::Setup MainWindow::cycleSetup(const QString& planId, const QString& planName) const {
+    CycleStartDialog::Setup setup;
+    setup.planName = planName;
+    // Lo mismo que hará IssueStore al arrancarlo: el primer issue que agrupa el plan, su ronda abierta
+    // (o la siguiente) y la fase que le toca, que es el ambiente del ciclo.
+    const IssueStore::RevisionRef next = m_ctx.issues->nextCycleContext(planId);
+    if (const Issue* issue = next.isEmpty() ? nullptr : m_ctx.issues->find(next.issueId)) {
+        const QString what = issue->isImported() ? tr("GREQ %1").arg(issue->requirement.data.id) : issue->id;
+        setup.context = tr("%1 · revisión %2").arg(what).arg(next.revision);
+        setup.environment = next.phase;
+        setup.phases = true;
+        setup.environments = m_ctx.issues->phasesOf(*issue);
+        // Una revisión abierta que ya tiene ciclos es de su fase: otra fase pide cerrarla antes.
+        if (const IssueRevision* open = issue->currentRevision();
+            open && !IssueStore::cyclesOfRevision(*issue, *m_ctx.history, open->number).isEmpty())
+            for (const QString& phase : setup.environments)
+                if (phase.compare(next.phase, Qt::CaseInsensitive) != 0)
+                    setup.blocked.insert(phase, tr("La revisión %1 ya tiene ciclos en %2: para probar en %3, ciérrala antes desde el issue.")
+                                                    .arg(open->number)
+                                                    .arg(next.phase, phase));
+        return setup;
+    }
+    // Un ciclo suelto: los ambientes de siempre y las fases del proyecto, con el último usado propuesto.
+    setup.environment = m_ctx.history->lastEnvironment();
+    setup.environments = BugReport::environments();
+    for (const QString& phase : m_ctx.issues->phases())
+        if (!setup.environments.contains(phase, Qt::CaseInsensitive)) setup.environments << phase;
+    return setup;
 }
 
 void MainWindow::askCycleEnvironment(const QString& planId, const QString& planName) {
     // El ambiente se pregunta al arrancar porque es de este ciclo, no del plan: el mismo plan se prueba
-    // en QA y luego en producción, y cada ejecución tiene que decir de dónde salieron sus resultados.
-    auto* dialog = new CycleStartDialog(planName, cycleContext(planId), m_ctx.history->lastEnvironment(), QString(), this);
+    // en QA y luego en PRE, y cada ejecución tiene que decir de dónde salieron sus resultados.
+    auto* dialog = new CycleStartDialog(cycleSetup(planId, planName), this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, planId, dialog]() { beginPlanRun(planId, dialog->environment()); });
     dialog->open();
@@ -408,15 +429,20 @@ void MainWindow::continueCycleRun(const QString& planRunId) {
         showToast(tr("Ese ciclo no dejó ningún caso fallado ni bloqueado que continuar"), theme::Amber);
         return;
     }
-    // El ambiente de partida es el de aquel ciclo: lo normal es continuar donde se estaba probando.
-    const QString environment = report.plan.environment.trimmed().isEmpty() ? m_ctx.history->lastEnvironment()
-                                                                            : report.plan.environment.trimmed();
-    auto* dialog = new CycleStartDialog(report.plan.name, cycleContext(report.plan.planId), environment,
-                                        tr("Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o "
-                                           "bloqueado(s), cada uno desde el paso que se rompió.")
-                                            .arg(planRunId)
-                                            .arg(report.brokenCaseIds().size()),
-                                        this);
+    CycleStartDialog::Setup setup = cycleSetup(report.plan.planId, report.plan.name);
+    // Continuar es seguir donde se estaba probando: en el ambiente de aquel ciclo. El de un issue no se
+    // cambia (es la fase de su ronda); uno suelto se puede cambiar.
+    if (!report.plan.environment.trimmed().isEmpty()) setup.environment = report.plan.environment.trimmed();
+    if (setup.phases) {
+        setup.phases = false;
+        setup.fixedEnvironment = true;
+        setup.blocked.clear();
+    }
+    setup.continuation = tr("Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o "
+                            "bloqueado(s), cada uno desde el paso que se rompió.")
+                             .arg(planRunId)
+                             .arg(report.brokenCaseIds().size());
+    auto* dialog = new CycleStartDialog(setup, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, planRunId, dialog]() { beginContinuation(planRunId, dialog->environment()); });
     dialog->open();

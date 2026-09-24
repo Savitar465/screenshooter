@@ -382,11 +382,16 @@ void HistoryView::renderPlan(const PlanReport& report) {
             connect(updateBtn, &QPushButton::clicked, this, [this, report]() { updateInZephyr(report); });
             ah->addWidget(updateBtn);
         }
-        auto* zephyrBtn = ui::button(plan.isPublished() ? tr("Publicar como ciclo nuevo") : tr("Publicar en Zephyr"), plan.isPublished() ? "outline" : "primary");
-        zephyrBtn->setObjectName(QStringLiteral("publishZephyr"));
-        zephyrBtn->setToolTip(tr("Crea el ciclo en Zephyr con estas ejecuciones, el veredicto de cada paso y sus evidencias"));
-        connect(zephyrBtn, &QPushButton::clicked, this, [this, report]() { publishToZephyr(report); });
-        ah->addWidget(zephyrBtn);
+        // El ciclo de un issue va siempre al de su fase: no hay «ciclo nuevo» que ofrecer.
+        if (!plan.isPublished() || !m_publish->sharesPhaseCycle(report)) {
+            auto* zephyrBtn = ui::button(plan.isPublished() ? tr("Publicar como ciclo nuevo") : tr("Publicar en Zephyr"), plan.isPublished() ? "outline" : "primary");
+            zephyrBtn->setObjectName(QStringLiteral("publishZephyr"));
+            zephyrBtn->setToolTip(m_publish->sharesPhaseCycle(report)
+                                      ? tr("Publica estas ejecuciones en el ciclo «%1» de Zephyr, el de su fase").arg(m_publish->cycleName(report))
+                                      : tr("Crea el ciclo en Zephyr con estas ejecuciones, el veredicto de cada paso y sus evidencias"));
+            connect(zephyrBtn, &QPushButton::clicked, this, [this, report]() { publishToZephyr(report); });
+            ah->addWidget(zephyrBtn);
+        }
     }
     // El ciclo en curso no se elimina: la ejecución sigue escribiendo en él. Un ciclo sin terminar
     // que no es el actual quedó a medias (la sesión se perdió) y sí puede irse.

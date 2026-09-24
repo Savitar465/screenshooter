@@ -2,6 +2,7 @@
 
 #include "core/models/Requirement.h"
 #include "presentation/Screen.h"
+#include "presentation/views/CycleStartDialog.h"
 
 #include <QMainWindow>
 #include <QList>
@@ -127,9 +128,10 @@ private:
     QString screenLabel(Screen s) const;
     /// Issue que se prueba con ese ciclo de plan; vacío si el plan no prueba ningún requerimiento.
     QString issueOfPlanRun(const QString& planRunId) const;
-    /// A qué requerimiento y a qué ronda va a pertenecer un ciclo de ese plan («GREQ 2026997 · revisión 2»);
-    /// vacío si el plan no prueba ningún issue.
-    QString cycleContext(const QString& planId) const;
+    /// Lo que pregunta el diálogo de arranque de un ciclo de ese plan: a qué requerimiento, ronda y fase
+    /// va a pertenecer («GREQ 2026997 · revisión 2 · PRE», con la fase como ambiente fijo) o, si el plan no
+    /// prueba ningún issue, los ambientes entre los que elegir.
+    CycleStartDialog::Setup cycleSetup(const QString& planId, const QString& planName) const;
     /// Pregunta en qué ambiente se va a probar y, si se acepta, arranca el ciclo (`beginPlanRun`).
     void askCycleEnvironment(const QString& planId, const QString& planName);
     /// Arranca el ciclo del plan en ese ambiente y lleva a la ejecución.

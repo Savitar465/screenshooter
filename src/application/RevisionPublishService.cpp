@@ -7,6 +7,7 @@
 #include "application/RunHistoryStore.h"
 #include "application/TestPublishService.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
@@ -92,8 +93,31 @@ QString RevisionPublishService::alreadyRegistered(const Issue& issue, int revisi
     return {};
 }
 
+QString RevisionPublishService::phaseFor(const QString& issueId, int revision) const {
+    const Issue* issue = m_issues.find(issueId);
+    const IssueRevision* round = issue ? issue->revision(revision) : nullptr;
+    return round ? phaseOf(*round, m_issues.phasesOf(*issue)) : QString();
+}
+
+bool RevisionPublishService::closesRequirement(const QString& issueId, QaOutcome outcome, int revision) const {
+    const Issue* issue = m_issues.find(issueId);
+    const IssueRevision* round = issue ? issue->revision(revision) : nullptr;
+    if (!round) return false;
+    IssueRevision closing = *round;
+    closing.outcome = outcome;
+    closing.closedAt = closing.closedAt.isValid() ? closing.closedAt : QDateTime::currentDateTime();
+    return qaflow::closesRequirement(closing, m_issues.phasesOf(*issue));
+}
+
 QString RevisionPublishService::requirementProblem(const QString& issueId, QaOutcome outcome,
                                                    const QString& documentPath, int revision) const {
+    // Una fase aprobada que no es la última no se registra: GESREQ sólo sabe del OK final (y de las
+    // rondas observadas de cualquier fase).
+    if (outcome == QaOutcome::Conforme && !closesRequirement(issueId, outcome, revision)) {
+        const QString phase = phaseFor(issueId, revision);
+        return tr("Aprobada en %1: GESREQ no se entera hasta que la última fase (%2) quede conforme")
+                .arg(phase, m_issues.phasesOf(*m_issues.find(issueId)).last());
+    }
     if (!m_requirements) return {};
     return m_requirements->registrationProblem(registrationFor(issueId, outcome, documentPath, revision));
 }
@@ -103,8 +127,12 @@ QList<RevisionPublishService::Destination> RevisionPublishService::pendingFor(co
     const Issue* issue = m_issues.find(issueId);
     const IssueRevision* round = issue ? issue->revision(revision) : nullptr;
     for (const auto& step : stepsFor(issueId, revision)) {
-        // Cerrar el issue sólo le falta a una ronda que terminó conforme.
-        if (step.destination == Destination::Close && (!round || round->outcome != QaOutcome::Conforme)) continue;
+        // Cerrar el issue sólo le falta a la ronda que cerró el requerimiento (conforme en la última fase),
+        // y registrarla en GESREQ no le falta a una fase aprobada que no es la última.
+        if (step.destination == Destination::Close && (!round || !qaflow::closesRequirement(*round, m_issues.phasesOf(*issue)))) continue;
+        if (step.destination == Destination::Requirement && round && round->outcome == QaOutcome::Conforme &&
+            !qaflow::closesRequirement(*round, m_issues.phasesOf(*issue)))
+            continue;
         if (!step.done && step.available) pending << step.destination;
     }
     return pending;
@@ -123,7 +151,10 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
         if (cycle.plan.isPublished()) ++published;
         executed += cycle.executed;
     }
-    zephyr.target = tr("Zephyr · %1 ciclo(s) de los planes del issue").arg(cycles.size());
+    // Los ciclos de plan de una fase van al ciclo de Zephyr de esa fase: se nombra ése.
+    zephyr.target = !cycles.isEmpty() && m_zephyr && m_zephyr->sharesPhaseCycle(cycles.first())
+                        ? tr("Zephyr · ciclo «%1»").arg(m_zephyr->cycleName(cycles.first()))
+                        : tr("Zephyr · %1 ciclo(s) de los planes del issue").arg(cycles.size());
     zephyr.done = !cycles.isEmpty() && published == cycles.size();
     zephyr.available = m_zephyr && m_zephyr->enabled() && executed > 0;
     if (!m_zephyr || !m_zephyr->enabled()) zephyr.blocked = tr("Activa Zephyr en Ajustes para publicar los ciclos");
@@ -201,7 +232,8 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
         close.blocked = issue->isPublished() ? tr("El gestor configurado no permite cerrar issues desde QAflow")
                                              : tr("El issue no está en el gestor");
     close.detail = close.done ? tr("Ya está cerrado en el gestor (%1)").arg(issue->publication.status)
-                              : tr("Sólo si el resultado es Conforme y lo demás se publica bien");
+                              : tr("Sólo si la fase %1 (la última) queda Conforme y lo demás se publica bien")
+                                    .arg(m_issues.phasesOf(*issue).last());
     if (close.done) close.state = issue->publication.status;
 
     return {zephyr, tracker, requirement, close};
@@ -220,8 +252,56 @@ void RevisionPublishService::publish(const QString& issueId, const Options& opti
     run->progress = std::move(progress);
     run->done = std::move(done);
     run->result.ok = true;   // lo baja el primer paso que no salga
-    if (options.zephyr) run->cycles = cyclesFor(issueId, run->revision);
+    if (options.zephyr) {
+        // Del más antiguo al más reciente: los ciclos de una fase van todos al mismo ciclo de Zephyr, y
+        // cada uno actualiza las ejecuciones de sus casos. El último en publicarse es el que queda.
+        run->cycles = cyclesFor(issueId, run->revision);
+        std::sort(run->cycles.begin(), run->cycles.end(),
+                  [](const PlanReport& a, const PlanReport& b) {
+                      // Dos arrancados en el mismo instante: el de id menor se creó antes.
+                      return a.plan.startedAt != b.plan.startedAt ? a.plan.startedAt < b.plan.startedAt : a.plan.id < b.plan.id;
+                  });
+    }
     runZephyr(run);
+}
+
+bool RevisionPublishService::canPrepareTests() const { return m_zephyr && m_zephyr->enabled(); }
+
+QStringList RevisionPublishService::casesWithoutTest(const QString& issueId, const QStringList& caseIds) const {
+    return m_zephyr ? m_zephyr->casesWithoutTest(issueId, caseIds) : caseIds;
+}
+
+void RevisionPublishService::prepareTests(const QString& issueId, const QStringList& caseIds,
+                                          std::function<void(const TestsPrepared&)> done) {
+    if (!canPrepareTests()) {
+        TestsPrepared refused;
+        refused.error = tr("Activa Zephyr en Ajustes para crear los Tests");
+        done(refused);
+        return;
+    }
+    m_zephyr->createTests(issueId, caseIds, [this, issueId, done](const PublishResult& r) {
+        TestsPrepared out;
+        out.created = r.testsCreated;
+        out.problems = r.skipped + r.warnings;
+        if (!r.ok) {
+            out.error = r.error;
+            done(out);
+            return;
+        }
+        const Issue* issue = m_issues.find(issueId);
+        // Enlazados al issue del requerimiento, se ven desde él (enlazar dos veces no duplica nada).
+        if (!issue || !m_tracker || !m_tracker->canLinkIssues(*issue) || issue->zephyr.tests.isEmpty()) {
+            out.ok = true;
+            done(out);
+            return;
+        }
+        m_tracker->linkToIssue(issueId, issue->zephyr.tests.values(), [out, done](const IssuePublishService::LinkResult& links) mutable {
+            out.ok = true;
+            out.linked = links.linked;
+            out.problems += links.failed;
+            done(out);
+        });
+    });
 }
 
 void RevisionPublishService::finish(const std::shared_ptr<Run>& run, const Outcome& outcome) {
@@ -243,7 +323,7 @@ void RevisionPublishService::runZephyr(const std::shared_ptr<Run>& run) {
     }
 
     const PlanReport cycle = run->cycles.takeFirst();
-    const bool update = cycle.plan.isPublished();
+    const bool update = cycle.plan.isPublished() || m_zephyr->sharesPhaseCycle(cycle);
     auto next = [this, run, cycle, update](const PublishResult& r) {
         if (r.ok) {
             ++run->cyclesDone;
@@ -322,8 +402,12 @@ void RevisionPublishService::linkEvidence(const std::shared_ptr<Run>& run, const
     if (issue)
         for (const auto& bug : m_records.revisionBugs(*issue, run->revision))
             if (!bug.key.trimmed().isEmpty()) bugs << bug.key.trimmed();
-    // Los Tests salen de los ciclos ya publicados: cada ejecución guarda el suyo al pasar por Zephyr.
+    // Los Tests: los del requerimiento (uno por caso, el mismo en todas sus fases) y, de los ciclos
+    // publicados antes de que los tuviera, el que guardó cada ejecución.
     QStringList tests;
+    if (issue)
+        for (const auto& key : issue->zephyr.tests)
+            if (!key.trimmed().isEmpty() && !tests.contains(key.trimmed())) tests << key.trimmed();
     for (const auto& cycle : cyclesFor(run->issueId, run->revision))
         for (const auto& row : cycle.rows)
             if (!row.testKey.trimmed().isEmpty() && !tests.contains(row.testKey.trimmed())) tests << row.testKey.trimmed();
@@ -346,14 +430,19 @@ void RevisionPublishService::linkEvidence(const std::shared_ptr<Run>& run, const
 void RevisionPublishService::runRequirement(const std::shared_ptr<Run>& run) {
     const Issue* issue = m_issues.find(run->issueId);
     const QString registeredAlready = issue ? alreadyRegistered(*issue, run->revision) : QString();
+    // Una fase aprobada que no es la última no se registra: el OK es sólo el del final.
+    const bool approvesPhase = run->options.outcome == QaOutcome::Conforme &&
+                               !closesRequirement(run->issueId, run->options.outcome, run->revision);
     const bool possible = run->options.requirement && issue && issue->isImported() && m_requirements &&
-                          m_requirements->canRegisterResult() && registeredAlready.isEmpty();
+                          m_requirements->canRegisterResult() && registeredAlready.isEmpty() && !approvesPhase;
     if (!possible) {
         if (run->options.requirement) {
             Outcome outcome;
             outcome.destination = Destination::Requirement;
             // Registrar dos veces la misma ronda cambiaría otra vez el estado del requerimiento.
-            outcome.message = registeredAlready.isEmpty() ? tr("No se puede registrar el resultado en GESREQ") : registeredAlready;
+            outcome.message = !registeredAlready.isEmpty() ? registeredAlready
+                              : approvesPhase ? requirementProblem(run->issueId, run->options.outcome, QString(), run->revision)
+                                              : tr("No se puede registrar el resultado en GESREQ");
             finish(run, outcome);
         }
         runClose(run);
@@ -404,8 +493,9 @@ void RevisionPublishService::runRequirement(const std::shared_ptr<Run>& run) {
 
 void RevisionPublishService::runClose(const std::shared_ptr<Run>& run) {
     const auto end = [run]() { if (run->done) run->done(run->result); };
-    // Observado, el requerimiento vuelve a desarrollo: su issue sigue abierto para la ronda siguiente.
-    if (!run->options.close || run->options.outcome != QaOutcome::Conforme) { end(); return; }
+    // Observado, el requerimiento vuelve a desarrollo; aprobada una fase que no es la última, queda la
+    // siguiente: en los dos casos su issue sigue abierto.
+    if (!run->options.close || !closesRequirement(run->issueId, run->options.outcome, run->revision)) { end(); return; }
     Outcome outcome;
     outcome.destination = Destination::Close;
     const Issue* issue = m_issues.find(run->issueId);

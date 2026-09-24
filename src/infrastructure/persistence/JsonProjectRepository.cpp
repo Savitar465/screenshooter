@@ -49,8 +49,13 @@ std::optional<ProjectCollection> JsonProjectRepository::load() {
         if (!validId(id) || name.isEmpty() || ids.contains(id)) return std::nullopt;
         // El sistema de GESREQ es opcional: los catálogos anteriores no lo tienen.
         if (p.contains("requirementSystem") && !p["requirementSystem"].isString()) return std::nullopt;
+        // Las fases también: sin ellas, las de por defecto.
+        if (p.contains("phases") && !p["phases"].isArray()) return std::nullopt;
         ids.insert(id);
-        collection.projects.append(Project{id, name, p["requirementSystem"].toString().simplified()});
+        QStringList phases;
+        for (const auto& phase : p["phases"].toArray())
+            if (phase.isString() && !phase.toString().trimmed().isEmpty()) phases << phase.toString().trimmed();
+        collection.projects.append(Project{id, name, p["requirementSystem"].toString().simplified(), phases});
     }
     collection.activeId = object["activeId"].toString();
     if (collection.projects.isEmpty() || !ids.contains(collection.activeId)) return std::nullopt;
@@ -78,6 +83,7 @@ bool JsonProjectRepository::save(const ProjectCollection& collection) {
     for (const auto& p : collection.projects) {
         QJsonObject item{{"id", p.id}, {"name", p.name}};
         if (!p.requirementSystem.isEmpty()) item.insert(QStringLiteral("requirementSystem"), p.requirementSystem);
+        if (!p.phases.isEmpty()) item.insert(QStringLiteral("phases"), QJsonArray::fromStringList(p.phases));
         projects.append(item);
     }
     const QByteArray bytes = QJsonDocument(QJsonObject{{"version", 1}, {"activeId", collection.activeId}, {"projects", projects}, {"suites", QJsonArray::fromStringList(collection.suites)}}).toJson();

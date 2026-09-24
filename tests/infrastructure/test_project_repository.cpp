@@ -91,6 +91,29 @@ private slots:
         QVERIFY(restored.setRequirementSystem(main, QStringLiteral("SUMA TRANSITO")));   // liberado, ya puede usarlo otro
     }
 
+    // Las fases del control de calidad son del proyecto: sin decir nada, QA y PRE; las que se escriban se
+    // limpian y se guardan en el catálogo.
+    void eachProjectKeepsItsQaPhases() {
+        QTemporaryDir dir;
+        auto repo = std::make_shared<JsonProjectRepository>(dir.path());
+        ProjectStore projects(repo);
+        QVERIFY(projects.load());
+        const QString main = projects.activeId();
+        const QString transit = projects.create(QStringLiteral("Tránsitos"));
+        QCOMPARE(projects.phasesOf(main), (QStringList{QStringLiteral("QA"), QStringLiteral("PRE")}));
+
+        QVERIFY(projects.setPhases(transit, {QStringLiteral(" QA "), QString(), QStringLiteral("UAT"), QStringLiteral("qa"), QStringLiteral("PRE")}));
+        QCOMPARE(projects.phasesOf(transit), (QStringList{QStringLiteral("QA"), QStringLiteral("UAT"), QStringLiteral("PRE")}));
+
+        ProjectStore restored(repo);
+        QVERIFY(restored.load());
+        QCOMPARE(restored.phasesOf(transit), (QStringList{QStringLiteral("QA"), QStringLiteral("UAT"), QStringLiteral("PRE")}));
+        QCOMPARE(restored.phasesOf(main), (QStringList{QStringLiteral("QA"), QStringLiteral("PRE")}));
+        // Volver a las de por defecto no deja nada escrito: el catálogo sigue diciendo «las de siempre».
+        QVERIFY(restored.setPhases(transit, {QStringLiteral("QA"), QStringLiteral("PRE")}));
+        QVERIFY(restored.find(transit)->phases.isEmpty());
+    }
+
     void invalidCatalogIsNotOverwritten() {
         QTemporaryDir dir;
         QFile file(QDir(dir.path()).filePath(QStringLiteral("projects.json")));

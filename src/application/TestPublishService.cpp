@@ -39,10 +39,83 @@ bool TestPublishService::enabled() const {
 }
 
 QStringList TestPublishService::casesNeedingTest(const PlanReport& report) const {
+    const Issue* issue = issueOf(report);
     QStringList out;
-    for (const auto& row : report.rows)
-        if (row.executed && row.run.testKey.trimmed().isEmpty()) out << row.caseId;
+    for (const auto& row : report.rows) {
+        if (!row.executed) continue;
+        const QString key = issue ? issue->zephyr.tests.value(row.caseId, row.run.testKey) : row.run.testKey;
+        if (key.trimmed().isEmpty()) out << row.caseId;
+    }
     return out;
+}
+
+const Issue* TestPublishService::issueOf(const PlanReport& report) const {
+    return m_issues && !report.plan.issueId.isEmpty() ? m_issues->find(report.plan.issueId) : nullptr;
+}
+
+QString TestPublishService::phaseOf(const PlanReport& report) const {
+    if (!report.plan.environment.trimmed().isEmpty()) return report.plan.environment.trimmed();
+    const Issue* issue = issueOf(report);
+    if (!issue) return {};
+    const QStringList phases = m_issues->phasesOf(*issue);
+    if (const IssueRevision* round = report.plan.revision > 0 ? issue->revision(report.plan.revision) : nullptr)
+        return qaflow::phaseOf(*round, phases);
+    return phases.first();
+}
+
+QString TestPublishService::phaseCycleName(const Issue& issue, const QString& phase) const {
+    // El requerimiento y la fase: es lo que se busca en Zephyr, y lo único que distingue un ciclo de
+    // fase de otro. Un issue creado a mano no tiene número de GESREQ: va con su id y su título.
+    const QString name = issue.isImported() ? tr("GREQ %1 · %2").arg(issue.requirement.data.id, phase.trimmed())
+                                            : tr("%1 · %2 · %3").arg(issue.id, elideTitle(issue.title, 120), phase.trimmed());
+    return elideTitle(name, PublishRequest::kMaxCycleField);
+}
+
+QString TestPublishService::testContextOf(const Issue& issue) const {
+    return issue.isImported() ? tr("GREQ %1 · %2").arg(issue.requirement.data.id, elideTitle(issue.title, 80))
+                              : tr("%1 · %2").arg(issue.id, elideTitle(issue.title, 80));
+}
+
+QStringList TestPublishService::casesWithoutTest(const QString& issueId, const QStringList& caseIds) const {
+    const Issue* issue = m_issues ? m_issues->find(issueId) : nullptr;
+    QStringList out;
+    for (const auto& caseId : caseIds)
+        if (!issue || issue->zephyr.tests.value(caseId).trimmed().isEmpty()) out << caseId;
+    return out;
+}
+
+void TestPublishService::createTests(const QString& issueId, const QStringList& caseIds, std::function<void(const PublishResult&)> done) {
+    const Issue* issue = m_issues ? m_issues->find(issueId) : nullptr;
+    PublishResult refused;
+    if (!enabled()) refused.error = tr("Activa Zephyr en Ajustes para crear los Tests");
+    else if (!issue) refused.error = tr("El issue ya no existe");
+    if (!refused.error.isEmpty()) { done(refused); return; }
+    PublishRequest req;
+    req.versionName = m_settings.tracker().zephyrVersion;
+    req.testContext = testContextOf(*issue);
+    for (const auto& caseId : casesWithoutTest(issueId, caseIds)) {
+        const TestCase* c = m_cases.find(caseId);
+        if (!c) continue;
+        PublishCase pc;
+        pc.caseId = caseId;
+        pc.title = c->title;
+        pc.preconditions = c->preconditions;
+        pc.design = c->steps;
+        req.cases.append(pc);
+    }
+    if (req.cases.isEmpty()) {
+        PublishResult nothing;
+        nothing.ok = true;
+        done(nothing);
+        return;
+    }
+    m_zephyr->createTests(m_settings.tracker(), req, [this, issueId, done = std::move(done)](const PublishResult& r) {
+        // Lo creado se guarda aunque otros no salieran: ya existe en Jira y no hay que duplicarlo.
+        QHash<QString, QString> created;
+        for (auto it = r.createdTests.constBegin(); it != r.createdTests.constEnd(); ++it) created.insert(it.key(), it.value());
+        if (m_issues) m_issues->noteZephyrTests(issueId, created);
+        done(r);
+    });
 }
 
 int TestPublishService::continuationDepth(const PlanRun& plan) const {
@@ -59,6 +132,15 @@ int TestPublishService::continuationDepth(const PlanRun& plan) const {
 }
 
 QString TestPublishService::cycleName(const PlanReport& report) const {
+    if (const Issue* issue = issueOf(report)) {
+        const QString phase = phaseOf(report);
+        const QString stored = issue->zephyr.cycleNameOf(phase);
+        return stored.isEmpty() ? phaseCycleName(*issue, phase) : stored;
+    }
+    return ownCycleName(report);
+}
+
+QString TestPublishService::ownCycleName(const PlanReport& report) const {
     const PlanRun& plan = report.plan;
     QStringList parts;
     int planPart = -1;
@@ -84,8 +166,13 @@ QString TestPublishService::cycleName(const PlanReport& report) const {
 
 PublishRequest TestPublishService::requestFor(const PlanReport& report, bool update) const {
     PublishRequest req;
-    if (update) req.cycleId = report.plan.zephyrCycleId.trimmed();
+    const Issue* owner = issueOf(report);
+    // El ciclo de un issue va siempre al de su fase (si ya existe, se actualiza); uno suelto, al suyo
+    // sólo cuando se actualiza.
+    if (owner) req.cycleId = owner->zephyr.cycleOf(phaseOf(report));
+    else if (update) req.cycleId = report.plan.zephyrCycleId.trimmed();
     req.cycleName = cycleName(report);
+    if (owner) req.testContext = testContextOf(*owner);
     req.versionName = m_settings.tracker().zephyrVersion;
     req.environment = report.plan.environment.trimmed();
     req.startedAt = report.plan.startedAt;
@@ -108,8 +195,9 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report, bool upd
         PublishCase pc;
         pc.caseId = row.caseId;
         pc.runId = row.run.id;
-        // El Test es de la ejecución: si este informe ya se publicó lo tiene; si no, se crea.
-        pc.testKey = row.run.testKey.trimmed();
+        // El Test de un caso del issue es el del issue (el mismo en todas sus fases); a falta de él, el
+        // que ya tenga la ejecución. En un ciclo suelto, el de la ejecución. Sin ninguno, se crea.
+        pc.testKey = (owner ? owner->zephyr.tests.value(row.caseId, row.run.testKey) : row.run.testKey).trimmed();
         pc.title = row.title;
         pc.verdict = row.run.verdict;
         pc.steps = row.run.steps;
@@ -134,7 +222,14 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report, bool upd
 
 QString TestPublishService::cycleUrl(const PlanReport& report) const {
     if (!report.plan.isPublished()) return {};
-    return m_settings.tracker().zephyrCycleUrl(requestFor(report).cycleName);
+    // Publicado en el ciclo de su fase, se busca por el nombre de ése; publicado antes de que existieran
+    // (en un ciclo propio), por el nombre que tenía entonces.
+    if (const Issue* issue = issueOf(report)) {
+        const QString phase = phaseOf(report);
+        if (!issue->zephyr.cycleOf(phase).isEmpty() && issue->zephyr.cycleOf(phase) == report.plan.zephyrCycleId)
+            return m_settings.tracker().zephyrCycleUrl(cycleName(report));
+    }
+    return m_settings.tracker().zephyrCycleUrl(ownCycleName(report));
 }
 
 void TestPublishService::testConnection(std::function<void(const ConnectionResult&)> done) {
@@ -145,7 +240,7 @@ void TestPublishService::testConnection(std::function<void(const ConnectionResul
 void TestPublishService::publish(const PlanReport& report, std::function<void(const PublishResult&)> done) { send(report, false, std::move(done)); }
 
 void TestPublishService::update(const PlanReport& report, std::function<void(const PublishResult&)> done) {
-    if (!report.plan.isPublished()) {
+    if (!report.plan.isPublished() && !sharesPhaseCycle(report)) {
         PublishResult r;
         r.error = tr("Este informe no está publicado en Zephyr: publícalo primero");
         done(r);
@@ -161,20 +256,40 @@ void TestPublishService::send(const PlanReport& report, bool update, std::functi
         done(r);
         return;
     }
-    // Qué ejecución publica cada caso, para devolverle el Test que se le cree.
+    const PublishRequest request = requestFor(report, update);
+    const Issue* owner = issueOf(report);
+    const QString issueId = owner ? owner->id : QString();
+    const QString phase = owner ? phaseOf(report) : QString();
+    // Qué ejecución publica cada caso, para devolverle su Test.
     QHash<QString, QString> runOfCase;
     for (const auto& row : report.rows) if (row.executed) runOfCase.insert(row.caseId, row.run.id);
-    m_zephyr->publish(m_settings.tracker(), requestFor(report, update), [this, planRunId = report.plan.id, runOfCase, done = std::move(done)](const PublishResult& r) {
-        // Los Tests creados son de las ejecuciones publicadas, y se guardan aunque el ciclo haya
-        // fallado a medias: ya existen en Jira y un reintento debe reutilizarlos, no duplicarlos.
+    m_zephyr->publish(m_settings.tracker(), request, [this, report, update, request, issueId, phase, runOfCase,
+                                                      done = std::move(done)](const PublishResult& r) mutable {
+        // El ciclo de la fase se borró en Zephyr: se olvida y se publica en uno nuevo (una vez: sin
+        // ciclo guardado, la siguiente petición ya lo crea).
+        if (r.cycleMissing && !issueId.isEmpty() && !request.cycleId.isEmpty()) {
+            m_issues->forgetZephyrCycle(issueId, phase);
+            send(report, update, std::move(done));
+            return;
+        }
+        // Los Tests con los que se publicó cada caso —los que ya tenía y los creados ahora— se guardan
+        // aunque el ciclo haya fallado a medias: ya existen en Jira y un reintento debe reutilizarlos.
+        QHash<QString, QString> testOfCase;
+        for (const auto& c : request.cases) if (!c.testKey.trimmed().isEmpty()) testOfCase.insert(c.caseId, c.testKey.trimmed());
+        for (auto it = r.createdTests.constBegin(); it != r.createdTests.constEnd(); ++it) testOfCase.insert(it.key(), it.value());
+        if (!issueId.isEmpty()) m_issues->noteZephyrTests(issueId, testOfCase);
         QHash<QString, QString> byRun;
-        for (auto it = r.createdTests.constBegin(); it != r.createdTests.constEnd(); ++it) {
+        for (auto it = testOfCase.constBegin(); it != testOfCase.constEnd(); ++it) {
             const QString runId = runOfCase.value(it.key());
             if (!runId.isEmpty() && !it.value().isEmpty()) byRun.insert(runId, it.value());
         }
         if (!byRun.isEmpty()) m_history.assignTestKeys(byRun);
-        // El ciclo de plan se queda con el de Zephyr en el que acabaron sus resultados.
-        if (r.ok) m_history.markPublished(planRunId, r.cycleId);
+        if (r.ok) {
+            // El issue recuerda el ciclo de su fase, y el ciclo de plan, el de Zephyr en el que acabaron
+            // sus resultados.
+            if (!issueId.isEmpty()) m_issues->noteZephyrCycle(issueId, phase, r.cycleId, request.cycleName);
+            m_history.markPublished(report.plan.id, r.cycleId);
+        }
         done(r);
     });
 }

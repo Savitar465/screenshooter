@@ -27,8 +27,10 @@ class TestPublishService;
 ///     acta adjunta. El issue ya está en el gestor desde que se importó el requerimiento, así que
 ///     aquí sólo se comenta.
 ///  3. **GESREQ**: el registro del resultado en el requerimiento, con su acta.
-///  4. **Cerrar el issue del gestor**: sólo cuando la revisión se publica como **Conforme** y todo lo
-///     elegido antes salió bien —el requerimiento pasó el control y no queda nada que hacer en él—.
+///  4. **Cerrar el issue del gestor**: sólo cuando la revisión se publica como **Conforme en la última
+///     fase** y todo lo elegido antes salió bien —el requerimiento pasó el control y no queda nada que
+///     hacer en él—. Conforme en una fase anterior (QA) sólo la aprueba: ni se registra en GESREQ ni se
+///     cierra nada, y sigue la fase siguiente.
 ///
 /// Nada se manda solo: quien publica elige los pasos y ve antes qué va a cada sitio. Los pasos se
 /// ejecutan en ese orden y uno que falle no impide los demás (se informa de cada uno). Un envío
@@ -76,15 +78,38 @@ public:
     /// acta, para avisar antes de enviar nada.
     QString requirementProblem(const QString& issueId, QaOutcome outcome, const QString& documentPath,
                                int revision = 0) const;
+    /// Fase de esa ronda ("QA", "PRE"); vacía si el issue no tiene ninguna.
+    QString phaseFor(const QString& issueId, int revision = 0) const;
+    /// ¿Publicar esa ronda con ese resultado cierra el control del requerimiento? Sólo Conforme en la
+    /// última fase: es lo único que registra el «OK» en GESREQ y cierra el issue del gestor. Conforme en
+    /// otra fase la aprueba y no registra nada.
+    bool closesRequirement(const QString& issueId, QaOutcome outcome, int revision = 0) const;
     /// Lo que le falta a esa ronda para estar publicada del todo, para enseñarlo en su fila del
     /// historial: los destinos que todavía no están hechos y se podrían hacer.
     QList<Destination> pendingFor(const QString& issueId, int revision) const;
+
+    // ---- Tests del requerimiento en Zephyr -------------------------------------------------------
+    /// ¿Se pueden crear ya los Tests de los casos del issue? (Zephyr activado.)
+    bool canPrepareTests() const;
+    /// De esos casos del issue, los que todavía no tienen Test en Zephyr.
+    QStringList casesWithoutTest(const QString& issueId, const QStringList& caseIds) const;
+    struct TestsPrepared {
+        bool ok = false;
+        int created = 0;          // Tests creados ahora
+        int linked = 0;           // enlaces nuevos al issue del gestor
+        QStringList problems;     // lo que no se pudo crear o enlazar, con su motivo
+        QString error;            // lo que impidió empezar
+    };
+    /// Lo primero del control de calidad en Zephyr: crea los Tests que les faltan a esos casos del issue
+    /// (uno por caso, el que usarán todos sus ciclos) y los enlaza a su issue del gestor, para que desde
+    /// el requerimiento se vea con qué se va a probar. Nada se crea solo: lo pide quien prepara el plan.
+    void prepareTests(const QString& issueId, const QStringList& caseIds, std::function<void(const TestsPrepared&)> done);
 
     struct Options {
         bool zephyr = true;
         bool tracker = true;
         bool requirement = true;
-        bool close = true;        // cerrar el issue del gestor; sólo se hace con el resultado Conforme
+        bool close = true;        // cerrar el issue del gestor; sólo con Conforme en la última fase
         QaOutcome outcome = QaOutcome::Conforme;
         QString comment;          // el resumen que va al gestor y a GESREQ
         QString documentPath;     // acta a adjuntar; vacía = sin adjunto

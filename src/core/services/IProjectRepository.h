@@ -12,6 +12,9 @@ struct Project {
     /// Sistema de GESREQ ("SUMA TRANSITO") cuyos requerimientos se trabajan en este proyecto; vacío si
     /// ninguno. Un sistema sólo puede estar vinculado a un proyecto.
     QString requirementSystem;
+    /// Fases del control de calidad de sus requerimientos, en orden ("QA", "PRE"). Vacío = las de por
+    /// defecto (`defaultQaPhases()`); se resuelven con `normalizedQaPhases()`.
+    QStringList phases;
 };
 struct ProjectCollection {
     QString activeId;

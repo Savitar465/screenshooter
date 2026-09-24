@@ -7,6 +7,8 @@
 
 #include <QtTest>
 
+#include <algorithm>
+
 using namespace qaflow;
 
 namespace {
@@ -73,6 +75,129 @@ private slots:
         QVERIFY(issue.currentRevision() && issue.currentRevision()->number == 2);
         QVERIFY(issue.lastClosedRevision()->number == 1);           // la anterior sigue siendo la última cerrada
         QVERIFY(issue.lastOutcome() == QaOutcome::Observado);
+    }
+
+    // ---- Bugs verificados en un reintento --------------------------------------------------------
+    void aBugIsVerifiedWhenALaterRunPassesItsStep() {
+        const QDateTime found = QDateTime::currentDateTime().addDays(-1);
+        IssueLink bug;
+        bug.key = QStringLiteral("SHOP-1");
+        bug.caseId = QStringLiteral("TC-1");
+        bug.runId = QStringLiteral("R-1");
+        bug.step = 2;
+        bug.createdAt = found;
+
+        auto run = [](const QString& id, const QString& caseId, const QDateTime& at, QList<StepResult> results, bool inheritedFirst = false) {
+            RunRecord r;
+            r.id = id;
+            r.caseId = caseId;
+            r.startedAt = at;
+            r.finishedAt = at.addSecs(60);
+            for (const auto result : results) {
+                RunRecordStep step;
+                step.result = result;
+                r.steps << step;
+            }
+            if (inheritedFirst && !r.steps.isEmpty()) r.steps.first().inherited = true;
+            r.verdict = std::all_of(results.cbegin(), results.cend(), [](StepResult x) { return x == StepResult::Pass; })
+                            ? Verdict::Superado : Verdict::Fallido;
+            return r;
+        };
+        const RunRecord failing = run(QStringLiteral("R-1"), QStringLiteral("TC-1"), found.addSecs(-120), {StepResult::Pass, StepResult::Fail});
+        QVERIFY(!retestPassed(bug, {failing}));   // la ejecución en la que se encontró no cuenta
+
+        const RunRecord retest = run(QStringLiteral("R-2"), QStringLiteral("TC-1"), found.addSecs(3600), {StepResult::Pass, StepResult::Pass});
+        QVERIFY(retestPassed(bug, {failing, retest}));
+
+        // Otro caso, o un reintento que no llegó a su paso, no lo verifican.
+        QVERIFY(!retestPassed(bug, {run(QStringLiteral("R-3"), QStringLiteral("TC-2"), found.addSecs(3600), {StepResult::Pass, StepResult::Pass})}));
+        QVERIFY(!retestPassed(bug, {run(QStringLiteral("R-4"), QStringLiteral("TC-1"), found.addSecs(3600), {StepResult::Pass})}));
+
+        // Manda el último reintento: si volvió a fallar, no está corregido.
+        const RunRecord again = run(QStringLiteral("R-5"), QStringLiteral("TC-1"), found.addSecs(7200), {StepResult::Pass, StepResult::Fail});
+        QVERIFY(!retestPassed(bug, {failing, retest, again}));
+
+        // Un bug del caso entero pide el caso superado.
+        IssueLink wholeCase = bug;
+        wholeCase.step = 0;
+        QVERIFY(retestPassed(wholeCase, {retest}));
+        QVERIFY(!retestPassed(wholeCase, {again}));
+    }
+
+    void anInheritedStepDoesNotVerifyABug() {
+        IssueLink bug;
+        bug.caseId = QStringLiteral("TC-1");
+        bug.step = 1;
+        bug.createdAt = QDateTime::currentDateTime().addDays(-1);
+        RunRecord continued;
+        continued.id = QStringLiteral("R-2");
+        continued.caseId = QStringLiteral("TC-1");
+        continued.startedAt = QDateTime::currentDateTime();
+        RunRecordStep step;
+        step.result = StepResult::Pass;
+        step.inherited = true;   // viene de la ejecución que se continuaba: no se volvió a probar
+        continued.steps << step;
+        QVERIFY(!retestPassed(bug, {continued}));
+    }
+
+    // ---- Fases del control de calidad ------------------------------------------------------------
+    void phasesAreCleanedAndDefaultToQaThenPre() {
+        QCOMPARE(defaultQaPhases(), (QStringList{QStringLiteral("QA"), QStringLiteral("PRE")}));
+        QCOMPARE(normalizedQaPhases({}), defaultQaPhases());
+        QCOMPARE(normalizedQaPhases({QStringLiteral("  "), QString()}), defaultQaPhases());
+        QCOMPARE(normalizedQaPhases({QStringLiteral(" QA "), QStringLiteral("qa"), QStringLiteral("UAT"), QStringLiteral("PRE")}),
+                 (QStringList{QStringLiteral("QA"), QStringLiteral("UAT"), QStringLiteral("PRE")}));
+        const QStringList phases = defaultQaPhases();
+        QVERIFY(!isFinalPhase(QStringLiteral("QA"), phases));
+        QVERIFY(isFinalPhase(QStringLiteral("pre"), phases));
+        QVERIFY(isFinalPhase(QStringLiteral("Staging"), phases));   // una que ya no está: no hay a dónde avanzar
+    }
+
+    void theNextRoundStaysInItsPhaseUntilItIsApproved() {
+        const QStringList phases = defaultQaPhases();
+        Issue issue;
+        QCOMPARE(nextPhase(issue, phases), QStringLiteral("QA"));   // sin rondas: la primera
+
+        IssueRevision qa;
+        qa.number = 1;
+        qa.phase = QStringLiteral("QA");
+        qa.startedAt = QDateTime::currentDateTime();
+        issue.revisions << qa;
+        QCOMPARE(nextPhase(issue, phases), QStringLiteral("QA"));   // abierta: la misma
+
+        issue.revisions.last().closedAt = QDateTime::currentDateTime();
+        issue.revisions.last().outcome = QaOutcome::Observado;
+        QCOMPARE(nextPhase(issue, phases), QStringLiteral("QA"));   // observada: se vuelve a probar en QA
+        QVERIFY(!closesRequirement(issue.revisions.last(), phases));
+
+        issue.revisions.last().outcome = QaOutcome::Conforme;
+        QCOMPARE(nextPhase(issue, phases), QStringLiteral("PRE"));  // QA aprobada: toca PRE
+        QVERIFY(!closesRequirement(issue.revisions.last(), phases));
+        QCOMPARE(outcomeLabel(QaOutcome::Conforme, QStringLiteral("QA"), phases), QStringLiteral("Aprobada en QA"));
+
+        IssueRevision pre = qa;
+        pre.number = 2;
+        pre.phase = QStringLiteral("PRE");
+        pre.outcome = QaOutcome::Conforme;
+        pre.closedAt = QDateTime::currentDateTime();
+        issue.revisions << pre;
+        QVERIFY(closesRequirement(issue.revisions.last(), phases));  // conforme en la última: el OK final
+        QCOMPARE(nextPhase(issue, phases), QStringLiteral("PRE"));
+        QCOMPARE(outcomeLabel(QaOutcome::Conforme, QStringLiteral("PRE"), phases), QStringLiteral("Conforme"));
+    }
+
+    void roundsFromBeforeThePhasesKeepWhatTheyMeant() {
+        const QStringList phases = defaultQaPhases();
+        IssueRevision old;
+        old.startedAt = QDateTime::currentDateTime();
+        QCOMPARE(phaseOf(old, phases), QStringLiteral("QA"));        // abierta: la primera
+        old.closedAt = QDateTime::currentDateTime();
+        old.outcome = QaOutcome::Observado;
+        QCOMPARE(phaseOf(old, phases), QStringLiteral("QA"));
+        // Antes, Conforme cerraba el requerimiento: sigue cerrándolo.
+        old.outcome = QaOutcome::Conforme;
+        QCOMPARE(phaseOf(old, phases), QStringLiteral("PRE"));
+        QVERIFY(closesRequirement(old, phases));
     }
 
     void progressCountsTheLastRunOfEachCaseAndProposesTheOutcome() {

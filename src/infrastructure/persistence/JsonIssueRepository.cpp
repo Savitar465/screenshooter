@@ -233,6 +233,7 @@ QJsonObject revisionToJson(const IssueRevision& r) {
         {"outcome", toString(r.outcome)}, {"planRunId", r.planRunId}, {"record", recordToJson(r.record)},
         {"documentPath", r.documentPath}, {"documentAt", iso(r.documentAt)},
     };
+    if (!r.phase.isEmpty()) o.insert(QStringLiteral("phase"), r.phase);
     if (!r.jira.isEmpty())
         o.insert(QStringLiteral("jira"), QJsonObject{
             {"key", r.jira.key}, {"publishedAt", iso(r.jira.publishedAt)}, {"attachedDocument", r.jira.attachedDocument},
@@ -250,6 +251,7 @@ QJsonObject revisionToJson(const IssueRevision& r) {
 IssueRevision revisionFromJson(const QJsonObject& o) {
     IssueRevision r;
     r.number = o["number"].toInt(1);
+    r.phase = o["phase"].toString();
     r.startedAt = dateTime(o["startedAt"]);
     r.closedAt = dateTime(o["closedAt"]);
     r.outcome = qaOutcomeFromString(o["outcome"].toString());
@@ -274,6 +276,20 @@ IssueRevision revisionFromJson(const QJsonObject& o) {
     return r;
 }
 
+QJsonObject mapToJson(const QMap<QString, QString>& map) {
+    QJsonObject o;
+    for (auto it = map.cbegin(); it != map.cend(); ++it) o.insert(it.key(), it.value());
+    return o;
+}
+
+QMap<QString, QString> mapFromJson(const QJsonValue& value) {
+    QMap<QString, QString> map;
+    const QJsonObject o = value.toObject();
+    for (auto it = o.constBegin(); it != o.constEnd(); ++it)
+        if (!it.value().toString().trimmed().isEmpty()) map.insert(it.key(), it.value().toString());
+    return map;
+}
+
 QJsonObject issueToJson(const Issue& i) {
     QJsonObject o{
         {"id", i.id}, {"title", i.title}, {"notes", i.notes}, {"priority", toString(i.priority)}, {"state", toString(i.state)},
@@ -287,6 +303,11 @@ QJsonObject issueToJson(const Issue& i) {
         for (const auto& r : i.revisions) revisions.append(revisionToJson(r));
         o.insert(QStringLiteral("revisions"), revisions);
     }
+    if (!i.phases.isEmpty()) o.insert(QStringLiteral("phases"), QJsonArray::fromStringList(i.phases));
+    if (!i.zephyr.isEmpty())
+        o.insert(QStringLiteral("zephyr"), QJsonObject{
+            {"tests", mapToJson(i.zephyr.tests)}, {"cycles", mapToJson(i.zephyr.cycles)}, {"cycleNames", mapToJson(i.zephyr.cycleNames)},
+        });
     return o;
 }
 
@@ -309,6 +330,11 @@ Issue issueFromJson(const QJsonObject& o) {
     i.updatedAt = dateTime(o["updatedAt"]);
     if (o.contains(QStringLiteral("requirement"))) i.requirement = requirementFromJson(o["requirement"].toObject());
     for (const auto& v : o["revisions"].toArray()) i.revisions << revisionFromJson(v.toObject());
+    i.phases = strings(o["phases"]);
+    const QJsonObject zephyr = o["zephyr"].toObject();
+    i.zephyr.tests = mapFromJson(zephyr["tests"]);
+    i.zephyr.cycles = mapFromJson(zephyr["cycles"]);
+    i.zephyr.cycleNames = mapFromJson(zephyr["cycleNames"]);
     return i;
 }
 

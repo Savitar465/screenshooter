@@ -644,6 +644,20 @@ private slots:
         pending.result = QStringLiteral("Pendiente");
         QVERIFY(!client.registrationProblem(pending).isEmpty());
 
+        // El «OK» del cierre declara todo lo encontrado: vale si cada observación tiene su corrección, y
+        // no si alguna sigue sin corregir.
+        RequirementRegistration allFixed = conforme;
+        allFixed.observations = {{QStringLiteral("A"), 2, 2}, {QStringLiteral("B"), 0, 0}, {QStringLiteral("C"), 1, 1},
+                                 {QStringLiteral("D"), 3, 0}, {QStringLiteral("E"), 0, 0}};
+        QVERIFY2(client.registrationProblem(allFixed).isEmpty(), qPrintable(client.registrationProblem(allFixed)));
+        RequirementRegistration oneLeft = allFixed;
+        oneLeft.observations[0].corrections = 1;
+        QVERIFY(client.registrationProblem(oneLeft).contains(QStringLiteral("sin corregir")));
+        // Observado sigue pidiendo alguna observación, esté o no corregida.
+        RequirementRegistration observedFixed = allFixed;
+        observedFixed.result = QStringLiteral("Observado");
+        QVERIFY(client.registrationProblem(observedFixed).isEmpty());
+
         RequirementRegistration onlyRecommendations = good;
         onlyRecommendations.observations = {{QStringLiteral("A"), 0, 0}, {QStringLiteral("B"), 0, 0}, {QStringLiteral("C"), 0, 0},
                                             {QStringLiteral("D"), 2, 0}, {QStringLiteral("E"), 0, 0}};

@@ -142,13 +142,13 @@ struct WindowFixture {
     BugDialog* bugDialog() const { return window->findChild<BugDialog*>(); }
     /// Arrancar un ciclo pregunta antes en qué ambiente se prueba: responde al diálogo y acepta.
     /// Falso si no hay ninguno abierto (el ciclo no llegó a ofrecerse).
-    bool answerCycleDialog(const QString& environment = QStringLiteral("QA")) const {
+    bool answerCycleDialog(const QString& environment = QString()) const {
         auto* dialog = window->findChild<CycleStartDialog*>();
         if (!dialog) return false;
         auto* combo = dialog->findChild<QComboBox*>(QStringLiteral("cycleStartEnvironment"));
         auto* accept = dialog->findChild<QPushButton*>(QStringLiteral("cycleStartAccept"));
         if (!combo || !accept) return false;
-        combo->setCurrentText(environment);
+        if (!environment.isEmpty()) combo->setCurrentText(environment);   // vacío = el que se propone
         accept->click();
         return true;
     }
@@ -2083,6 +2083,8 @@ private slots:
     // gestor y el registro a GESREQ.
     void publishingAFinishedRevisionSendsItToItsThreeDestinations() {
         WindowFixture f;
+        // Un proyecto de una sola fase: su Conforme es el final, el que se registra en GESREQ.
+        f.app.issues.setPhases({QStringLiteral("QA")});
         f.app.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
         f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) {
             r.url = QStringLiteral("http://gesreq.test:7401/greq");
@@ -2395,7 +2397,15 @@ private slots:
         auto runButton = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issueStepRun")); };
         QTRY_VERIFY(runButton() && runButton()->isEnabled());
         runButton()->click();
-        QVERIFY(f.answerCycleDialog(QStringLiteral("Staging")));
+        // El ciclo de un issue se ejecuta en una de sus fases: se propone la que le toca y se puede elegir
+        // otra de las del requerimiento, sin escribir ambientes sueltos.
+        auto* dialog = f.window->findChild<CycleStartDialog*>();
+        QVERIFY(dialog);
+        auto* environment = dialog->findChild<QComboBox*>(QStringLiteral("cycleStartEnvironment"));
+        QVERIFY(environment && environment->isEnabled() && !environment->isEditable());
+        QCOMPARE(environment->currentText(), QStringLiteral("QA"));
+        QCOMPARE(environment->count(), 2);
+        QVERIFY(f.answerCycleDialog(QStringLiteral("PRE")));
 
         // Arrancó el ciclo del plan del issue y la ventana lleva a la ejecución.
         QCOMPARE(f.window->currentScreen(), Screen::Run);
@@ -2404,8 +2414,219 @@ private slots:
         const PlanRun* cycle = f.app.history.findPlan(planRunId);
         QVERIFY(cycle);
         QCOMPARE(cycle->planId, planId);
-        QCOMPARE(cycle->environment, QStringLiteral("Staging"));
+        QCOMPARE(cycle->environment, QStringLiteral("PRE"));
         QCOMPARE(f.app.run.state().caseId, f.app.plans.orderedCaseIds(planId).first());
+    }
+
+    // Un requerimiento que sólo se prueba en PRE: desde el menú «Fases…» se quita QA, y la pista y el
+    // ciclo que se arranque son de PRE.
+    void anIssueCanBeTestedOnlyInPre() {
+        WindowFixture f;
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        f.app.issues.linkPlan(issueId, f.app.plans.activeId());
+        f.app.issues.select(issueId);
+        f.window->navigate(Screen::Issues);
+
+        auto* phases = f.window->findChild<QPushButton*>(QStringLiteral("issuePhasesButton"));
+        QTRY_VERIFY(phases);
+        phases->click();
+        auto* menu = f.window->findChild<QMenu*>(QStringLiteral("issuePhasesMenu"));
+        QVERIFY(menu);
+        auto* qa = menu->findChild<QAction*>(QStringLiteral("issuePhase-QA"));
+        QVERIFY(qa && qa->isChecked() && qa->isEnabled());
+        qa->setChecked(false);
+        menu->close();
+        QCOMPARE(f.app.issues.phasesOf(*f.app.issues.find(issueId)), QStringList{QStringLiteral("PRE")});
+        // Los pasos se rehacen al cambiar el issue: la pista vieja espera a borrarse.
+        auto track = [&f] {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            auto* label = f.window->findChild<QLabel*>(QStringLiteral("issuePhaseTrack"));
+            return label ? label->text() : QString();
+        };
+        QTRY_VERIFY2(track().contains(QStringLiteral("PRE ●")) && !track().contains(QStringLiteral("QA")), qPrintable(track()));
+        QCOMPARE(f.app.issues.nextCycleContext(f.app.plans.activeId()).phase, QStringLiteral("PRE"));
+    }
+
+    // Un requerimiento que empezó en QA sin llegar a probar nada (revisión abierta sin ciclos) puede
+    // pasar a sólo PRE: QA se desmarca y la revisión pasa a PRE. Con ciclos ya ejecutados en QA, no.
+    void qaCanBeRemovedWhileItsRevisionHasNoCycles() {
+        WindowFixture f;
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        const QString planId = f.app.plans.activeId();
+        f.app.issues.linkPlan(issueId, planId);
+        f.app.issues.select(issueId);
+        f.app.issues.openRevision(issueId);
+        f.window->navigate(Screen::Issues);
+
+        auto openMenu = [&f]() -> QMenu* {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            auto* phases = f.window->findChild<QPushButton*>(QStringLiteral("issuePhasesButton"));
+            if (!phases) return nullptr;
+            phases->click();
+            return f.window->findChild<QMenu*>(QStringLiteral("issuePhasesMenu"));
+        };
+        QMenu* menu = nullptr;
+        QTRY_VERIFY((menu = openMenu()));
+        auto* qa = menu->findChild<QAction*>(QStringLiteral("issuePhase-QA"));
+        QVERIFY(qa && qa->isEnabled());
+        qa->setChecked(false);
+        menu->close();
+        QCOMPARE(f.app.issues.find(issueId)->currentRevision()->phase, QStringLiteral("PRE"));
+
+        // Ya con un ciclo ejecutado en la revisión, su fase queda atada y el menú dice por qué.
+        const QString cycle = f.app.history.startPlan(QStringLiteral("Regresión"), {f.app.plans.orderedCaseIds(planId).first()}, planId,
+                                                      QStringLiteral("PRE"));
+        f.app.history.noteCycleRevision(cycle, issueId, 1);
+        f.app.issues.setIssuePhases(issueId, {QStringLiteral("QA"), QStringLiteral("PRE")});
+        QTRY_VERIFY((menu = openMenu()));
+        auto* pre = menu->findChild<QAction*>(QStringLiteral("issuePhase-PRE"));
+        QVERIFY(pre && !pre->isEnabled());
+        QVERIFY2(pre->text().contains(QStringLiteral("ciclos")), qPrintable(pre->text()));
+        menu->close();
+    }
+
+    // Con ciclos ya ejecutados en la revisión, arrancar en otra fase se explica y no se deja.
+    void theCycleDialogExplainsWhyAnotherPhaseCannotStartYet() {
+        WindowFixture f;
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        const QString planId = f.app.plans.activeId();
+        f.app.issues.linkPlan(issueId, planId);
+        f.app.issues.select(issueId);
+        f.app.issues.openRevision(issueId);
+        const QString cycle = f.app.history.startPlan(QStringLiteral("Regresión"), {f.app.plans.orderedCaseIds(planId).first()}, planId,
+                                                      QStringLiteral("QA"));
+        f.app.history.noteCycleRevision(cycle, issueId, 1);
+        f.app.history.finishPlan(cycle);
+        f.window->navigate(Screen::Issues);
+
+        auto runButton = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issueStepRun")); };
+        QTRY_VERIFY(runButton() && runButton()->isEnabled());
+        runButton()->click();
+        auto* dialog = f.window->findChild<CycleStartDialog*>();
+        QVERIFY(dialog);
+        auto* combo = dialog->findChild<QComboBox*>(QStringLiteral("cycleStartEnvironment"));
+        auto* accept = dialog->findChild<QPushButton*>(QStringLiteral("cycleStartAccept"));
+        auto* note = dialog->findChild<QLabel*>(QStringLiteral("cycleStartBlocked"));
+        QVERIFY(combo && accept && note);
+        QVERIFY(accept->isEnabled());                 // QA, la de la revisión
+        combo->setCurrentText(QStringLiteral("PRE"));
+        QVERIFY(!accept->isEnabled());
+        QVERIFY2(note->text().contains(QStringLiteral("ciérrala")), qPrintable(note->text()));
+        combo->setCurrentText(QStringLiteral("QA"));
+        QVERIFY(accept->isEnabled());
+        dialog->reject();
+    }
+
+    // Con Zephyr activado, el paso 1 del issue crea los Tests de sus casos (uno por caso, el de todas sus
+    // fases) y los enlaza a su issue del gestor.
+    void theIssueCreatesTheZephyrTestsOfItsCases() {
+        WindowFixture f;
+        f.app.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        f.app.issues.updateIssue(issueId, [](Issue& i) {
+            i.publication.tracker = QStringLiteral("Jira");
+            i.publication.key = QStringLiteral("SHOP-12");
+            i.publication.publishedAt = QDateTime::currentDateTime();
+        });
+        const QString planId = f.app.plans.activeId();
+        f.app.issues.linkPlan(issueId, planId);
+        f.app.issues.select(issueId);
+        f.window->navigate(Screen::Issues);
+
+        const int cases = int(IssueStore::caseIdsOf(*f.app.issues.find(issueId), f.app.plans).size());
+        auto createButton = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issueCreateTests")); };
+        QTRY_VERIFY(createButton() && createButton()->isEnabled());
+        QVERIFY(createButton()->text().contains(QString::number(cases)));
+        createButton()->click();
+        auto* accept = f.window->findChild<QPushButton*>(QStringLiteral("issueCreateTestsAccept"));
+        QVERIFY(accept);
+        accept->click();
+        QCOMPARE(f.app.zephyr->testsRequested.size(), 1);
+        QCOMPARE(f.app.issues.find(issueId)->zephyr.tests.size(), cases);
+        QCOMPARE(f.app.tracker->links.size(), cases);   // cada Test, enlazado al issue del requerimiento
+        QTRY_VERIFY(!createButton());                    // ya no falta ninguno
+        auto* summary = f.window->findChild<QLabel*>(QStringLiteral("issueZephyrTests"));
+        QVERIFY(summary && summary->text().contains(QStringLiteral("tienen su Test")));
+    }
+
+    // Un bug cuyo paso pasó en un reintento sale como verificado en el paso 3 del issue, y desde ahí se
+    // cierra en el gestor (con confirmación).
+    void verifiedBugsAreClosedFromTheIssue() {
+        WindowFixture f;
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        const QString planId = f.app.plans.activeId();
+        const QString caseId = f.app.plans.orderedCaseIds(planId).first();
+        f.app.issues.linkPlan(issueId, planId);
+        f.app.issues.select(issueId);
+        f.app.issues.openRevision(issueId);
+        const QDateTime now = QDateTime::currentDateTime();
+        auto cycle = [&f, &planId, &caseId](const QDateTime& at, StepResult result) {
+            const QString planRunId = f.app.history.startPlan(QStringLiteral("Regresión"), {caseId}, planId);
+            RunRecord run;
+            run.caseId = caseId;
+            run.planRunId = planRunId;
+            run.startedAt = at;
+            run.finishedAt = at.addSecs(60);
+            RunRecordStep step;
+            step.result = result;
+            run.steps << step;
+            run.verdict = result == StepResult::Pass ? Verdict::Superado : Verdict::Fallido;
+            f.app.history.addRun(run);
+            f.app.history.finishPlan(planRunId);
+            return planRunId;
+        };
+        const QString failing = cycle(now.addSecs(-600), StepResult::Fail);
+        IssueLink bug;
+        bug.key = QStringLiteral("SHOP-41");
+        bug.tracker = QStringLiteral("Jira");
+        bug.caseId = caseId;
+        bug.planRunId = failing;
+        bug.runId = QStringLiteral("R-X");
+        bug.step = 1;
+        bug.createdAt = now.addSecs(-300);
+        f.app.bugLedger.recordIssue(bug);
+        f.window->navigate(Screen::Issues);
+
+        auto closeButton = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issueCloseVerifiedBugs")); };
+        QVERIFY(!closeButton());   // todavía no se volvió a probar
+        cycle(now, StepResult::Pass);
+        QTRY_VERIFY(closeButton() && closeButton()->isEnabled());
+        closeButton()->click();
+        auto* accept = f.window->findChild<QPushButton*>(QStringLiteral("issueCloseBugsAccept"));
+        QVERIFY(accept);
+        accept->click();
+        QCOMPARE(f.app.tracker->closed, QStringList{QStringLiteral("SHOP-41")});
+        QVERIFY(f.app.bugLedger.findIssue(QStringLiteral("SHOP-41"))->resolved);
+        QTRY_VERIFY(!closeButton());
+    }
+
+    // QA aprobada no finaliza el issue: lo siguiente es probar en PRE, y arrancar ese ciclo desde el issue
+    // abre la revisión de PRE con PRE como ambiente.
+    void anApprovedQaRoundMovesTheIssueToPre() {
+        WindowFixture f;
+        const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
+        const QString planId = f.app.plans.activeId();
+        f.app.issues.linkPlan(issueId, planId);
+        f.app.issues.select(issueId);
+        f.app.issues.openRevision(issueId);
+        f.app.issues.closeRevision(issueId, QaOutcome::Conforme);
+        QVERIFY(f.app.issues.find(issueId)->state == IssueState::Testing);
+        f.window->navigate(Screen::Issues);
+
+        auto* track = f.window->findChild<QLabel*>(QStringLiteral("issuePhaseTrack"));
+        QTRY_VERIFY(track && track->text().contains(QStringLiteral("QA ✓")) && track->text().contains(QStringLiteral("PRE ●")));
+        auto startButton = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issueStartNextPhase")); };
+        QTRY_VERIFY(startButton() && startButton()->isEnabled());
+        QVERIFY(startButton()->text().contains(QStringLiteral("PRE")));
+        startButton()->click();
+        auto* dialog = f.window->findChild<CycleStartDialog*>();
+        QVERIFY(dialog);
+        QCOMPARE(dialog->environment(), QStringLiteral("PRE"));
+        QVERIFY(f.answerCycleDialog());
+
+        const PlanRun* cycle = f.app.history.findPlan(f.app.run.planRunId());
+        QVERIFY(cycle);
+        QCOMPARE(cycle->environment, QStringLiteral("PRE"));
     }
 
     void finishingThePlanCycleOfAnIssueReturnsToTheIssue() {
@@ -2498,6 +2719,8 @@ private slots:
         WindowFixture f;
         const QString observed = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
         const QString accepted = f.app.issues.createIssue(QStringLiteral("Exportar pedidos"));
+        // Un proyecto de una sola fase, para que Conforme finalice sin pasar por PRE.
+        f.app.issues.setPhases({QStringLiteral("QA")});
         for (const auto& id : {observed, accepted}) f.app.issues.openRevision(id);
         f.app.issues.closeRevision(observed, QaOutcome::Observado);
         f.app.issues.closeRevision(accepted, QaOutcome::Conforme);
@@ -2749,6 +2972,17 @@ private slots:
         connect(window, &BugDetailWindow::openUrlRequested, this, [&opened](const QString& url) { opened = url; });
         window->findChild<QPushButton*>(QStringLiteral("bugDetailOpen"))->click();
         QCOMPARE(opened, QStringLiteral("https://acme.atlassian.net/browse/SHOP-77"));
+
+        // Y se cierra en el gestor desde la ficha, confirmándolo antes.
+        auto* closeBug = window->findChild<QPushButton*>(QStringLiteral("bugDetailCloseBug"));
+        QVERIFY(closeBug && closeBug->isVisible());
+        closeBug->click();
+        auto* accept = window->findChild<QPushButton*>(QStringLiteral("bugDetailCloseAccept"));
+        QVERIFY(accept);
+        accept->click();
+        QCOMPARE(f.app.tracker->closed, QStringList{QStringLiteral("SHOP-77")});
+        QVERIFY(f.app.bugLedger.findIssue(QStringLiteral("SHOP-77"))->resolved);
+        QTRY_VERIFY(!closeBug->isVisible());   // cerrado, ya no se ofrece
     }
 
     void finishingAPlanCycleWithoutAnIssueStillOpensItsReport() {

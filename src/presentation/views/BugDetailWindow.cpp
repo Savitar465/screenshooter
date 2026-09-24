@@ -1,4 +1,5 @@
 #include "BugDetailWindow.h"
+#include "application/BugReportService.h"
 
 #include "core/models/BugReport.h"
 #include "presentation/theme/Theme.h"
@@ -8,6 +9,8 @@
 #include <QClipboard>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
+#include <QPointer>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -61,6 +64,12 @@ BugDetailWindow::BugDetailWindow(const IssueLink& bug, const QString& caseTitle,
     connect(copy, &QPushButton::clicked, this, [this]() { QApplication::clipboard()->setText(m_bug.key); });
     bh->addWidget(copy);
     bh->addStretch(1);
+    m_closeBug = ui::button(tr("Cerrar en el gestor…"), "outline");
+    m_closeBug->setObjectName(QStringLiteral("bugDetailCloseBug"));
+    m_closeBug->setToolTip(tr("Lleva el bug a un estado resuelto en el gestor: dalo por corregido"));
+    m_closeBug->setVisible(false);
+    connect(m_closeBug, &QPushButton::clicked, this, &BugDetailWindow::closeInTracker);
+    bh->addWidget(m_closeBug);
     auto* close = ui::button(tr("Cerrar"), "outline");
     connect(close, &QPushButton::clicked, this, &QDialog::close);
     bh->addWidget(close);
@@ -72,6 +81,48 @@ BugDetailWindow::BugDetailWindow(const IssueLink& bug, const QString& caseTitle,
     v->addWidget(buttons);
 
     refresh();
+}
+
+void BugDetailWindow::setBugService(BugReportService* service) {
+    m_service = service;
+    refresh();
+}
+
+void BugDetailWindow::closeInTracker() {
+    if (!m_service || m_closing || m_bug.resolved) return;
+    // Cerrar cambia el estado en el gestor para todo el equipo: se pregunta antes.
+    auto* box = new QMessageBox(QMessageBox::Question, tr("Cerrar el bug"),
+                                tr("¿Cerrar %1 en el gestor? Se da por corregido.").arg(m_bug.key), QMessageBox::NoButton, this);
+    box->setObjectName(QStringLiteral("bugDetailCloseConfirm"));
+    QPushButton* accept = box->addButton(tr("Cerrar %1").arg(m_bug.key), QMessageBox::AcceptRole);
+    accept->setObjectName(QStringLiteral("bugDetailCloseAccept"));
+    box->addButton(tr("Cancelar"), QMessageBox::RejectRole);
+    box->setDefaultButton(accept);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    connect(box, &QMessageBox::buttonClicked, this, [this, accept](QAbstractButton* clicked) {
+        if (clicked != accept || !m_service) return;
+        m_closing = true;
+        refresh();
+        QPointer<BugDetailWindow> self(this);
+        const QString key = m_bug.key;
+        m_service->closeBugs({key}, [self, key](const BugReportService::CloseResult& r) {
+            if (!self) return;
+            self->m_closing = false;
+            // El libro ya tiene el estado nuevo y quien abrió la ficha la pone al día; aquí se dice qué pasó.
+            if (r.closed.contains(key)) {
+                self->m_bug.resolved = true;
+                self->m_status->setText(tr("Cerrado en el gestor"));
+            } else {
+                self->refresh();
+                self->m_status->setText(r.uncertain.contains(key) ? tr("El cierre no quedó confirmado: compruébalo en el gestor")
+                                                                  : r.failed.value(0));
+                self->m_status->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Red));
+                return;
+            }
+            self->refresh();
+        });
+    });
+    box->open();
 }
 
 void BugDetailWindow::setBug(const IssueLink& bug) {
@@ -117,6 +168,10 @@ void BugDetailWindow::refresh() {
     if (!m_bug.tracker.isEmpty()) meta << m_bug.tracker;
     if (!m_bug.url.trimmed().isEmpty()) meta << m_bug.url;
     m_meta->setText(meta.join(QStringLiteral(" · ")));
+
+    m_closeBug->setVisible(m_service && m_service->canCloseBugs() && !m_bug.resolved && !m_bug.key.isEmpty());
+    m_closeBug->setEnabled(!m_closing);
+    m_closeBug->setText(m_closing ? tr("Cerrando…") : tr("Cerrar en el gestor…"));
 }
 
 } // namespace qaflow

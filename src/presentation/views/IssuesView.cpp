@@ -3,6 +3,7 @@
 #include "application/AppContext.h"
 #include "core/Text.h"
 #include "core/models/BugReport.h"
+#include "core/models/IssueProgress.h"   // retestPassed
 #include "presentation/theme/Theme.h"
 #include "presentation/views/AiCaseGenerationDialog.h"
 #include "presentation/views/GreqsView.h"
@@ -16,7 +17,9 @@
 #include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/Ui.h"
 
+#include <QAction>
 #include <QComboBox>
+#include <QCursor>
 #include <QApplication>
 #include <QDrag>
 #include <QDragEnterEvent>
@@ -219,6 +222,7 @@ IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
     connect(&m_plans, &PlanStore::plansChanged, this, refreshIfVisible);
     connect(&m_plans, &PlanStore::planChanged, this, refreshIfVisible);
     connect(&m_history, &RunHistoryStore::historyChanged, this, refreshIfVisible);
+    if (m_bugLedger) connect(m_bugLedger, &BugStore::bugsChanged, this, refreshIfVisible);
     if (m_projects) connect(m_projects, &ProjectStore::projectsChanged, this, &IssuesView::refreshList);
     // Los issues de los demás proyectos también cambian (al leer la bandeja, o desde su ventana).
     if (m_directory) connect(m_directory, &IssueDirectory::changed, this, [this]() { if (isVisible() && m_allProjects) refreshList(); });
@@ -378,10 +382,20 @@ IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
     s.open = open != nullptr;
     s.closed = !open && last != nullptr;
     s.number = last ? last->number : 1;
+    const QStringList phases = m_issues.phasesOf(issue);
+    s.phase = last ? phaseOf(*last, phases) : nextPhase(issue, phases);
+    s.finalPhase = isFinalPhase(s.phase, phases);
+    s.phaseApproved = s.closed && last->outcome == QaOutcome::Conforme && !s.finalPhase;
+    s.upcoming = nextPhase(issue, phases);
+    for (int i = 0; i + 1 < phases.size(); ++i)
+        if (phases.at(i).compare(s.phase, Qt::CaseInsensitive) == 0) s.following = phases.at(i + 1);
     s.hasPlan = !issue.planIds.isEmpty() && !IssueStore::caseIdsOf(issue, m_plans).isEmpty();
     s.executed = s.progress.executed > 0;
     const QList<IssueLink> bugs = bugsOf(issue);
     s.openBugs = int(std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
+    const QList<RunRecord> runs = IssueStore::runsOf(issue, m_history);
+    for (const auto& bug : bugs)
+        if (!bug.resolved && retestPassed(bug, runs)) s.verifiedBugs << bug.key;
     s.hasRecord = last && last->hasDocument();
     // Publicada es la ronda a la que no le falta ningún destino, y eso lo sabe el servicio que publica:
     // mira los tres (Zephyr, el gestor y GESREQ), no sólo lo que quedó anotado en la revisión. Sólo se
@@ -390,9 +404,10 @@ IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
     if (m_revisionPublish && s.closed) {
         bool arrived = false, missing = false;
         for (const auto& destination : m_revisionPublish->stepsFor(issue.id, s.number)) {
-            // Cerrar el issue en el gestor sólo le toca a una ronda conforme: a una observada no le falta.
+            // Cerrar el issue en el gestor sólo le toca a la ronda que cierra el control (conforme en la
+            // última fase): a una observada, o a una fase aprobada antes de la última, no le falta.
             const bool close = destination.destination == RevisionPublishService::Destination::Close;
-            if (close && issue.lastOutcome() != QaOutcome::Conforme) continue;
+            if (close && !closesRequirement(*last, phases)) continue;
             if (destination.done && !close) arrived = true;
             if (!destination.done && destination.available) missing = true;
         }
@@ -401,9 +416,13 @@ IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
         s.published = last && (!last->jira.isEmpty() || !last->gesreq.isEmpty());
     }
     s.continuable = continuableCycle(issue, s.number);
+    // Una fase que no es la última y sale limpia no lleva acta ni se registra en GESREQ: se aprueba y se
+    // pasa a la siguiente. El acta y la publicación siguen a mano en sus pasos, por si se quieren.
+    const bool approving = !s.finalPhase && (s.phaseApproved || (s.open && s.progress.suggested == QaOutcome::Conforme));
     // Los bugs de una ronda cerrada ya no son un paso pendiente: se cerró sabiéndolos (es lo que la deja
     // observada), así que el trabajo sigue con el acta y la publicación en vez de quedarse ahí parado.
-    const bool done[] = {s.hasPlan, s.executed, s.openBugs == 0 || s.closed, s.hasRecord, s.closed, s.published};
+    const bool done[] = {s.hasPlan, s.executed, s.openBugs == 0 || s.closed, s.hasRecord || approving, s.closed,
+                         s.published || s.phaseApproved};
     std::copy(std::begin(done), std::end(done), std::begin(s.done));
     s.nextStep = 7;
     for (int i = 0; i < 6; ++i)
@@ -746,7 +765,7 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     th->addWidget(ui::label(issue.isImported() ? issue.requirement.data.id : issue.id, "mono-muted"));
     th->addStretch(1);
     if (!issue.revisions.isEmpty()) {
-        auto* rev = ui::label(tr("REV %1").arg(s.number), "muted-sm");
+        auto* rev = ui::label(tr("REV %1 · %2").arg(s.number).arg(s.phaseApproved ? s.upcoming : s.phase), "muted-sm");
         rev->setStyleSheet(QStringLiteral("color:%1;font-weight:700;font-size:10.5px;").arg(theme::Cyan));
         th->addWidget(rev);
     }
@@ -828,6 +847,26 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     return card;
 }
 
+QString IssuesView::outcomeText(const Issue& issue, QaOutcome outcome, const QString& phase) const {
+    return outcomeLabel(outcome, phase, m_issues.phasesOf(issue));
+}
+
+QString IssuesView::phaseTrack(const Issue& issue, const RevisionSnapshot& s) const {
+    const QStringList phases = m_issues.phasesOf(issue);
+    QStringList parts;
+    for (const QString& phase : phases) {
+        bool approved = issue.state == IssueState::Done;
+        for (const auto& round : issue.revisions)
+            if (!round.isOpen() && round.outcome == QaOutcome::Conforme &&
+                phaseOf(round, phases).compare(phase, Qt::CaseInsensitive) == 0)
+                approved = true;
+        const QString current = s.phaseApproved ? s.upcoming : s.phase;
+        const bool here = !approved && current.compare(phase, Qt::CaseInsensitive) == 0;
+        parts << QStringLiteral("%1 %2").arg(phase, approved ? QStringLiteral("✓") : here ? QStringLiteral("●") : QStringLiteral("○"));
+    }
+    return parts.join(QStringLiteral("  →  "));
+}
+
 IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const RevisionSnapshot& s, Column column) {
     NextAction a;
     const QString issueId = issue.id;
@@ -864,6 +903,14 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
             a.title = tr("Revisar los bugs reportados");
             a.why = tr("%n bug(s) abierto(s): con alguno abierto el requerimiento no queda conforme.", nullptr, s.openBugs);
             a.hint = tr("%n bug(s) abierto(s)", nullptr, s.openBugs);
+            // Si el reintento ya pasó el paso de alguno, lo que toca es cerrarlo en el gestor.
+            if (!s.verifiedBugs.isEmpty() && m_bugs && m_bugs->canCloseBugs()) {
+                a.why += QLatin1Char(' ') + tr("%n ya pasó el reintento y se puede cerrar.", nullptr, int(s.verifiedBugs.size()));
+                a.button = tr("Cerrar verificados (%1)…").arg(s.verifiedBugs.size());
+                a.shortButton = tr("Cerrar (%1)").arg(s.verifiedBugs.size());
+                a.run = [this, keys = s.verifiedBugs](QWidget*) { closeVerifiedBugs(keys); };
+                break;
+            }
             a.button = tr("Ver los bugs");
             a.shortButton = tr("Ver bugs");
             a.run = [this](QWidget*) { showDetail(true); };
@@ -872,7 +919,7 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
             a.title = tr("Generar el acta (R-213)");
             a.why = s.closed ? tr("Revisión %1 cerrada como %2: el acta la levanta con lo que se probó, y con ella se publica el resultado")
                                    .arg(s.number)
-                                   .arg(label(issue.lastOutcome()))
+                                   .arg(outcomeText(issue, issue.lastOutcome(), s.phase))
                              : tr("Con lo del requerimiento, la ejecución elegida y los bugs de la revisión");
             a.hint = tr("Generar el acta");
             a.button = tr("Generar acta…");
@@ -881,7 +928,7 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
             break;
         case 5:
             a.title = tr("Cerrar la revisión");
-            a.why = tr("Se propone «%1»").arg(label(s.progress.suggested));
+            a.why = tr("Se propone «%1»").arg(outcomeText(issue, s.progress.suggested, s.phase));
             a.hint = tr("Cerrar la revisión");
             a.button = tr("Cerrar revisión…");
             a.shortButton = tr("Cerrar");
@@ -891,16 +938,27 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
             a.title = tr("Publicar el resultado");
             a.why = tr("Revisión %1 cerrada como %2: los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ")
                         .arg(s.number)
-                        .arg(label(issue.lastOutcome()));
+                        .arg(outcomeText(issue, issue.lastOutcome(), s.phase));
             a.hint = tr("Publicar el resultado");
             a.button = tr("Publicar…");
             a.shortButton = tr("Publicar");
             if (m_revisionPublish) a.run = [this](QWidget*) { publishRevision(); };
             break;
         default:
+            // Aprobada una fase que no es la última, toca probar en la siguiente: arrancar su ciclo abre
+            // ya la ronda de esa fase.
+            if (s.phaseApproved) {
+                a.title = tr("Probar en %1").arg(s.upcoming);
+                a.why = tr("%1 aprobada en la revisión %2: la ronda siguiente es de %3").arg(s.phase).arg(s.number).arg(s.upcoming);
+                a.hint = tr("Toca %1").arg(s.upcoming);
+                a.button = tr("▶ Empezar %1…").arg(s.upcoming);
+                a.shortButton = tr("▶ %1").arg(s.upcoming);
+                a.run = [this](QWidget* anchor) { runPlan(anchor); };
+                break;
+            }
             a.title = issue.lastOutcome() == QaOutcome::Observado ? tr("Volver a probar") : tr("Nada pendiente");
-            a.why = tr("Revisión %1 cerrada como %2").arg(s.number).arg(label(issue.lastOutcome()));
-            a.hint = tr("%1 · publicado").arg(label(issue.lastOutcome()));
+            a.why = tr("Revisión %1 cerrada como %2").arg(s.number).arg(outcomeText(issue, issue.lastOutcome(), s.phase));
+            a.hint = tr("%1 · publicado").arg(outcomeText(issue, issue.lastOutcome(), s.phase));
             a.button = a.shortButton = tr("Nueva revisión");
             a.run = [this](QWidget*) { openRevision(); };
             break;
@@ -1155,12 +1213,8 @@ void IssuesView::refreshDrawer() {
     };
     chh->addWidget(pill(info.name, theme::tint(info.color, 46), info.color));
     if (!issue.revisions.isEmpty()) {
-        QString rev = tr("REV %1").arg(s.number);
-        QStringList environments;
-        for (const auto& cycle : IssueStore::cyclesOfRevision(issue, m_history, s.number))
-            if (const QString env = cycle.environment.trimmed(); !env.isEmpty() && !environments.contains(env)) environments << env;
-        if (!environments.isEmpty()) rev += QStringLiteral(" · ") + environments.join(QStringLiteral(", ")).toUpper();
-        chh->addWidget(pill(rev, theme::tint(theme::Cyan, 38), theme::Cyan));
+        // La ronda y su fase, que es el ambiente de sus ciclos.
+        chh->addWidget(pill(tr("REV %1 · %2").arg(s.number).arg(s.phase.toUpper()), theme::tint(theme::Cyan, 38), theme::Cyan));
     }
     if (issue.isPublished()) {
         const auto& p = issue.publication;
@@ -1208,10 +1262,11 @@ void IssuesView::refreshDrawer() {
     m_drawerLayout->addWidget(next);
 
     // Los pasos de la revisión, de un vistazo.
-    m_drawerLayout->addWidget(ui::label(issue.revisions.isEmpty() ? tr("REVISIÓN") : tr("REVISIÓN %1").arg(s.number), "eyebrow"));
+    m_drawerLayout->addWidget(ui::label(issue.revisions.isEmpty() ? tr("REVISIÓN") : tr("REVISIÓN %1 · %2").arg(s.number).arg(s.phase), "eyebrow"));
     const QStringList caseIds = IssueStore::caseIdsOf(issue, m_plans);
     const QString names[] = {tr("Preparar el plan"), tr("Ejecutar el plan"), tr("Revisar los bugs"), tr("Generar el acta"),
-                             tr("Cerrar la revisión"), tr("Publicar"), tr("Volver a probar")};
+                             tr("Cerrar la revisión"), tr("Publicar"),
+                             s.phaseApproved ? tr("Probar en %1").arg(s.upcoming) : tr("Volver a probar")};
     const QString notes[] = {caseIds.isEmpty() ? QString() : tr("%n caso(s)", nullptr, int(caseIds.size())),
                              s.progress.cases > 0 ? QStringLiteral("%1/%2").arg(s.progress.executed).arg(s.progress.cases) : QString(),
                              s.openBugs > 0 ? tr("%n abierto(s)", nullptr, s.openBugs) : QString(),
@@ -1372,7 +1427,11 @@ QWidget* IssuesView::foreignCard(const IssueDirectory::Entry& entry, Column colu
     th->addWidget(ui::label(issue.isImported() ? issue.requirement.data.id : issue.id, "mono-muted"));
     th->addStretch(1);
     if (!issue.revisions.isEmpty()) {
-        auto* rev = ui::label(tr("REV %1").arg(issue.currentRevisionNumber()), "muted-sm");
+        // De otro proyecto no se tienen sus fases: se enseña la que guardó la ronda, si la tiene.
+        const QString phase = issue.revisions.last().phase;
+        auto* rev = ui::label(phase.isEmpty() ? tr("REV %1").arg(issue.currentRevisionNumber())
+                                              : tr("REV %1 · %2").arg(issue.currentRevisionNumber()).arg(phase),
+                              "muted-sm");
         rev->setStyleSheet(QStringLiteral("color:%1;font-weight:700;font-size:10.5px;").arg(theme::Cyan));
         th->addWidget(rev);
     }
@@ -1489,8 +1548,10 @@ void IssuesView::refreshForeignDrawer(const IssueDirectory::Entry& entry) {
     if (!issue.revisions.isEmpty()) {
         m_drawerLayout->addWidget(ui::label(tr("REVISIONES"), "eyebrow"));
         for (auto it = issue.revisions.crbegin(); it != issue.revisions.crend(); ++it) {
-            const QString text = it->isOpen() ? tr("Revisión %1 · abierta desde %2").arg(it->number).arg(when(it->startedAt))
-                                              : tr("Revisión %1 · %2 · cerrada el %3").arg(it->number).arg(label(it->outcome), when(it->closedAt));
+            // Es un issue de otro proyecto: sus fases no se conocen aquí, sólo la que guardó cada ronda.
+            const QString round = it->phase.isEmpty() ? tr("Revisión %1").arg(it->number) : tr("Revisión %1 (%2)").arg(it->number).arg(it->phase);
+            const QString text = it->isOpen() ? tr("%1 · abierta desde %2").arg(round, when(it->startedAt))
+                                              : tr("%1 · %2 · cerrada el %3").arg(round, label(it->outcome), when(it->closedAt));
             auto* line = ui::label(text, "muted-sm");
             line->setWordWrap(true);
             m_drawerLayout->addWidget(line);
@@ -1840,11 +1901,14 @@ void IssuesView::refreshRevision(const Issue& issue) {
     const bool closed = snapshot.closed;
     const int number = snapshot.number;
     const QaOutcome outcome = closed ? issue.lastOutcome() : progress.suggested;
+    const QString outcomeName = outcomeText(issue, outcome, snapshot.phase);
 
-    m_revisionHeader->setText(issue.revisions.isEmpty() ? tr("REVISIÓN") : tr("REVISIÓN %1 · %2").arg(number).arg(label(issue.state).toUpper()));
+    m_revisionHeader->setText(issue.revisions.isEmpty()
+                                  ? tr("REVISIÓN")
+                                  : tr("REVISIÓN %1 · %2 · %3").arg(number).arg(snapshot.phase.toUpper(), label(issue.state).toUpper()));
     const QString blockers = progress.blockers.isEmpty() ? tr("nada pendiente") : progress.blockers.join(QStringLiteral(" · "));
     m_revisionProgress->setText(closed ? tr("Cerrada como %1 · %2 de %3 casos ejecutados · %4 bugs (%5 abiertos)")
-                                             .arg(label(outcome))
+                                             .arg(outcomeName)
                                              .arg(progress.executed)
                                              .arg(progress.cases)
                                              .arg(progress.bugs)
@@ -1858,7 +1922,7 @@ void IssuesView::refreshRevision(const Issue& issue) {
                                              .arg(progress.blocked)
                                              .arg(progress.bugs)
                                              .arg(progress.openBugs)
-                                             .arg(label(outcome), blockers));
+                                             .arg(outcomeName, blockers));
     m_revisionProgress->setStyleSheet(QStringLiteral("color:%1;").arg(outcomeColor(outcome)));
 
     // Los pasos del control de calidad, en el orden en que se hacen. El primero sin terminar es el que toca.
@@ -1876,6 +1940,24 @@ void IssuesView::refreshRevision(const Issue& issue) {
         m_revisionSteps->addWidget(row.widget);
         return row;
     };
+
+    // Arriba, las fases del requerimiento y en cuál está: la revisión es una ronda dentro de una de ellas.
+    {
+        auto* line = new QWidget;
+        auto* lh = ui::hbox(line, 0, 8);
+        auto* track = ui::label(tr("Fases: %1").arg(phaseTrack(issue, snapshot)), "muted-sm");
+        track->setObjectName(QStringLiteral("issuePhaseTrack"));
+        track->setToolTip(tr("Cada fase se prueba en una o más revisiones. Conforme en una fase la aprueba y se pasa a la "
+                             "siguiente; sólo el Conforme de la última registra el OK en GESREQ y cierra el issue del gestor."));
+        lh->addWidget(track);
+        // No todos los requerimientos pasan por todas: los hay que sólo se prueban en QA, o sólo en PRE.
+        auto* phases = smallButton(tr("Fases…"), "ghost", tr("Elige en qué fases se prueba este requerimiento"));
+        phases->setObjectName(QStringLiteral("issuePhasesButton"));
+        connect(phases, &QPushButton::clicked, this, [this, phases]() { choosePhases(phases); });
+        lh->addWidget(phases);
+        lh->addStretch(1);
+        m_revisionSteps->addWidget(line);
+    }
 
     // 1 · El plan con el que se prueba el requerimiento.
     {
@@ -1910,6 +1992,25 @@ void IssuesView::refreshRevision(const Issue& issue) {
         generate->setObjectName(QStringLiteral("issueGenerateCases"));
         connect(generate, &QPushButton::clicked, this, &IssuesView::generateCases);
         row.actions->addWidget(generate);
+        // Los Tests de Zephyr del requerimiento: uno por caso, el mismo en todas sus fases. Se pueden crear
+        // (y enlazar al issue) antes de probar; si no, se crean al publicar el primer ciclo.
+        if (m_revisionPublish && m_revisionPublish->canPrepareTests() && !caseIds.isEmpty()) {
+            const QStringList missing = m_revisionPublish->casesWithoutTest(issue.id, caseIds);
+            auto* zephyr = ui::label(missing.isEmpty() ? tr("Zephyr: los %1 caso(s) tienen su Test").arg(caseIds.size())
+                                                       : tr("Zephyr: %1 de %2 caso(s) con Test")
+                                                             .arg(caseIds.size() - missing.size())
+                                                             .arg(caseIds.size()),
+                                     "muted-sm");
+            zephyr->setObjectName(QStringLiteral("issueZephyrTests"));
+            row.body->addWidget(zephyr);
+            if (!missing.isEmpty()) {
+                auto* tests = smallButton(tr("Crear Tests en Zephyr (%1)…").arg(missing.size()), "ghost",
+                                          tr("Crea en Zephyr un Test por caso (el que usarán los ciclos de QA y de PRE) y los enlaza al issue"));
+                tests->setObjectName(QStringLiteral("issueCreateTests"));
+                connect(tests, &QPushButton::clicked, this, [this, missing]() { prepareTests(missing); });
+                row.actions->addWidget(tests);
+            }
+        }
         fillPlans(issue, row.body);
     }
 
@@ -1968,9 +2069,26 @@ void IssuesView::refreshRevision(const Issue& issue) {
         const StepRow row = step(snapshot.done[2], tr("Revisar los bugs reportados"),
                                  bugs.isEmpty() ? tr("Los que se reporten en sus ejecuciones salen aquí, cuentan en el acta y se "
                                                      "enlazan al publicar")
-                                                : tr("%1 bug(s) · %2 abierto(s)").arg(bugs.size()).arg(openBugs),
+                                                : snapshot.verifiedBugs.isEmpty()
+                                                    ? tr("%1 bug(s) · %2 abierto(s)").arg(bugs.size()).arg(openBugs)
+                                                    : tr("%1 bug(s) · %2 abierto(s), %3 ya verificado(s) en un reintento")
+                                                          .arg(bugs.size())
+                                                          .arg(openBugs)
+                                                          .arg(snapshot.verifiedBugs.size()),
                                  QStringLiteral("issueStepBugsDetail"));
-        fillBugs(issue, bugs, row.body);
+        // Los que pasaron el reintento se cierran desde aquí: es lo que los cuenta como corregidos en el
+        // acta del cierre y en GESREQ.
+        if (!snapshot.verifiedBugs.isEmpty()) {
+            const bool can = m_bugs && m_bugs->canCloseBugs();
+            auto* close = smallButton(tr("Cerrar verificados (%1)…").arg(snapshot.verifiedBugs.size()), "outline",
+                                      can ? tr("Cierra en el gestor los bugs cuyo paso se volvió a probar y pasó")
+                                          : tr("El gestor configurado no cierra issues desde QAflow: ciérralos en él y usa «Actualizar estados»"));
+            close->setObjectName(QStringLiteral("issueCloseVerifiedBugs"));
+            close->setEnabled(can);
+            connect(close, &QPushButton::clicked, this, [this, keys = snapshot.verifiedBugs]() { closeVerifiedBugs(keys); });
+            row.actions->addWidget(close);
+        }
+        fillBugs(issue, bugs, snapshot.verifiedBugs, row.body);
     }
 
     // 4 · El acta del control de calidad.
@@ -1996,8 +2114,10 @@ void IssuesView::refreshRevision(const Issue& issue) {
     // 5 · Cerrar la revisión con su resultado.
     {
         auto* actions = step(closed, tr("Cerrar la revisión"),
-                             closed ? tr("Cerrada el %1 como %2").arg(when(last->closedAt), label(outcome))
-                                    : tr("Se cierra con el resultado del control: conforme u observado")).actions;
+                             closed ? tr("Cerrada el %1 como %2").arg(when(last->closedAt), outcomeName)
+                             : snapshot.finalPhase
+                                 ? tr("Se cierra con el resultado del control: conforme (el cierre final) u observado")
+                                 : tr("Se cierra aprobando %1 (y se pasa a %2) u observada").arg(snapshot.phase, snapshot.following)).actions;
         if (open) {
             auto* close = smallButton(tr("Cerrar revisión…"), "outline",
                                       tr("Deja la revisión cerrada con su resultado: conforme u observado"));
@@ -2051,12 +2171,25 @@ void IssuesView::refreshRevision(const Issue& issue) {
         }
     }
 
-    // Y, cerrada la ronda, la siguiente: un requerimiento observado vuelve a pruebas.
+    // Y, cerrada la ronda, la siguiente: un requerimiento observado vuelve a pruebas en la misma fase, y
+    // una fase aprobada pasa a la siguiente.
     if (!open) {
-        auto* actions = step(false, tr("Volver a probar"),
-                             closed && outcome == QaOutcome::Observado
-                                     ? tr("El requerimiento quedó observado: al corregirlo se abre la revisión %1").arg(number + 1)
-                                     : tr("Abre otra ronda de pruebas del requerimiento")).actions;
+        const QString title = snapshot.phaseApproved ? tr("Probar en %1").arg(snapshot.upcoming) : tr("Volver a probar");
+        auto* actions = step(false, title,
+                             snapshot.phaseApproved
+                                 ? tr("%1 aprobada: la revisión %2 es de %3").arg(snapshot.phase).arg(number + 1).arg(snapshot.upcoming)
+                             : closed && outcome == QaOutcome::Observado
+                                 ? tr("El requerimiento quedó observado: al corregirlo se abre la revisión %1 en %2")
+                                       .arg(number + 1)
+                                       .arg(snapshot.upcoming)
+                                 : tr("Abre otra ronda de pruebas del requerimiento")).actions;
+        if (snapshot.phaseApproved) {
+            auto* start = smallButton(tr("▶ Empezar %1…").arg(snapshot.upcoming), "primary",
+                                      tr("Arranca un ciclo del plan en %1: abre la revisión %2").arg(snapshot.upcoming).arg(number + 1));
+            start->setObjectName(QStringLiteral("issueStartNextPhase"));
+            connect(start, &QPushButton::clicked, this, [this, start]() { runPlan(start); });
+            actions->addWidget(start);
+        }
         auto* next = smallButton(closed ? tr("Nueva revisión") : tr("Abrir revisión"), "outline",
                                  tr("El requerimiento vuelve a pruebas: abre la ronda siguiente del acta"));
         next->setObjectName(QStringLiteral("issueNewRevision"));
@@ -2086,8 +2219,9 @@ void IssuesView::refreshRevision(const Issue& issue) {
         QHBoxLayout* h;
         auto* row = listRow(&h);
         const QString color = outcomeColor(it->outcome);
-        h->addWidget(ui::pill(tr("REV %1").arg(it->number), theme::tint(theme::Muted, 30), theme::Muted));
-        h->addWidget(ui::pill(label(it->outcome).toUpper(), theme::tint(color, 46), color));
+        const QString phase = phaseOf(*it, m_issues.phasesOf(issue));
+        h->addWidget(ui::pill(tr("REV %1 · %2").arg(it->number).arg(phase), theme::tint(theme::Muted, 30), theme::Muted));
+        h->addWidget(ui::pill(outcomeText(issue, it->outcome, phase).toUpper(), theme::tint(color, 46), color));
         h->addWidget(ui::label(it->closedAt.toString(QStringLiteral("dd/MM/yyyy")), "muted-sm"), 1);
         // Dónde llegó el resultado de esa ronda y qué le falta: cada destino, con lo que dice de él la
         // propia publicación, así el historial y el diálogo cuentan lo mismo.
@@ -2205,16 +2339,24 @@ void IssuesView::closeRevision() {
     if (!issue || !issue->currentRevision() || !m_records) return;
     const QString issueId = issue->id;
     const IssueProgress progress = m_records->progressFor(issueId);
+    const RevisionSnapshot s = snapshotOf(*issue);
 
+    // Lo que significa Conforme depende de la fase: en la última es el cierre del control (el OK que se
+    // registra en GESREQ); en otra aprueba ésa y la ronda siguiente es de la que viene.
     QMessageBox box(this);
     box.setWindowTitle(tr("Cerrar la revisión"));
     box.setIcon(QMessageBox::Question);
-    box.setText(tr("¿Con qué resultado se cierra la revisión del requerimiento?"));
+    box.setText(s.finalPhase ? tr("¿Con qué resultado se cierra la revisión %1 (%2)?").arg(s.number).arg(s.phase)
+                             : tr("¿Cómo termina %1 en la revisión %2?").arg(s.phase).arg(s.number));
+    const QString proposed = outcomeText(*issue, progress.suggested, s.phase);
     box.setInformativeText(progress.blockers.isEmpty()
-                               ? tr("Se propone «%1»: no queda nada pendiente.").arg(label(progress.suggested))
-                               : tr("Se propone «%1»: %2.").arg(label(progress.suggested), progress.blockers.join(QStringLiteral(", "))));
-    auto* conforme = box.addButton(tr("Conforme"), QMessageBox::AcceptRole);
+                               ? tr("Se propone «%1»: no queda nada pendiente.").arg(proposed)
+                               : tr("Se propone «%1»: %2.").arg(proposed, progress.blockers.join(QStringLiteral(", "))));
+    auto* conforme = box.addButton(s.finalPhase ? tr("Conforme (cierre final)") : tr("Aprobada en %1 → pasar a %2").arg(s.phase, s.following),
+                                   QMessageBox::AcceptRole);
+    conforme->setObjectName(QStringLiteral("closeRevisionConforme"));
     auto* observado = box.addButton(tr("Observado"), QMessageBox::AcceptRole);
+    observado->setObjectName(QStringLiteral("closeRevisionObservado"));
     box.addButton(QMessageBox::Cancel);
     box.setDefaultButton(progress.suggested == QaOutcome::Conforme ? conforme : observado);
     box.exec();
@@ -2222,16 +2364,137 @@ void IssuesView::closeRevision() {
 
     const QaOutcome outcome = box.clickedButton() == conforme ? QaOutcome::Conforme : QaOutcome::Observado;
     m_issues.closeRevision(issueId, outcome);
-    emit toast(outcome == QaOutcome::Conforme ? tr("Revisión cerrada como conforme")
-                                              : tr("Revisión cerrada con observaciones: al volver a probar se abre la siguiente"),
-               outcome == QaOutcome::Conforme ? theme::Green : theme::Amber);
+    if (outcome == QaOutcome::Observado)
+        emit toast(tr("Revisión cerrada con observaciones: al volver a probar se abre la siguiente, en %1").arg(s.phase), theme::Amber);
+    else if (s.finalPhase)
+        emit toast(tr("Revisión cerrada como conforme"), theme::Green);
+    else
+        emit toast(tr("%1 aprobada: la revisión siguiente es de %2").arg(s.phase, s.following), theme::Green);
+}
+
+void IssuesView::closeVerifiedBugs(const QStringList& keys) {
+    if (keys.isEmpty() || !m_bugs || !m_bugs->canCloseBugs()) return;
+    // Cerrar cambia el estado en el gestor para todo el equipo: se pregunta antes, con la lista a la vista.
+    auto* box = new QMessageBox(QMessageBox::Question, tr("Cerrar bugs verificados"),
+                                tr("¿Cerrar en el gestor %n bug(s) cuyo paso ya pasó el reintento?", nullptr, int(keys.size())),
+                                QMessageBox::NoButton, this);
+    box->setObjectName(QStringLiteral("issueCloseBugsConfirm"));
+    box->setInformativeText(keys.join(QStringLiteral(", ")));
+    QPushButton* accept = box->addButton(tr("Cerrar %n bug(s)", nullptr, int(keys.size())), QMessageBox::AcceptRole);
+    accept->setObjectName(QStringLiteral("issueCloseBugsAccept"));
+    box->addButton(tr("Cancelar"), QMessageBox::RejectRole);
+    box->setDefaultButton(accept);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    connect(box, &QMessageBox::buttonClicked, this, [this, accept, keys](QAbstractButton* clicked) {
+        if (clicked != accept) return;
+        QPointer<IssuesView> self(this);
+        m_bugs->closeBugs(keys, [self](const BugReportService::CloseResult& r) {
+            if (!self) return;
+            QStringList parts;
+            if (!r.closed.isEmpty()) parts << tr("%n cerrado(s)", nullptr, int(r.closed.size()));
+            if (!r.uncertain.isEmpty())
+                parts << tr("sin confirmar: %1 (compruébalos en el gestor)").arg(r.uncertain.join(QStringLiteral(", ")));
+            if (!r.failed.isEmpty()) parts << tr("no se pudieron cerrar: %1").arg(r.failed.join(QStringLiteral(" · ")));
+            const bool ok = r.failed.isEmpty() && r.uncertain.isEmpty();
+            emit self->toast(tr("Bugs · %1").arg(parts.join(QStringLiteral(" · "))), ok ? theme::Green : theme::Amber);
+        });
+    });
+    box->open();
+}
+
+void IssuesView::choosePhases(QWidget* anchor) {
+    const Issue* issue = selected();
+    if (!issue) return;
+    const QString issueId = issue->id;
+    const QStringList project = m_issues.phases();
+    const QStringList chosen = m_issues.phasesOf(*issue);
+    // Lo que ata una fase: una revisión cerrada en ella (su acta y su resultado son de esa fase) o la
+    // revisión abierta con ciclos ya ejecutados en ella. Una revisión abierta sin ciclos no ata: si se
+    // quita su fase, pasa a la siguiente.
+    QHash<QString, QString> locks;
+    for (const auto& round : issue->revisions) {
+        const QString phase = phaseOf(round, chosen);
+        if (!round.isOpen()) locks.insert(phase.toUpper(), tr("revisión %1 cerrada").arg(round.number));
+        else if (!IssueStore::cyclesOfRevision(*issue, m_history, round.number).isEmpty())
+            locks.insert(phase.toUpper(), tr("la revisión %1 ya tiene ciclos").arg(round.number));
+    }
+    auto* menu = new QMenu(this);
+    menu->setObjectName(QStringLiteral("issuePhasesMenu"));
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->setToolTipsVisible(true);
+    auto* heading = menu->addAction(tr("Fases en las que se prueba"));
+    heading->setEnabled(false);
+    for (const QString& phase : project) {
+        const bool on = chosen.contains(phase, Qt::CaseInsensitive);
+        const QString lock = on ? locks.value(phase.toUpper()) : QString();
+        // La que está atada no se quita, y se dice por qué en el propio menú.
+        QAction* action = menu->addAction(lock.isEmpty() ? phase : tr("%1 (%2)").arg(phase, lock));
+        action->setObjectName(QStringLiteral("issuePhase-%1").arg(phase));
+        action->setCheckable(true);
+        action->setChecked(on);
+        action->setEnabled(lock.isEmpty());
+        if (!lock.isEmpty()) action->setToolTip(tr("No se puede quitar %1: %2").arg(phase, lock));
+        connect(action, &QAction::toggled, this, [this, issueId, phase](bool on) {
+            const Issue* current = m_issues.find(issueId);
+            if (!current) return;
+            QStringList next = m_issues.phasesOf(*current);
+            if (on && !next.contains(phase, Qt::CaseInsensitive)) next << phase;
+            if (!on) next.removeAll(phase);
+            if (next.isEmpty()) {
+                emit toast(tr("El requerimiento tiene que probarse al menos en una fase"), theme::Amber);
+                refreshRevision(*current);
+                return;
+            }
+            const QString problem = m_issues.setIssuePhases(issueId, next);
+            if (!problem.isEmpty()) emit toast(problem, theme::Amber);
+        });
+    }
+    menu->popup(anchor ? anchor->mapToGlobal(QPoint(0, anchor->height())) : QCursor::pos());
+}
+
+void IssuesView::prepareTests(const QStringList& caseIds) {
+    const Issue* issue = selected();
+    if (!issue || caseIds.isEmpty() || !m_revisionPublish) return;
+    const QString issueId = issue->id;
+    // Crear Tests escribe en Jira para todo el equipo: se pregunta antes.
+    auto* box = new QMessageBox(QMessageBox::Question, tr("Crear Tests en Zephyr"),
+                                tr("¿Crear en Zephyr %n Test(s), uno por caso, y enlazarlos al issue del requerimiento?", nullptr,
+                                   int(caseIds.size())),
+                                QMessageBox::NoButton, this);
+    box->setObjectName(QStringLiteral("issueCreateTestsConfirm"));
+    box->setInformativeText(caseIds.join(QStringLiteral(", ")));
+    QPushButton* accept = box->addButton(tr("Crear Tests"), QMessageBox::AcceptRole);
+    accept->setObjectName(QStringLiteral("issueCreateTestsAccept"));
+    box->addButton(tr("Cancelar"), QMessageBox::RejectRole);
+    box->setDefaultButton(accept);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    connect(box, &QMessageBox::buttonClicked, this, [this, accept, issueId, caseIds](QAbstractButton* clicked) {
+        if (clicked != accept) return;
+        QPointer<IssuesView> self(this);
+        m_revisionPublish->prepareTests(issueId, caseIds, [self](const RevisionPublishService::TestsPrepared& r) {
+            if (!self) return;
+            if (!r.error.isEmpty()) {
+                emit self->toast(tr("No se crearon los Tests · %1").arg(r.error), theme::Red);
+                return;
+            }
+            QString text = tr("%n Test(s) creado(s) en Zephyr", nullptr, r.created);
+            if (r.linked > 0) text += tr(" · %n enlace(s) al issue", nullptr, r.linked);
+            if (!r.problems.isEmpty()) text += QStringLiteral("\n") + r.problems.join(QLatin1Char('\n'));
+            emit self->toast(text, r.problems.isEmpty() ? theme::Green : theme::Amber);
+            self->loadDetail();
+        });
+    });
+    box->open();
 }
 
 void IssuesView::openRevision() {
     const Issue* issue = selected();
     if (!issue) return;
     const int number = m_issues.openRevision(issue->id);
-    if (number > 0) emit toast(tr("Revisión %1 abierta: el issue vuelve a pruebas").arg(number), theme::Blue);
+    const Issue* opened = m_issues.find(issue->id);
+    const IssueRevision* round = opened ? opened->currentRevision() : nullptr;
+    if (number > 0 && round)
+        emit toast(tr("Revisión %1 abierta en %2: el issue vuelve a pruebas").arg(number).arg(round->phase), theme::Blue);
 }
 
 void IssuesView::refreshRequirement(const Issue& issue) {
@@ -2658,7 +2921,7 @@ QList<IssueLink> IssuesView::bugsOf(const Issue& issue) const {
     return bugs;
 }
 
-void IssuesView::fillBugs(const Issue& issue, const QList<IssueLink>& bugs, QVBoxLayout* into) {
+void IssuesView::fillBugs(const Issue& issue, const QList<IssueLink>& bugs, const QStringList& verified, QVBoxLayout* into) {
     if (bugs.isEmpty()) return;
     const QDateTime since = issue.revisions.isEmpty() ? QDateTime() : issue.revisions.last().startedAt;
     for (const auto& bug : bugs) {
@@ -2674,6 +2937,11 @@ void IssuesView::fillBugs(const Issue& issue, const QList<IssueLink>& bugs, QVBo
         h->addWidget(ui::label(bug.step > 0 ? tr("%1 · paso %2").arg(bug.caseId).arg(bug.step) : bug.caseId, "muted-sm"));
         if (since.isValid() && bug.createdAt.isValid() && bug.createdAt >= since)
             h->addWidget(ui::pill(tr("ESTA REVISIÓN"), theme::tint(theme::Blue, 30), theme::Blue));
+        if (verified.contains(bug.key)) {
+            auto* pill = ui::pill(tr("VERIFICADO"), theme::tint(theme::Green, 30), theme::Green);
+            pill->setToolTip(tr("Su paso se volvió a probar después del bug y pasó: se puede cerrar"));
+            h->addWidget(pill);
+        }
         h->addWidget(ui::label(bug.status.isEmpty() ? BugReport::severityLabel(bug.severity) : bug.status, "muted-sm"));
         h->addWidget(ui::label(when(bug.createdAt), "muted-sm"));
         if (!bug.url.isEmpty()) {

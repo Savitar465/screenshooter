@@ -49,11 +49,116 @@ PlanReport reportWith(const QList<QPair<QString, Verdict>>& executed, const QStr
     }
     return report;
 }
+
+/// El issue de un requerimiento importado, para los ciclos que lo prueban.
+QString issueFor(AppFixture& f) {
+    ExternalRequirement requirement;
+    requirement.id = QStringLiteral("2026997");
+    requirement.summary = QStringLiteral("Cupones de descuento");
+    return f.issues.openForRequirement(requirement, QStringLiteral("http://servidor:7401/greq"));
+}
+
+PlanReport issueReport(const QString& issueId, const QString& id, const QString& phase, const QList<QPair<QString, Verdict>>& executed) {
+    PlanReport report = reportWith(executed);
+    report.plan.id = id;
+    report.plan.issueId = issueId;
+    report.plan.revision = 1;
+    report.plan.environment = phase;
+    return report;
+}
 } // namespace
 
 class TestPublishServiceTest : public QObject {
     Q_OBJECT
 private slots:
+    // Un requerimiento tiene en Zephyr un ciclo por fase y un Test por caso: los ciclos de plan de la
+    // misma fase van al mismo ciclo, y el Test del caso es el mismo en QA y en PRE.
+    void anIssueHasOneCyclePerPhaseAndOneTestPerCase() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
+        publish.setIssues(&f.issues);
+        const QString issueId = issueFor(f);
+
+        // Primer ciclo de QA: crea el ciclo de la fase y el Test del caso.
+        zephyr->resultToReturn.createdTests.insert(QStringLiteral("TC-101"), QStringLiteral("SHOP-77"));
+        PublishResult out;
+        publish.publish(issueReport(issueId, QStringLiteral("PR-1"), QStringLiteral("QA"), {{QStringLiteral("TC-101"), Verdict::Fallido}}),
+                        [&out](const PublishResult& r) { out = r; });
+        QVERIFY(out.ok);
+        QVERIFY(zephyr->published[0].cycleId.isEmpty());
+        QCOMPARE(zephyr->published[0].cycleName, QStringLiteral("GREQ 2026997 · QA"));
+        QVERIFY(zephyr->published[0].testContext.contains(QStringLiteral("GREQ 2026997")));
+        const Issue* issue = f.issues.find(issueId);
+        QCOMPARE(issue->zephyr.tests.value(QStringLiteral("TC-101")), QStringLiteral("SHOP-77"));
+        QCOMPARE(issue->zephyr.cycleOf(QStringLiteral("QA")), QStringLiteral("77"));
+        QCOMPARE(issue->zephyr.cycleNameOf(QStringLiteral("QA")), QStringLiteral("GREQ 2026997 · QA"));
+
+        // El reintento en QA (otro ciclo de plan) actualiza ese ciclo con el mismo Test.
+        zephyr->resultToReturn = PublishResult{};
+        PlanReport retest = issueReport(issueId, QStringLiteral("PR-2"), QStringLiteral("QA"), {{QStringLiteral("TC-101"), Verdict::Superado}});
+        QVERIFY(publish.casesNeedingTest(retest).isEmpty());
+        publish.publish(retest, [&out](const PublishResult& r) { out = r; });
+        QCOMPARE(zephyr->published[1].cycleId, QStringLiteral("77"));
+        QCOMPARE(zephyr->published[1].cases.first().testKey, QStringLiteral("SHOP-77"));
+
+        // PRE: otro ciclo de Zephyr, el mismo Test.
+        zephyr->nextCycleId = QStringLiteral("88");
+        publish.publish(issueReport(issueId, QStringLiteral("PR-3"), QStringLiteral("PRE"), {{QStringLiteral("TC-101"), Verdict::Superado}}),
+                        [&out](const PublishResult& r) { out = r; });
+        QVERIFY(zephyr->published[2].cycleId.isEmpty());
+        QCOMPARE(zephyr->published[2].cycleName, QStringLiteral("GREQ 2026997 · PRE"));
+        QCOMPARE(zephyr->published[2].cases.first().testKey, QStringLiteral("SHOP-77"));
+        QCOMPARE(f.issues.find(issueId)->zephyr.cycleOf(QStringLiteral("PRE")), QStringLiteral("88"));
+    }
+
+    // Si el ciclo de la fase se borró en Zephyr, se olvida y se publica en uno nuevo.
+    void aDeletedPhaseCycleIsCreatedAgain() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
+        publish.setIssues(&f.issues);
+        const QString issueId = issueFor(f);
+        f.issues.noteZephyrCycle(issueId, QStringLiteral("QA"), QStringLiteral("70"), QStringLiteral("GREQ 2026997 · QA"));
+        zephyr->missingCycles = {QStringLiteral("70")};
+
+        PublishResult out;
+        publish.publish(issueReport(issueId, QStringLiteral("PR-1"), QStringLiteral("QA"), {{QStringLiteral("TC-101"), Verdict::Superado}}),
+                        [&out](const PublishResult& r) { out = r; });
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(zephyr->published.size(), 2);
+        QCOMPARE(zephyr->published[0].cycleId, QStringLiteral("70"));
+        QVERIFY(zephyr->published[1].cycleId.isEmpty());
+        QCOMPARE(f.issues.find(issueId)->zephyr.cycleOf(QStringLiteral("QA")), QStringLiteral("77"));
+    }
+
+    // Los Tests del requerimiento se pueden crear antes de probarlo; los que ya tiene no se repiten.
+    void theTestsOfAnIssueAreCreatedBeforeTesting() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
+        publish.setIssues(&f.issues);
+        const QString issueId = issueFor(f);
+        const QStringList cases{QStringLiteral("TC-101"), QStringLiteral("TC-102")};
+        QCOMPARE(publish.casesWithoutTest(issueId, cases), cases);
+
+        PublishResult out;
+        publish.createTests(issueId, cases, [&out](const PublishResult& r) { out = r; });
+        QVERIFY(out.ok);
+        QCOMPARE(zephyr->testsRequested.size(), 1);
+        QCOMPARE(zephyr->testsRequested[0].cases.size(), 2);
+        QVERIFY(!zephyr->testsRequested[0].cases[0].design.isEmpty());   // con los pasos del caso
+        QCOMPARE(f.issues.find(issueId)->zephyr.tests.value(QStringLiteral("TC-101")), QStringLiteral("SHOP-101"));
+        QVERIFY(publish.casesWithoutTest(issueId, cases).isEmpty());
+
+        publish.createTests(issueId, cases, [&out](const PublishResult& r) { out = r; });
+        QVERIFY(out.ok);
+        QCOMPARE(zephyr->testsRequested.size(), 1);   // nada que crear: no se llama a Zephyr
+    }
+
     void publishingIsOffUntilZephyrIsEnabledForJira() {
         AppFixture f;
         auto zephyr = std::make_shared<FakeTestManagement>();
@@ -100,8 +205,8 @@ private slots:
         QCOMPARE(req.startedAt, report.plan.startedAt);
     }
 
-    // El ciclo tiene que decir en Zephyr de qué requerimiento y de qué ronda es, y dónde se probó:
-    // varios planes del mismo issue se distinguen por eso, no por el nombre del plan.
+    // Un ciclo que prueba un requerimiento va al ciclo de Zephyr de su fase, que se llama por el
+    // requerimiento y la fase; la ronda y el ambiente siguen en su descripción.
     void theCycleCarriesTheRequirementTheRevisionAndTheEnvironment() {
         AppFixture f;
         f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
@@ -119,8 +224,7 @@ private slots:
         report.plan.issueId = issueId;
         report.plan.revision = 2;
         report.plan.environment = QStringLiteral("QA");
-        QCOMPARE(publish.cycleName(report),
-                 QStringLiteral("GREQ 2026997 · Rev. 2 · Regresión Sprint 14 · 12/05/2026 · QA"));
+        QCOMPARE(publish.cycleName(report), QStringLiteral("GREQ 2026997 · QA"));
 
         publish.publish(report, [](const PublishResult&) {});
         const PublishRequest& sent = zephyr->published[0];
@@ -133,7 +237,7 @@ private slots:
         PlanReport loose = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
         QCOMPARE(publish.cycleName(loose), QStringLiteral("Regresión Sprint 14 · 12/05/2026"));
 
-        // Y una continuación no puede llamarse igual que el ciclo al que continúa: lleva por dónde va.
+        // Y una continuación de la misma fase va al mismo ciclo: actualiza sus ejecuciones.
         const QString cycleId = f.history.startPlan(QStringLiteral("Regresión Sprint 14"), {QStringLiteral("TC-101")},
                                                     QStringLiteral("PL-0001"), QStringLiteral("QA"));
         PlanReport continued = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
@@ -141,8 +245,10 @@ private slots:
         continued.plan.revision = 2;
         continued.plan.environment = QStringLiteral("QA");
         continued.plan.continuesCycleId = cycleId;
-        QCOMPARE(publish.cycleName(continued),
-                 QStringLiteral("GREQ 2026997 · Rev. 2 · Regresión Sprint 14 · Cont. 1 · 12/05/2026 · QA"));
+        QCOMPARE(publish.cycleName(continued), QStringLiteral("GREQ 2026997 · QA"));
+        // Un ciclo suelto que continúa a otro sí lleva por dónde va la cadena: su ciclo es propio.
+        continued.plan.issueId.clear();
+        QCOMPARE(publish.cycleName(continued), QStringLiteral("Rev. 2 · Regresión Sprint 14 · Cont. 1 · 12/05/2026 · QA"));
     }
 
     // Zephyr rechaza con un 406 genérico un ciclo cuyo nombre o descripción pasan de 255
@@ -167,10 +273,16 @@ private slots:
         report.plan.revision = 1;
         report.plan.environment = QStringLiteral("QA");
 
+        // El ciclo de la fase se llama por el requerimiento: el título largo no llega a su nombre.
         const QString name = publish.cycleName(report);
-        QVERIFY(name.size() <= PublishRequest::kMaxCycleField);
-        QVERIFY(name.startsWith(QStringLiteral("GREQ 2025749 · Rev. 1 · IS-0001 · Adecuar")));
-        QVERIFY(name.endsWith(QStringLiteral("… · 12/05/2026 · QA")));   // se acorta el plan, no lo demás
+        QCOMPARE(name, QStringLiteral("GREQ 2025749 · QA"));
+        // Uno suelto con ese plan sí lo lleva, y se acorta el plan, no lo demás.
+        PlanReport loose = report;
+        loose.plan.issueId.clear();
+        const QString own = publish.cycleName(loose);
+        QVERIFY(own.size() <= PublishRequest::kMaxCycleField);
+        QVERIFY(own.startsWith(QStringLiteral("Rev. 1 · IS-0001 · Adecuar")));
+        QVERIFY(own.endsWith(QStringLiteral("… · 12/05/2026 · QA")));
 
         publish.publish(report, [](const PublishResult&) {});
         const PublishRequest& sent = zephyr->published[0];

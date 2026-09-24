@@ -24,6 +24,7 @@ namespace qaflow {
 
 class TestCaseStore;
 class BugStore;
+class BugReportService;
 class BugDetailWindow;
 class RunController;
 class RunHistoryStore;
@@ -58,6 +59,8 @@ class RunView : public QWidget {
 public:
     RunView(TestCaseStore& cases, RunController& run, RunHistoryStore& history, SettingsStore& settings,
             EvidenceService& evidence, BugStore& bugs, QWidget* parent = nullptr);
+    /// Para cerrar bugs en el gestor desde su ficha.
+    void setBugService(BugReportService* service) { m_bugService = service; }
 
     bool focusMode() const { return m_focusMode; }
     /// Entra o sale del modo foco. Sin ejecución no hay nada que enfocar: se queda fuera.
@@ -227,6 +230,7 @@ private:
 
     /// Fichas de bug abiertas, por clave: pulsar otra vez el mismo bug trae la suya al frente.
     QHash<QString, QPointer<BugDetailWindow>> m_bugWindows;
+    BugReportService* m_bugService = nullptr;
 
     bool m_focusMode = false;
     bool m_groupedShots = false;   // hay evidencias de más de un paso: ordenarlas por paso tiene sentido

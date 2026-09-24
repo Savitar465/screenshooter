@@ -33,7 +33,7 @@ QString title(RevisionPublishService::Destination destination) {
         case RevisionPublishService::Destination::Requirement:
             return QCoreApplication::translate("qaflow::RevisionPublishDialog", "Registrar el resultado en GESREQ");
         case RevisionPublishService::Destination::Close:
-            return QCoreApplication::translate("qaflow::RevisionPublishDialog", "Cerrar el issue en el gestor (sólo si es Conforme)");
+            return QCoreApplication::translate("qaflow::RevisionPublishDialog", "Cerrar el issue en el gestor (sólo al cerrar el control conforme)");
     }
     return {};
 }
@@ -56,7 +56,9 @@ RevisionPublishDialog::RevisionPublishDialog(RevisionPublishService& service, co
     setObjectName(QStringLiteral("revisionPublishDialog"));
     // El número de la ronda va en el título: con un requerimiento observado se publica más de una, y
     // hay que ver cuál se está mandando.
-    const QString heading = revision > 0 ? tr("Publicar el resultado de la revisión %1").arg(revision)
+    const QString phase = service.phaseFor(issueId, revision);
+    const QString heading = revision > 0 ? (phase.isEmpty() ? tr("Publicar el resultado de la revisión %1").arg(revision)
+                                                            : tr("Publicar el resultado de la revisión %1 (%2)").arg(revision).arg(phase))
                                          : tr("Publicar el resultado de la revisión");
     setWindowTitle(heading);
     setWindowIcon(ui::appIcon());
@@ -72,7 +74,12 @@ RevisionPublishDialog::RevisionPublishDialog(RevisionPublishService& service, co
 
     m_outcome = new QComboBox;
     m_outcome->setObjectName(QStringLiteral("revisionPublishOutcome"));
-    for (const auto value : {QaOutcome::Conforme, QaOutcome::Observado}) m_outcome->addItem(label(value), static_cast<int>(value));
+    // Conforme se lee según la fase: en una que no es la última la aprueba («Aprobada en QA») y no se
+    // registra ni se cierra nada; en la última es el cierre del control.
+    const bool finalPhase = service.closesRequirement(issueId, QaOutcome::Conforme, revision);
+    m_outcome->addItem(finalPhase || phase.isEmpty() ? label(QaOutcome::Conforme) : tr("Aprobada en %1").arg(phase),
+                       static_cast<int>(QaOutcome::Conforme));
+    m_outcome->addItem(label(QaOutcome::Observado), static_cast<int>(QaOutcome::Observado));
     m_outcome->setCurrentIndex(std::max(0, m_outcome->findData(static_cast<int>(outcome))));
     v->addWidget(field(tr("Resultado del control de calidad"), m_outcome));
 
@@ -172,10 +179,11 @@ void RevisionPublishDialog::refreshCloseStep() {
     bool available = false;
     for (const auto& s : m_steps)
         if (s.destination == RevisionPublishService::Destination::Close) available = s.available;
-    // El issue del gestor sólo se cierra cuando el control termina conforme: observado, sigue abierto.
-    const bool conforme = outcome() == QaOutcome::Conforme;
-    choice->setEnabled(available && conforme);
-    choice->setChecked(available && conforme);
+    // El issue del gestor sólo se cierra cuando el control termina: conforme en la última fase. Observado,
+    // o aprobada una fase anterior, sigue abierto.
+    const bool closes = m_service.closesRequirement(m_issueId, outcome(), m_revision);
+    choice->setEnabled(available && closes);
+    choice->setChecked(available && closes);
 }
 
 void RevisionPublishDialog::refreshRequirementStep() {

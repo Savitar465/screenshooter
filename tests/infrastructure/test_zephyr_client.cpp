@@ -671,7 +671,46 @@ private slots:
         QVERIFY(!out.ok);
         QVERIFY2(out.error.contains(QStringLiteral("77")), qPrintable(out.error));
         QVERIFY(!out.retryable);
+        QVERIFY(out.cycleMissing);   // quien lo guardaba lo olvida y publica en uno nuevo
         for (const auto& r : server.requests) QVERIFY(r.method != "POST" && r.method != "PUT");
+    }
+
+    // Los Tests del requerimiento se crean antes de probarlo: sólo el Test y sus pasos, sin ciclo ni
+    // ejecución, y el caso que ya tiene el suyo no se toca.
+    void createsTheMissingTestsWithoutACycle() {
+        FakeHttpServer server;
+        routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+        routeMyself(server, "es_ES");
+        server.route("PUT", "/rest/api/2/issue/SHOP-77/assignee", [](const HttpRequest&) { return HttpResponse::json(204, ""); });
+
+        PublishCase fresh = caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {});
+        fresh.title = QStringLiteral("Comprar con cupón");
+        fresh.design = {TestStep{QStringLiteral("Abrir carrito"), {}, QStringLiteral("Se abre")}};
+        PublishCase known = caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado, {});
+        PublishRequest request;
+        request.testContext = QStringLiteral("GREQ 2026997 · Cupones");
+        request.cases = {fresh, known};
+
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.createTests(settingsFor(server.baseUrl()), request, [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.createdTests.size(), 1);
+        QCOMPARE(out.createdTests.value(QStringLiteral("TC-103")), QStringLiteral("SHOP-77"));
+        int created = 0;
+        for (const auto& r : server.requests) {
+            // Leer sí (la detección de la API consulta ciclos); crear ciclos o ejecuciones, no.
+            if (r.method != "GET") QVERIFY2(!r.path.contains("/cycle") && !r.path.contains("/execution"), r.path.constData());
+            if (r.method == "POST" && r.path == "/rest/api/2/issue") {
+                ++created;
+                const QString description = bodyOf(r)[QStringLiteral("fields")].toObject()[QStringLiteral("description")].toString();
+                QVERIFY2(description.contains(QStringLiteral("GREQ 2026997")), qPrintable(description));
+            }
+        }
+        QCOMPARE(created, 1);
     }
 
     void unknownVersionStopsThePublicationBeforeCreatingAnything() {

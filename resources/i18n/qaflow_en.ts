@@ -829,6 +829,30 @@
         <source>Este conector no descarga adjuntos</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Aprobada en %1</source>
+        <translation>Passed in %1</translation>
+    </message>
+    <message>
+        <source>%1 en %2</source>
+        <translation>%1 in %2</translation>
+    </message>
+    <message>
+        <source>Control de calidad GREQ %1 — revisión %2 (%3): %4</source>
+        <translation>Quality control GREQ %1 — revision %2 (%3): %4</translation>
+    </message>
+    <message>
+        <source>Observaciones: %1 · corregidas: %2</source>
+        <translation>Observations: %1 · corrected: %2</translation>
+    </message>
+    <message>
+        <source>- %1 · %2: %3 (%4 corregida(s))</source>
+        <translation>- %1 · %2: %3 (%4 corrected)</translation>
+    </message>
+    <message>
+        <source>Esta herramienta no crea Tests sueltos</source>
+        <translation>This tool does not create standalone Tests</translation>
+    </message>
 </context>
 <context>
     <name>infrastructure</name>
@@ -1117,10 +1141,6 @@
         <translation>%1: Test %2 was not found</translation>
     </message>
     <message>
-        <source>Creado por QAflow a partir del caso %1 para el ciclo «%2»</source>
-        <translation>Created by QAflow from case %1 for the cycle “%2”</translation>
-    </message>
-    <message>
         <source>El ciclo %1 ya no existe en Zephyr: publica los resultados como ciclo nuevo</source>
         <translation>Cycle %1 no longer exists in Zephyr: publish the results as a new cycle</translation>
     </message>
@@ -1256,13 +1276,6 @@
         <source>GESREQ no admite adjuntos «%1»: el acta tiene que ser .doc, .docx, .pdf, .xls, .xlsx, .vsd, .jpg o .gif</source>
         <translation>GESREQ does not accept “%1” attachments: the record must be .doc, .docx, .pdf, .xls, .xlsx, .vsd, .jpg or .gif</translation>
     </message>
-    <message numerus="yes">
-        <source>GESREQ no acepta un control «OK» con %n observación(es) que no sean recomendaciones: registra esta ronda como observada</source>
-        <translation>
-            <numerusform>GESREQ does not accept an “OK” control with %n observation that is not a recommendation: register this round as observed</numerusform>
-            <numerusform>GESREQ does not accept an “OK” control with %n observations that are not recommendations: register this round as observed</numerusform>
-        </translation>
-    </message>
     <message>
         <source>GESREQ no acepta un control «OBSERVADO» sin ninguna observación de funcionamiento, datos, forma o vulnerabilidades</source>
         <translation>GESREQ does not accept an “OBSERVADO” control without any behaviour, data, appearance or vulnerability observation</translation>
@@ -1378,6 +1391,17 @@
     <message>
         <source>GESREQ respondió con una página en lugar del adjunto %1</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>GESREQ no acepta un control «OK» con %n observación(es) sin corregir que no sean recomendaciones: cierra sus bugs o registra esta ronda como observada</source>
+        <translation>
+            <numerusform>GESREQ does not accept an “OK” control with %n uncorrected observation that is not a recommendation: close its bug or register this round as observed</numerusform>
+            <numerusform>GESREQ does not accept an “OK” control with %n uncorrected observations that are not recommendations: close their bugs or register this round as observed</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Creado por QAflow a partir del caso %1 para «%2»</source>
+        <translation>Created by QAflow from case %1 for “%2”</translation>
     </message>
 </context>
 <context>
@@ -1742,6 +1766,42 @@
         <source>Reportado el %1</source>
         <translation>Reported on %1</translation>
     </message>
+    <message>
+        <source>Cerrar en el gestor…</source>
+        <translation>Close in the tracker…</translation>
+    </message>
+    <message>
+        <source>Lleva el bug a un estado resuelto en el gestor: dalo por corregido</source>
+        <translation>Moves the bug to a resolved status in the tracker: mark it as fixed</translation>
+    </message>
+    <message>
+        <source>Cerrar el bug</source>
+        <translation>Close the bug</translation>
+    </message>
+    <message>
+        <source>¿Cerrar %1 en el gestor? Se da por corregido.</source>
+        <translation>Close %1 in the tracker? It will be considered fixed.</translation>
+    </message>
+    <message>
+        <source>Cerrar %1</source>
+        <translation>Close %1</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+        <source>Cerrado en el gestor</source>
+        <translation>Closed in the tracker</translation>
+    </message>
+    <message>
+        <source>El cierre no quedó confirmado: compruébalo en el gestor</source>
+        <translation>The closure was not confirmed: check it in the tracker</translation>
+    </message>
+    <message>
+        <source>Cerrando…</source>
+        <translation>Closing…</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::BugDialog</name>
@@ -2003,6 +2063,18 @@
     <message>
         <source>El gestor configurado no sabe buscar los bugs de QAflow</source>
         <translation>The configured tracker cannot search for QAflow bugs</translation>
+    </message>
+    <message>
+        <source>%1: el gestor configurado no cierra issues desde QAflow</source>
+        <translation>%1: the configured tracker does not close issues from QAflow</translation>
+    </message>
+    <message>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <source>Cerrado</source>
+        <translation>Closed</translation>
     </message>
 </context>
 <context>
@@ -2597,6 +2669,18 @@
     <message>
         <source>Continuar</source>
         <translation>Continue</translation>
+    </message>
+    <message>
+        <source>FASE</source>
+        <translation>PHASE</translation>
+    </message>
+    <message>
+        <source>Continúa en la fase del ciclo que continúa.</source>
+        <translation>It continues in the phase of the cycle it continues.</translation>
+    </message>
+    <message>
+        <source>Se propone la fase que le toca a la revisión; aprobada una fase desde el issue, se pasa a la siguiente.</source>
+        <translation>The revision's phase is proposed; once a phase is approved from the issue, the next one follows.</translation>
     </message>
 </context>
 <context>
@@ -3321,6 +3405,10 @@
         <source>Heredada de %1: el paso no se volvió a probar</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Publica estas ejecuciones en el ciclo «%1» de Zephyr, el de su fase</source>
+        <translation>Publishes these executions in the Zephyr cycle “%1”, the one of their phase</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ImageViewer</name>
@@ -3528,6 +3616,14 @@
     <message>
         <source>Requerimiento %1</source>
         <translation>Requirement %1</translation>
+    </message>
+    <message>
+        <source>El issue ya no existe</source>
+        <translation>The issue no longer exists</translation>
+    </message>
+    <message>
+        <source>%1 ya tiene revisiones cerradas en %2: esa fase no se puede quitar</source>
+        <translation>%1 already has closed revisions in %2: that phase cannot be removed</translation>
     </message>
 </context>
 <context>
@@ -3973,10 +4069,6 @@ Create another one anyway?</translation>
         <translation>Close the review</translation>
     </message>
     <message>
-        <source>¿Con qué resultado se cierra la revisión del requerimiento?</source>
-        <translation>With which result is the requirement review closed?</translation>
-    </message>
-    <message>
         <source>Se propone «%1»: no queda nada pendiente.</source>
         <translation>“%1” is proposed: nothing is pending.</translation>
     </message>
@@ -3985,24 +4077,12 @@ Create another one anyway?</translation>
         <translation>“%1” is proposed: %2.</translation>
     </message>
     <message>
-        <source>Conforme</source>
-        <translation>Passed</translation>
-    </message>
-    <message>
         <source>Observado</source>
         <translation>With findings</translation>
     </message>
     <message>
         <source>Revisión cerrada como conforme</source>
         <translation>Review closed as passed</translation>
-    </message>
-    <message>
-        <source>Revisión cerrada con observaciones: al volver a probar se abre la siguiente</source>
-        <translation>Review closed with findings: testing again opens the next one</translation>
-    </message>
-    <message>
-        <source>Revisión %1 abierta: el issue vuelve a pruebas</source>
-        <translation>Review %1 opened: the issue goes back to testing</translation>
     </message>
     <message>
         <source>Publica los planes con sus casos en Zephyr, deja el resultado y el acta en el gestor y registra el control de calidad en GESREQ</source>
@@ -4129,10 +4209,6 @@ Create another one anyway?</translation>
         <translation>Closed on %1 as %2</translation>
     </message>
     <message>
-        <source>Se cierra con el resultado del control: conforme u observado</source>
-        <translation>It is closed with the control result: compliant or with findings</translation>
-    </message>
-    <message>
         <source>Publicar el resultado</source>
         <translation>Publish the result</translation>
     </message>
@@ -4155,10 +4231,6 @@ Create another one anyway?</translation>
     <message>
         <source>Volver a probar</source>
         <translation>Test again</translation>
-    </message>
-    <message>
-        <source>El requerimiento quedó observado: al corregirlo se abre la revisión %1</source>
-        <translation>The requirement was left with findings: fixing it opens revision %1</translation>
     </message>
     <message>
         <source>Abre otra ronda de pruebas del requerimiento</source>
@@ -4432,10 +4504,6 @@ Create another one anyway?</translation>
         <translation>Open the issue</translation>
     </message>
     <message>
-        <source>REVISIÓN %1</source>
-        <translation>REVIEW %1</translation>
-    </message>
-    <message>
         <source>Preparar el plan</source>
         <translation>Prepare the plan</translation>
     </message>
@@ -4637,14 +4705,6 @@ Create another one anyway?</translation>
         <translation>REVISIONS</translation>
     </message>
     <message>
-        <source>Revisión %1 · abierta desde %2</source>
-        <translation>Revision %1 · open since %2</translation>
-    </message>
-    <message>
-        <source>Revisión %1 · %2 · cerrada el %3</source>
-        <translation>Revision %1 · %2 · closed on %3</translation>
-    </message>
-    <message>
         <source>Cambiar de proyecto</source>
         <translation>Switch project</translation>
     </message>
@@ -4732,6 +4792,255 @@ Create another one anyway?</translation>
             <numerusform>Issues finished more than %n day ago are only shown in the list</numerusform>
             <numerusform>Issues finished more than %n days ago are only shown in the list</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>REV %1 · %2</source>
+        <translation>REV %1 · %2</translation>
+    </message>
+    <message>
+        <source>Probar en %1</source>
+        <translation>Test in %1</translation>
+    </message>
+    <message>
+        <source>%1 aprobada en la revisión %2: la ronda siguiente es de %3</source>
+        <translation>%1 passed in revision %2: the next round is %3</translation>
+    </message>
+    <message>
+        <source>Toca %1</source>
+        <translation>%1 is next</translation>
+    </message>
+    <message>
+        <source>▶ Empezar %1…</source>
+        <translation>▶ Start %1…</translation>
+    </message>
+    <message>
+        <source>▶ %1</source>
+        <translation>▶ %1</translation>
+    </message>
+    <message>
+        <source>Revisión %1</source>
+        <translation>Revision %1</translation>
+    </message>
+    <message>
+        <source>Revisión %1 (%2)</source>
+        <translation>Revision %1 (%2)</translation>
+    </message>
+    <message>
+        <source>%1 · abierta desde %2</source>
+        <translation>%1 · open since %2</translation>
+    </message>
+    <message>
+        <source>%1 · %2 · cerrada el %3</source>
+        <translation>%1 · %2 · closed on %3</translation>
+    </message>
+    <message>
+        <source>REVISIÓN %1 · %2 · %3</source>
+        <translation>REVISION %1 · %2 · %3</translation>
+    </message>
+    <message>
+        <source>Fases: %1</source>
+        <translation>Phases: %1</translation>
+    </message>
+    <message>
+        <source>Cada fase se prueba en una o más revisiones. Conforme en una fase la aprueba y se pasa a la siguiente; sólo el Conforme de la última registra el OK en GESREQ y cierra el issue del gestor.</source>
+        <translation>Each phase is tested in one or more revisions. Conforming in a phase approves it and moves on to the next; only conforming in the last one registers the OK in GESREQ and closes the tracker issue.</translation>
+    </message>
+    <message>
+        <source>Se cierra con el resultado del control: conforme (el cierre final) u observado</source>
+        <translation>It is closed with the control result: conforming (the final closure) or observed</translation>
+    </message>
+    <message>
+        <source>Se cierra aprobando %1 (y se pasa a %2) u observada</source>
+        <translation>It is closed approving %1 (moving on to %2) or observed</translation>
+    </message>
+    <message>
+        <source>%1 aprobada: la revisión %2 es de %3</source>
+        <translation>%1 passed: revision %2 is %3</translation>
+    </message>
+    <message>
+        <source>El requerimiento quedó observado: al corregirlo se abre la revisión %1 en %2</source>
+        <translation>The requirement was observed: once fixed, revision %1 opens in %2</translation>
+    </message>
+    <message>
+        <source>Arranca un ciclo del plan en %1: abre la revisión %2</source>
+        <translation>Starts a plan cycle in %1: opens revision %2</translation>
+    </message>
+    <message>
+        <source>¿Con qué resultado se cierra la revisión %1 (%2)?</source>
+        <translation>With which result is revision %1 (%2) closed?</translation>
+    </message>
+    <message>
+        <source>¿Cómo termina %1 en la revisión %2?</source>
+        <translation>How does %1 end in revision %2?</translation>
+    </message>
+    <message>
+        <source>Conforme (cierre final)</source>
+        <translation>Conforming (final closure)</translation>
+    </message>
+    <message>
+        <source>Aprobada en %1 → pasar a %2</source>
+        <translation>Passed in %1 → move to %2</translation>
+    </message>
+    <message>
+        <source>Revisión cerrada con observaciones: al volver a probar se abre la siguiente, en %1</source>
+        <translation>Revision closed with observations: retesting opens the next one, in %1</translation>
+    </message>
+    <message>
+        <source>%1 aprobada: la revisión siguiente es de %2</source>
+        <translation>%1 passed: the next revision is %2</translation>
+    </message>
+    <message>
+        <source>Revisión %1 abierta en %2: el issue vuelve a pruebas</source>
+        <translation>Revision %1 opened in %2: the issue is back in testing</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n ya pasó el reintento y se puede cerrar.</source>
+        <translation>
+            <numerusform>%n already passed the retest and can be closed.</numerusform>
+            <numerusform>%n already passed the retest and can be closed.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Cerrar verificados (%1)…</source>
+        <translation>Close verified (%1)…</translation>
+    </message>
+    <message>
+        <source>Cerrar (%1)</source>
+        <translation>Close (%1)</translation>
+    </message>
+    <message>
+        <source>%1 bug(s) · %2 abierto(s), %3 ya verificado(s) en un reintento</source>
+        <translation>%1 bug(s) · %2 open, %3 already verified in a retest</translation>
+    </message>
+    <message>
+        <source>Cierra en el gestor los bugs cuyo paso se volvió a probar y pasó</source>
+        <translation>Closes in the tracker the bugs whose step was retested and passed</translation>
+    </message>
+    <message>
+        <source>El gestor configurado no cierra issues desde QAflow: ciérralos en él y usa «Actualizar estados»</source>
+        <translation>The configured tracker does not close issues from QAflow: close them there and use “Refresh statuses”</translation>
+    </message>
+    <message>
+        <source>Cerrar bugs verificados</source>
+        <translation>Close verified bugs</translation>
+    </message>
+    <message numerus="yes">
+        <source>¿Cerrar en el gestor %n bug(s) cuyo paso ya pasó el reintento?</source>
+        <translation>
+            <numerusform>Close in the tracker %n bug whose step already passed the retest?</numerusform>
+            <numerusform>Close in the tracker %n bugs whose step already passed the retest?</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Cerrar %n bug(s)</source>
+        <translation>
+            <numerusform>Close %n bug</numerusform>
+            <numerusform>Close %n bugs</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n cerrado(s)</source>
+        <translation>
+            <numerusform>%n closed</numerusform>
+            <numerusform>%n closed</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>sin confirmar: %1 (compruébalos en el gestor)</source>
+        <translation>unconfirmed: %1 (check them in the tracker)</translation>
+    </message>
+    <message>
+        <source>no se pudieron cerrar: %1</source>
+        <translation>could not be closed: %1</translation>
+    </message>
+    <message>
+        <source>Bugs · %1</source>
+        <translation>Bugs · %1</translation>
+    </message>
+    <message>
+        <source>VERIFICADO</source>
+        <translation>VERIFIED</translation>
+    </message>
+    <message>
+        <source>Su paso se volvió a probar después del bug y pasó: se puede cerrar</source>
+        <translation>Its step was retested after the bug and passed: it can be closed</translation>
+    </message>
+    <message>
+        <source>Fases…</source>
+        <translation>Phases…</translation>
+    </message>
+    <message>
+        <source>Elige en qué fases se prueba este requerimiento</source>
+        <translation>Choose the phases this requirement is tested in</translation>
+    </message>
+    <message>
+        <source>Zephyr: los %1 caso(s) tienen su Test</source>
+        <translation>Zephyr: all %1 case(s) have their Test</translation>
+    </message>
+    <message>
+        <source>Zephyr: %1 de %2 caso(s) con Test</source>
+        <translation>Zephyr: %1 of %2 case(s) with a Test</translation>
+    </message>
+    <message>
+        <source>Crear Tests en Zephyr (%1)…</source>
+        <translation>Create Tests in Zephyr (%1)…</translation>
+    </message>
+    <message>
+        <source>Crea en Zephyr un Test por caso (el que usarán los ciclos de QA y de PRE) y los enlaza al issue</source>
+        <translation>Creates one Test per case in Zephyr (used by the QA and PRE cycles) and links them to the issue</translation>
+    </message>
+    <message>
+        <source>El requerimiento tiene que probarse al menos en una fase</source>
+        <translation>The requirement has to be tested in at least one phase</translation>
+    </message>
+    <message>
+        <source>Crear Tests en Zephyr</source>
+        <translation>Create Tests in Zephyr</translation>
+    </message>
+    <message numerus="yes">
+        <source>¿Crear en Zephyr %n Test(s), uno por caso, y enlazarlos al issue del requerimiento?</source>
+        <translation>
+            <numerusform>Create %n Test in Zephyr, one per case, and link it to the requirement issue?</numerusform>
+            <numerusform>Create %n Tests in Zephyr, one per case, and link them to the requirement issue?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Crear Tests</source>
+        <translation>Create Tests</translation>
+    </message>
+    <message>
+        <source>No se crearon los Tests · %1</source>
+        <translation>The Tests were not created · %1</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n Test(s) creado(s) en Zephyr</source>
+        <translation>
+            <numerusform>%n Test created in Zephyr</numerusform>
+            <numerusform>%n Tests created in Zephyr</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source> · %n enlace(s) al issue</source>
+        <translation>
+            <numerusform> · %n link to the issue</numerusform>
+            <numerusform> · %n links to the issue</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>revisión %1 cerrada</source>
+        <translation>revision %1 closed</translation>
+    </message>
+    <message>
+        <source>la revisión %1 ya tiene ciclos</source>
+        <translation>revision %1 already has cycles</translation>
+    </message>
+    <message>
+        <source>Fases en las que se prueba</source>
+        <translation>Phases it is tested in</translation>
+    </message>
+    <message>
+        <source>No se puede quitar %1: %2</source>
+        <translation>%1 cannot be removed: %2</translation>
     </message>
 </context>
 <context>
@@ -5228,10 +5537,6 @@ Create another one anyway?</translation>
         <translation>GREQ %1</translation>
     </message>
     <message>
-        <source>%1 · revisión %2</source>
-        <translation>%1 · revision %2</translation>
-    </message>
-    <message>
         <source>Ese ciclo no dejó ningún caso fallado ni bloqueado que continuar</source>
         <translation>That cycle left no failed or blocked case to continue</translation>
     </message>
@@ -5274,6 +5579,14 @@ Create another one anyway?</translation>
     <message>
         <source>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Nuevo caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Buscar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Clonar caso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Deshacer el último borrado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ejecutar el caso seleccionado&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Capturar pantalla (global si el sistema lo permite; vuelve a pulsar para cancelar la cuenta atrás)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Iniciar o detener la grabación de GIF&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Adjuntar archivos como evidencia (o arrástralos a la ventana)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en una miniatura&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir la evidencia a tamaño completo (← → navegan, Ctrl+E anota, Ctrl+C copia)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Falla el paso actual y avanza al siguiente (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Vuelve al paso anterior, sin tocar su veredicto (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pasa al siguiente sin darle veredicto a este (global)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Reportar bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Cambiar de pantalla&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Abrir los ajustes&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Veredicto del paso en ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Retroceso · Alt+← · Alt+→&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Moverse por los pasos de la ejecución&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Clic en un paso de la lista&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Ir a ese paso&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Salir&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</source>
         <translation>&lt;table cellspacing=&apos;6&apos;&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+N&lt;/b&gt;&lt;/td&gt;&lt;td&gt;New case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+F&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Find case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+D&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Clone case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Undo the last deletion&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;F5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Run the selected case&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Take a screenshot (system-wide when the system allows it; press again to cancel the countdown)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Start or stop the GIF recording&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Shift+A&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Attach files as evidence (or drag them onto the window)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a thumbnail&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the evidence at full size (← → navigate, Ctrl+E annotates, Ctrl+C copies)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Pass the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%4&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Fail the current step and move to the next one (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go back to the previous step, leaving its verdict alone (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;%6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Move to the next step without giving this one a verdict (system-wide)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+B&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Report bug&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+1 … Ctrl+6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Switch screen&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+,&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Open the settings&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;P / F / B / S&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Verdict of the running step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Backspace · Alt+← · Alt+→&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Move through the steps of the run&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Click a step in the list&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Go to that step&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;b&gt;Ctrl+Q&lt;/b&gt;&lt;/td&gt;&lt;td&gt;Quit&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
+    </message>
+    <message>
+        <source>%1 · revisión %2</source>
+        <translation>%1 · revision %2</translation>
+    </message>
+    <message>
+        <source>La revisión %1 ya tiene ciclos en %2: para probar en %3, ciérrala antes desde el issue.</source>
+        <translation>Revision %1 already has cycles in %2: to test in %3, close it first from the issue.</translation>
     </message>
 </context>
 <context>
@@ -6050,6 +6363,10 @@ Create another one anyway?</translation>
         <source>No se pudo guardar el sistema de GESREQ del proyecto.</source>
         <translation>Could not save the GESREQ system of the project.</translation>
     </message>
+    <message>
+        <source>No se pudieron guardar las fases del proyecto.</source>
+        <translation>The project phases could not be saved.</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::QualityRecordDialog</name>
@@ -6339,8 +6656,16 @@ Create another one anyway?</translation>
         <translation>Publish the result of review %1</translation>
     </message>
     <message>
-        <source>Cerrar el issue en el gestor (sólo si es Conforme)</source>
-        <translation>Close the tracker issue (only if Passed)</translation>
+        <source>Cerrar el issue en el gestor (sólo al cerrar el control conforme)</source>
+        <translation>Close the issue in the tracker (only when the control closes as conforming)</translation>
+    </message>
+    <message>
+        <source>Publicar el resultado de la revisión %1 (%2)</source>
+        <translation>Publish the result of revision %1 (%2)</translation>
+    </message>
+    <message>
+        <source>Aprobada en %1</source>
+        <translation>Passed in %1</translation>
     </message>
 </context>
 <context>
@@ -6518,10 +6843,6 @@ Create another one anyway?</translation>
         <translation>Already closed in the tracker (%1)</translation>
     </message>
     <message>
-        <source>Sólo si el resultado es Conforme y lo demás se publica bien</source>
-        <translation>Only if the result is Passed and everything else publishes fine</translation>
-    </message>
-    <message>
         <source>No se puede cerrar el issue en el gestor</source>
         <translation>The tracker issue cannot be closed</translation>
     </message>
@@ -6556,6 +6877,22 @@ Create another one anyway?</translation>
     <message>
         <source>%1 de %2</source>
         <translation>%1 of %2</translation>
+    </message>
+    <message>
+        <source>Aprobada en %1: GESREQ no se entera hasta que la última fase (%2) quede conforme</source>
+        <translation>Passed in %1: GESREQ is not told until the last phase (%2) conforms</translation>
+    </message>
+    <message>
+        <source>Sólo si la fase %1 (la última) queda Conforme y lo demás se publica bien</source>
+        <translation>Only if phase %1 (the last one) conforms and everything else is published correctly</translation>
+    </message>
+    <message>
+        <source>Zephyr · ciclo «%1»</source>
+        <translation>Zephyr · cycle “%1”</translation>
+    </message>
+    <message>
+        <source>Activa Zephyr en Ajustes para crear los Tests</source>
+        <translation>Enable Zephyr in Settings to create the Tests</translation>
     </message>
 </context>
 <context>
@@ -7667,6 +8004,18 @@ Press “Capture” or drop a file on the window.</translation>
         <source>Consultando los modelos disponibles…</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Ambientes en los que se prueba cada requerimiento, en orden y separados por comas. Aprobado uno se pasa al siguiente; sólo el Conforme del último registra el OK en GESREQ y cierra el issue del gestor.</source>
+        <translation>Environments each requirement is tested in, in order and separated by commas. Once one passes the next one follows; only conforming in the last one registers the OK in GESREQ and closes the tracker issue.</translation>
+    </message>
+    <message>
+        <source>Fases del control de calidad</source>
+        <translation>Quality control phases</translation>
+    </message>
+    <message>
+        <source>Fases del proyecto: %1</source>
+        <translation>Project phases: %1</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ShotCard</name>
@@ -7910,6 +8259,26 @@ Continúa el ciclo %1: sólo sus casos fallados y bloqueados</source>
         <translation>
 Continues cycle %1: only its failed and blocked cases</translation>
     </message>
+    <message>
+        <source>GREQ %1 · %2</source>
+        <translation>GREQ %1 · %2</translation>
+    </message>
+    <message>
+        <source>%1 · %2 · %3</source>
+        <translation>%1 · %2 · %3</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>Activa Zephyr en Ajustes para crear los Tests</source>
+        <translation>Enable Zephyr in Settings to create the Tests</translation>
+    </message>
+    <message>
+        <source>El issue ya no existe</source>
+        <translation>The issue no longer exists</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::TextArea</name>
@@ -8051,6 +8420,22 @@ HEADS-UP: these results were already published on %1 (cycle %2). A new cycle wil
     <message>
         <source> · %1 sin asignar a tu usuario</source>
         <translation> · %1 not assigned to your user</translation>
+    </message>
+    <message>
+        <source>Los resultados van al ciclo «%1» de Zephyr, el de la fase %2 del requerimiento: se actualizan las ejecuciones de estos %3 caso(s) (veredicto, pasos y las evidencias que falten).</source>
+        <translation>The results go to the Zephyr cycle “%1”, the one of the requirement&apos;s %2 phase: the executions of these %3 case(s) are updated (verdict, steps and any missing evidence).</translation>
+    </message>
+    <message>
+        <source>Se creará el ciclo «%1» de Zephyr, el de la fase %2 del requerimiento, con %3 ejecución(es). Las rondas y continuaciones siguientes de esa fase lo irán actualizando.</source>
+        <translation>The Zephyr cycle “%1”, the one of the requirement&apos;s %2 phase, will be created with %3 execution(s). The next rounds and continuations of that phase will keep updating it.</translation>
+    </message>
+    <message>
+        <source>
+
+Antes se crearán en Jira %1 Test(s), uno por caso, que el requerimiento usará en todas sus fases: %2.</source>
+        <translation>
+
+First %1 Test(s) will be created in Jira, one per case, which the requirement will use in all its phases: %2.</translation>
     </message>
 </context>
 <context>

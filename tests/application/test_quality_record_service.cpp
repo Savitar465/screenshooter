@@ -175,6 +175,44 @@ private slots:
         QVERIFY(!draft.bugs.contains(QStringLiteral("SHOP-1")));
     }
 
+    // El acta del cierre del control (PRE conforme) declara todo lo encontrado en el requerimiento, de QA y
+    // de PRE, y como corregido lo que ya está cerrado: también un bug encontrado y cerrado en la propia
+    // ronda de PRE.
+    void theClosingRecordCountsEverythingFoundAndWhatWasFixed() {
+        AppFixture f;
+        const Testing t = issueInTesting(f);                      // revisión 1, QA
+        const QDateTime old = QDateTime::currentDateTime().addDays(-5);
+        f.bugLedger.recordIssue(bugOf(QStringLiteral("SHOP-1"), QStringLiteral("TC-101"), QStringLiteral("A"), old, true));
+        f.bugLedger.recordIssue(bugOf(QStringLiteral("SHOP-2"), QStringLiteral("TC-102"), QStringLiteral("C"), old, true));
+        f.issues.closeRevision(t.issueId, QaOutcome::Conforme);    // QA aprobada
+        f.issues.notePlanStarted(t.planId);                        // revisión 2, PRE
+        QCOMPARE(f.issues.find(t.issueId)->currentRevision()->phase, QStringLiteral("PRE"));
+        const QDateTime now = QDateTime::currentDateTime();
+        const QString cycle = addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), now,
+                                       {{QStringLiteral("TC-101"), Verdict::Superado}, {QStringLiteral("TC-102"), Verdict::Superado}});
+        IssueLink inPre = bugOf(QStringLiteral("SHOP-3"), QStringLiteral("TC-101"), QStringLiteral("A"), now, true);
+        inPre.runId = QStringLiteral("R-1");
+        inPre.planRunId = cycle;
+        f.bugLedger.recordIssue(inPre);
+
+        const QualityRecord draft = f.records.draftFor(t.issueId);
+        QCOMPARE(draft.observations[0].observations, 2);   // A: SHOP-1 (QA) y SHOP-3 (PRE)
+        QCOMPARE(draft.observations[0].corrections, 2);
+        QCOMPARE(draft.observations[2].observations, 1);   // C: SHOP-2
+        QCOMPARE(draft.observations[2].corrections, 1);
+        QCOMPARE(draft.totalObservations(), 3);
+        QCOMPARE(draft.totalCorrections(), 3);
+        const QString summary = f.records.summaryFor(t.issueId, draft, QaOutcome::Conforme);
+        QVERIFY2(summary.contains(QStringLiteral("revisión 2 (PRE): Conforme")), qPrintable(summary));
+        QVERIFY2(summary.contains(QStringLiteral("Observaciones: 3 · corregidas: 3")), qPrintable(summary));
+
+        // Y en GESREQ va lo mismo que dice el acta.
+        const RequirementRegistration registration =
+            f.revisionPublish.registrationFor(t.issueId, QaOutcome::Conforme, QStringLiteral("/tmp/acta.docx"));
+        QCOMPARE(registration.observations[0].observations, 2);
+        QCOMPARE(registration.observations[0].corrections, 2);
+    }
+
     // Un bug de una ejecución suelta de un caso del issue no es de la ronda: como su resultado, no es
     // de ninguno de los ciclos del issue aunque se reportara mientras la revisión estaba abierta.
     void bugsOfALooseRunAreNotObservationsOfTheRevision() {
@@ -278,9 +316,9 @@ private slots:
         // resumen son los de entonces, no los de la ronda en curso.
         const QualityRecord again = f.records.draftFor(t.issueId, QString(), 1);
         QCOMPARE(again.revisionNumber, 1);
-        QVERIFY(f.records.suggestedFileName(t.issueId, 1).startsWith(QStringLiteral("ControlCalidad_2026997_rev1_")));
+        QVERIFY(f.records.suggestedFileName(t.issueId, 1).startsWith(QStringLiteral("ControlCalidad_2026997_rev1_QA_")));
         QVERIFY(f.records.summaryFor(t.issueId, again, QaOutcome::Observado, QString(), 1)
-                    .contains(QStringLiteral("revisión 1: Observado")));
+                    .contains(QStringLiteral("revisión 1 (QA): Observado")));
     }
 
     void aRecordThatCouldNotBeWrittenChangesNothing() {
@@ -298,13 +336,14 @@ private slots:
         const Testing t = issueInTesting(f);
         addCycle(f, t.planId, QStringLiteral("Plan GREQ 2026997"), QDateTime::currentDateTime(),
                  {{QStringLiteral("TC-101"), Verdict::Superado}});
-        // La ronda va en el nombre: un requerimiento observado levanta un acta por revisión.
+        // La ronda y su fase van en el nombre: un requerimiento observado levanta un acta por revisión.
         const QString name = f.records.suggestedFileName(t.issueId);
-        QVERIFY2(name.startsWith(QStringLiteral("ControlCalidad_2026997_rev1_")), qPrintable(name));
+        QVERIFY2(name.startsWith(QStringLiteral("ControlCalidad_2026997_rev1_QA_")), qPrintable(name));
         QVERIFY(name.endsWith(QStringLiteral(".docx")));
 
         const QString summary = f.records.summaryFor(t.issueId, f.records.draftFor(t.issueId), QaOutcome::Conforme);
-        QVERIFY(summary.contains(QStringLiteral("GREQ 2026997 — revisión 1: Conforme")));
+        // Conforme en QA, que no es la última fase, aprueba QA: no es el OK del requerimiento.
+        QVERIFY2(summary.contains(QStringLiteral("GREQ 2026997 — revisión 1 (QA): Aprobada en QA")), qPrintable(summary));
         QVERIFY(summary.contains(QStringLiteral("Casos ejecutados: 1 de 1")));
         QVERIFY(summary.contains(QStringLiteral("Plan «Plan GREQ 2026997»")));
         QVERIFY(summary.contains(QStringLiteral("Sin observaciones")));

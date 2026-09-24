@@ -138,11 +138,21 @@ private:
         bool hasPlan = false;
         bool executed = false;
         int openBugs = 0;
+        /// Bugs abiertos cuyo paso se volvió a probar y pasó (`retestPassed`): los que se pueden dar por
+        /// corregidos y cerrar en el gestor.
+        QStringList verifiedBugs;
         bool hasRecord = false;
         bool open = false;       // hay una ronda abierta
         bool closed = false;     // la última ronda está cerrada
         bool published = false;
         int number = 1;          // número de la ronda en curso (o de la última)
+        QString phase;           // fase de esa ronda (la de la próxima si todavía no hay ninguna)
+        bool finalPhase = true;  // es la última fase: su Conforme cierra el control del requerimiento
+        /// La ronda cerrada aprobó una fase que no es la última: no lleva acta ni registro, y lo que
+        /// toca es probar en la siguiente (`upcoming`).
+        bool phaseApproved = false;
+        QString upcoming;        // fase de la próxima ronda
+        QString following;       // la fase que va después de `phase`; vacía si ésta es la última
         QString continuable;     // ciclo de la ronda que se puede continuar; vacío si ninguno
         /// Qué lleva hecho cada paso, en el orden en que se hacen (plan, ejecución, bugs, acta, cierre
         /// y publicación): es lo que marca el visto y de lo que sale `nextStep`. Un paso posterior puede
@@ -152,6 +162,10 @@ private:
         int nextStep = 1;
     };
     RevisionSnapshot snapshotOf(const Issue& issue) const;
+    /// El resultado de una ronda tal y como se lee según su fase: «Aprobada en QA», «Conforme», «Observado».
+    QString outcomeText(const Issue& issue, QaOutcome outcome, const QString& phase) const;
+    /// Las fases del proyecto con cómo va el issue en cada una: «QA ✓ → PRE ●».
+    QString phaseTrack(const Issue& issue, const RevisionSnapshot& snapshot) const;
     Column columnOf(const Issue& issue, const RevisionSnapshot& snapshot) const;
 
     /// Lo siguiente que toca a un issue, con su acción: lo proponen igual la tarjeta (su botón rápido),
@@ -225,7 +239,13 @@ private:
     /// Los bugs reportados desde los casos de sus planes, del más reciente al primero.
     QList<IssueLink> bugsOf(const Issue& issue) const;
     /// Esos bugs con su clasificación, su estado y el paso del que salieron, dentro de su paso.
-    void fillBugs(const Issue& issue, const QList<IssueLink>& bugs, QVBoxLayout* into);
+    void fillBugs(const Issue& issue, const QList<IssueLink>& bugs, const QStringList& verified, QVBoxLayout* into);
+    /// Pregunta y cierra en el gestor esos bugs (los verificados del issue elegido).
+    void closeVerifiedBugs(const QStringList& keys);
+    /// Menú para elegir en qué fases se prueba el issue elegido (sólo QA, sólo PRE…).
+    void choosePhases(QWidget* anchor);
+    /// Pregunta y crea en Zephyr los Tests que les faltan a esos casos del issue, y los enlaza a su issue.
+    void prepareTests(const QStringList& caseIds);
     /// Aplica un cambio al issue seleccionado sin que el refresco pise lo que se está escribiendo.
     void editSelected(const std::function<void(Issue&)>& mutate);
     void createPlan();

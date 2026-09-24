@@ -154,6 +154,38 @@ void BugReportService::refreshNext(QStringList keys, RefreshResult acc, std::fun
     });
 }
 
+bool BugReportService::canCloseBugs() const { return m_tracker && m_tracker->canCloseIssues(m_settings.tracker()); }
+
+void BugReportService::closeBugs(const QStringList& keys, std::function<void(const CloseResult&)> done) {
+    if (!canCloseBugs()) {
+        CloseResult refused;
+        for (const auto& key : keys) refused.failed << tr("%1: el gestor configurado no cierra issues desde QAflow").arg(key);
+        done(refused);
+        return;
+    }
+    closeNext(keys, CloseResult{}, std::move(done));
+}
+
+void BugReportService::closeNext(QStringList keys, CloseResult acc, std::function<void(const CloseResult&)> done) {
+    if (keys.isEmpty()) { done(acc); return; }
+    const QString key = keys.takeFirst();
+    m_tracker->closeIssue(m_settings.tracker(), key, [this, key, keys, acc, done](const IssueResult& r) mutable {
+        if (!r.ok) {
+            // Una transición cortada puede haberse aplicado: se sabrá consultando su estado.
+            if (r.retryable) acc.uncertain << key;
+            else acc.failed << tr("%1: %2").arg(key, r.error);
+            closeNext(keys, acc, std::move(done));
+            return;
+        }
+        acc.closed << key;
+        // El estado que se guarda es el que dice el gestor ahora: el nombre lo pone su flujo.
+        m_tracker->fetchStatus(m_settings.tracker(), key, [this, key, keys, acc, done](const IssueStatus& s) mutable {
+            m_bugs.updateStatus(key, s.ok ? s.status : tr("Cerrado"), true);
+            closeNext(keys, acc, std::move(done));
+        });
+    });
+}
+
 bool BugReportService::canImportFromTracker() const {
     return m_tracker && m_tracker->canSearchIssues(m_settings.tracker()) && !m_settings.tracker().project.trimmed().isEmpty();
 }

@@ -4,6 +4,7 @@
 #include "core/models/RunHistory.h"
 #include "core/services/IIssueRepository.h"
 
+#include <QHash>
 #include <QObject>
 #include <functional>
 #include <memory>
@@ -55,6 +56,7 @@ public:
     struct RevisionRef {
         QString issueId;
         int revision = 0;
+        QString phase;   // fase de esa ronda: el ambiente en el que se prueba
 
         bool isEmpty() const { return issueId.trimmed().isEmpty(); }
     };
@@ -62,7 +64,33 @@ public:
     /// ninguna revisión abierta, abren la siguiente (un requerimiento observado que vuelve a probarse
     /// es la revisión N+1 del acta). El avance automático nunca retrocede de estado por su cuenta.
     /// Devuelve el issue y la revisión a los que queda asociado el ciclo (el primero que agrupa el plan).
-    RevisionRef notePlanStarted(const QString& planId);
+    /// `phase` es la fase en la que se arranca el ciclo (su ambiente): una ronda nueva nace en ella y una
+    /// abierta en otra fase pasa a ella —quien arranca ya comprobó que esa ronda no tiene ciclos en su
+    /// fase—. Vacía, o que no sea del issue, = la fase que le toca (`nextPhase`).
+    RevisionRef notePlanStarted(const QString& planId, const QString& phase = QString());
+    /// Lo que haría `notePlanStarted` sin hacerlo: el issue, la ronda y la fase a los que pertenecería un
+    /// ciclo de ese plan que empezara ahora (la ronda abierta o la siguiente, con la fase que le toca).
+    /// Es lo que el diálogo de arranque enseña y el ambiente con el que arranca el ciclo.
+    RevisionRef nextCycleContext(const QString& planId) const;
+    /// Fases del control de calidad del proyecto (`Project::phases`, ya resueltas con
+    /// `normalizedQaPhases`). Deciden la fase de cada ronda nueva y qué ronda cierra el requerimiento.
+    void setPhases(const QStringList& phases);
+    const QStringList& phases() const { return m_phases; }
+    /// Fases de ese issue: las suyas si se eligieron (en el orden del proyecto) o, si no, las del proyecto.
+    QStringList phasesOf(const Issue& issue) const;
+    /// Elige en qué fases se prueba el issue (sólo QA, sólo PRE…). Elegir todas las del proyecto, o
+    /// ninguna, vuelve a «las del proyecto». No se puede quitar una fase con rondas **cerradas** (su acta y
+    /// su resultado son de ella); la ronda abierta en una fase que se quita pasa a la siguiente que quede
+    /// —quien lo pide ya comprobó que no tiene ciclos—. Devuelve vacío si se hizo y, si no, el motivo.
+    QString setIssuePhases(const QString& issueId, const QStringList& phases);
+
+    // ---- Zephyr --------------------------------------------------------------------------------
+    /// Tests de Zephyr de los casos del issue (caso → clave), que se reutilizan en todos sus ciclos.
+    void noteZephyrTests(const QString& issueId, const QHash<QString, QString>& tests);
+    /// El ciclo de Zephyr de una fase del issue, con el nombre con el que se creó.
+    void noteZephyrCycle(const QString& issueId, const QString& phase, const QString& cycleId, const QString& name);
+    /// Olvida el ciclo de una fase (se borró en Zephyr): la próxima publicación crea otro.
+    void forgetZephyrCycle(const QString& issueId, const QString& phase);
     /// Abre la ronda siguiente (la primera si no hay ninguna) y deja el issue «En pruebas».
     /// Devuelve su número, o 0 si el issue no existe.
     int openRevision(const QString& issueId);
@@ -74,8 +102,10 @@ public:
     void setRevisionPublication(const QString& issueId, const RevisionPublication& publication, int revision = 0);
     /// Guarda el registro del resultado en GESREQ, en esa ronda (0 = la última).
     void setRevisionRegistration(const QString& issueId, const RevisionRegistration& registration, int revision = 0);
-    /// Cierra la revisión en curso con su resultado y deja el issue en Finalizado. Sin revisión
-    /// abierta no hace nada.
+    /// Cierra la revisión en curso con su resultado. Sólo lo finaliza lo que cierra el requerimiento
+    /// (`closesRequirement`: Conforme en la última fase); Conforme en otra fase aprueba ésa y el issue
+    /// sigue en pruebas para la siguiente, y Observado lo devuelve a pruebas. Sin revisión abierta no
+    /// hace nada.
     void closeRevision(const QString& issueId, QaOutcome outcome);
 
     // ---- Importación ---------------------------------------------------------------------------
@@ -161,6 +191,10 @@ private:
     /// se crea si el issue todavía no tiene ninguna). Una ronda que no existe devuelve la última: nada
     /// que se guarde puede quedarse sin sitio.
     IssueRevision& revisionFor(Issue& issue, int number = 0);
+    /// Añade al issue la ronda siguiente, con la fase que le toca.
+    const IssueRevision& appendRevision(Issue& issue, const QString& phase = QString()) const;
+    /// `phase` si es una de las fases del issue (con su nombre canónico); vacía si no.
+    QString validPhase(const Issue& issue, const QString& phase) const;
     QString nextId() const;
     void persist(const QString& changedId = QString());
 
@@ -168,6 +202,7 @@ private:
     QList<Issue> m_issues;
     QString m_selectedId;
     bool m_readOnly = false;
+    QStringList m_phases = defaultQaPhases();
 };
 
 } // namespace qaflow

@@ -45,6 +45,8 @@ struct ZephyrClient::Job {
     };
     QList<PendingStep> pendingSteps;
     QList<Upload> uploads;     // evidencias del caso, ya resueltas a su destino
+    /// Sólo se crean los Tests que faltan: sin ciclo, sin ejecuciones (`createTests`).
+    bool testsOnly = false;
 
     const PublishCase& current() const { return request.cases[index]; }
     /// ¿Se actualiza un ciclo ya publicado en vez de crear uno?
@@ -122,11 +124,11 @@ QString ZephyrClient::testTypeName(const TrackerSettings& s) {
 QString ZephyrClient::testDescription(const PublishCase& c, const QString& cycleName) {
     QStringList parts;
     if (!c.preconditions.trimmed().isEmpty()) parts << c.preconditions.trimmed();
-    // De dónde salió el Test: el caso de QAflow es el original, y el ciclo lo distingue de los
-    // Tests del mismo caso en otros ciclos, que son otros issues.
+    // De dónde salió el Test: el caso de QAflow es el original, y el contexto (el requerimiento, o el
+    // ciclo de una ejecución suelta) lo distingue de los Tests del mismo caso en otros sitios.
     parts << (cycleName.trimmed().isEmpty()
                   ? QCoreApplication::translate("infrastructure", "Creado por QAflow a partir del caso %1").arg(c.caseId)
-                  : QCoreApplication::translate("infrastructure", "Creado por QAflow a partir del caso %1 para el ciclo «%2»").arg(c.caseId, cycleName.trimmed()));
+                  : QCoreApplication::translate("infrastructure", "Creado por QAflow a partir del caso %1 para «%2»").arg(c.caseId, cycleName.trimmed()));
     return parts.join(QStringLiteral("\n\n"));
 }
 
@@ -265,6 +267,23 @@ void ZephyrClient::publish(const TrackerSettings& s, const PublishRequest& reque
     });
 }
 
+void ZephyrClient::createTests(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) {
+    auto job = std::make_shared<Job>();
+    job->settings = s;
+    job->request = request;
+    job->done = std::move(done);
+    job->testsOnly = true;
+    // Los pasos del Test se crean por la API de Zephyr, así que hace falta la ruta igual que al publicar.
+    resolveProject(s, request.versionName, [this, job](bool ok, const Project& project, const QString& error) {
+        if (!ok) { job->result.error = error; job->finish(); return; }
+        job->project = project;
+        ensureApi(job->settings, project.id, [this, job](bool found, const QString& detectError, bool retryable) {
+            if (!found) { job->result.error = detectError; job->result.retryable = retryable; job->finish(); return; }
+            resolveUser(job, [this, job]() { nextCase(job); });
+        });
+    });
+}
+
 void ZephyrClient::resolveUser(const std::shared_ptr<Job>& job, std::function<void()> done) {
     const QString scope = job->settings.baseUrl() + QLatin1Char('|') + job->settings.user.trimmed();
     if (m_userFor == scope) { job->locale = m_locale; job->assignee = m_assignee; done(); return; }
@@ -343,7 +362,8 @@ void ZephyrClient::checkCycle(const std::shared_ptr<Job>& job) {
         if (!r.ok) {
             // Borrado en Zephyr desde que se publicó: no hay nada que actualizar, y decirlo evita
             // que las ejecuciones se cuelguen de un ciclo que ya no está.
-            job->result.error = r.status == 404 || r.status == 400
+            job->result.cycleMissing = r.status == 404 || r.status == 400;
+            job->result.error = job->result.cycleMissing
                                     ? QCoreApplication::translate("infrastructure", "El ciclo %1 ya no existe en Zephyr: publica los resultados como ciclo nuevo").arg(cycleId)
                                     : r.error;
             job->result.retryable = r.retryable;
@@ -362,9 +382,10 @@ void ZephyrClient::nextCase(const std::shared_ptr<Job>& job) {
         return;
     }
     const PublishCase& c = job->current();
-    // La ejecución manda: si aún no tiene Test (este informe no se había publicado), se le crea
-    // uno a partir del caso; si lo tiene, es una republicación y se reutiliza.
+    // Si el caso aún no tiene Test se le crea uno a partir del caso; si lo tiene, se reutiliza.
     if (c.testKey.trimmed().isEmpty()) { createTestForCase(job); return; }
+    // Creando sólo los Tests, el que ya existe no se toca.
+    if (job->testsOnly) { ++job->index; nextCase(job); return; }
     // Zephyr crea la ejecución con el id numérico del issue, no con su clave.
     get(jira(job->settings, QStringLiteral("/rest/api/2/issue/%1?fields=id").arg(c.testKey.trimmed())), [this, job](const Response& r) {
         const PublishCase& c = job->current();
@@ -429,7 +450,8 @@ void ZephyrClient::createTestForCase(const std::shared_ptr<Job>& job) {
         nextCase(job);
         return;
     }
-    postTestIssue(job->settings, job->project, c, job->request.cycleName, [this, job](bool created, const QString& issueId, const QString& key,
+    const QString context = job->request.testContext.trimmed().isEmpty() ? job->request.cycleName : job->request.testContext;
+    postTestIssue(job->settings, job->project, c, context, [this, job](bool created, const QString& issueId, const QString& key,
                                                               const QString& error, bool) {
         const PublishCase& c = job->current();
         if (!created) {
@@ -446,6 +468,7 @@ void ZephyrClient::createTestForCase(const std::shared_ptr<Job>& job) {
             postTestSteps(job->settings, issueId, job->current(), 0, {}, [this, job, issueId](const QStringList& failed) {
                 // El veredicto del paso que no llegó a existir se cuenta luego, al leer los resultados.
                 job->result.skipped += failed;
+                if (job->testsOnly) { ++job->index; nextCase(job); return; }
                 executeCase(job, issueId);
             });
         });

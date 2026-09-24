@@ -5,6 +5,7 @@
 #include "core/models/TestCase.h"
 #include "core/services/IIssueTracker.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QHash>
 #include <QList>
@@ -62,6 +63,8 @@ struct PublishRequest {
     /// de Zephyr, además de al nombre. Vacío = no se indicó.
     QString environment;
     QString description;
+    /// De qué son los Tests que se creen («GREQ 2026997»): va en su descripción. Vacío = el ciclo.
+    QString testContext;
     QDateTime startedAt;
     QDateTime finishedAt;
     QList<PublishCase> cases;
@@ -83,6 +86,9 @@ struct PublishResult {
     QStringList warnings;
     QString error;
     bool retryable = false;  // fallo de red o 5xx: merece la pena reintentar
+    /// El ciclo que se iba a actualizar (`PublishRequest::cycleId`) ya no existe en Zephyr: no se tocó
+    /// nada, y quien lo guardaba debe olvidarlo y publicar en uno nuevo.
+    bool cycleMissing = false;
 };
 
 /// Herramienta de gestión de pruebas (Zephyr for Jira). Es otra responsabilidad distinta de la de
@@ -97,6 +103,15 @@ public:
     /// todavía no tiene Test se le crea antes uno a partir del caso, y su clave vuelve en
     /// `PublishResult::createdTests` para que la ejecución la guarde.
     virtual void publish(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) = 0;
+    /// Crea los Tests de los casos que todavía no tienen (`PublishCase::testKey` vacío), sin ciclo ni
+    /// ejecuciones: los del requerimiento, antes de probarlo, para enlazarlos a su issue desde el
+    /// principio. Las claves vuelven en `createdTests`; lo que no se pudo crear, en `skipped`.
+    virtual void createTests(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) {
+        Q_UNUSED(s); Q_UNUSED(request);
+        PublishResult r;
+        r.error = QCoreApplication::translate("core", "Esta herramienta no crea Tests sueltos");
+        done(r);
+    }
 
 };
 

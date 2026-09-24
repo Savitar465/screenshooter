@@ -36,6 +36,8 @@ src/
 │   ├── BugStore           libro de bugs: issues enlazados a la ejecución de la que salieron y cola de pendientes
 │   ├── IssueStore         issues de QA: los planes que prueban cada requerimiento (y los casos y ciclos que
 │   │                      salen de ellos), importación de GESREQ sin duplicados
+│   ├── IssueDirectory     los issues de todos los proyectos (vista general del tablero, dónde tiene issue
+│   │                      cada requerimiento) y la bandeja de GESREQ puesta al día en todos
 │   ├── IssuePublishService publicación del issue en el gestor: crear, vincular, actualizar, estado y
 │   │                      el resultado de la revisión (comentario con el acta adjunta)
 │   ├── QualityRecordService el acta de la revisión: la propone con el ciclo de plan que se elija, la escribe
@@ -66,7 +68,7 @@ src/
     │                BusyIndicator (el arco que gira mientras algo está en marcha), FlashOverlay, ProgressCells, MetricBars (RateBar, TrendChart), Thumbnail, TextArea, ShotCard,
     │                EvidencePreview (visor de la ejecución), ImageViewer (visor a tamaño completo),
     │                AnnotationEditor (anotaciones), EvidenceActions (acciones compartidas)
-    ├── views/       Una clase por pantalla: IssuesView (+ RequirementImportDialog, JiraPublishDialog,
+    ├── views/       Una clase por pantalla: IssuesView (+ GreqsView, su pestaña GREQS; IssueListView, su vista de lista; JiraPublishDialog,
     │                QualityRecordDialog, RevisionPublishDialog), CasesView, PlanView, RunView, HistoryView,
     │                BugView (+ BugDialog, el parte; BugDetailWindow, la ficha),
     │                SettingsView (+ SettingsDialog, su ventana); Sidebar (rail de iconos),
@@ -844,24 +846,52 @@ ello.
 **Importación sin duplicados.** Un requerimiento se identifica por su número dentro de la conexión (la
 dirección de GESREQ, sin distinguir la barra final ni mayúsculas); el número GREQ es único en el sistema,
 así que un cambio de sistema en GESREQ aparece como un cambio del issue en vez de como un issue nuevo.
-«Consultar GESREQ» (`IssuesView::consultRequirements`) lee la bandeja entera y:
+La bandeja se lee en la pestaña **GREQS** (`GreqsView`, ver «Pantalla»), y leerla pone al día lo importado
+de **todos los proyectos** (`IssueDirectory::applyInbox` → `IssueStore::applyInbox` en cada uno):
 
 1. `markInboxRead()` marca como ausentes los issues importados de esa conexión que ya no están en ella (el
    control de calidad terminó o se reasignó) y como presentes los que sí; nunca borra nada.
-2. `previewImport()` clasifica los requerimientos del sistema vinculado al proyecto en nuevos, con cambios
-   (y cuáles) o sin cambios; los de otros sistemas se enseñan aparte, para empezar sus pruebas donde toque.
-3. `RequirementImportDialog` los enseña marcados (nuevos y con cambios) y `importRequirements()` crea los
-   nuevos y, en los ya importados, reemplaza sólo lo extraído. Lo que cambió (`diffRequirement`: estado,
-   descripción, prioridad, sistema, fechas de asignación, solicitante…) se acumula en `changes` con
-   `mergeChanges` —de cada campo, el valor revisado por última vez y el último leído; si vuelve a como
-   estaba, desaparece— hasta «Marcar como revisado». El rail cuenta los issues con cambios sin revisar.
+2. En los que siguen en ella, `importRequirements()` reemplaza sólo lo extraído. Lo que cambió
+   (`diffRequirement`: estado, descripción, prioridad, sistema, fechas de asignación, solicitante…) se
+   acumula en `changes` con `mergeChanges` —de cada campo, el valor revisado por última vez y el último
+   leído; si vuelve a como estaba, desaparece— hasta «Marcar como revisado». El rail cuenta los issues con
+   cambios sin revisar.
+3. Leer la bandeja **no crea issues**: eso es empezar las pruebas de un requerimiento, desde su fila.
 
-Sin sistema vinculado al proyecto, la consulta no se lanza y abre los ajustes. La ficha del requerimiento
-se lee bajo demanda («Cargar ficha», `RequirementSourceService::fetchDetail`) y se guarda en el issue con su
-fecha; «Abrir en GESREQ» abre la ficha en el navegador, donde hace falta haber entrado.
+De un proyecto con la sesión abierta se escribe a través de su store; de uno sin abrir, con un `IssueStore`
+de paso sobre su `issues.json` (que nadie más tiene entre manos), que respeta las mismas reglas —sólo lo
+extraído, y nada si el fichero no se pudo leer—.
 
-**Pantalla.** `IssuesView` son dos páginas (`QStackedWidget`). Se abre en el **tablero**: filtros (texto
-sobre `Issue::searchText()`, prioridad, publicación en Jira) y una columna por cómo va el trabajo de QA
+Sin conexión con GESREQ configurada, la pestaña no lee nada y ofrece abrir los ajustes.
+
+**Pantalla.** `IssuesView` son tres páginas (`QStackedWidget`): el tablero, el detalle y GREQS. Junto al
+título, dos pestañas —**Issues** y **GREQS**— llevan de una a otra. Cada página tiene las suyas en su
+cabecera, así que `syncTabs()` las marca todas a la vez al cambiar de página (el detalle cuenta como
+«Issues»): un clic no conmuta nada por su cuenta.
+
+**Tablero o lista.** Entre las pestañas y la búsqueda, un conmutador «Tablero / Lista» (`setListMode`,
+recordado en `issues/listMode`) cambia cómo se ven los issues sin salir de la pantalla. La cabecera son dos
+grupos —lo que se ve (pestañas, recuento y conmutador) y la búsqueda con los filtros— en una fila si caben
+y, si la ventana es estrecha, con los filtros en una segunda fila (`placeHeader`): así nada se comprime
+hasta montarse encima de otra cosa, y la cabecera no obliga a la ventana a un ancho mínimo enorme. La lista (`IssueListView`)
+ocupa el sitio de las columnas: una tabla ordenable (issue, GREQ, título, proyecto, estado, revisión, clave
+del gestor, actualizado y finalizado) con **todos** los issues —también los finalizados que ya salieron del
+tablero—, los mismos filtros de la cabecera y el mismo panel a la derecha: un clic elige el issue, un doble
+clic o Intro lo abre (preguntando antes si es de otro proyecto). Sólo el doble clic y no también
+`cellActivated`, que llega con él en casi todos los estilos: abría dos confirmaciones modales de la misma
+ventana, que se bloqueaban entre sí y no dejaban pulsar ningún botón. Por lo mismo, `openElsewhere` nunca
+abre una segunda mientras la primera está a la vista.
+
+Las tarjetas **resumen el título** a dos líneas recortadas al ancho de la columna (`ElidedLabel::setMaxLines`;
+entero en el tooltip y en el panel) y ponen sus etiquetas —sistema, proyecto, fallidos, cambios, fuera de la
+bandeja— en un `FlowLayout` que salta de línea, cada una acortada si es larga. El borde de la tarjeta no es
+`@border`, que es el tono de fondo de la columna y en el tema oscuro la hacía invisible.
+
+**Los finalizados salen del tablero.** Un issue finalizado hace más de `kDoneDaysOnBoard` (7) días
+(`Issue::finishedAt()`: el cierre de su última revisión o, finalizado a mano, su último cambio) ya no está
+en el tablero —salvo buscándolo por texto—; al pie de la columna «Finalizado» un botón dice cuántos hay y
+pasa a la **lista**, ordenada por fecha de finalización. Se abre en el **tablero**:
+filtros (texto sobre `Issue::searchText()`, proyecto, prioridad, publicación en Jira) y una columna por cómo va el trabajo de QA
 —Pendiente, En preparación, En pruebas, **Fallido / bloqueado** y Finalizado—, con cada issue en una
 tarjeta (GREQ, sistema, ronda, barra de resultados, fallidos y bloqueados, cambios, qué le toca y su
 clave en el gestor). La columna de fallidos **no es un estado guardado**: `IssuesView::columnOf` pone ahí
@@ -930,9 +960,30 @@ ambiente y lleva a la pantalla de ejecución—. El paso 2 ejecuta el único pla
 (`IssuesView::runnablePlans`: existe, no está archivado y tiene casos) y, si hay varios, despliega un menú
 para elegir cuál; sin ninguno avisa de qué falta. «Ir al plan» se queda para componerlo antes.
 
-**Iniciar pruebas (entre proyectos).** La bandeja de GESREQ es del usuario, no del proyecto: el diálogo de
-importación enseña también los requerimientos de los demás sistemas, cada uno con el proyecto que los
-trabaja (`ProjectStore::projectForRequirementSystem`). «Iniciar pruebas» resuelve ese proyecto y:
+**Vista general: los issues de todos los proyectos.** El tablero enseña también los issues de los demás
+proyectos (`IssueDirectory`, en `AppContext::issueDirectory`): de los que tienen la sesión abierta lee su
+store, y de los demás su `issues.json`, leído una vez y guardado hasta que cambie el catálogo. Van debajo de
+los del proyecto abierto en cada columna; éstos **resaltan** (borde azul a la izquierda, propiedad `own`) y
+los ajenos van **atenuados** (borde discontinuo, título apagado y una pastilla violeta con su proyecto,
+propiedad `foreign`). De un issue ajeno no se tienen sus planes ni sus ciclos, así que su columna sale de su
+estado de QA y de cómo se cerró su última revisión (`foreignColumnOf`), no se arrastra y su panel sólo dice
+lo que guarda y cómo seguir con él. **Seguir con él es cambiar de proyecto, y se pregunta antes**
+(`openElsewhere`, un `QMessageBox` no modal): confirmado, la vista lo pide
+(`openIssueInProjectRequested`) y la raíz de composición guarda el actual, activa el suyo y allí lo abre
+(`MainWindow::openIssue`). El filtro «Sólo este proyecto» los quita, y se recuerda (`issues/allProjects`).
+
+**La pestaña GREQS.** `GreqsView` es la bandeja de control de calidad del usuario, leída al entrar en la
+pestaña (y con «Actualizar»): cada requerimiento dice si ya tiene issue y **en qué proyecto** (verde si es
+de éste, azul si es de otro) o «SIN ISSUE», con su acción: «Abrir issue», «Abrir en «Riesgos»…» (con la
+misma confirmación que el tablero) o «Iniciar pruebas». Se filtra por texto y por «Con issue» / «Sin
+issue». **Uno que no está asignado al usuario se busca por su número**: si está en la bandeja se enseña tal
+cual; si no, se lee su ficha (`fetchDetail`) y `requirementFromDetail` (core) la convierte en lo que sería su
+fila —con el principio del alcance como descripción corta— marcada «NO ASIGNADO A TI», y se empieza igual.
+Como no está en la bandeja, su issue queda «fuera de la bandeja» en la siguiente lectura.
+
+**Iniciar pruebas (entre proyectos).** La bandeja de GESREQ es del usuario, no del proyecto: la pestaña
+GREQS enseña también los requerimientos de los demás sistemas, cada uno con el proyecto que los trabaja
+(`ProjectStore::projectForRequirementSystem`). «Iniciar pruebas» resuelve ese proyecto y:
 
 | Situación | Qué pasa |
 |-----------|----------|
@@ -941,8 +992,8 @@ trabaja (`ProjectStore::projectForRequirementSystem`). «Iniciar pruebas» resue
 | Ningún proyecto tiene ese sistema vinculado | `ProjectSetupDialog` pregunta en cuál se prueban: uno que ya existe (se le vincula el sistema) o uno nuevo, con el sistema ya escrito y su código Jira opcional; hecho eso se sigue por una de las dos filas anteriores |
 | Ejecución o captura en curso | `ProjectSession::canLeave()` no deja salir y dice qué hay que terminar; si el guardado falla, el cambio se cancela y no se inicia nada |
 
-Ninguna vista cambia de proyecto por su cuenta, y consultar la bandeja o previsualizar la importación
-tampoco: sólo «Iniciar pruebas» lo pide. `canLeave()` es la misma regla que usa el selector de proyectos de
+Ninguna vista cambia de proyecto por su cuenta, y leer la bandeja tampoco: sólo lo piden «Iniciar
+pruebas» y seguir con un issue de otro proyecto (éste, tras confirmarlo). `canLeave()` es la misma regla que usa el selector de proyectos de
 la barra, así que empezar unas pruebas y cambiar de proyecto a mano se comportan igual.
 
 **Alta de proyecto (`ProjectSetupDialog`).** El mismo diálogo sirve para «Nuevo proyecto…» de la barra y para

@@ -16,11 +16,6 @@ QString cleanConnection(const QString& connection) {
     while (c.endsWith(QLatin1Char('/'))) c.chop(1);
     return c;
 }
-
-/// La misma dirección con o sin barra final, o con otras mayúsculas, es la misma conexión.
-bool sameConnection(const QString& a, const QString& b) {
-    return cleanConnection(a).compare(cleanConnection(b), Qt::CaseInsensitive) == 0;
-}
 } // namespace
 
 IssueStore::IssueStore(std::shared_ptr<IIssueRepository> repo, QObject* parent) : QObject(parent), m_repo(std::move(repo)) {}
@@ -69,9 +64,8 @@ QList<Issue> IssueStore::issuesForPlan(const QString& planId) const {
 }
 
 const Issue* IssueStore::findByRequirement(const QString& connection, const QString& requirementId) const {
-    const auto it = std::find_if(m_issues.cbegin(), m_issues.cend(), [&](const Issue& i) {
-        return i.isImported() && i.requirement.data.id == requirementId && sameConnection(i.requirement.connection, connection);
-    });
+    const auto it = std::find_if(m_issues.cbegin(), m_issues.cend(),
+                                 [&](const Issue& i) { return i.testsRequirement(connection, requirementId); });
     return it == m_issues.cend() ? nullptr : &*it;
 }
 
@@ -317,6 +311,17 @@ QString IssueStore::openForRequirement(const ExternalRequirement& requirement, c
     if (!issue) return {};
     select(issue->id);   // el recién creado ya queda seleccionado; el que ya existía se trae al frente
     return issue->id;
+}
+
+IssueStore::InboxResult IssueStore::applyInbox(const QList<ExternalRequirement>& inbox, const QString& connection,
+                                               const QDateTime& fetchedAt) {
+    InboxResult result;
+    result.missing = markInboxRead(inbox, connection, fetchedAt);
+    QList<ExternalRequirement> known;
+    for (const auto& r : inbox)
+        if (findByRequirement(connection, r.id)) known << r;
+    if (!known.isEmpty()) result.updated = importRequirements(known, connection, fetchedAt).updated;
+    return result;
 }
 
 int IssueStore::markInboxRead(const QList<ExternalRequirement>& inbox, const QString& connection, const QDateTime& fetchedAt) {

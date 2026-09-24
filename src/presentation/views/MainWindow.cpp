@@ -99,6 +99,11 @@ void MainWindow::startTesting(const ExternalRequirement& requirement, const QStr
     issuesView()->openRequirement(requirement, connection, fetchedAt);
 }
 
+void MainWindow::openIssue(const QString& issueId) {
+    navigate(Screen::Issues);
+    issuesView()->openIssue(issueId);
+}
+
 QWidget* MainWindow::viewFor(Screen s) {
     switch (s) {
         case Screen::Casos: return casesView();
@@ -809,6 +814,7 @@ void MainWindow::wireIssues() {
     // Iniciar las pruebas de un requerimiento de otro proyecto: lo resuelve quien coordina las sesiones.
     connect(m_issuesView, &IssuesView::startTestingRequested, this, &MainWindow::startTestingRequested);
     connect(m_issuesView, &IssuesView::projectJiraKeyRequested, this, &MainWindow::projectJiraKeyRequested);
+    connect(m_issuesView, &IssuesView::openIssueInProjectRequested, this, &MainWindow::openIssueInProjectRequested);
 }
 
 /// Abrir en el navegador un issue del gestor por su clave; sin URL configurada, lo dice.

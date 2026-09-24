@@ -5,11 +5,12 @@
 #include "core/models/BugReport.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/views/AiCaseGenerationDialog.h"
+#include "presentation/views/GreqsView.h"
+#include "presentation/views/IssueListView.h"
 #include "presentation/views/JiraPublishDialog.h"
 #include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/QualityRecordDialog.h"
 #include "presentation/views/RevisionPublishDialog.h"
-#include "presentation/views/RequirementImportDialog.h"
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/FlowLayout.h"
@@ -157,14 +158,16 @@ IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
     : QWidget(parent), m_issues(*ctx.issues), m_cases(*ctx.cases), m_plans(*ctx.plan), m_history(*ctx.history),
       m_requirements(ctx.requirements), m_attachmentText(ctx.attachmentText), m_ai(ctx.ai), m_publish(ctx.issuePublish), m_revisionPublish(ctx.revisionPublish),
       m_bugs(ctx.bugs), m_bugLedger(ctx.bugLedger), m_records(ctx.records),
-      m_projects(ctx.projects),
+      m_projects(ctx.projects), m_directory(ctx.issueDirectory),
       m_projectId(ctx.projectId) {
+    m_allProjects = m_directory && QSettings().value(QStringLiteral("issues/allProjects"), true).toBool();
     auto* root = ui::vbox(this, 0, 0);
     m_pages = new QStackedWidget;
     root->addWidget(m_pages);
 
     auto* board = new QWidget;
     auto* bv = ui::vbox(board, 0, 0);
+    m_list = new IssueListView(ctx);   // la vista de lista, que el tablero aloja en lugar de sus columnas
     buildBoard(bv);
     m_pages->addWidget(board);
 
@@ -173,9 +176,34 @@ IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
     buildDetail(dv);
     m_pages->addWidget(detail);
 
+    // La bandeja de GESREQ, en su pestaña: lo que pide (empezar unas pruebas, seguir con un issue) lo
+    // resuelve esta pantalla, que es la que sabe crear issues y la que pregunta antes de cambiar de proyecto.
+    m_greqs = new GreqsView(ctx, screenTabs(Page::Greqs));
+    m_greqs->setObjectName(QStringLiteral("greqsView"));
+    m_pages->addWidget(m_greqs);
+    connect(m_greqs, &GreqsView::toast, this, &IssuesView::toast);
+    connect(m_greqs, &GreqsView::settingsRequested, this, &IssuesView::settingsRequested);
+    connect(m_greqs, &GreqsView::startTestingRequested, this, &IssuesView::startTesting);
+    connect(m_greqs, &GreqsView::openIssueRequested, this, [this](const QString& projectId, const QString& issueId) {
+        if (projectId == m_projectId) openIssue(issueId);
+        else openElsewhere(projectId, issueId);
+    });
+
+    connect(m_pages, &QStackedWidget::currentChanged, this, &IssuesView::syncTabs);
+    syncTabs();
+    m_listMode = QSettings().value(QStringLiteral("issues/listMode"), false).toBool();
+    m_boardToggle->setChecked(!m_listMode);
+    m_listToggle->setChecked(m_listMode);
+    m_boardViews->setCurrentIndex(m_listMode ? 1 : 0);
+
     connect(&m_issues, &IssueStore::issuesChanged, this, [this]() { refreshList(); loadDetail(); });
-    connect(&m_issues, &IssueStore::selectionChanged, this, [this]() {
-        if (!selected()) showDetail(false);
+    connect(&m_issues, &IssueStore::selectionChanged, this, [this](const QString& id) {
+        // Elegir uno de este proyecto deja de lado el de otro que estuviera elegido.
+        if (!id.isEmpty()) {
+            m_foreignProject.clear();
+            m_foreignIssue.clear();
+        }
+        if (!selected() && m_pages->currentIndex() == static_cast<int>(Page::Detail)) showDetail(false);
         refreshList();
         loadDetail();
     });
@@ -192,6 +220,8 @@ IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
     connect(&m_plans, &PlanStore::planChanged, this, refreshIfVisible);
     connect(&m_history, &RunHistoryStore::historyChanged, this, refreshIfVisible);
     if (m_projects) connect(m_projects, &ProjectStore::projectsChanged, this, &IssuesView::refreshList);
+    // Los issues de los demás proyectos también cambian (al leer la bandeja, o desde su ventana).
+    if (m_directory) connect(m_directory, &IssueDirectory::changed, this, [this]() { if (isVisible() && m_allProjects) refreshList(); });
     if (ctx.settings) connect(ctx.settings, &SettingsStore::trackerChanged, this, refreshIfVisible);
     refreshList();
     loadDetail();
@@ -207,6 +237,7 @@ void IssuesView::showEvent(QShowEvent* e) {
 
 void IssuesView::resizeEvent(QResizeEvent* e) {
     QWidget::resizeEvent(e);
+    placeHeader();
     // El panel no se come el tablero: como mucho, la mitad de la pantalla.
     m_drawer->setMaximumWidth(std::clamp(width() / 2, m_drawer->minimumWidth(), 720));
 }
@@ -214,6 +245,17 @@ void IssuesView::resizeEvent(QResizeEvent* e) {
 void IssuesView::hideEvent(QHideEvent* e) { QWidget::hideEvent(e); }
 
 bool IssuesView::eventFilter(QObject* watched, QEvent* event) {
+    // La tarjeta de un issue de otro proyecto: un clic la elige (lo hace su `clicked`) y el doble clic
+    // sigue con él, que es cambiar de proyecto y se pregunta antes. No se arrastra: su estado es de allí.
+    if (const QString foreign = watched->property("foreignIssue").toString(); !foreign.isEmpty()) {
+        if (event->type() == QEvent::MouseButtonDblClick) {
+            const QString project = watched->property("foreignProject").toString();
+            selectForeign(project, foreign);
+            openElsewhere(project, foreign);
+            return true;
+        }
+        return QWidget::eventFilter(watched, event);
+    }
     if (const QString id = watched->property("issueId").toString(); !id.isEmpty()) {
         auto* card = qobject_cast<QPushButton*>(watched);
         switch (event->type()) {
@@ -282,11 +324,6 @@ bool IssuesView::eventFilter(QObject* watched, QEvent* event) {
 
 const Issue* IssuesView::selected() const { return m_issues.find(m_issues.selectedId()); }
 
-QString IssuesView::linkedSystem() const {
-    const Project* project = m_projects ? m_projects->find(m_projectId) : nullptr;
-    return project ? project->requirementSystem : QString();
-}
-
 void IssuesView::focusSearch() {
     showDetail(false);
     m_search->setFocus();
@@ -294,7 +331,43 @@ void IssuesView::focusSearch() {
 }
 
 void IssuesView::showDetail(bool on) {
-    m_pages->setCurrentIndex(on && selected() ? 1 : 0);
+    m_pages->setCurrentIndex(static_cast<int>(on && selected() ? Page::Detail : Page::Board));
+}
+
+void IssuesView::placeHeader() {
+    const QMargins m = m_headGrid->contentsMargins();
+    const int oneRow = m.left() + m_headLeft->sizeHint().width() + m_headGrid->horizontalSpacing() +
+                       m_headFilters->minimumSizeHint().width() + m.right();
+    const bool twoRows = width() > 0 && width() < oneRow;
+    if (m_headGrid->count() == 2 && twoRows == m_headTwoRows) return;
+    m_headTwoRows = twoRows;
+    m_headGrid->removeWidget(m_headLeft);
+    m_headGrid->removeWidget(m_headFilters);
+    m_headGrid->addWidget(m_headLeft, 0, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    if (twoRows) m_headGrid->addWidget(m_headFilters, 1, 0, 1, 2);
+    else m_headGrid->addWidget(m_headFilters, 0, 1);
+    m_headGrid->setColumnStretch(0, twoRows ? 1 : 0);
+    m_headGrid->setColumnStretch(1, twoRows ? 0 : 1);
+}
+
+void IssuesView::setListMode(bool list) {
+    m_listMode = list;
+    QSettings().setValue(QStringLiteral("issues/listMode"), list);
+    m_boardToggle->setChecked(!list);
+    m_listToggle->setChecked(list);
+    m_boardViews->setCurrentIndex(list ? 1 : 0);
+    refreshList();
+}
+
+void IssuesView::showGreqs() {
+    m_pages->setCurrentWidget(m_greqs);
+    m_greqs->ensureLoaded();
+}
+
+void IssuesView::openIssue(const QString& issueId) {
+    if (!m_issues.find(issueId)) return;
+    m_issues.select(issueId);
+    showDetail(true);
 }
 
 IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
@@ -377,6 +450,34 @@ ColumnInfo columnInfo(IssuesView::Column c) {
     return {};
 }
 
+/// Largo máximo del texto de una etiqueta de la tarjeta (el sistema, el proyecto): así cabe en la columna.
+constexpr int kMaxCardTag = 18;
+
+/// El título de la tarjeta, resumido: dos líneas como mucho, recortadas al ancho de la columna (entero en
+/// el tooltip de la tarjeta y en el panel).
+QLabel* cardTitle(const QString& text, const QString& color) {
+    auto* title = new ElidedLabel;
+    title->setObjectName(QStringLiteral("issueCardTitle"));
+    title->setStyleSheet(QStringLiteral("font-size:13px;font-weight:600;color:%1;").arg(color));
+    title->setMaxLines(2);
+    title->setFullText(text.simplified());
+    return title;
+}
+
+/// Las etiquetas de la tarjeta en una fila que salta de línea cuando no caben, en vez de recortarse.
+QWidget* cardTags(const QList<QLabel*>& tags) {
+    auto* row = new QWidget;
+    row->setObjectName(QStringLiteral("issueCardTags"));
+    auto* flow = new FlowLayout(row, 0, 4, 4);
+    for (auto* tag : tags) flow->addWidget(tag);
+    return row;
+}
+
+/// Una etiqueta de la tarjeta, con su texto acortado si es largo.
+QLabel* cardTag(const QString& text, const QString& bg, const QString& fg) {
+    return ui::pill(ui::elide(text, kMaxCardTag), bg, fg);
+}
+
 /// Barra fina con lo que salió de los casos de la ronda: superados, fallidos, bloqueados y el resto.
 QWidget* resultBar(const IssueProgress& p) {
     auto* bar = new QWidget;
@@ -397,21 +498,64 @@ QWidget* resultBar(const IssueProgress& p) {
 } // namespace
 
 void IssuesView::buildBoard(QVBoxLayout* root) {
+    // La cabecera son dos grupos: a la izquierda qué se ve (pestañas, recuento y tablero o lista) y a la
+    // derecha la búsqueda y los filtros. Caben en una fila; si no, los filtros bajan a otra (`placeHeader`).
     auto* head = new QWidget;
-    auto* hh = ui::hbox(head, 0, 10);
-    hh->setContentsMargins(22, 16, 22, 14);
-    hh->addWidget(ui::label(tr("Issues"), "h1-sm"));
+    m_headGrid = new QGridLayout(head);
+    m_headGrid->setContentsMargins(22, 16, 22, 14);
+    m_headGrid->setHorizontalSpacing(16);
+    m_headGrid->setVerticalSpacing(10);
+    m_headLeft = new QWidget;
+    auto* hh = ui::hbox(m_headLeft, 0, 10);
+    hh->addWidget(screenTabs(Page::Board));
     m_listCount = ui::label(QString(), "muted-sm");
     hh->addWidget(m_listCount);
-    hh->addStretch(1);
+    m_headFilters = new QWidget;
+    auto* fh = ui::hbox(m_headFilters, 0, 10);
+    fh->addStretch(1);   // los filtros van a la derecha; la búsqueda crece hasta su máximo
 
     m_search = new QLineEdit;
     m_search->setObjectName(QStringLiteral("issueSearch"));
     m_search->setPlaceholderText(tr("Buscar por título, número de GREQ, sistema, solicitante…"));
     m_search->setClearButtonEnabled(true);
-    m_search->setMinimumWidth(240);
+    // La búsqueda es lo único que cede sitio cuando la ventana es estrecha; lo demás conserva su tamaño,
+    // o se montaría uno encima de otro.
+    m_search->setMinimumWidth(150);
+    m_search->setMaximumWidth(340);
+    m_search->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     connect(m_search, &QLineEdit::textChanged, this, [this](const QString& t) { m_filter.text = t; refreshList(); });
-    hh->addWidget(m_search);
+    fh->addWidget(m_search, 3);   // se lleva casi todo el sitio que sobra, hasta su máximo
+
+    // Tablero o lista: dos botones pegados, el elegido marcado.
+    auto* toggle = new QWidget;
+    toggle->setObjectName(QStringLiteral("issueViewToggle"));
+    auto* th = ui::hbox(toggle, 0, 0);
+    auto segment = [&](const QString& text, const QString& name, const QString& tip, bool left) {
+        auto* b = new QPushButton(text);
+        b->setObjectName(name);
+        b->setCheckable(true);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setToolTip(tip);
+        b->setStyleSheet(QStringLiteral("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:4px 10px;"
+                                        "font-size:11.5px;font-weight:700;%3}"
+                                        "QPushButton:hover{color:%4;}QPushButton:checked{background:%5;color:%4;border-color:%6;}")
+                             .arg(theme::Muted, theme::tint(theme::Muted, 80),
+                                  left ? QStringLiteral("border-top-left-radius:8px;border-bottom-left-radius:8px;border-right:none;")
+                                       : QStringLiteral("border-top-right-radius:8px;border-bottom-right-radius:8px;"),
+                                  theme::Text, theme::tint(theme::Blue, 40), theme::Blue));
+        th->addWidget(b);
+        return b;
+    };
+    m_boardToggle = segment(tr("▦ Tablero"), QStringLiteral("issueViewBoard"), tr("Los issues en columnas, según cómo va su trabajo de QA"), true);
+    m_listToggle = segment(tr("☰ Lista"), QStringLiteral("issueViewList"),
+                           tr("Todos los issues en una lista, también los finalizados que ya salieron del tablero"), false);
+    // Un clic no desmarca el elegido: sólo cambia de vista.
+    connect(m_boardToggle, &QPushButton::clicked, this, [this]() { setListMode(false); });
+    connect(m_listToggle, &QPushButton::clicked, this, [this]() { setListMode(true); });
+    // Va entre las pestañas y la búsqueda: es cómo se ven los issues, no un filtro. Un poco apartado del
+    // recuento para que se lea como un control aparte.
+    hh->addSpacing(8);
+    hh->addWidget(toggle);
 
     // Cada opción lleva el valor del enum como dato: el texto se traduce, el filtro no. El estado no se
     // filtra: es la columna.
@@ -428,14 +572,23 @@ void IssuesView::buildBoard(QVBoxLayout* root) {
         m_filter.published = i <= 0 ? std::nullopt : std::optional<bool>(m_jiraFilter->currentData().toInt() == 1);
         refreshList();
     });
-    hh->addWidget(m_priorityFilter);
-    hh->addWidget(m_jiraFilter);
-
-    m_consult = smallButton(tr("Consultar GESREQ"), "outline");
-    m_consult->setObjectName(QStringLiteral("issuesConsult"));
-    m_consult->setVisible(m_requirements != nullptr);
-    connect(m_consult, &QPushButton::clicked, this, &IssuesView::consultRequirements);
-    hh->addWidget(m_consult);
+    // La vista general enseña también los issues de los demás proyectos; se puede ceñir a éste.
+    m_scopeFilter = new QComboBox;
+    m_scopeFilter->setObjectName(QStringLiteral("issueScopeFilter"));
+    m_scopeFilter->setStyleSheet(QStringLiteral("font-size:11.5px;padding:3px 6px;"));
+    m_scopeFilter->addItem(tr("Todos los proyectos"), true);
+    m_scopeFilter->addItem(tr("Sólo este proyecto"), false);
+    m_scopeFilter->setCurrentIndex(m_allProjects ? 0 : 1);
+    m_scopeFilter->setVisible(m_directory != nullptr);
+    connect(m_scopeFilter, &QComboBox::currentIndexChanged, this, [this]() {
+        m_allProjects = m_scopeFilter->currentData().toBool();
+        QSettings().setValue(QStringLiteral("issues/allProjects"), m_allProjects);
+        if (!m_allProjects) selectForeign(QString(), QString());
+        refreshList();
+    });
+    fh->addWidget(m_scopeFilter);
+    fh->addWidget(m_priorityFilter);
+    fh->addWidget(m_jiraFilter);
     auto* create = smallButton(tr("+ Nuevo"), "primary", tr("Issue creado a mano, sin requerimiento de GESREQ"));
     create->setObjectName(QStringLiteral("issuesNew"));
     connect(create, &QPushButton::clicked, this, [this]() {
@@ -444,7 +597,15 @@ void IssuesView::buildBoard(QVBoxLayout* root) {
         m_title->setFocus();
         m_title->selectAll();
     });
-    hh->addWidget(create);
+    fh->addWidget(create);
+    for (auto* layout : {hh, fh})
+        for (int i = 0; i < layout->count(); ++i)
+            if (QWidget* w = layout->itemAt(i)->widget(); w && w != m_search) w->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    m_headLeft->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    // Su ancho mínimo no se impone a la ventana: antes de apretarse, `placeHeader` lo baja a otra fila.
+    m_headFilters->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    placeHeader();
+    for (auto* combo : {m_scopeFilter, m_priorityFilter, m_jiraFilter}) combo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     root->addWidget(head);
     auto* divider = new QFrame;
     divider->setFixedHeight(1);
@@ -522,7 +683,20 @@ void IssuesView::buildBoard(QVBoxLayout* root) {
         cv->addWidget(well, 1);
         ch->addWidget(column, 1);
     }
-    av->addWidget(columnsScroll, 1);
+    // La lista ocupa el sitio de las columnas: mismos filtros y mismo panel del issue a la derecha.
+    m_list->setObjectName(QStringLiteral("issueListView"));
+    connect(m_list, &IssueListView::issueSelected, this, [this](const QString& projectId, const QString& issueId) {
+        if (projectId == m_projectId) m_issues.select(issueId);
+        else selectForeign(projectId, issueId);
+    });
+    connect(m_list, &IssueListView::openIssueRequested, this, [this](const QString& projectId, const QString& issueId) {
+        if (projectId == m_projectId) openIssue(issueId);
+        else openElsewhere(projectId, issueId);
+    });
+    m_boardViews = new QStackedWidget;
+    m_boardViews->addWidget(columnsScroll);
+    m_boardViews->addWidget(m_list);
+    av->addWidget(m_boardViews, 1);
     m_boardSplit->addWidget(boardArea);
     buildDrawer(m_boardSplit);
     m_boardSplit->setStretchFactor(0, 1);
@@ -555,24 +729,21 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     card->setObjectName(QStringLiteral("issueRow-%1").arg(issue.id));
     card->setProperty("issueId", issue.id);
     card->installEventFilter(this);
-    card->setToolTip(tr("Doble clic para abrir el issue · arrástralo a otra columna para cambiar su estado · clic derecho para más"));
+    card->setToolTip(QStringLiteral("%1\n\n%2").arg(issue.title.simplified(),
+                                                    tr("Doble clic para abrir el issue · arrástralo a otra columna para cambiar su estado · clic derecho para más")));
     // La tarjeta toma el ancho de su columna: su contenido se ajusta a él, no al revés.
     card->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     ui::setFlag(card, "active", issue.id == m_issues.selectedId());
+    // En la vista general, los del proyecto abierto resaltan sobre los de los demás.
+    ui::setFlag(card, "own", m_directory && m_allProjects && m_projects && m_projects->projects().size() > 1);
     auto* v = ui::vbox(card, 0, 7);
     v->setContentsMargins(11, 10, 11, 10);
 
     auto* top = new QWidget;
     auto* th = ui::hbox(top, 0, 6);
+    // Arriba, lo que lo identifica; el sistema va con las demás etiquetas, que tienen sitio para saltar
+    // de línea en vez de recortarse junto al número.
     th->addWidget(ui::label(issue.isImported() ? issue.requirement.data.id : issue.id, "mono-muted"));
-    if (issue.isImported() && !issue.requirement.data.systemCode.isEmpty()) {
-        // Con la columna estrecha el sistema se recorta con «…» (entero en el tooltip), no a media letra.
-        auto* system = new ElidedLabel(issue.requirement.data.systemCode);
-        system->setProperty("role", QStringLiteral("pill"));
-        system->setStyleSheet(QStringLiteral("background:%1;color:%2;").arg(theme::tint(theme::Muted, 26), theme::Muted));
-        system->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
-        th->addWidget(system, 0);
-    }
     th->addStretch(1);
     if (!issue.revisions.isEmpty()) {
         auto* rev = ui::label(tr("REV %1").arg(s.number), "muted-sm");
@@ -581,28 +752,22 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     }
     v->addWidget(top);
 
-    auto* title = new QLabel(issue.title);
-    title->setWordWrap(true);
-    title->setStyleSheet(QStringLiteral("font-size:13px;font-weight:600;color:%1;").arg(theme::Text));
-    v->addWidget(title);
+    v->addWidget(cardTitle(issue.title, theme::Text));
 
     if (s.progress.cases > 0) v->addWidget(resultBar(s.progress));
 
-    // Lo que avisa: casos rotos, cambios en GESREQ o que el requerimiento salió de la bandeja.
-    QList<QLabel*> flags;
+    // Las etiquetas: el sistema y lo que avisa (casos rotos, cambios en GESREQ o que el requerimiento
+    // salió de la bandeja).
+    QList<QLabel*> tags;
+    if (issue.isImported() && !issue.requirement.data.systemCode.isEmpty())
+        tags << cardTag(issue.requirement.data.systemCode, theme::tint(theme::Muted, 26), theme::Muted);
     if (s.progress.failed > 0)
-        flags << ui::pill(tr("%n FALLIDO(S)", nullptr, s.progress.failed), theme::tint(theme::Red, 46), theme::RedSoft);
+        tags << cardTag(tr("%n FALLIDO(S)", nullptr, s.progress.failed), theme::tint(theme::Red, 46), theme::RedSoft);
     if (s.progress.blocked > 0)
-        flags << ui::pill(tr("%n BLOQUEADO(S)", nullptr, s.progress.blocked), theme::tint(theme::Amber, 46), theme::AmberSoft);
-    if (!issue.requirement.changes.isEmpty()) flags << ui::pill(tr("CAMBIOS"), theme::tint(theme::Amber, 46), theme::AmberSoft);
-    if (issue.requirement.missing) flags << ui::pill(tr("FUERA DE LA BANDEJA"), theme::tint(theme::Muted, 38), theme::Muted);
-    if (!flags.isEmpty()) {
-        auto* row = new QWidget;
-        auto* fh = ui::hbox(row, 0, 4);
-        for (auto* f : flags) fh->addWidget(f);
-        fh->addStretch(1);
-        v->addWidget(row);
-    }
+        tags << cardTag(tr("%n BLOQUEADO(S)", nullptr, s.progress.blocked), theme::tint(theme::Amber, 46), theme::AmberSoft);
+    if (!issue.requirement.changes.isEmpty()) tags << cardTag(tr("CAMBIOS"), theme::tint(theme::Amber, 46), theme::AmberSoft);
+    if (issue.requirement.missing) tags << cardTag(tr("FUERA DE LA BANDEJA"), theme::tint(theme::Muted, 38), theme::Muted);
+    if (!tags.isEmpty()) v->addWidget(cardTags(tags));
 
     // La última fila dice qué le toca y su clave en el gestor; en la tarjeta elegida o con el ratón
     // encima, lo cambia por el botón que lo hace y el «⋯» de su menú. Las dos ocupan lo mismo, así que
@@ -868,14 +1033,33 @@ void IssuesView::styleWell(int column, bool hot) {
 }
 
 void IssuesView::refreshList() {
-    const QString system = linkedSystem();
-    m_consult->setToolTip(system.isEmpty() ? tr("Vincula antes un sistema de GESREQ a este proyecto en Ajustes")
-                                           : tr("Leer la bandeja de control de calidad e importar los requerimientos de %1").arg(system));
+    const QList<IssueDirectory::Entry> others = m_directory && m_allProjects ? m_directory->issues(m_projectId) : QList<IssueDirectory::Entry>{};
+    const qsizetype total = m_issues.issues().size() + others.size();
+    const QString emptyText = total == 0 ? tr("Todavía no hay issues. En la pestaña GREQS están tus requerimientos de GESREQ para empezar sus "
+                                              "pruebas; también puedes crear uno a mano.")
+                                         : tr("Ningún issue coincide con los filtros.");
+    // En la lista están todos, también los finalizados que ya salieron del tablero.
+    if (m_listMode) {
+        m_list->setFilter(m_filter, m_allProjects);
+        if (m_foreignIssue.isEmpty()) m_list->setSelected(m_projectId, m_issues.selectedId());
+        else m_list->setSelected(m_foreignProject, m_foreignIssue);
+        const int shown = m_list->shownCount();
+        m_boardEmpty->setText(emptyText);
+        m_boardEmpty->setVisible(shown == 0);
+        m_listCount->setText(shown == total ? tr("%n issue(s)", nullptr, shown) : tr("%1 de %2 issues").arg(shown).arg(total));
+        refreshDrawer();
+        return;
+    }
     int counts[kColumns] = {};
     for (int i = 0; i < kColumns; ++i) ui::clearLayout(m_columns[i]);
     int shown = 0;
+    // Los finalizados hace tiempo ya no son trabajo: salen del tablero y quedan en la lista. Buscando
+    // por texto se enseñan igual, para no esconder lo que se busca.
+    const bool searching = !m_filter.text.trimmed().isEmpty();
+    int olderDone = 0;
     for (const auto& issue : m_issues.issues()) {
         if (!m_filter.matches(issue)) continue;
+        if (!searching && !onBoard(issue)) { ++olderDone; continue; }
         ++shown;
         const RevisionSnapshot s = snapshotOf(issue);
         const Column column = columnOf(issue, s);
@@ -883,19 +1067,46 @@ void IssuesView::refreshList() {
         ++counts[i];
         m_columns[i]->addWidget(boardCard(issue, s, column));
     }
+    // Debajo de los del proyecto, en cada columna, los de los demás: la vista general.
+    int shownOthers = 0;
+    for (const auto& entry : others) {
+        if (!m_filter.matches(entry.issue)) continue;
+        if (!searching && !onBoard(entry.issue)) { ++olderDone; continue; }
+        ++shownOthers;
+        const Column column = foreignColumnOf(entry.issue);
+        const int i = static_cast<int>(column);
+        ++counts[i];
+        m_columns[i]->addWidget(foreignCard(entry, column));
+    }
+    if (olderDone > 0) {
+        auto* older = smallButton(tr("%n finalizado(s) anterior(es) · Ver en la lista", nullptr, olderDone), "ghost",
+                                  tr("Los finalizados hace más de %n día(s) sólo se ven en la lista", nullptr, kDoneDaysOnBoard));
+        older->setObjectName(QStringLiteral("issueBoardOlderDone"));
+        connect(older, &QPushButton::clicked, this, [this]() {
+            m_list->sortByFinished();
+            setListMode(true);
+        });
+        m_columns[static_cast<int>(Column::Done)]->addWidget(older);
+    }
     for (int i = 0; i < kColumns; ++i) {
         m_columnCounts[i]->setText(QString::number(counts[i]));
         m_columns[i]->addStretch(1);
     }
-    m_boardEmpty->setText(m_issues.issues().isEmpty() ? tr("Todavía no hay issues. Consulta GESREQ para importar tus requerimientos o crea uno a mano.")
-                                                      : tr("Ningún issue coincide con los filtros."));
-    m_boardEmpty->setVisible(shown == 0);
-    m_listCount->setText(m_filter.isEmpty() ? tr("%1 issues").arg(shown) : tr("%1 de %2 issues").arg(shown).arg(m_issues.issues().size()));
+    m_boardEmpty->setText(emptyText);
+    m_boardEmpty->setVisible(shown + shownOthers + olderDone == 0);
+    QString count = m_filter.isEmpty() ? tr("%1 issues").arg(shown) : tr("%1 de %2 issues").arg(shown).arg(m_issues.issues().size());
+    if (!others.isEmpty()) count += QStringLiteral(" · ") + tr("%n de otros proyectos", nullptr, shownOthers);
+    m_listCount->setText(count);
     refreshDrawer();
 }
 
 void IssuesView::refreshDrawer() {
     ui::clearLayout(m_drawerLayout);
+    if (const std::optional<IssueDirectory::Entry> foreign = selectedForeign()) {
+        m_drawer->setVisible(true);
+        refreshForeignDrawer(*foreign);
+        return;
+    }
     const Issue* found = selected();
     m_drawer->setVisible(found != nullptr);
     if (!found) return;
@@ -1059,6 +1270,257 @@ void IssuesView::refreshDrawer() {
         m_drawerLayout->addWidget(dest);
     }
     m_drawerLayout->addStretch(1);
+}
+
+// ---- Vista general: los issues de los demás proyectos ------------------------------------------
+
+QWidget* IssuesView::screenTabs(Page page) {
+    auto* tabs = new QWidget;
+    auto* h = ui::hbox(tabs, 0, 4);
+    const QString prefix = page == Page::Greqs ? QStringLiteral("greqsTab") : QStringLiteral("issuesTab");
+    // Como el título de la pantalla, pero pinchables: la elegida con su subrayado, las otras apagadas.
+    auto tab = [&](const QString& text, const QString& name, Page target, const QString& tip) {
+        auto* b = new QPushButton(text);
+        b->setObjectName(prefix + name);
+        b->setCheckable(true);
+        b->setProperty("tabPage", static_cast<int>(target));
+        b->setCursor(Qt::PointingHandCursor);
+        b->setToolTip(tip);
+        b->setStyleSheet(QStringLiteral("QPushButton{background:transparent;border:none;border-bottom:2px solid transparent;"
+                                        "border-radius:0;padding:2px 6px 4px 6px;font-size:18px;font-weight:800;color:%1;}"
+                                        "QPushButton:hover{color:%2;}QPushButton:checked{color:%2;border-bottom-color:%3;}")
+                             .arg(theme::Muted, theme::Text, theme::Blue));
+        // Un clic no conmuta nada por su cuenta: lleva a su página y `syncTabs` marca las de todas.
+        connect(b, &QPushButton::clicked, this, [this, target]() {
+            if (target == Page::Greqs) showGreqs();
+            else showDetail(false);
+            syncTabs();
+        });
+        h->addWidget(b);
+        m_tabs << b;
+        return b;
+    };
+    tab(tr("Issues"), QStringLiteral("Board"), Page::Board, tr("El tablero con los issues de todos los proyectos"));
+    auto* inbox = tab(tr("GREQS"), QStringLiteral("Greqs"), Page::Greqs,
+                      tr("Tus requerimientos de GESREQ: cuáles tienen issue y cuáles no, y la búsqueda de cualquiera por su número"));
+    inbox->setVisible(m_requirements != nullptr);
+    return tabs;
+}
+
+void IssuesView::syncTabs() {
+    // El detalle es parte del tablero: su pestaña sigue siendo «Issues».
+    auto current = static_cast<Page>(m_pages->currentIndex());
+    if (current == Page::Detail) current = Page::Board;
+    for (auto* b : m_tabs) b->setChecked(static_cast<Page>(b->property("tabPage").toInt()) == current);
+}
+
+bool IssuesView::onBoard(const Issue& issue) {
+    const QDateTime finished = issue.finishedAt();
+    return !finished.isValid() || finished.daysTo(QDateTime::currentDateTime()) < kDoneDaysOnBoard;
+}
+
+QString IssuesView::projectName(const QString& projectId) const {
+    const Project* project = m_projects ? m_projects->find(projectId) : nullptr;
+    return project ? project->name : projectId;
+}
+
+IssuesView::Column IssuesView::foreignColumnOf(const Issue& issue) {
+    if (issue.state != IssueState::Pending && !issue.currentRevision() && issue.lastOutcome() == QaOutcome::Observado)
+        return Column::Broken;
+    switch (issue.state) {
+        case IssueState::Pending: return Column::Pending;
+        case IssueState::Preparing: return Column::Preparing;
+        case IssueState::Testing: return Column::Testing;
+        case IssueState::Done: return Column::Done;
+    }
+    return Column::Pending;
+}
+
+void IssuesView::selectForeign(const QString& projectId, const QString& issueId) {
+    m_foreignProject = projectId;
+    m_foreignIssue = issueId;
+    // Elegir uno ajeno suelta el de este proyecto: el panel es de uno solo.
+    if (!issueId.isEmpty() && !m_issues.selectedId().isEmpty()) m_issues.select(QString());
+    else refreshList();
+}
+
+std::optional<IssueDirectory::Entry> IssuesView::selectedForeign() const {
+    if (!m_directory || !m_allProjects || m_foreignIssue.isEmpty()) return std::nullopt;
+    for (const auto& entry : m_directory->issues(m_projectId))
+        if (entry.projectId == m_foreignProject && entry.issue.id == m_foreignIssue) return entry;
+    return std::nullopt;
+}
+
+QWidget* IssuesView::foreignCard(const IssueDirectory::Entry& entry, Column column) {
+    const Issue& issue = entry.issue;
+    const QString project = projectName(entry.projectId);
+    auto* card = ui::button(QString(), "board-card");
+    card->setObjectName(QStringLiteral("issueForeignRow-%1-%2").arg(entry.projectId, issue.id));
+    card->setProperty("foreignIssue", issue.id);
+    card->setProperty("foreignProject", entry.projectId);
+    card->installEventFilter(this);
+    card->setToolTip(QStringLiteral("%1\n\n%2").arg(issue.title.simplified(),
+                                                    tr("Issue del proyecto «%1» · doble clic para cambiar a ese proyecto y seguir con él").arg(project)));
+    card->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    ui::setFlag(card, "foreign", true);
+    ui::setFlag(card, "active", entry.projectId == m_foreignProject && issue.id == m_foreignIssue);
+    auto* v = ui::vbox(card, 0, 7);
+    v->setContentsMargins(11, 10, 11, 10);
+
+    auto* top = new QWidget;
+    auto* th = ui::hbox(top, 0, 6);
+    th->addWidget(ui::label(issue.isImported() ? issue.requirement.data.id : issue.id, "mono-muted"));
+    th->addStretch(1);
+    if (!issue.revisions.isEmpty()) {
+        auto* rev = ui::label(tr("REV %1").arg(issue.currentRevisionNumber()), "muted-sm");
+        rev->setStyleSheet(QStringLiteral("color:%1;font-weight:700;font-size:10.5px;").arg(theme::Cyan));
+        th->addWidget(rev);
+    }
+    v->addWidget(top);
+
+    // Atenuado: se ve, pero no compite con el trabajo del proyecto abierto.
+    v->addWidget(cardTitle(issue.title, theme::Muted));
+
+    // Su proyecto va primero entre las etiquetas: es lo que lo distingue de los de éste.
+    QList<QLabel*> tags;
+    auto* projectPill = cardTag(project, theme::tint(theme::Violet, 30), theme::Violet);
+    projectPill->setObjectName(QStringLiteral("issueForeignProject-%1-%2").arg(entry.projectId, issue.id));
+    tags << projectPill;
+    if (issue.isImported() && !issue.requirement.data.systemCode.isEmpty())
+        tags << cardTag(issue.requirement.data.systemCode, theme::tint(theme::Muted, 26), theme::Muted);
+    if (!issue.requirement.changes.isEmpty()) tags << cardTag(tr("CAMBIOS"), theme::tint(theme::Amber, 46), theme::AmberSoft);
+    if (issue.requirement.missing) tags << cardTag(tr("FUERA DE LA BANDEJA"), theme::tint(theme::Muted, 38), theme::Muted);
+    v->addWidget(cardTags(tags));
+
+    auto* bottom = new QWidget;
+    auto* bh = ui::hbox(bottom, 0, 6);
+    bh->addWidget(ui::label(column == Column::Broken ? tr("Revisión observada") : label(issue.state), "muted-sm"), 1);
+    if (issue.isPublished()) bh->addWidget(ui::label(issue.publication.key, "mono-muted"));
+    v->addWidget(bottom);
+
+    for (auto* child : card->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+    card->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(card, &QWidget::customContextMenuRequested, this, [this, card, projectId = entry.projectId, id = issue.id](const QPoint& pos) {
+        showForeignMenu(projectId, id, card->mapToGlobal(pos));
+    });
+    connect(card, &QPushButton::clicked, this, [this, projectId = entry.projectId, id = issue.id]() { selectForeign(projectId, id); });
+    return card;
+}
+
+void IssuesView::showForeignMenu(const QString& projectId, const QString& issueId, const QPoint& globalPos) {
+    selectForeign(projectId, issueId);
+    const std::optional<IssueDirectory::Entry> entry = selectedForeign();
+    if (!entry) return;
+    const Issue& issue = entry->issue;
+    auto* menu = new QMenu(this);
+    menu->setObjectName(QStringLiteral("issueForeignMenu"));
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    QAction* open = menu->addAction(tr("Cambiar a «%1» y abrirlo…").arg(projectName(projectId)),
+                                    this, [this, projectId, issueId]() { openElsewhere(projectId, issueId); });
+    open->setObjectName(QStringLiteral("issueMenuOpenElsewhere"));
+    menu->addSeparator();
+    if (issue.isPublished() && !issue.publication.url.isEmpty())
+        menu->addAction(tr("Abrir %1 en el gestor").arg(issue.publication.key), this, [this, url = issue.publication.url]() { emit openUrlRequested(url); });
+    if (issue.isImported() && !issue.requirement.data.detailUrl.isEmpty())
+        menu->addAction(tr("Abrir en GESREQ"), this, [this, url = issue.requirement.data.detailUrl]() { emit openUrlRequested(url); });
+    menu->popup(globalPos);
+}
+
+void IssuesView::refreshForeignDrawer(const IssueDirectory::Entry& entry) {
+    const Issue& issue = entry.issue;
+    const QString project = projectName(entry.projectId);
+    const ColumnInfo info = columnInfo(foreignColumnOf(issue));
+
+    auto* identity = ui::label(issue.isImported() ? QStringLiteral("%1 · GREQ %2 · %3").arg(issue.id, issue.requirement.data.id,
+                                                                                          issue.requirement.data.systemCode)
+                                                  : issue.id,
+                               "eyebrow-mono");
+    identity->setWordWrap(true);
+    identity->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_drawerLayout->addWidget(identity);
+
+    auto* title = new QLabel(issue.title);
+    title->setObjectName(QStringLiteral("issueDrawerTitle"));
+    title->setWordWrap(true);
+    title->setStyleSheet(QStringLiteral("font-size:18px;font-weight:700;color:%1;").arg(theme::Text));
+    title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    title->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_drawerLayout->addWidget(title);
+
+    auto* chips = new QWidget;
+    auto* chh = new FlowLayout(chips, 0, 6, 6);
+    chh->addWidget(ui::pill(project, theme::tint(theme::Violet, 30), theme::Violet));
+    chh->addWidget(ui::pill(info.name, theme::tint(info.color, 46), info.color));
+    if (!issue.revisions.isEmpty())
+        chh->addWidget(ui::pill(tr("REV %1").arg(issue.currentRevisionNumber()), theme::tint(theme::Cyan, 38), theme::Cyan));
+    if (issue.isPublished()) {
+        const auto& p = issue.publication;
+        chh->addWidget(ui::pill(p.status.isEmpty() ? p.key : QStringLiteral("%1 · %2").arg(p.key, p.status), theme::tint(theme::Blue, 30), theme::Blue));
+    }
+    m_drawerLayout->addWidget(chips);
+
+    // Lo que se puede hacer con él: seguir en su proyecto, que es donde están sus planes y sus ciclos.
+    auto* elsewhere = ui::card("card-flat");
+    elsewhere->setObjectName(QStringLiteral("issueForeign"));
+    auto* ev = ui::vbox(elsewhere, 0, 8);
+    ev->setContentsMargins(14, 12, 14, 14);
+    ev->addWidget(ui::label(tr("DE OTRO PROYECTO"), "eyebrow"));
+    auto* why = ui::label(tr("Este issue se trabaja en «%1»: allí están sus planes, sus ciclos y su revisión. Para seguir con él "
+                             "hay que cambiar a ese proyecto; el actual se guarda antes.")
+                              .arg(project),
+                          "muted-sm");
+    why->setWordWrap(true);
+    ev->addWidget(why);
+    auto* buttons = new QWidget;
+    auto* bh = new FlowLayout(buttons, 0, 8, 8);
+    auto* go = smallButton(tr("Cambiar a «%1» y abrirlo").arg(project), "primary");
+    go->setObjectName(QStringLiteral("issueForeignOpen"));
+    connect(go, &QPushButton::clicked, this, [this, projectId = entry.projectId, id = issue.id]() { openElsewhere(projectId, id); });
+    bh->addWidget(go);
+    if (issue.isPublished() && !issue.publication.url.isEmpty()) {
+        auto* tracker = smallButton(tr("Abrir %1").arg(issue.publication.key), "outline");
+        connect(tracker, &QPushButton::clicked, this, [this, url = issue.publication.url]() { emit openUrlRequested(url); });
+        bh->addWidget(tracker);
+    }
+    ev->addWidget(buttons);
+    m_drawerLayout->addWidget(elsewhere);
+
+    // Lo que guarda el issue de su revisión: en qué ronda va y cómo se cerraron las anteriores.
+    if (!issue.revisions.isEmpty()) {
+        m_drawerLayout->addWidget(ui::label(tr("REVISIONES"), "eyebrow"));
+        for (auto it = issue.revisions.crbegin(); it != issue.revisions.crend(); ++it) {
+            const QString text = it->isOpen() ? tr("Revisión %1 · abierta desde %2").arg(it->number).arg(when(it->startedAt))
+                                              : tr("Revisión %1 · %2 · cerrada el %3").arg(it->number).arg(label(it->outcome), when(it->closedAt));
+            auto* line = ui::label(text, "muted-sm");
+            line->setWordWrap(true);
+            m_drawerLayout->addWidget(line);
+        }
+    }
+    m_drawerLayout->addStretch(1);
+}
+
+void IssuesView::openElsewhere(const QString& projectId, const QString& issueId) {
+    // Ya se está preguntando (un doble clic llega también como activación): se trae la que hay al frente.
+    if (m_switchConfirm && m_switchConfirm->isVisible()) {
+        m_switchConfirm->raise();
+        m_switchConfirm->activateWindow();
+        return;
+    }
+    const QString project = projectName(projectId);
+    auto* box = new QMessageBox(QMessageBox::Question, tr("Cambiar de proyecto"),
+                                tr("%1 es del proyecto «%2». ¿Cambiar a «%2» para seguir con él?").arg(issueId, project), QMessageBox::NoButton, this);
+    box->setObjectName(QStringLiteral("issueSwitchConfirm"));
+    m_switchConfirm = box;
+    box->setInformativeText(tr("El proyecto actual se guarda antes de cambiar."));
+    QPushButton* accept = box->addButton(tr("Cambiar a «%1»").arg(project), QMessageBox::AcceptRole);
+    accept->setObjectName(QStringLiteral("issueSwitchAccept"));
+    box->addButton(tr("Cancelar"), QMessageBox::RejectRole);
+    box->setDefaultButton(accept);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    connect(box, &QMessageBox::buttonClicked, this, [this, accept, projectId, issueId](QAbstractButton* clicked) {
+        if (clicked == accept) emit openIssueInProjectRequested(projectId, issueId);
+    });
+    box->open();
 }
 
 // ---- Detalle -------------------------------------------------------------------------------------
@@ -2231,54 +2693,6 @@ void IssuesView::editSelected(const std::function<void(Issue&)>& mutate) {
     m_selfEdit = true;
     m_issues.updateIssue(id, mutate);
     m_selfEdit = false;
-}
-
-void IssuesView::consultRequirements() {
-    if (!m_requirements || m_consulting) return;
-    const QString system = linkedSystem();
-    if (system.isEmpty()) {
-        emit toast(tr("Vincula un sistema de GESREQ a este proyecto en Ajustes → Configuración del proyecto"), theme::Amber);
-        emit settingsRequested();
-        return;
-    }
-    m_consulting = true;
-    m_consult->setEnabled(false);
-    m_consult->setText(tr("Consultando…"));
-    QPointer<IssuesView> self(this);
-    m_requirements->fetchInbox([self, system](const RequirementInboxResult& r) {
-        if (!self) return;
-        self->m_consulting = false;
-        self->m_consult->setEnabled(true);
-        self->m_consult->setText(tr("Consultar GESREQ"));
-        if (!r.ok) {
-            emit self->toast(tr("No se pudo consultar GESREQ · %1").arg(r.error), theme::Red);
-            return;
-        }
-        const QString connection = self->m_requirements->connection();
-        const QDateTime fetchedAt = r.fetchedAt.isValid() ? r.fetchedAt : QDateTime::currentDateTime();
-        QList<ExternalRequirement> mine, others;
-        for (const auto& requirement : r.requirements) {
-            if (requirement.systemCode.compare(system, Qt::CaseInsensitive) == 0) mine << requirement;
-            else others << requirement;
-        }
-        // La bandeja se lee entera: lo importado que ya no está en ella se marca, lo elija o no el usuario.
-        const int missing = self->m_issues.markInboxRead(r.requirements, connection, fetchedAt);
-        const QList<IssueStore::ImportCandidate> candidates = self->m_issues.previewImport(mine, connection);
-        if (candidates.isEmpty() && others.isEmpty()) {
-            emit self->toast(tr("Tu bandeja de control de calidad no tiene requerimientos"), theme::Amber);
-            return;
-        }
-        // Los de otros sistemas no se importan aquí, pero desde ellos se pueden iniciar las pruebas en el
-        // proyecto que los trabaja: consultar la bandeja nunca cambia de proyecto por su cuenta.
-        auto* dialog = new RequirementImportDialog(system, candidates, others, missing,
-                                                   [self](const QString& code) { return self ? self->projectNameForSystem(code) : QString(); },
-                                                   self.data());
-        dialog->setAttribute(Qt::WA_DeleteOnClose);
-        connect(dialog, &RequirementImportDialog::startTestingRequested, self.data(), [self, connection, fetchedAt](const ExternalRequirement& requirement) {
-            if (self) self->startTesting(requirement, connection, fetchedAt);
-        });
-        dialog->open();
-    });
 }
 
 QString IssuesView::projectNameForSystem(const QString& systemCode) const {

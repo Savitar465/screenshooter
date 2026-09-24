@@ -1,5 +1,7 @@
 #include "Requirement.h"
 
+#include "core/Text.h"
+
 #include <QUrl>
 
 namespace qaflow {
@@ -23,6 +25,22 @@ QString RequirementDetail::field(const QString& label) const {
         for (const auto& f : s.fields)
             if (same(f)) return f.value;
     return {};
+}
+
+ExternalRequirement requirementFromDetail(const RequirementDetail& detail) {
+    ExternalRequirement r;
+    r.id = detail.id;
+    r.systemCode = detail.systemCode.simplified();
+    r.system = r.systemCode;
+    QString summary = detail.field(QStringLiteral("Descripción Corta"));
+    if (summary.trimmed().isEmpty()) summary = detail.description.section(QLatin1Char('\n'), 0, 0);
+    r.summary = elideTitle(summary.simplified(), 160);
+    r.requestingUnit = detail.requestingUnit;
+    r.requester = detail.requester;
+    r.priority = detail.priority;
+    if (!detail.state.trimmed().isEmpty()) r.states = {detail.state.simplified()};
+    r.detailUrl = detail.url;
+    return r;
 }
 
 QPair<QString, QString> splitSystem(const QString& system) {

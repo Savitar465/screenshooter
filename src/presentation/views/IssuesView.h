@@ -1,16 +1,21 @@
 #pragma once
 
+#include "application/IssueDirectory.h"
 #include "core/models/Issue.h"
 #include "core/models/IssueLink.h"
 #include "core/models/IssueProgress.h"
 #include "core/models/RunHistory.h"
 
+#include <QMessageBox>
 #include <QPoint>
+#include <QPointer>
 #include <QWidget>
 #include <functional>
+#include <optional>
 
 class QAction;
 class QComboBox;
+class QGridLayout;
 class QFrame;
 class QHBoxLayout;
 class QLabel;
@@ -37,12 +42,21 @@ class RevisionPublishService;
 class BugReportService;
 class BugStore;
 class ProjectStore;
+class GreqsView;
+class IssueListView;
 
 /// Pantalla "Issues": el punto de entrada para organizar las pruebas de cada requerimiento. Se abre en el
 /// **tablero**: una columna por cómo va el trabajo de QA —pendiente, en preparación, en pruebas, **con
-/// casos fallidos o bloqueados** y finalizado— con búsqueda, filtros (prioridad, publicación en Jira) y la
-/// consulta de la bandeja de GESREQ, y a la derecha el panel del issue elegido con lo siguiente que toca,
-/// los pasos de su revisión y cómo va cada destino. La columna de fallidos no es un estado guardado: sale
+/// casos fallidos o bloqueados** y finalizado— con búsqueda y filtros (proyecto, prioridad, publicación en
+/// Jira), y a la derecha el panel del issue elegido con lo siguiente que toca, los pasos de su revisión y
+/// cómo va cada destino.
+///
+/// El tablero es una **vista general**: enseña también los issues de los demás proyectos, atenuados y con
+/// su proyecto, mientras que los del abierto resaltan. De uno ajeno sólo se ve lo que guarda el issue; para
+/// seguir con él hay que cambiar a su proyecto, y la pantalla lo pregunta antes de pedirlo.
+///
+/// Junto al título, la pestaña **GREQS** (`GreqsView`) es la bandeja de GESREQ del usuario: qué
+/// requerimientos tienen ya issue y cuáles no, y la búsqueda de uno por su número. La columna de fallidos no es un estado guardado: sale
 /// de los resultados de la revisión en curso, así que un issue sale de ella en cuanto se repite lo roto.
 ///
 /// Al abrir un issue (doble clic, «Abrir el issue», uno nuevo o uno importado) se pasa a su **detalle**,
@@ -69,10 +83,18 @@ public:
     /// Columnas del tablero, en el orden en que avanza un issue.
     enum class Column { Pending, Preparing, Testing, Broken, Done };
     static constexpr int kColumns = 5;
+    /// Días que un issue finalizado sigue en el tablero; pasados, se ve en el historial.
+    static constexpr int kDoneDaysOnBoard = 7;
 
     void focusSearch();
-    /// Lee la bandeja de GESREQ y ofrece importar los requerimientos del sistema vinculado al proyecto.
-    void consultRequirements();
+    /// Pasa a la pestaña GREQS (la bandeja de GESREQ del usuario) y la lee si todavía no se leyó.
+    void showGreqs();
+    /// Cambia entre el tablero y la lista (todos los issues, también los finalizados que ya salieron
+    /// del tablero). Se recuerda entre sesiones.
+    void setListMode(bool list);
+    bool isListMode() const { return m_listMode; }
+    /// Abre el detalle de ese issue del proyecto.
+    void openIssue(const QString& issueId);
     /// Abre en este proyecto el issue desde el que se prueba ese requerimiento, creándolo si es la primera
     /// vez (con su issue en el gestor) y reutilizando el que ya hubiera. Lo llama quien coordina el cambio
     /// de proyecto, ya activado.
@@ -98,6 +120,9 @@ signals:
     /// Código de Jira pedido al crear un proyecto: sólo su propia sesión tiene abiertos sus ajustes, así que
     /// lo guarda quien las coordina.
     void projectJiraKeyRequested(const QString& projectId, const QString& jiraProject);
+    /// Seguir con un issue de otro proyecto, ya confirmado: hay que activarlo (guardando éste) y abrir allí
+    /// el issue. La vista no cambia de proyecto por su cuenta.
+    void openIssueInProjectRequested(const QString& projectId, const QString& issueId);
 
 protected:
     void showEvent(QShowEvent* e) override;
@@ -155,6 +180,31 @@ private:
     /// Resalta la columna sobre la que se arrastra una tarjeta (o la deja como estaba).
     void styleWell(int column, bool hot);
 
+    // ---- Vista general: los issues de los demás proyectos ------------------------------------------
+    /// La columna de un issue de otro proyecto. De él sólo se tiene lo guardado (no sus planes ni sus
+    /// ciclos), así que va por su estado de QA y por cómo se cerró su última revisión.
+    static Column foreignColumnOf(const Issue& issue);
+    QWidget* foreignCard(const IssueDirectory::Entry& entry, Column column);
+    /// El panel de un issue de otro proyecto: lo que guarda y cómo seguir con él.
+    void refreshForeignDrawer(const IssueDirectory::Entry& entry);
+    void showForeignMenu(const QString& projectId, const QString& issueId, const QPoint& globalPos);
+    /// Elige en el tablero un issue de otro proyecto (vacío: ninguno).
+    void selectForeign(const QString& projectId, const QString& issueId);
+    std::optional<IssueDirectory::Entry> selectedForeign() const;
+    /// Seguir con un issue de otro proyecto: pregunta antes, porque cambia de proyecto.
+    void openElsewhere(const QString& projectId, const QString& issueId);
+    QString projectName(const QString& projectId) const;
+
+    /// Páginas de la pantalla, en el orden de `m_pages`.
+    enum class Page { Board = 0, Detail = 1, Greqs = 2 };
+    /// Las pestañas de la pantalla (Issues | GREQS) para la cabecera de la página `page`. Cada
+    /// página tiene las suyas, así que se marcan todas a la vez según la página que se ve (`syncTabs`).
+    QWidget* screenTabs(Page page);
+    void syncTabs();
+    /// ¿Sigue en el tablero? Un finalizado hace más de `kDoneDaysOnBoard` días sólo está en la lista.
+    static bool onBoard(const Issue& issue);
+    /// Pone los filtros al lado de las pestañas si caben, o en una segunda fila si la ventana es estrecha.
+    void placeHeader();
     void buildBoard(QVBoxLayout* root);
     void buildDrawer(QSplitter* root);
     void buildDetail(QVBoxLayout* root);
@@ -229,8 +279,6 @@ private:
     void unlinkJira();
     void refreshJiraStatus();
     void removeSelected();
-    /// Sistema de GESREQ vinculado al proyecto abierto; vacío si ninguno (o sin catálogo de proyectos).
-    QString linkedSystem() const;
     const Issue* selected() const;
 
     IssueStore& m_issues;
@@ -246,18 +294,38 @@ private:
     BugStore* m_bugLedger;      // los bugs reportados desde los casos del issue
     QualityRecordService* m_records;
     ProjectStore* m_projects;
+    IssueDirectory* m_directory;   // los issues de todos los proyectos; nullptr = sólo los de éste
     QString m_projectId;
+    bool m_allProjects = true;     // el tablero enseña también los issues de los demás proyectos
+    QString m_foreignProject;      // issue de otro proyecto elegido en el tablero
+    QString m_foreignIssue;
+    /// La confirmación de cambio de proyecto abierta, si la hay: nunca dos a la vez. Dos ventanas modales
+    /// de la misma ventana se bloquean entre sí y ninguna deja pulsar sus botones.
+    QPointer<QMessageBox> m_switchConfirm;
     IssueFilter m_filter;
     bool m_selfEdit = false;
     bool m_loadingDetail = false;
-    bool m_consulting = false;
     bool m_readingRequirement = false;
     bool m_publishing = false;
 
-    QStackedWidget* m_pages;
+    // La cabecera del tablero: lo que se ve (izquierda) y la búsqueda con los filtros (derecha), en una fila
+    // o, si la ventana no da para tanto, en dos.
+    QGridLayout* m_headGrid;
+    QWidget* m_headLeft;
+    QWidget* m_headFilters;
+    bool m_headTwoRows = false;
+    QStackedWidget* m_pages;   // tablero, detalle y GREQS
+    GreqsView* m_greqs;
+    // Tablero o lista: las dos vistas del trabajo, con los mismos filtros y el mismo panel del issue.
+    bool m_listMode = false;
+    QStackedWidget* m_boardViews;
+    IssueListView* m_list;
+    QPushButton* m_boardToggle;
+    QPushButton* m_listToggle;
+    QList<QPushButton*> m_tabs;     // las pestañas de todas las páginas, con su página en `tabPage`
     // Tablero
-    QPushButton* m_consult;
     QLineEdit* m_search;
+    QComboBox* m_scopeFilter;
     QComboBox* m_priorityFilter;
     QComboBox* m_jiraFilter;
     QLabel* m_listCount;

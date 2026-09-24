@@ -22,7 +22,6 @@
 #include "presentation/views/PlanView.h"
 #include "presentation/views/JiraPublishDialog.h"
 #include "presentation/views/ProjectSetupDialog.h"
-#include "presentation/views/RequirementImportDialog.h"
 #include "presentation/views/RevisionPublishDialog.h"
 #include "presentation/views/RunView.h"
 #include "presentation/views/Sidebar.h"
@@ -45,6 +44,8 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
+#include <QMessageBox>
+#include <QTableWidget>
 #include <QMimeData>
 #include <QDropEvent>
 #include <QPushButton>
@@ -100,6 +101,24 @@ struct WindowFixture {
     QLabel* liveLabel(const char* name) const {
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         return window->findChild<QLabel*>(QString::fromLatin1(name));
+    }
+    /// Botón vivo con ese nombre (las filas de GREQS y las tarjetas del tablero se rehacen en cada refresco).
+    QPushButton* liveButton(const QString& name) const {
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        return window->findChild<QPushButton*>(name);
+    }
+    /// Pasa a la pestaña GREQS de la pantalla de issues, que lee la bandeja de GESREQ.
+    void openGreqs() const {
+        window->navigate(Screen::Issues);
+        window->findChild<QPushButton*>(QStringLiteral("issuesTabGreqs"))->click();
+    }
+    /// La acción de la fila de un requerimiento en GREQS: seguir con su issue o empezar sus pruebas.
+    QPushButton* greqAction(const QString& id) const { return liveButton(QStringLiteral("greqAction-%1").arg(id)); }
+    /// Lo que dice la fila de un requerimiento en GREQS de su issue («SIN ISSUE», «IS-0001 · Riesgos»…).
+    QString greqStatus(const QString& id) const {
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* l = window->findChild<QLabel*>(QStringLiteral("greqStatus-%1").arg(id));
+        return l ? l->text() : QString();
     }
     QPushButton* nav(Screen s) const { return window->findChild<QPushButton*>(QStringLiteral("nav-%1").arg(static_cast<int>(s))); }
     /// Insignia del botón del rail (progreso de la ejecución, bugs pendientes…).
@@ -1465,24 +1484,16 @@ private slots:
         QTest::mouseClick(f.nav(Screen::Issues), Qt::LeftButton);
         QCOMPARE(f.window->currentScreen(), Screen::Issues);
 
-        // Consultar GESREQ muestra toda la bandeja; la acción unificada importa y abre el elegido.
-        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
-        auto* import = f.window->findChild<RequirementImportDialog*>();
-        QVERIFY(import);
-        auto* candidates = import->findChild<QListWidget*>(QStringLiteral("importList"));
-        QCOMPARE(candidates->count(), 2);
-        QVERIFY(!(candidates->item(0)->flags() & Qt::ItemIsUserCheckable));
-        QVERIFY(!import->findChild<QPushButton*>(QStringLiteral("importAccept")));
-        auto* start = import->findChild<QPushButton*>(QStringLiteral("importStartTesting"));
-        QVERIFY(start && !start->isEnabled());
-        import->accept();
+        // La pestaña GREQS enseña toda la bandeja, con lo que ya tiene issue y lo que no; leerla no crea
+        // nada, y las pruebas se empiezan desde la fila del requerimiento.
+        f.openGreqs();
+        QCOMPARE(f.app.requirementSource->inboxReads, 1);
+        QVERIFY(f.greqAction(QStringLiteral("2025175")) && f.greqAction(QStringLiteral("2025719")));
+        QVERIFY2(f.greqStatus(QStringLiteral("2025175")).contains(QStringLiteral("SIN ISSUE")), qPrintable(f.greqStatus(QStringLiteral("2025175"))));
+        const QString count = f.liveLabel("greqsCount")->text();
+        QVERIFY2(count.contains(QStringLiteral("2 asignados")) && count.contains(QStringLiteral("2 sin issue")), qPrintable(count));
         QVERIFY(f.app.issues.issues().isEmpty());
-        candidates->setCurrentRow(0);
-        QVERIFY(start->isEnabled());
-        const QString summary = import->findChild<QLabel*>(QStringLiteral("importSummary"))->text();
-        QVERIFY2(summary.contains(QStringLiteral("1 de otros sistemas")), qPrintable(summary));
-        import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
-        QTRY_VERIFY(!f.window->findChild<RequirementImportDialog*>());
+        f.greqAction(QStringLiteral("2025175"))->click();
         QCOMPARE(f.app.issues.issues().size(), 1);
         const QString id = f.app.issues.issues().first().id;
         QCOMPARE(f.app.issues.selectedId(), id);
@@ -1540,13 +1551,13 @@ private slots:
         QTest::keyClicks(title, "Mi titulo");
         QTest::keyClick(title, Qt::Key_Return);
         QCOMPARE(f.app.issues.find(id)->title, QStringLiteral("Mi titulo"));
+        // Volver a leer la bandeja pone al día lo importado; la fila ya dice cuál es su issue y lo abre.
         mine.states = {QStringLiteral("CONTROL DE CALIDAD OBSERVADO")};
         f.app.requirementSource->inbox = {mine};
-        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
-        import = f.window->findChild<RequirementImportDialog*>();
-        QVERIFY(import);
-        import->findChild<QListWidget*>(QStringLiteral("importList"))->setCurrentRow(0);
-        import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
+        f.openGreqs();
+        f.liveButton(QStringLiteral("greqsReload"))->click();
+        QCOMPARE(f.greqStatus(QStringLiteral("2025175")), id);
+        f.greqAction(QStringLiteral("2025175"))->click();
         QCOMPARE(f.app.issues.issues().size(), 1);
         QCOMPARE(f.app.issues.find(id)->title, QStringLiteral("Mi titulo"));
         QCOMPARE(f.app.tracker->publishedIssues.size(), 1);   // volver a empezar no crea otro issue
@@ -1559,12 +1570,13 @@ private slots:
         f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
     }
 
-    void consultingGesreqWithoutALinkedSystemOpensTheSettings() {
+    // Sin la conexión con GESREQ configurada, la pestaña no lee nada y lleva a los ajustes.
+    void theGreqsTabWithoutAConnectionOpensTheSettings() {
         WindowFixture f;
-        f.window->navigate(Screen::Issues);
-        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
-        QVERIFY(f.window->settingsWindow());
+        f.openGreqs();
         QCOMPARE(f.app.requirementSource->inboxReads, 0);
+        f.liveButton(QStringLiteral("greqsSettings"))->click();
+        QVERIFY(f.window->settingsWindow());
     }
 
     // La bandeja es del usuario: también enseña los requerimientos de otros sistemas. Iniciar sus pruebas
@@ -1598,49 +1610,30 @@ private slots:
                                           requirementOf(QStringLiteral("2026001"), QStringLiteral("SIN PROYECTO"), QStringLiteral("Algo de otro sistema"))};
 
         QSignalSpy started(f.window.get(), &MainWindow::startTestingRequested);
-        f.window->navigate(Screen::Issues);
-        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
-        auto* import = f.window->findChild<RequirementImportDialog*>();
-        QVERIFY(import);
-        auto* others = import->findChild<QListWidget*>(QStringLiteral("importList"));
-        auto* start = import->findChild<QPushButton*>(QStringLiteral("importStartTesting"));
-        QVERIFY(others && start);
-        QCOMPARE(others->count(), 3);
-        QVERIFY(others->item(0)->text().contains(QStringLiteral("Proyecto actual")));
-        QVERIFY(others->item(0)->text().contains(QStringLiteral("2025175")));
-        QVERIFY(others->item(1)->text().contains(QStringLiteral("CONTROL CALIDAD ASIGNADO")));
-        QVERIFY(!(others->item(1)->flags() & Qt::ItemIsUserCheckable));
-        QVERIFY(!(others->item(0)->flags() & Qt::ItemIsUserCheckable));
-        QVERIFY(!start->isEnabled());   // sin elegir requerimiento no hay pruebas que empezar
-
+        f.openGreqs();
+        // Cada fila dice en qué proyecto se prueba su requerimiento, y su botón, dónde se empieza.
+        QCOMPARE(f.greqAction(QStringLiteral("2025175"))->text(), QStringLiteral("Iniciar pruebas"));
+        QVERIFY2(f.greqAction(QStringLiteral("2025719"))->text().contains(QStringLiteral("Riesgos")),
+                 qPrintable(f.greqAction(QStringLiteral("2025719"))->text()));
         // El de un sistema que nadie trabaja dice que no tiene proyecto, pero se puede empezar igual:
         // primero se elige o se crea (ver startingTestsOfASystemNobodyWorksAsksForItsProject).
-        others->setCurrentRow(2);
-        QVERIFY(start->isEnabled());
-        QVERIFY2(others->item(2)->text().contains(QStringLiteral("ningún proyecto")), qPrintable(others->item(2)->text()));
-        others->setCurrentRow(1);
-        QVERIFY(start->isEnabled());
-        QVERIFY2(start->text().contains(QStringLiteral("Riesgos")), qPrintable(start->text()));
-        start->click();
+        QVERIFY2(f.greqAction(QStringLiteral("2026001"))->text().contains(QStringLiteral("Elegir proyecto")),
+                 qPrintable(f.greqAction(QStringLiteral("2026001"))->text()));
+
+        f.greqAction(QStringLiteral("2025719"))->click();
         QCOMPARE(started.count(), 1);
         QCOMPARE(started.first().at(0).toString(), otherId);
         QCOMPARE(started.first().at(1).value<ExternalRequirement>().id, QStringLiteral("2025719"));
         QVERIFY(f.app.issues.issues().isEmpty());   // el issue es del otro proyecto, no de éste
-        QTRY_VERIFY(!f.window->findChild<RequirementImportDialog*>());
 
         // El del sistema del proyecto se abre aquí, sin pedir cambio de proyecto.
-        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
-        import = f.window->findChild<RequirementImportDialog*>();
-        QVERIFY(import);
-        import->findChild<QListWidget*>(QStringLiteral("importList"))->setCurrentRow(0);
-        import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
+        f.greqAction(QStringLiteral("2025175"))->click();
         QCOMPARE(started.count(), 1);
         QCOMPARE(f.app.issues.issues().size(), 1);
         const Issue& issue = f.app.issues.issues().first();
         QCOMPARE(issue.requirement.data.id, QStringLiteral("2025175"));
         QCOMPARE(f.app.issues.selectedId(), issue.id);
         QCOMPARE(f.window->currentScreen(), Screen::Issues);
-        QTRY_VERIFY(!f.window->findChild<RequirementImportDialog*>());
         f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
     }
 
@@ -1664,17 +1657,14 @@ private slots:
         r.summary = QStringLiteral("Salidas de almacén");
         r.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
         f.app.requirementSource->inbox = {r};
+        f.app.settings.updateRequirementSource([](RequirementSourceSettings& rs) { rs.url = QStringLiteral("http://gesreq.test:7401/greq"); });
 
         QSignalSpy started(f.window.get(), &MainWindow::startTestingRequested);
         QSignalSpy jiraKey(f.window.get(), &MainWindow::projectJiraKeyRequested);
-        f.window->navigate(Screen::Issues);
-        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
-        auto* import = f.window->findChild<RequirementImportDialog*>();
-        QVERIFY(import);
-        import->findChild<QListWidget*>(QStringLiteral("importList"))->setCurrentRow(0);
-        auto* start = import->findChild<QPushButton*>(QStringLiteral("importStartTesting"));
-        QVERIFY(start->isEnabled());
-        QVERIFY2(start->text().contains(QStringLiteral("Crear proyecto")), qPrintable(start->text()));
+        f.openGreqs();
+        auto* start = f.greqAction(QStringLiteral("2026001"));
+        QVERIFY(start);
+        QVERIFY2(start->text().contains(QStringLiteral("Elegir proyecto")), qPrintable(start->text()));
         start->click();
 
         auto* setup = f.window->findChild<ProjectSetupDialog*>();
@@ -1721,14 +1711,11 @@ private slots:
         r.summary = QStringLiteral("Módulo de riesgos");
         r.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
         f.app.requirementSource->inbox = {r};
+        f.app.settings.updateRequirementSource([](RequirementSourceSettings& rs) { rs.url = QStringLiteral("http://gesreq.test:7401/greq"); });
 
         QSignalSpy started(f.window.get(), &MainWindow::startTestingRequested);
-        f.window->navigate(Screen::Issues);
-        f.window->findChild<QPushButton*>(QStringLiteral("issuesConsult"))->click();
-        auto* import = f.window->findChild<RequirementImportDialog*>();
-        QVERIFY(import);
-        import->findChild<QListWidget*>(QStringLiteral("importList"))->setCurrentRow(0);
-        import->findChild<QPushButton*>(QStringLiteral("importStartTesting"))->click();
+        f.openGreqs();
+        f.greqAction(QStringLiteral("2026002"))->click();
 
         auto* setup = f.window->findChild<ProjectSetupDialog*>();
         QVERIFY(setup);
@@ -1748,6 +1735,266 @@ private slots:
         QCOMPARE(started.count(), 0);              // es el proyecto abierto: se abre aquí mismo
         QCOMPARE(f.app.issues.issues().size(), 1);
         QCOMPARE(f.app.issues.issues().first().requirement.data.id, QStringLiteral("2026002"));
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    // El tablero es una vista general: también enseña los issues de los demás proyectos, atenuados y con su
+    // proyecto, y los de éste resaltan. Seguir con uno ajeno es cambiar de proyecto, y se pregunta antes.
+    void theBoardShowsTheIssuesOfEveryProjectAndAsksBeforeSwitching() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        const QString mineId = projects.activeId();
+        const QString otherId = projects.create(QStringLiteral("Riesgos"));
+        auto otherRepo = std::make_shared<testing::MemoryIssueRepository>();
+        {
+            IssueStore seed(otherRepo);
+            seed.load();
+            seed.createIssue(QStringLiteral("Módulo de riesgos"));   // IS-0001 allí…
+        }
+        const QString mine = f.app.issues.createIssue(QStringLiteral("Cupones de descuento"));   // …y aquí
+        IssueDirectory directory(projects, [&](const QString& id) -> std::shared_ptr<IIssueRepository> {
+            return id == otherId ? otherRepo : nullptr;
+        });
+        directory.attach(mineId, &f.app.issues);
+        f.ctx.projects = &projects;
+        f.ctx.projectId = mineId;
+        f.ctx.issueDirectory = &directory;
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        f.window->navigate(Screen::Issues);
+
+        auto* own = f.liveButton(QStringLiteral("issueRow-%1").arg(mine));
+        QVERIFY(own && own->property("own").toBool());
+        const QString foreignName = QStringLiteral("issueForeignRow-%1-IS-0001").arg(otherId);
+        auto* foreign = f.liveButton(foreignName);
+        QVERIFY2(foreign, "el issue del otro proyecto está en el tablero");
+        QVERIFY(foreign->property("foreign").toBool());
+        QCOMPARE(f.window->findChild<QLabel*>(QStringLiteral("issueForeignProject-%1-IS-0001").arg(otherId))->text(), QStringLiteral("Riesgos"));
+
+        // Un clic lo elige (y suelta el de este proyecto); su panel dice de dónde es y cómo seguir.
+        foreign->click();
+        QVERIFY(f.app.issues.selectedId().isEmpty());
+        auto* go = f.liveButton(QStringLiteral("issueForeignOpen"));
+        QVERIFY(go);
+        QVERIFY2(go->text().contains(QStringLiteral("Riesgos")), qPrintable(go->text()));
+
+        QSignalSpy wanted(f.window.get(), &MainWindow::openIssueInProjectRequested);
+        go->click();
+        auto* confirm = f.window->findChild<QMessageBox*>(QStringLiteral("issueSwitchConfirm"));
+        QVERIFY(confirm);
+        QCOMPARE(wanted.count(), 0);   // nada cambia de proyecto sin confirmarlo
+        confirm->findChild<QPushButton*>(QStringLiteral("issueSwitchAccept"))->click();
+        QCOMPARE(wanted.count(), 1);
+        QCOMPARE(wanted.first().at(0).toString(), otherId);
+        QCOMPARE(wanted.first().at(1).toString(), QStringLiteral("IS-0001"));
+
+        // Ya en su proyecto, quien coordina el cambio abre allí el issue.
+        f.window->openIssue(mine);
+        QCOMPARE(f.window->currentScreen(), Screen::Issues);
+        QCOMPARE(f.app.issues.selectedId(), mine);
+        QCOMPARE(f.window->findChild<QLineEdit*>(QStringLiteral("issueTitle"))->text(), QStringLiteral("Cupones de descuento"));
+
+        // Desde la lista, un doble clic en uno ajeno pregunta una sola vez —aunque llegue repetido— y la
+        // confirmación se puede aceptar.
+        f.window->navigate(Screen::Issues);
+        auto* issuesView = f.window->findChild<IssuesView*>();
+        issuesView->setListMode(true);
+        auto* table = f.window->findChild<QTableWidget*>(QStringLiteral("issueListTable"));
+        int foreignRow = -1;
+        for (int r = 0; r < table->rowCount(); ++r)
+            if (table->item(r, 3)->text() == QStringLiteral("Riesgos")) foreignRow = r;
+        QVERIFY(foreignRow >= 0);
+        emit table->cellDoubleClicked(foreignRow, 0);
+        emit table->cellDoubleClicked(foreignRow, 0);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QCOMPARE(f.window->findChildren<QMessageBox*>(QStringLiteral("issueSwitchConfirm")).size(), 1);
+        f.window->findChild<QMessageBox*>(QStringLiteral("issueSwitchConfirm"))->findChild<QPushButton*>(QStringLiteral("issueSwitchAccept"))->click();
+        QCOMPARE(wanted.count(), 2);
+        QCOMPARE(wanted.last().at(0).toString(), otherId);
+        issuesView->setListMode(false);
+
+        // «Sólo este proyecto» deja fuera a los demás.
+        f.window->navigate(Screen::Issues);
+        auto* scope = f.window->findChild<QComboBox*>(QStringLiteral("issueScopeFilter"));
+        scope->setCurrentIndex(1);
+        QVERIFY(!f.liveButton(foreignName));
+        QVERIFY(!f.liveButton(QStringLiteral("issueRow-%1").arg(mine))->property("own").toBool());
+        scope->setCurrentIndex(0);   // se recuerda: se deja como estaba
+        QVERIFY(f.liveButton(foreignName));
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    // Cada página tiene sus pestañas, y todas marcan la página que se ve: cambiar de una a otra no deja
+    // dos subrayadas.
+    void theScreenTabsUnderlineThePageThatIsShown() {
+        WindowFixture f;
+        f.window->navigate(Screen::Issues);
+        auto tab = [&](const char* name) { return f.window->findChild<QPushButton*>(QString::fromLatin1(name)); };
+        QVERIFY(tab("issuesTabBoard")->isChecked() && !tab("issuesTabGreqs")->isChecked());
+        QVERIFY(!tab("issuesTabHistory"));   // la lista no es una pestaña: es otra vista del tablero
+
+        tab("issuesTabGreqs")->click();
+        QVERIFY(tab("greqsTabGreqs")->isChecked() && !tab("greqsTabBoard")->isChecked());
+        QVERIFY(tab("issuesTabGreqs")->isChecked() && !tab("issuesTabBoard")->isChecked());
+        tab("greqsTabGreqs")->click();   // pulsar la elegida no la desmarca
+        QVERIFY(tab("greqsTabGreqs")->isChecked());
+
+        tab("greqsTabBoard")->click();
+        QVERIFY(tab("issuesTabBoard")->isChecked() && !tab("issuesTabGreqs")->isChecked());
+        QVERIFY(tab("greqsTabBoard")->isChecked() && !tab("greqsTabGreqs")->isChecked());
+    }
+
+    // Los finalizados hace tiempo salen del tablero; la vista de lista, al lado de la búsqueda, los tiene
+    // todos, con los mismos filtros, y abre cualquiera.
+    void finishedIssuesLeaveTheBoardAndStayInTheList() {
+        WindowFixture f;
+        const QString recent = f.app.issues.createIssue(QStringLiteral("Finalizado ayer"));
+        const QString old = f.app.issues.createIssue(QStringLiteral("Finalizado hace un mes"));
+        const QString open = f.app.issues.createIssue(QStringLiteral("En pruebas"));
+        auto finish = [&](const QString& id, int daysAgo) {
+            f.app.issues.updateIssue(id, [daysAgo](Issue& i) {
+                IssueRevision r;
+                r.startedAt = QDateTime::currentDateTime().addDays(-daysAgo - 2);
+                r.closedAt = QDateTime::currentDateTime().addDays(-daysAgo);
+                r.outcome = QaOutcome::Conforme;
+                i.revisions = {r};
+                i.state = IssueState::Done;
+            });
+        };
+        finish(recent, 1);
+        finish(old, 30);
+        f.window->navigate(Screen::Issues);
+        auto* view = f.window->findChild<IssuesView*>();
+        view->setListMode(false);
+        QVERIFY(f.liveButton(QStringLiteral("issueRow-%1").arg(recent)));
+        QVERIFY(f.liveButton(QStringLiteral("issueRow-%1").arg(open)));
+        QVERIFY2(!f.liveButton(QStringLiteral("issueRow-%1").arg(old)), "el finalizado hace un mes ya no está en el tablero");
+        // Buscándolo, sí aparece: no se esconde lo que se busca.
+        auto* search = f.window->findChild<QLineEdit*>(QStringLiteral("issueSearch"));
+        search->setText(QStringLiteral("mes"));
+        QVERIFY(f.liveButton(QStringLiteral("issueRow-%1").arg(old)));
+        search->clear();
+
+        // El pie de la columna lo dice y lleva a la lista, con los finalizados más recientes primero.
+        auto* older = f.liveButton(QStringLiteral("issueBoardOlderDone"));
+        QVERIFY(older);
+        QVERIFY2(older->text().contains(QStringLiteral("1 finalizado")), qPrintable(older->text()));
+        older->click();
+        QVERIFY(view->isListMode());
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("issueViewList"))->isChecked());
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("issueViewBoard"))->isChecked());
+        auto* table = f.window->findChild<QTableWidget*>(QStringLiteral("issueListTable"));
+        QVERIFY(table && table->isVisible());
+        QCOMPARE(table->rowCount(), 3);
+        QCOMPARE(table->item(0, 0)->text(), recent);   // el finalizado más reciente primero
+        QCOMPARE(table->item(1, 0)->text(), old);
+
+        // Los filtros del tablero valen también para la lista.
+        search->setText(QStringLiteral("mes"));
+        QCOMPARE(table->rowCount(), 1);
+        search->clear();
+
+        // Un clic elige el issue y abre su panel; doble clic lo abre entero.
+        int row = -1;
+        for (int r = 0; r < table->rowCount(); ++r)
+            if (table->item(r, 0)->text() == old) row = r;
+        QVERIFY(row >= 0);
+        table->setCurrentCell(row, 2);
+        QCOMPARE(f.app.issues.selectedId(), old);
+        QVERIFY(f.window->findChild<QWidget*>(QStringLiteral("issueDrawer"))->isVisible());
+        emit table->cellDoubleClicked(row, 2);
+        QCOMPARE(f.window->findChild<QLineEdit*>(QStringLiteral("issueTitle"))->text(), QStringLiteral("Finalizado hace un mes"));
+
+        // El conmutador vuelve al tablero (y se recuerda: se deja como estaba).
+        f.window->findChild<QPushButton*>(QStringLiteral("issuesTabBoard"))->click();
+        f.window->findChild<QPushButton*>(QStringLiteral("issueViewBoard"))->click();
+        QVERIFY(!view->isListMode());
+        QVERIFY(!table->isVisible());
+    }
+
+    // GREQS dice qué requerimientos de la bandeja tienen issue (y en qué proyecto) y busca por su número
+    // uno que no está asignado al usuario, para empezar sus pruebas igual.
+    void theGreqsTabSaysWhichRequirementsHaveAnIssueAndFindsAnyByNumber() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        const QString mineId = projects.activeId();
+        const QString otherId = projects.create(QStringLiteral("Riesgos"));
+        QVERIFY(projects.setRequirementSystem(mineId, QStringLiteral("SUMA TRANSITO")));
+        QVERIFY(projects.setRequirementSystem(otherId, QStringLiteral("SEGRAN")));
+        const QString connection = QStringLiteral("http://gesreq.test:7401/greq");
+        f.app.settings.updateRequirementSource([&](RequirementSourceSettings& r) { r.url = connection; });
+        auto requirementOf = [](const QString& id, const QString& code) {
+            ExternalRequirement r;
+            r.id = id;
+            r.systemCode = code;
+            r.system = code + QStringLiteral("-SISTEMA");
+            r.summary = QStringLiteral("Requerimiento %1").arg(id);
+            r.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+            return r;
+        };
+        // 2025719 ya tiene issue en «Riesgos»; 2025175 todavía no tiene ninguno.
+        auto otherRepo = std::make_shared<testing::MemoryIssueRepository>();
+        {
+            IssueStore seed(otherRepo);
+            seed.load();
+            seed.openForRequirement(requirementOf(QStringLiteral("2025719"), QStringLiteral("SEGRAN")), connection);
+        }
+        f.app.requirementSource->inbox = {requirementOf(QStringLiteral("2025175"), QStringLiteral("SUMA TRANSITO")),
+                                          requirementOf(QStringLiteral("2025719"), QStringLiteral("SEGRAN"))};
+        RequirementDetail detail;
+        detail.id = QStringLiteral("2025800");
+        detail.systemCode = QStringLiteral("SUMA TRANSITO");
+        detail.description = QStringLiteral("Cupones de descuento\nCon su vigencia.");
+        detail.state = QStringLiteral("CONTROL FUNCIONAL");
+        f.app.requirementSource->details.insert(detail.id, detail);
+        IssueDirectory directory(projects, [&](const QString& id) -> std::shared_ptr<IIssueRepository> {
+            return id == otherId ? otherRepo : nullptr;
+        });
+        directory.attach(mineId, &f.app.issues);
+        f.ctx.projects = &projects;
+        f.ctx.projectId = mineId;
+        f.ctx.issueDirectory = &directory;
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+
+        f.openGreqs();
+        QVERIFY2(f.greqStatus(QStringLiteral("2025719")).contains(QStringLiteral("Riesgos")), qPrintable(f.greqStatus(QStringLiteral("2025719"))));
+        QVERIFY(f.greqStatus(QStringLiteral("2025175")).contains(QStringLiteral("SIN ISSUE")));
+        // Seguir con el issue de otro proyecto también se pregunta antes.
+        QSignalSpy wanted(f.window.get(), &MainWindow::openIssueInProjectRequested);
+        f.greqAction(QStringLiteral("2025719"))->click();
+        auto* confirm = f.window->findChild<QMessageBox*>(QStringLiteral("issueSwitchConfirm"));
+        QVERIFY(confirm);
+        confirm->findChild<QPushButton*>(QStringLiteral("issueSwitchAccept"))->click();
+        QCOMPARE(wanted.count(), 1);
+        QCOMPARE(wanted.first().at(0).toString(), otherId);
+
+        // El filtro «Sin issue» deja sólo lo que falta empezar.
+        auto* scope = f.window->findChild<QComboBox*>(QStringLiteral("greqsIssueFilter"));
+        scope->setCurrentIndex(scope->findData(1));
+        QVERIFY(!f.greqAction(QStringLiteral("2025719")));
+        QVERIFY(f.greqAction(QStringLiteral("2025175")));
+        scope->setCurrentIndex(0);
+
+        // Uno que no es del usuario se busca por su número: se lee su ficha y se empieza como cualquier otro.
+        auto* number = f.window->findChild<QLineEdit*>(QStringLiteral("greqsNumber"));
+        number->setText(QStringLiteral("9999999"));
+        f.liveButton(QStringLiteral("greqsFind"))->click();
+        QVERIFY2(f.liveLabel("greqsNotice")->text().contains(QStringLiteral("9999999")), qPrintable(f.liveLabel("greqsNotice")->text()));
+        number->setText(QStringLiteral("2025800"));
+        f.liveButton(QStringLiteral("greqsFind"))->click();
+        auto* row = f.window->findChild<QFrame*>(QStringLiteral("greqRow-2025800"));
+        QVERIFY(row);
+        bool notAssigned = false;
+        for (auto* l : row->findChildren<QLabel*>()) notAssigned |= l->text().contains(QStringLiteral("NO ASIGNADO"));
+        QVERIFY(notAssigned);
+        f.greqAction(QStringLiteral("2025800"))->click();
+        const Issue* created = f.app.issues.findByRequirement(connection, QStringLiteral("2025800"));
+        QVERIFY(created);
+        QCOMPARE(created->title, QStringLiteral("Cupones de descuento"));
+        QCOMPARE(f.app.issues.selectedId(), created->id);
         f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
     }
 

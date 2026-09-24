@@ -61,6 +61,38 @@
         <source>Preparando sus casos, planes e issues</source>
         <translation>Getting its cases, plans and issues ready</translation>
     </message>
+    <message>
+        <source>Prioridad: %1</source>
+        <translation type="unfinished">Priority: %1</translation>
+    </message>
+    <message>
+        <source>Componente: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Etiquetas: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Precondiciones</source>
+        <translation type="unfinished">Preconditions</translation>
+    </message>
+    <message>
+        <source>Acción</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Datos</source>
+        <translation type="unfinished">Data</translation>
+    </message>
+    <message>
+        <source>Resultado esperado</source>
+        <translation type="unfinished">Expected result</translation>
+    </message>
+    <message>
+        <source>falta</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecorderOverlay</name>
@@ -124,6 +156,21 @@
     <message>
         <source>Paso %1 · %2</source>
         <translation>Step %1 · %2</translation>
+    </message>
+</context>
+<context>
+    <name>application</name>
+    <message>
+        <source>%1 · %2 modelos disponibles</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> · «%1» no está entre ellos: elige otro</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No se pudo descargar «%1» · %2</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -778,6 +825,10 @@
         <source>Columna %1</source>
         <translation>Column %1</translation>
     </message>
+    <message>
+        <source>Este conector no descarga adjuntos</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>infrastructure</name>
@@ -1311,6 +1362,239 @@
     <message>
         <source>El flujo de %1 no ofrece desde su estado actual ninguna transición que lo cierre: ciérralo en Jira</source>
         <translation>The workflow of %1 offers no transition that closes it from its current status: close it in Jira</translation>
+    </message>
+    <message>
+        <source>El adjunto no es de esta conexión de GESREQ: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>GESREQ ya no tiene el adjunto %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>GESREQ no conserva la sesión al descargar el adjunto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>GESREQ respondió con una página en lugar del adjunto %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>qaflow</name>
+    <message>
+        <source>«%1» no tiene texto que leer (¿es una imagen escaneada?)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::AiCaseGenerationDialog</name>
+    <message>
+        <source>Generar casos con IA</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copia el prompt, pégalo en ChatGPT u otra IA y trae aquí su respuesta. Los casos que elijas se añaden %1 en Borrador y con la etiqueta «%2».</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Texto del requerimiento</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Es lo que compartirás con la IA: quita lo que no deba salir y añade lo que falte.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Marca los que sean parte de la especificación y añádelos al texto.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sin conexión con GESREQ: abre los adjuntos y copia su texto a mano.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Añadir al texto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Adjuntos del requerimiento</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Opcional: «céntrate en las validaciones del formulario», «máximo 10 casos»…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Indicaciones para la IA</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copiar prompt</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 caracteres en el prompt: puede no caber en el chat de la IA; quita lo que no haga falta</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 caracteres en el prompt</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>1 · Prompt</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pega aquí la respuesta completa de la IA (el JSON, aunque venga con texto alrededor)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Respuesta de la IA</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Interpretar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>2 · Respuesta</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+        <source>Añadir casos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Marca al menos un adjunto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>leyendo…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Descargando y leyendo %1…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>añadido (%1 caracteres)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Revisa el texto añadido: quita índices, firmas o anexos que no sirvan para probar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>no se pudo leer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Generar con IA</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>«Generar con IA» envía este prompt a %1 con tu clave. Revisa antes el texto: es todo lo que sale del equipo.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Genera los casos con la IA configurada, o copia el prompt para usar otra. Los casos que elijas se añaden %1 en Borrador y con la etiqueta «%2».</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Generando…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Esperando la respuesta de la IA; puede tardar un par de minutos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>La respuesta llegó cortada por el tope de tokens (súbelo en Ajustes o pide menos casos) · %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copiado: pégalo en la IA y trae su respuesta</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 · %2 · %3 paso(s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 caso(s) leídos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> · revisa: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Añadir %1 caso(s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::AiClient</name>
+    <message>
+        <source>No se pudo conectar con %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 rechazó la clave de API (no es válida o no tiene permiso)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 no tiene el modelo «%2» para esta clave</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 alcanzó el límite de uso de la clave: espera un momento o revisa el plan</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 está saturado: vuelve a intentarlo en un momento</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 no aceptó la petición</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 respondió con un error (HTTP %2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Falta la clave de API de %1 en Ajustes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>OpenAI no respondió: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gemini bloqueó el prompt (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Gemini no respondió (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>La respuesta se cortó antes de empezar: sube el tope de tokens en Ajustes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 respondió sin texto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Indica la clave de API de %1</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2316,6 +2600,49 @@
     </message>
 </context>
 <context>
+    <name>qaflow::DocumentReader</name>
+    <message>
+        <source>«%1» está vacío</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No se pudo leer «%1»: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Para leer PDF hace falta pdftotext (paquete poppler-utils); instálalo o copia el texto de «%1» a mano</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Para leer «%1» hace falta LibreOffice; instálalo o copia su texto a mano</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>QAflow no sabe leer el texto de «%1»: copia a mano lo que haga falta</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No se pudo crear un directorio temporal para leer el documento</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No se pudo escribir el documento en el directorio temporal</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 no pudo leer el documento%2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No se pudo ejecutar %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>La lectura del documento tardó demasiado y se canceló</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>qaflow::EvidencePreview</name>
     <message>
         <source>%1 · clic para abrirla a tamaño completo</source>
@@ -2375,6 +2702,181 @@
     <message>
         <source>Ya hay una captura o una grabación en curso</source>
         <translation>A capture or a recording is already in progress</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::GreqsView</name>
+    <message>
+        <source>Filtrar por número, sistema, descripción, solicitante…</source>
+        <translation>Filter by number, system, description, requester…</translation>
+    </message>
+    <message>
+        <source>Todos</source>
+        <translation>All</translation>
+    </message>
+    <message>
+        <source>Sin issue</source>
+        <translation>Without issue</translation>
+    </message>
+    <message>
+        <source>Con issue</source>
+        <translation>With issue</translation>
+    </message>
+    <message>
+        <source>Actualizar</source>
+        <translation>Refresh</translation>
+    </message>
+    <message>
+        <source>Volver a leer tu bandeja de control de calidad en GESREQ</source>
+        <translation>Read your quality control inbox in GESREQ again</translation>
+    </message>
+    <message>
+        <source>¿Uno que no es tuyo?</source>
+        <translation>One that is not yours?</translation>
+    </message>
+    <message>
+        <source>Nº de GREQ</source>
+        <translation>GREQ no.</translation>
+    </message>
+    <message>
+        <source>Buscar GREQ</source>
+        <translation>Find GREQ</translation>
+    </message>
+    <message>
+        <source>Leer la ficha de ese requerimiento en GESREQ, aunque no esté asignado a ti</source>
+        <translation>Read that requirement’s record in GESREQ, even if it is not assigned to you</translation>
+    </message>
+    <message>
+        <source>Leyendo…</source>
+        <translation>Reading…</translation>
+    </message>
+    <message>
+        <source>«%1» no es un número de GREQ</source>
+        <translation>“%1” is not a GREQ number</translation>
+    </message>
+    <message>
+        <source>Buscando…</source>
+        <translation>Searching…</translation>
+    </message>
+    <message>
+        <source>GESREQ no tiene el requerimiento %1 (o no puedes verlo)</source>
+        <translation>GESREQ does not have requirement %1 (or you cannot see it)</translation>
+    </message>
+    <message>
+        <source>No se pudo leer el requerimiento %1 · %2</source>
+        <translation>Could not read requirement %1 · %2</translation>
+    </message>
+    <message>
+        <source>Configura la conexión con GESREQ (dirección, usuario y contraseña) para ver los requerimientos que tienes asignados.</source>
+        <translation>Set up the GESREQ connection (address, user and password) to see the requirements assigned to you.</translation>
+    </message>
+    <message>
+        <source>Configurar GESREQ…</source>
+        <translation>Set up GESREQ…</translation>
+    </message>
+    <message>
+        <source>BÚSQUEDA · GREQ %1</source>
+        <translation>SEARCH · GREQ %1</translation>
+    </message>
+    <message>
+        <source>BÚSQUEDA</source>
+        <translation>SEARCH</translation>
+    </message>
+    <message>
+        <source>%1 asignados · %2 con issue · %3 sin issue</source>
+        <translation>%1 assigned · %2 with issue · %3 without issue</translation>
+    </message>
+    <message>
+        <source>ASIGNADOS A TI</source>
+        <translation>ASSIGNED TO YOU</translation>
+    </message>
+    <message>
+        <source>Leyendo tu bandeja de control de calidad…</source>
+        <translation>Reading your quality control inbox…</translation>
+    </message>
+    <message>
+        <source>No se pudo consultar GESREQ · %1</source>
+        <translation>Could not query GESREQ · %1</translation>
+    </message>
+    <message>
+        <source>Todavía no se leyó la bandeja.</source>
+        <translation>The inbox has not been read yet.</translation>
+    </message>
+    <message>
+        <source>Tu bandeja de control de calidad no tiene requerimientos.</source>
+        <translation>Your quality control inbox has no requirements.</translation>
+    </message>
+    <message>
+        <source>Ningún requerimiento coincide con los filtros.</source>
+        <translation>No requirement matches the filters.</translation>
+    </message>
+    <message>
+        <source>NO ASIGNADO A TI</source>
+        <translation>NOT ASSIGNED TO YOU</translation>
+    </message>
+    <message>
+        <source>Requerimiento %1</source>
+        <translation>Requirement %1</translation>
+    </message>
+    <message>
+        <source>Solicita %1</source>
+        <translation>Requested by %1</translation>
+    </message>
+    <message>
+        <source>Solicita %1 (%2)</source>
+        <translation>Requested by %1 (%2)</translation>
+    </message>
+    <message>
+        <source>Asignado %1 – %2</source>
+        <translation>Assigned %1 – %2</translation>
+    </message>
+    <message>
+        <source>Ningún proyecto trabaja %1</source>
+        <translation>No project works on %1</translation>
+    </message>
+    <message>
+        <source>Se prueba en este proyecto</source>
+        <translation>Tested in this project</translation>
+    </message>
+    <message>
+        <source>Se prueba en «%1»</source>
+        <translation>Tested in “%1”</translation>
+    </message>
+    <message>
+        <source>Tiene issue en este proyecto: %1</source>
+        <translation>Has an issue in this project: %1</translation>
+    </message>
+    <message>
+        <source>Tiene issue en el proyecto «%1»: %2</source>
+        <translation>Has an issue in project “%1”: %2</translation>
+    </message>
+    <message>
+        <source>SIN ISSUE</source>
+        <translation>NO ISSUE</translation>
+    </message>
+    <message>
+        <source>Abrir issue</source>
+        <translation>Open issue</translation>
+    </message>
+    <message>
+        <source>Abrir en «%1»…</source>
+        <translation>Open in “%1”…</translation>
+    </message>
+    <message>
+        <source>Iniciar pruebas · Elegir proyecto…</source>
+        <translation>Start testing · Choose project…</translation>
+    </message>
+    <message>
+        <source>Iniciar pruebas</source>
+        <translation>Start testing</translation>
+    </message>
+    <message>
+        <source>Iniciar pruebas en «%1»</source>
+        <translation>Start testing in “%1”</translation>
+    </message>
+    <message>
+        <source>Crea su issue (con su plan y su issue en el gestor) en el proyecto que trabaja %1</source>
+        <translation>Creates its issue (with its plan and its tracker issue) in the project that works on %1</translation>
     </message>
 </context>
 <context>
@@ -2815,6 +3317,10 @@
         <source>Errores y mejoras encontrados ejecutando este ciclo, en los casos que estaba probando.</source>
         <translation>Bugs and improvements found while running this cycle, in the test cases it was running.</translation>
     </message>
+    <message>
+        <source>Heredada de %1: el paso no se volvió a probar</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ImageViewer</name>
@@ -2889,6 +3395,57 @@
     <message>
         <source>Evidencia · %1</source>
         <translation>Evidence · %1</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::IssueListView</name>
+    <message>
+        <source>Issue</source>
+        <translation>Issue</translation>
+    </message>
+    <message>
+        <source>GREQ</source>
+        <translation>GREQ</translation>
+    </message>
+    <message>
+        <source>Título</source>
+        <translation>Title</translation>
+    </message>
+    <message>
+        <source>Proyecto</source>
+        <translation>Project</translation>
+    </message>
+    <message>
+        <source>Estado de QA</source>
+        <translation>QA state</translation>
+    </message>
+    <message>
+        <source>Revisión</source>
+        <translation>Revision</translation>
+    </message>
+    <message>
+        <source>Gestor</source>
+        <translation>Tracker</translation>
+    </message>
+    <message>
+        <source>Actualizado</source>
+        <translation>Updated</translation>
+    </message>
+    <message>
+        <source>Finalizado</source>
+        <translation>Finished</translation>
+    </message>
+    <message>
+        <source>Un clic elige el issue · doble clic (o Intro) lo abre</source>
+        <translation>Click selects the issue · double-click (or Enter) opens it</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>%1 · en curso</source>
+        <translation>%1 · in progress</translation>
     </message>
 </context>
 <context>
@@ -2992,10 +3549,6 @@
         <translation>New issue</translation>
     </message>
     <message>
-        <source>Consultar GESREQ</source>
-        <translation>Check GESREQ</translation>
-    </message>
-    <message>
         <source>Buscar por título, número de GREQ, sistema, solicitante…</source>
         <translation>Search by title, GREQ number, system, requester…</translation>
     </message>
@@ -3016,24 +3569,12 @@
         <translation>Not published</translation>
     </message>
     <message>
-        <source>Vincula antes un sistema de GESREQ a este proyecto en Ajustes</source>
-        <translation>First link a GESREQ system to this project in Settings</translation>
-    </message>
-    <message>
-        <source>Leer la bandeja de control de calidad e importar los requerimientos de %1</source>
-        <translation>Read the quality control inbox and import the requirements of %1</translation>
-    </message>
-    <message>
         <source>CAMBIOS</source>
         <translation>CHANGES</translation>
     </message>
     <message>
         <source>FUERA DE LA BANDEJA</source>
         <translation>OUT OF THE INBOX</translation>
-    </message>
-    <message>
-        <source>Todavía no hay issues. Consulta GESREQ para importar tus requerimientos o crea uno a mano.</source>
-        <translation>No issues yet. Check GESREQ to import your requirements or create one by hand.</translation>
     </message>
     <message>
         <source>Ningún issue coincide con los filtros.</source>
@@ -3208,18 +3749,6 @@
         <translation>Open the run in the history</translation>
     </message>
     <message>
-        <source>Vincula un sistema de GESREQ a este proyecto en Ajustes → Configuración del proyecto</source>
-        <translation>Link a GESREQ system to this project in Settings → Project settings</translation>
-    </message>
-    <message>
-        <source>Consultando…</source>
-        <translation>Checking…</translation>
-    </message>
-    <message>
-        <source>No se pudo consultar GESREQ · %1</source>
-        <translation>Could not check GESREQ · %1</translation>
-    </message>
-    <message>
         <source>Vincular plan a %1</source>
         <translation>Link plan to %1</translation>
     </message>
@@ -3370,10 +3899,6 @@ Create another one anyway?</translation>
     <message>
         <source>No se pudo consultar el estado en el gestor · %1</source>
         <translation>Could not check the status in the tracker · %1</translation>
-    </message>
-    <message>
-        <source>Tu bandeja de control de calidad no tiene requerimientos</source>
-        <translation>Your quality control inbox has no requirements</translation>
     </message>
     <message>
         <source>Ningún proyecto trabaja los requerimientos de %1: vincúlale ese sistema a uno en Ajustes → Configuración del proyecto</source>
@@ -4047,6 +4572,166 @@ Create another one anyway?</translation>
     <message>
         <source>Abre la revisión %1 y vuelve a ejecutar en ella los %2 caso(s) fallado(s) o bloqueado(s) del ciclo %3, cada uno desde el paso que se rompió</source>
         <translation>Opens revision %1 and runs in it the %2 failed or blocked case(s) of cycle %3, each from the step that broke</translation>
+    </message>
+    <message>
+        <source>Todos los proyectos</source>
+        <translation>All projects</translation>
+    </message>
+    <message>
+        <source>Sólo este proyecto</source>
+        <translation>This project only</translation>
+    </message>
+    <message>
+        <source>Todavía no hay issues. En la pestaña GREQS están tus requerimientos de GESREQ para empezar sus pruebas; también puedes crear uno a mano.</source>
+        <translation>No issues yet. The GREQS tab lists your GESREQ requirements so you can start testing them; you can also create one by hand.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n de otros proyectos</source>
+        <translation>
+            <numerusform>%n from another project</numerusform>
+            <numerusform>%n from other projects</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>El tablero con los issues de todos los proyectos</source>
+        <translation>The board with the issues of every project</translation>
+    </message>
+    <message>
+        <source>GREQS</source>
+        <translation>GREQS</translation>
+    </message>
+    <message>
+        <source>Tus requerimientos de GESREQ: cuáles tienen issue y cuáles no, y la búsqueda de cualquiera por su número</source>
+        <translation>Your GESREQ requirements: which have an issue and which do not, and a search for any of them by number</translation>
+    </message>
+    <message>
+        <source>Issue del proyecto «%1» · doble clic para cambiar a ese proyecto y seguir con él</source>
+        <translation>Issue of project “%1” · double-click to switch to that project and continue with it</translation>
+    </message>
+    <message>
+        <source>Revisión observada</source>
+        <translation>Revision observed</translation>
+    </message>
+    <message>
+        <source>Cambiar a «%1» y abrirlo…</source>
+        <translation>Switch to “%1” and open it…</translation>
+    </message>
+    <message>
+        <source>DE OTRO PROYECTO</source>
+        <translation>FROM ANOTHER PROJECT</translation>
+    </message>
+    <message>
+        <source>Este issue se trabaja en «%1»: allí están sus planes, sus ciclos y su revisión. Para seguir con él hay que cambiar a ese proyecto; el actual se guarda antes.</source>
+        <translation>This issue is worked on in “%1”: its plans, cycles and revision are there. To continue with it you need to switch to that project; the current one is saved first.</translation>
+    </message>
+    <message>
+        <source>Cambiar a «%1» y abrirlo</source>
+        <translation>Switch to “%1” and open it</translation>
+    </message>
+    <message>
+        <source>Abrir %1</source>
+        <translation>Open %1</translation>
+    </message>
+    <message>
+        <source>REVISIONES</source>
+        <translation>REVISIONS</translation>
+    </message>
+    <message>
+        <source>Revisión %1 · abierta desde %2</source>
+        <translation>Revision %1 · open since %2</translation>
+    </message>
+    <message>
+        <source>Revisión %1 · %2 · cerrada el %3</source>
+        <translation>Revision %1 · %2 · closed on %3</translation>
+    </message>
+    <message>
+        <source>Cambiar de proyecto</source>
+        <translation>Switch project</translation>
+    </message>
+    <message>
+        <source>%1 es del proyecto «%2». ¿Cambiar a «%2» para seguir con él?</source>
+        <translation>%1 belongs to project “%2”. Switch to “%2” to continue with it?</translation>
+    </message>
+    <message>
+        <source>El proyecto actual se guarda antes de cambiar.</source>
+        <translation>The current project is saved before switching.</translation>
+    </message>
+    <message>
+        <source>Cambiar a «%1»</source>
+        <translation>Switch to “%1”</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Generar con IA…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Arma un prompt con el requerimiento para ChatGPT u otra IA y añade al plan los casos que devuelva</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Notas de QA:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>al plan %1 (%2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>a un plan nuevo de %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>La conexión con GESREQ ya no está disponible</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>La IA ya no está disponible</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 caso(s) generados en Borrador y añadidos a %2: revísalos antes de ejecutarlos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>▦ Tablero</source>
+        <translation>▦ Board</translation>
+    </message>
+    <message>
+        <source>Los issues en columnas, según cómo va su trabajo de QA</source>
+        <translation>Issues in columns, by how their QA work is going</translation>
+    </message>
+    <message>
+        <source>☰ Lista</source>
+        <translation>☰ List</translation>
+    </message>
+    <message>
+        <source>Todos los issues en una lista, también los finalizados que ya salieron del tablero</source>
+        <translation>Every issue in a list, including the finished ones that left the board</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n issue(s)</source>
+        <translation>
+            <numerusform>%n issue</numerusform>
+            <numerusform>%n issues</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n finalizado(s) anterior(es) · Ver en la lista</source>
+        <translation>
+            <numerusform>%n older finished · See in the list</numerusform>
+            <numerusform>%n older finished · See in the list</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Los finalizados hace más de %n día(s) sólo se ven en la lista</source>
+        <translation>
+            <numerusform>Issues finished more than %n day ago are only shown in the list</numerusform>
+            <numerusform>Issues finished more than %n days ago are only shown in the list</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -5581,123 +6266,6 @@ Create another one anyway?</translation>
     </message>
 </context>
 <context>
-    <name>qaflow::RequirementImportDialog</name>
-    <message>
-        <source>Importar requerimientos de GESREQ</source>
-        <translation>Import GESREQ requirements</translation>
-    </message>
-    <message>
-        <source>%1 nuevos</source>
-        <translation>%1 new</translation>
-    </message>
-    <message>
-        <source>%1 con cambios</source>
-        <translation>%1 with changes</translation>
-    </message>
-    <message>
-        <source>%1 ya importados</source>
-        <translation>%1 already imported</translation>
-    </message>
-    <message>
-        <source>%1 importados ya no están en la bandeja (se conservan)</source>
-        <translation>%1 imported are no longer in the inbox (they are kept)</translation>
-    </message>
-    <message>
-        <source>nuevo</source>
-        <translation>new</translation>
-    </message>
-    <message>
-        <source>%1 · cambió: %2</source>
-        <translation>%1 · changed: %2</translation>
-    </message>
-    <message>
-        <source>%1 · sin cambios</source>
-        <translation>%1 · no changes</translation>
-    </message>
-    <message>
-        <source> · asignado %1 – %2</source>
-        <translation> · assigned %1 – %2</translation>
-    </message>
-    <message>
-        <source>Cancelar</source>
-        <translation>Cancel</translation>
-    </message>
-    <message>
-        <source>%1 de otros sistemas, que no se importan aquí</source>
-        <translation>%1 from other systems, which are not imported here</translation>
-    </message>
-    <message>
-        <source>ningún proyecto trabaja %1</source>
-        <translation>no project works %1</translation>
-    </message>
-    <message>
-        <source>se prueba en %1</source>
-        <translation>tested in %1</translation>
-    </message>
-    <message>
-        <source>Requerimientos asignados a ti</source>
-        <translation>Requirements assigned to you</translation>
-    </message>
-    <message>
-        <source>%1 requerimientos · %2 del proyecto actual (%3)</source>
-        <translation>%1 requirements · %2 of the current project (%3)</translation>
-    </message>
-    <message>
-        <source>Sin estado</source>
-        <translation>No status</translation>
-    </message>
-    <message>
-        <source>Proyecto actual</source>
-        <translation>Current project</translation>
-    </message>
-    <message>
-        <source>Otro proyecto / sistema</source>
-        <translation>Another project / system</translation>
-    </message>
-    <message>
-        <source>N.º %1 · %2
-%3
-Estado: %4
-%5 · %6</source>
-        <translation>No. %1 · %2
-%3
-Status: %4
-%5 · %6</translation>
-    </message>
-    <message>
-        <source>N.º %1</source>
-        <translation>No. %1</translation>
-    </message>
-    <message>
-        <source>Estado: %1</source>
-        <translation>Status: %1</translation>
-    </message>
-    <message>
-        <source>Selecciona un requerimiento para importarlo e iniciar sus pruebas en el proyecto correspondiente. Importar un requerimiento que ya tiene issue sólo actualiza lo que viene de GESREQ: el título, las notas, el estado, la prioridad y los casos y planes del issue no cambian.</source>
-        <translation>Pick a requirement to import it and start its tests in the matching project. Importing a requirement that already has an issue only refreshes what comes from GESREQ: the title, notes, status, priority and the issue cases and plans do not change.</translation>
-    </message>
-    <message>
-        <source>Importar e iniciar pruebas</source>
-        <translation>Import and start testing</translation>
-    </message>
-    <message>
-        <source>Crear proyecto, importar e iniciar</source>
-        <translation>Create project, import and start</translation>
-    </message>
-    <message>
-        <source>Importar e iniciar pruebas en %1</source>
-        <translation>Import and start testing in %1</translation>
-    </message>
-    <message>
-        <source>Ningún proyecto trabaja ese sistema: antes de empezar se elige uno o se crea</source>
-        <translation>No project works that system: pick or create one before starting</translation>
-    </message>
-    <message>
-        <source>Importa o actualiza el requerimiento elegido y abre su issue en el proyecto que trabaja su sistema</source>
-        <translation>Imports or refreshes the chosen requirement and opens its issue in the project that works its system</translation>
-    </message>
-</context>
-<context>
     <name>qaflow::RequirementSourceService</name>
     <message>
         <source>Configura la conexión con GESREQ en Ajustes para registrar el resultado</source>
@@ -6542,6 +7110,18 @@ Press “Capture” or drop a file on the window.</translation>
         <source>EN PAUSA · PASO %1 / %2</source>
         <translation>PAUSED · STEP %1 / %2</translation>
     </message>
+    <message>
+        <source>Heredada de %1: el paso no se ha vuelto a probar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PASO %1 · DE %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Evidencia heredada de la ejecución que se retoma: el paso no se ha vuelto a probar</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>qaflow::SettingsDialog</name>
@@ -7015,6 +7595,78 @@ Press “Capture” or drop a file on the window.</translation>
         <source>%1 · desconectada (se usa la del cursor)</source>
         <translation>%1 · disconnected (the one under the cursor is used)</translation>
     </message>
+    <message>
+        <source>Probar la clave con el proveedor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>IA para generar casos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Con una clave de API, «Generar con IA» envía el prompt revisado al proveedor y trae los casos sin copiar ni pegar. Sin clave, se sigue pudiendo copiar el prompt a ChatGPT u otra IA.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Elegir entre los modelos disponibles para la clave</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sólo si se usa un proxy de la organización o un servidor compatible; vacío = la API oficial</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tope de la respuesta: si los casos llegan cortados, súbelo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Proveedor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clave de API</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Modelo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tope de tokens de la respuesta</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dirección de la API (opcional)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>●  Sin probar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>🔒 Clave · se guarda en: %1. Lo que se envía es sólo el prompt que revisas en el diálogo.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>⚠ Clave · se guarda %1. Instala un llavero (secret-tool / libsecret en Linux) para cifrar el dato.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Conectado · %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No se pudo conectar con la IA · %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Modelo de %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Consultando los modelos disponibles…</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ShotCard</name>
@@ -7399,6 +8051,45 @@ HEADS-UP: these results were already published on %1 (cycle %2). A new cycle wil
     <message>
         <source> · %1 sin asignar a tu usuario</source>
         <translation> · %1 not assigned to your user</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::documents</name>
+    <message>
+        <source>No se pudo descomprimir el documento</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>El documento está dañado: su contenido comprimido no se puede leer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Esta instalación de QAflow no puede descomprimir documentos (compilada sin zlib)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>El documento no es un ZIP válido</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>El índice del documento está dañado</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>El documento está dañado</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>El documento está incompleto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>El documento usa una compresión que QAflow no sabe leer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>El documento no tiene %1</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

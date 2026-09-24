@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(qaflow VERSION 1.3.1 LANGUAGES CXX)
+project(qaflow VERSION 1.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -117,6 +117,8 @@ add_library(qaflow_application STATIC
         src/application/RequirementSourceService.cpp
         src/application/IssueStore.h
         src/application/IssueStore.cpp
+        src/application/IssueDirectory.h
+        src/application/IssueDirectory.cpp
         src/application/IssuePublishService.h
         src/application/IssuePublishService.cpp
         src/application/QualityRecordService.h
@@ -299,8 +301,10 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/JiraPublishDialog.cpp
         src/presentation/views/AiCaseGenerationDialog.h
         src/presentation/views/AiCaseGenerationDialog.cpp
-        src/presentation/views/RequirementImportDialog.h
-        src/presentation/views/RequirementImportDialog.cpp
+        src/presentation/views/GreqsView.h
+        src/presentation/views/GreqsView.cpp
+        src/presentation/views/IssueListView.h
+        src/presentation/views/IssueListView.cpp
         src/presentation/views/ProjectSetupDialog.h
         src/presentation/views/ProjectSetupDialog.cpp
         src/presentation/views/CycleStartDialog.h

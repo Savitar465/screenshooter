@@ -64,6 +64,9 @@ public:
     /// Abre en este proyecto, ya activo, el issue desde el que se prueba ese requerimiento de GESREQ,
     /// creándolo si es la primera vez. Lo llama quien coordina el cambio de proyecto.
     void startTesting(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt);
+    /// Abre en la pantalla de issues el detalle de ese issue de este proyecto. Lo llama quien coordina el
+    /// cambio de proyecto, ya activado, cuando se sigue con un issue de otro proyecto desde el tablero.
+    void openIssue(const QString& issueId);
     void showToast(const QString& message, const QString& color);
     /// Abre el historial en el panel de métricas.
     void showMetrics();
@@ -99,6 +102,9 @@ signals:
     /// Código de Jira elegido al crear un proyecto: los ajustes son de cada proyecto y sólo los tiene
     /// abiertos su sesión, así que lo guarda quien las coordina.
     void projectJiraKeyRequested(const QString& projectId, const QString& jiraProject);
+    /// Seguir con un issue de otro proyecto (ya confirmado): hay que guardar éste, activar aquél y abrir
+    /// allí el issue.
+    void openIssueInProjectRequested(const QString& projectId, const QString& issueId);
 
 protected:
     void resizeEvent(QResizeEvent* e) override;

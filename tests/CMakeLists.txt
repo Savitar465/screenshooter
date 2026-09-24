@@ -47,6 +47,7 @@ qaflow_add_test(application test_requirement_source_service LIBS qaflow_applicat
 qaflow_add_test(application test_attachment_text_service LIBS qaflow_application)
 qaflow_add_test(application test_ai_service LIBS qaflow_application)
 qaflow_add_test(application test_issue_store LIBS qaflow_application)
+qaflow_add_test(application test_issue_directory LIBS qaflow_application)
 qaflow_add_test(application test_issue_publish_service LIBS qaflow_application)
 qaflow_add_test(application test_quality_record_service LIBS qaflow_application)
 qaflow_add_test(application test_revision_publish_service LIBS qaflow_application)

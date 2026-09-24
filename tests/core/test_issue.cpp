@@ -230,6 +230,54 @@ private slots:
         filter.priority = Priority::Baja;
         QVERIFY(!filter.matches(issue));
     }
+
+    // Un requerimiento buscado por su número llega como ficha: se lleva a lo que sería su fila de la
+    // bandeja, con el principio del alcance como descripción corta si la ficha no la trae.
+    void aRequirementDetailBecomesAnInboxRow() {
+        RequirementDetail d;
+        d.id = QStringLiteral("2025800");
+        d.systemCode = QStringLiteral("SUMA  TRANSITO");
+        d.description = QStringLiteral("Alta de cupones de descuento\nCon su vigencia y su tope.");
+        d.priority = QStringLiteral("ALTA");
+        d.state = QStringLiteral("CONTROL FUNCIONAL");
+        d.requester = QStringLiteral("Ana Pérez");
+        d.url = QStringLiteral("http://gesreq.test/greq/publico.do?id=2025800&bandera=1");
+        const ExternalRequirement r = requirementFromDetail(d);
+        QCOMPARE(r.id, d.id);
+        QCOMPARE(r.systemCode, QStringLiteral("SUMA TRANSITO"));
+        QCOMPARE(r.summary, QStringLiteral("Alta de cupones de descuento"));
+        QCOMPARE(r.states, QStringList{QStringLiteral("CONTROL FUNCIONAL")});
+        QCOMPARE(r.priority, d.priority);
+        QCOMPARE(r.requester, d.requester);
+        QCOMPARE(r.detailUrl, d.url);
+
+        d.fields << RequirementField{QStringLiteral("Descripción Corta"), QStringLiteral("Cupones")};
+        QCOMPARE(requirementFromDetail(d).summary, QStringLiteral("Cupones"));
+    }
+
+    // El issue de un requerimiento es el de su número en su conexión, con o sin barra final.
+    void anIssueTestsTheRequirementOfItsConnection() {
+        Issue issue;
+        QVERIFY(!issue.testsRequirement(QStringLiteral("http://gesreq.test/greq"), QString()));
+        issue.requirement.connection = QStringLiteral("http://gesreq.test/greq");
+        issue.requirement.data.id = QStringLiteral("2025175");
+        QVERIFY(issue.testsRequirement(QStringLiteral("HTTP://gesreq.test/greq/"), QStringLiteral("2025175")));
+        QVERIFY(!issue.testsRequirement(QStringLiteral("http://gesreq.test/greq"), QStringLiteral("2025176")));
+        QVERIFY(!issue.testsRequirement(QStringLiteral("http://otro/greq"), QStringLiteral("2025175")));
+    }
+
+    // Un issue finalizado lo está desde que se cerró su última revisión; a mano, desde su último cambio.
+    void anIssueIsFinishedWhenItsLastRevisionClosed() {
+        Issue issue;
+        issue.updatedAt = QDateTime(QDate(2026, 9, 20), QTime(10, 0));
+        QVERIFY(!issue.finishedAt().isValid());
+        issue.state = IssueState::Done;
+        QCOMPARE(issue.finishedAt(), issue.updatedAt);
+        IssueRevision r;
+        r.closedAt = QDateTime(QDate(2026, 9, 1), QTime(9, 0));
+        issue.revisions << r;
+        QCOMPARE(issue.finishedAt(), r.closedAt);
+    }
 };
 
 QTEST_APPLESS_MAIN(IssueTest)

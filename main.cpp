@@ -7,6 +7,7 @@
 
 #include "bootstrap/ProjectSession.h"
 #include "infrastructure/hotkey/GlobalHotkey.h"
+#include "infrastructure/persistence/JsonIssueRepository.h"
 #include "infrastructure/persistence/JsonProjectRepository.h"
 #include "infrastructure/requirements/GesreqClient.h"
 #include "infrastructure/secrets/SecretStores.h"
@@ -32,7 +33,7 @@
 namespace {
 
 #ifndef QAFLOW_VERSION
-#define QAFLOW_VERSION "1.3.1"
+#define QAFLOW_VERSION "1.4.0"
 #endif
 
 /// Idioma efectivo: el elegido o, con "sistema", el del entorno (español si el sistema es español).
@@ -97,6 +98,11 @@ int main(int argc, char* argv[]) {
     auto requirementSource = std::make_shared<GesreqClient>();
     GlobalHotkey hotkey;
     Translators translators;
+    // Los issues de todos los proyectos, para la vista general del tablero: de los abiertos se leen sus
+    // stores; de los demás, su issues.json. Se declara antes que las sesiones, que se le enganchan.
+    IssueDirectory issueDirectory(projects, [&projects](const QString& id) {
+        return std::make_shared<JsonIssueRepository>(projects.dataDir(id));
+    });
     // Las sesiones conservan sus servicios y ventanas al cambiar de proyecto. Los callbacks
     // pendientes siempre terminan en el proyecto que inició la operación.
     WorkspaceWindow workspace;
@@ -179,6 +185,18 @@ int main(int argc, char* argv[]) {
                 });
             });
         });
+        // Seguir con un issue de otro proyecto desde el tablero (ya confirmado): se cambia a su proyecto y
+        // allí se abre. Si el cambio no llegó a hacerse, no se abre nada.
+        QObject::connect(session.window.get(), &MainWindow::openIssueInProjectRequested, &app,
+                         [&, owner = &session](const QString& id, const QString& issueId) {
+            if (owner != current) return;
+            QTimer::singleShot(0, &app, [&, id, issueId]() {
+                switchProject(id, [&, id, issueId]() {
+                    if (!current || current->ctx.projectId != id) return;
+                    current->window->openIssue(issueId);
+                });
+            });
+        });
         // El código Jira de un proyecto vive en sus ajustes, que sólo tiene abiertos su sesión: al crearlo
         // desde otra ventana se guarda aquí, antes de que el cambio de proyecto los recargue.
         QObject::connect(session.window.get(), &MainWindow::projectJiraKeyRequested, &app,
@@ -198,6 +216,8 @@ int main(int argc, char* argv[]) {
         stored = std::make_unique<ProjectSession>(projects, id, secrets, requirementSource);
         auto* session = stored.get();
         session->ctx.hotkey = &hotkey;
+        session->ctx.issueDirectory = &issueDirectory;
+        issueDirectory.attach(id, session->issues.get());
         QObject::connect(session->settings.get(), &SettingsStore::captureChanged, &app, [&, session]() { if (current == session) bindHotkeys(); });
         QObject::connect(session->settings.get(), &SettingsStore::runShortcutsChanged, &app, [&, session]() { if (current == session) bindHotkeys(); });
         QObject::connect(session->settings.get(), &SettingsStore::appChanged, &app, [&, session]() {

@@ -6,6 +6,23 @@
 
 namespace qaflow {
 
+namespace {
+QString cleanConnection(const QString& connection) {
+    QString c = connection.trimmed();
+    while (c.endsWith(QLatin1Char('/'))) c.chop(1);
+    return c;
+}
+} // namespace
+
+bool sameConnection(const QString& a, const QString& b) {
+    return cleanConnection(a).compare(cleanConnection(b), Qt::CaseInsensitive) == 0;
+}
+
+bool Issue::testsRequirement(const QString& connection, const QString& requirementId) const {
+    return isImported() && !requirementId.isEmpty() && requirement.data.id == requirementId
+           && sameConnection(requirement.connection, connection);
+}
+
 QString toString(IssueState s) {
     switch (s) {
         case IssueState::Pending: return QStringLiteral("Pendiente");
@@ -76,6 +93,12 @@ const IssueRevision* Issue::lastClosedRevision() const {
     for (auto it = revisions.crbegin(); it != revisions.crend(); ++it)
         if (!it->isOpen()) return &*it;
     return nullptr;
+}
+
+QDateTime Issue::finishedAt() const {
+    if (state != IssueState::Done) return {};
+    const IssueRevision* closed = lastClosedRevision();
+    return closed && closed->closedAt.isValid() ? closed->closedAt : updatedAt;
 }
 
 QaOutcome Issue::lastOutcome() const {

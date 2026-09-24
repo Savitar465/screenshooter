@@ -116,9 +116,15 @@ QPushButton[role="row"]:hover { background: @elevated; }
 QPushButton[role="row"][active="true"] { background: @elevated; border-color: @blue; }
 QPushButton[role="row"][running="true"] { background: @tint(green,20); border-color: @green; }
 /* Tarjeta del tablero de issues: se elige con un clic y se abre con doble clic */
-QPushButton[role="board-card"] { text-align: left; background: @panel; border: 1px solid @border; border-radius: 10px; padding: 0; }
+/* El borde no es @border: la columna ya lleva ese tono de fondo y en el tema oscuro la tarjeta se perdía en ella */
+QPushButton[role="board-card"] { text-align: left; background: @panel; border: 1px solid @tint(muted,80); border-radius: 10px; padding: 0; }
 QPushButton[role="board-card"]:hover { border-color: @tint(blue,90); }
 QPushButton[role="board-card"][active="true"] { background: @tint(blue,18); border-color: @blue; }
+/* En la vista general, los issues del proyecto abierto resaltan y los de otros proyectos quedan atenuados */
+QPushButton[role="board-card"][own="true"] { border-left: 3px solid @blue; }
+QPushButton[role="board-card"][foreign="true"] { background: transparent; border: 1px dashed @tint(muted,110); }
+QPushButton[role="board-card"][foreign="true"]:hover { background: @panel; border-color: @tint(violet,90); }
+QPushButton[role="board-card"][foreign="true"][active="true"] { background: @tint(violet,16); border-style: solid; border-color: @violet; }
 QPushButton[role="plan-row"] { text-align: left; background: transparent; border: 1px solid @border; border-radius: 10px; padding: 0; }
 QPushButton[role="plan-row"]:hover { background: @elevated; }
 QPushButton[role="plan-row"][active="true"] { background: @tint(green,15); border-color: @tint(green,90); }
@@ -184,3 +190,10 @@ QPushButton::menu-indicator { image: none; width: 0px; }
 QFrame#ideNavbar { background: @panel; border: none; border-bottom: 1px solid @border; border-radius: 0; }
 QPushButton#navbarRun:disabled, QPushButton#navbarStop:disabled { background: @elevated; color: @disabled; border-color: @border; }
 QComboBox#runTargetSelector:disabled, QComboBox#projectSelector:disabled { color: @muted; }
+
+/* Vista de lista de la pantalla de issues */
+QTableWidget#issueListTable { background: @panel; alternate-background-color: @elevated; border: 1px solid @tint(muted,80); border-radius: 10px; gridline-color: transparent; selection-background-color: @tint(blue,60); selection-color: @text; }
+QTableWidget#issueListTable::item { padding: 0 8px; border: none; }
+QTableWidget#issueListTable QHeaderView { background: transparent; border: none; }
+QTableWidget#issueListTable QTableCornerButton::section { background: transparent; border: none; }
+QTableWidget#issueListTable QHeaderView::section { background: @panel; color: @muted; border: none; border-bottom: 1px solid @tint(muted,80); padding: 7px 8px; font-size: 11px; font-weight: 700; }

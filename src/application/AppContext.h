@@ -6,6 +6,7 @@
 #include "application/BugStore.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
+#include "application/IssueDirectory.h"
 #include "application/IssuePublishService.h"
 #include "application/IssueStore.h"
 #include "application/PlanStore.h"
@@ -40,6 +41,9 @@ struct AppContext {
     CaseTransferService* transfer = nullptr;
     /// Issues del proyecto: el trabajo de QA de cada requerimiento, con los planes que lo prueban.
     IssueStore* issues = nullptr;
+    /// Los issues de todos los proyectos, para la vista general (puede ser nullptr en tests: entonces se
+    /// ven sólo los del proyecto).
+    IssueDirectory* issueDirectory = nullptr;
     /// Publicación del issue en el gestor (puede ser nullptr en tests).
     IssuePublishService* issuePublish = nullptr;
     /// Acta de control de calidad del issue (puede ser nullptr en tests).

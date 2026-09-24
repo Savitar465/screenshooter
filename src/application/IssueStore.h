@@ -106,6 +106,16 @@ public:
     /// ausentes (sin borrarse), y los que sí están, como presentes. Devuelve cuántos quedan ausentes.
     int markInboxRead(const QList<ExternalRequirement>& inbox, const QString& connection,
                       const QDateTime& fetchedAt = QDateTime::currentDateTime());
+    /// Lo que hace leer la bandeja entera con los issues ya importados: marca los que salieron de ella (y
+    /// los que siguen) y pone al día lo extraído de los que están, anotando qué cambió. No crea ninguno:
+    /// eso es empezar las pruebas de un requerimiento (`openForRequirement`). Devuelve los que quedan
+    /// ausentes y los que traían cambios.
+    struct InboxResult {
+        int missing = 0;
+        QStringList updated;
+    };
+    InboxResult applyInbox(const QList<ExternalRequirement>& inbox, const QString& connection,
+                           const QDateTime& fetchedAt = QDateTime::currentDateTime());
     /// Deja en el issue el estado con el que quedó su requerimiento tras registrar el control (lo dice
     /// GESREQ al guardarlo), como si se hubiera vuelto a leer la bandeja: es un dato extraído, no algo
     /// escrito en QAflow, y los cambios pendientes de ese campo dejan de estarlo porque este es el valor

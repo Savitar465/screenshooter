@@ -175,6 +175,11 @@ struct RequirementSystemsResult {
     bool retryable() const { return failure == RequirementSourceFailure::Network; }
 };
 
+/// El requerimiento de una ficha, como si fuera una fila de la bandeja: es lo que se tiene de uno que se
+/// busca por su número y no está asignado al usuario. Sin descripción corta en la ficha, el resumen es el
+/// principio de su alcance.
+ExternalRequirement requirementFromDetail(const RequirementDetail& detail);
+
 /// Parte la columna "Sistema" ("SUMA TRANSITO-TRANSITOS") en código y nombre por el primer guion.
 /// Sin guion, todo es código.
 QPair<QString, QString> splitSystem(const QString& system);

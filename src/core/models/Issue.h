@@ -155,6 +155,9 @@ struct Issue {
 
     bool isImported() const { return !requirement.isEmpty(); }
     bool isPublished() const { return !publication.isEmpty(); }
+    /// ¿Es el issue de ese requerimiento de esa conexión? Un requerimiento se identifica por su número
+    /// dentro de la dirección de GESREQ (sin distinguir la barra final ni mayúsculas).
+    bool testsRequirement(const QString& connection, const QString& requirementId) const;
     /// La revisión en curso; nullptr si no hay ninguna abierta (o todavía ninguna).
     const IssueRevision* currentRevision() const;
     /// La ronda con ese número; nullptr si el issue no la tiene. Con `number <= 0`, la ronda de la que
@@ -167,6 +170,9 @@ struct Issue {
     const IssueRevision* lastClosedRevision() const;
     /// Resultado de la última revisión cerrada; Pendiente si no hay ninguna.
     QaOutcome lastOutcome() const;
+    /// Cuándo quedó finalizado: el cierre de su última revisión o, si se finalizó a mano sin cerrar
+    /// ninguna, su último cambio. Inválida si el issue no está Finalizado.
+    QDateTime finishedAt() const;
     /// Texto en el que busca el filtro: id, título, notas, clave del gestor y lo importado (número,
     /// sistema, descripción, estados, solicitante, referencia y alcance).
     QString searchText() const;
@@ -184,6 +190,8 @@ struct IssueFilter {
     bool matches(const Issue& issue) const;
 };
 
+/// La misma dirección de GESREQ con o sin barra final, o con otras mayúsculas, es la misma conexión.
+bool sameConnection(const QString& a, const QString& b);
 /// Prioridad de QAflow a partir de la que escribe el sistema externo ("ALTA", "Media"…); Media si no se reconoce.
 Priority priorityFromRequirement(const QString& text);
 /// Qué cambió entre dos lecturas del mismo requerimiento, en un orden estable. Los espacios repetidos no cuentan.

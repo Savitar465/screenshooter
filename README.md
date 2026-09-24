@@ -67,9 +67,13 @@ ctest --test-dir build -L presentation     # ventana principal completa (menú, 
 ## Paquetes y CI
 
 ```bash
-cpack --config build/CPackConfig.cmake      # .deb y .tar.gz (Linux), instalador NSIS y .zip (Windows), .dmg (macOS)
-packaging/linux/build-appimage.sh build     # AppImage (descarga linuxdeploy si hace falta)
+cpack --config build/CPackConfig.cmake      # .deb (Linux), instalador NSIS y .zip (Windows), .dmg (macOS)
+packaging/linux/build-appimage.sh build     # AppImage y .tar.gz portátil (descarga linuxdeploy si hace falta)
 ```
+
+En Linux, el AppImage y el `.tar.gz` llevan Qt dentro y funcionan en casi cualquier distro. El `.deb` usa el
+Qt del sistema y lo declara como dependencia, así que hay que compilarlo con el Qt de la distro
+(`qt6-base-dev`): el CI lo genera en Debian 12 y sirve en Debian 12+ y Ubuntu 24.04+.
 
 `.github/workflows/ci.yml` compila y pasa los tests en Linux, Windows y macOS en cada push, genera los paquetes
 como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.

@@ -1,8 +1,12 @@
 # Instalación y generación de paquetes con CPack. Se incluye desde el CMakeLists.txt raíz.
 #
 #   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
-#   cpack --config build/CPackConfig.cmake            # .deb / .tar.gz en Linux, NSIS/.zip en Windows, .dmg en macOS
-#   packaging/linux/build-appimage.sh build            # AppImage (requiere linuxdeploy)
+#   cpack --config build/CPackConfig.cmake            # .deb en Linux, NSIS/.zip en Windows, .dmg en macOS
+#   packaging/linux/build-appimage.sh build            # AppImage y .tar.gz portátil (requiere linuxdeploy)
+#
+# En Linux el .deb no incluye Qt: usa el del sistema y lo declara como dependencia. Por eso hay que
+# compilarlo con el Qt de la distro (qt6-base-dev), no con uno descargado aparte. El .tar.gz sí trae
+# Qt dentro y se arma desde el AppDir del AppImage.
 
 include(GNUInstallDirs)
 
@@ -53,11 +57,19 @@ elseif (APPLE)
         install(CODE "execute_process(COMMAND \"${QAFLOW_MACDEPLOYQT}\" \"\${CMAKE_INSTALL_PREFIX}/qaflow.app\" -always-overwrite)")
     endif ()
 else ()
-    set(CPACK_GENERATOR "DEB;TGZ")
+    set(CPACK_GENERATOR "DEB")
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "QAflow")
     set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)          # calcula las dependencias de Qt del sistema
-    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libsecret-tools, xdotool, xdg-desktop-portal")
+    # dpkg-shlibdeps no ve los plugins de plataforma (se cargan en tiempo de ejecución).
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "qt6-qpa-plugins")
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "qt6-wayland, libsecret-tools, xdotool, xdg-desktop-portal")
+    # Con un Qt fuera de /usr, dpkg-shlibdeps no encuentra el paquete de Qt y el .deb sale sin esa
+    # dependencia: se instala, pero no arranca en una máquina sin ese mismo Qt.
+    if (NOT Qt6_DIR MATCHES "^/usr/")
+        message(WARNING "Qt6 no es el del sistema (${Qt6_DIR}): el .deb no declarará la dependencia de Qt. "
+                        "Para distribuirlo, compilá con qt6-base-dev; para un paquete con Qt incluido, usá build-appimage.sh.")
+    endif ()
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 endif ()
 

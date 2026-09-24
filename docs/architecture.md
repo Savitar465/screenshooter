@@ -1287,7 +1287,9 @@ dibujadas al vuelo.
 ## Empaquetado
 
 `packaging/CMakeLists.txt` define la instalación (`install(TARGETS)`, `.desktop`, icono y
-metainfo en Linux) y CPack: `.deb` + `.tar.gz` en Linux, NSIS + `.zip` en Windows (con
-`windeployqt` en la instalación) y `.dmg` en macOS (`macdeployqt`). `packaging/linux/build-appimage.sh`
-instala en un AppDir y llama a linuxdeploy con su plugin de Qt. El workflow de GitHub Actions
+metainfo en Linux) y CPack: `.deb` en Linux, NSIS + `.zip` en Windows (con
+`windeployqt` en la instalación) y `.dmg` en macOS (`macdeployqt`). El `.deb` no incluye Qt: depende
+del de la distro (dpkg-shlibdeps + `qt6-qpa-plugins`), por eso el CI lo compila en un contenedor
+Debian 12 con `qt6-base-dev`. `packaging/linux/build-appimage.sh` instala en un AppDir, llama a
+linuxdeploy con su plugin de Qt y genera el AppImage y un `.tar.gz` portátil con ese mismo AppDir. El workflow de GitHub Actions
 (`.github/workflows/ci.yml`) compila y pasa los tests en los tres sistemas y sube los paquetes.

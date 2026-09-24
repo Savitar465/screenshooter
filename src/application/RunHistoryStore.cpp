@@ -44,6 +44,24 @@ const RunRecord* RunHistoryStore::findRun(const QString& id) const {
     return it == m_history.runs.cend() ? nullptr : &*it;
 }
 
+QList<Screenshot> RunHistoryStore::evidenceOf(const RunRecord& run) const {
+    const TestCase* c = m_cases.find(run.caseId);
+    const QList<Screenshot> own = c ? c->shotsOfRun(run.id) : QList<Screenshot>{};
+    QList<int> inherited;
+    for (int i = 0; i < run.steps.size(); ++i) if (run.steps[i].inherited) inherited << i + 1;
+    if (run.continuesRunId.isEmpty() || inherited.isEmpty()) return own;
+    // Primero lo heredado, que es de los pasos anteriores al que se retomó.
+    return evidenceOfSteps(run.continuesRunId, inherited) + own;
+}
+
+QList<Screenshot> RunHistoryStore::evidenceOfSteps(const QString& runId, const QList<int>& steps) const {
+    const RunRecord* run = steps.isEmpty() ? nullptr : findRun(runId);
+    if (!run) return {};
+    QList<Screenshot> out;
+    for (const auto& shot : evidenceOf(*run)) if (steps.contains(shot.step)) out << shot;
+    return out;
+}
+
 const PlanRun* RunHistoryStore::findPlan(const QString& id) const {
     auto it = std::find_if(m_history.plans.cbegin(), m_history.plans.cend(), [&](const PlanRun& p) { return p.id == id; });
     return it == m_history.plans.cend() ? nullptr : &*it;

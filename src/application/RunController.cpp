@@ -317,7 +317,8 @@ void RunController::commitRun(bool evenIfPending) {
     for (int i = 0; i <= last && i < c->steps.size(); ++i) {
         const StepRecord& r = m_run.results[i];
         rec.steps.append(RunRecordStep{c->steps[i].action, c->steps[i].data, c->steps[i].expected,
-                                       r.marked ? r.result : StepResult::Skip, r.note, r.durationSecs});
+                                       r.marked ? r.result : StepResult::Skip, r.note, r.durationSecs,
+                                       r.marked && r.inherited && !m_continuesRunId.isEmpty()});
         rec.durationSecs += r.durationSecs;
     }
     const RunRecord saved = m_history.addRun(rec);

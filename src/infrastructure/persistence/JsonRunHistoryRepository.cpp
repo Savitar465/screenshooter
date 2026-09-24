@@ -17,7 +17,7 @@ QString isoOrEmpty(const QDateTime& dt) { return dt.isValid() ? dt.toString(Qt::
 QJsonObject toJson(const RunRecord& r) {
     QJsonArray steps;
     for (const auto& s : r.steps)
-        steps.append(QJsonObject{{"action", s.action}, {"data", s.data}, {"expected", s.expected}, {"result", toString(s.result)}, {"note", s.note}, {"durationSecs", s.durationSecs}});
+        steps.append(QJsonObject{{"action", s.action}, {"data", s.data}, {"expected", s.expected}, {"result", toString(s.result)}, {"note", s.note}, {"durationSecs", s.durationSecs}, {"inherited", s.inherited}});
     return QJsonObject{
         {"id", r.id}, {"caseId", r.caseId}, {"caseTitle", r.caseTitle}, {"suite", r.suite},
         {"planRunId", r.planRunId}, {"startedAt", isoOrEmpty(r.startedAt)}, {"finishedAt", isoOrEmpty(r.finishedAt)},
@@ -41,12 +41,26 @@ RunRecord runFromJson(const QJsonObject& o) {
     r.continuesRunId = o["continuesRunId"].toString();
     for (const auto& v : o["steps"].toArray()) {
         const auto s = v.toObject();
-        r.steps.append(RunRecordStep{s["action"].toString(), s["data"].toString(), s["expected"].toString(), stepResultFromString(s["result"].toString()), s["note"].toString(), s["durationSecs"].toInt()});
+        r.steps.append(RunRecordStep{s["action"].toString(), s["data"].toString(), s["expected"].toString(), stepResultFromString(s["result"].toString()), s["note"].toString(), s["durationSecs"].toInt(), s["inherited"].toBool()});
     }
     // Registros anteriores a la medición por pasos: usar inicio → fin.
     r.durationSecs = o.contains("durationSecs") ? static_cast<qint64>(o["durationSecs"].toDouble())
                      : (r.startedAt.isValid() && r.finishedAt.isValid() ? r.startedAt.secsTo(r.finishedAt) : 0);
     return r;
+}
+
+// Continuaciones archivadas antes de que cada paso dijera si era heredado: se deduce como al
+// retomarlas, con lo anterior al paso que se rompió en la ejecución de la que vienen, mientras el paso
+// y lo que se anotó en él sigan siendo lo de entonces.
+void inferInheritedSteps(RunRecord& run, const RunRecord& previous) {
+    const int broken = previous.brokenStepIndex();
+    for (int i = 0; i < broken && i < run.steps.size() && i < previous.steps.size(); ++i) {
+        const RunRecordStep& now = run.steps[i];
+        const RunRecordStep& then = previous.steps[i];
+        if (now.action != then.action || now.data != then.data || now.expected != then.expected
+            || now.result != then.result || now.note != then.note) break;
+        run.steps[i].inherited = true;
+    }
 }
 
 QJsonObject toJson(const PlanRun& p) {
@@ -89,7 +103,19 @@ std::optional<RunHistory> JsonRunHistoryRepository::loadHistory() {
     if (err.error != QJsonParseError::NoError || !doc.isObject()) return std::nullopt;
     RunHistory h;
     const auto o = doc.object();
-    for (const auto& v : o["runs"].toArray()) h.runs.append(runFromJson(v.toObject()));
+    QList<int> legacyContinuations;
+    for (const auto& v : o["runs"].toArray()) {
+        const QJsonObject run = v.toObject();
+        h.runs.append(runFromJson(run));
+        const QJsonArray steps = run["steps"].toArray();
+        if (!h.runs.last().continuesRunId.isEmpty() && !steps.isEmpty() && !steps.first().toObject().contains("inherited"))
+            legacyContinuations << h.runs.size() - 1;
+    }
+    for (int index : legacyContinuations) {
+        RunRecord& run = h.runs[index];
+        for (const auto& previous : std::as_const(h.runs))
+            if (previous.id == run.continuesRunId) { inferInheritedSteps(run, previous); break; }
+    }
     for (const auto& v : o["plans"].toArray()) h.plans.append(planFromJson(v.toObject()));
     return h;
 }

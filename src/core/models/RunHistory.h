@@ -29,6 +29,9 @@ struct RunRecordStep {
     StepResult result = StepResult::Pass;
     QString note;
     int durationSecs = 0;
+    /// El veredicto viene de la ejecución que ésta retoma (`RunRecord::continuesRunId`): no se volvió a
+    /// probar, y su evidencia es la que se tomó entonces.
+    bool inherited = false;
 };
 
 /// Ejecución terminada de un caso. Es una instantánea: no cambia aunque el caso se edite después.

@@ -3,6 +3,7 @@
 #include "core/models/IssueLink.h"
 #include "core/models/PlanReport.h"
 #include "core/models/RunHistory.h"
+#include "core/models/TestCase.h"
 #include "core/services/IRunHistoryRepository.h"
 
 #include <QObject>
@@ -37,6 +38,13 @@ public:
     /// Informe de un plan. Los títulos de los casos pendientes se resuelven contra los casos actuales
     /// y los bugs, contra el libro de `setBugs()`.
     PlanReport report(const QString& planRunId) const;
+    /// Evidencias de una ejecución archivada: las suyas y, si retoma otra, las de los pasos que heredó
+    /// de ella (con el `runId` de la ejecución en que se tomaron). Son las que prueban sus veredictos:
+    /// un paso heredado no se volvió a probar, y su prueba sigue siendo la de entonces.
+    QList<Screenshot> evidenceOf(const RunRecord& run) const;
+    /// Evidencias de la ejecución `runId` asignadas a los pasos `steps` (1..N), incluidas las que ésta
+    /// heredó a su vez. Es lo que trae una continuación de los pasos que no vuelve a probar.
+    QList<Screenshot> evidenceOfSteps(const QString& runId, const QList<int>& steps) const;
 
     /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos). `environment` es el
     /// ambiente en el que se va a probar ("QA", "Staging"…), que acompaña al ciclo hasta Zephyr.

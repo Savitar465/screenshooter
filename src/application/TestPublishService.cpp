@@ -119,10 +119,11 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report, bool upd
             // Con lo que el caso dice hoy se crea el Test de la ejecución.
             pc.preconditions = c->preconditions;
             pc.design = c->steps;
-            // Las evidencias son las de esa ejecución que sigan en disco, con su paso.
-            for (const auto& shot : c->shotsOfRun(row.run.id))
-                if (QFileInfo::exists(shot.path)) pc.attachments.append(PublishAttachment{shot.path, shot.step});
         }
+        // Las evidencias son las de esa ejecución que sigan en disco, con su paso. Una continuación
+        // lleva también las de los pasos que heredó: su Test los da por buenos, y la prueba es aquélla.
+        for (const auto& shot : m_history.evidenceOf(row.run))
+            if (QFileInfo::exists(shot.path)) pc.attachments.append(PublishAttachment{shot.path, shot.step});
         // Del caso que ya no está en el catálogo sólo queda la ejecución: sus pasos son el Test.
         if (pc.design.isEmpty())
             for (const auto& s : row.run.steps) pc.design.append(TestStep{s.action, s.data, s.expected});

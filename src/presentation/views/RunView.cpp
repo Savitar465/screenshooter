@@ -236,7 +236,7 @@ QWidget* RunView::buildStage() {
     m_assign->setMinimumContentsLength(18);
     m_assign->setStyleSheet(QStringLiteral("QComboBox{background:%1;font-size:11.5px;}").arg(theme::Field));
     connect(m_assign, &QComboBox::currentIndexChanged, this, [this](int) {
-        if (m_selfEdit || !m_selectedShot) return;
+        if (m_selfEdit || !m_selectedShot || isInheritedShot(m_selectedShot)) return;
         m_cases.assignShotStep(m_run.state().caseId, m_selectedShot, m_assign->currentData().toInt());
     });
     bh->addWidget(m_assign, 4);
@@ -267,12 +267,13 @@ QWidget* RunView::buildStage() {
     m_focusButton->setToolTip(tr("Modo foco: la evidencia a toda la ventana (F11)"));
     connect(m_focusButton, &QPushButton::clicked, this, [this](bool on) { setFocusMode(on); });
     bh->addWidget(m_focusButton);
-    auto* remove = ui::button(QStringLiteral("×"), "icon");
-    remove->setToolTip(tr("Eliminar esta evidencia"));
-    connect(remove, &QPushButton::clicked, this, [this]() {
-        if (m_selectedShot) m_cases.removeShot(m_run.state().caseId, m_selectedShot);
+    m_shotRemove = ui::button(QStringLiteral("×"), "icon");
+    m_shotRemove->setObjectName(QStringLiteral("shotRemove"));
+    m_shotRemove->setToolTip(tr("Eliminar esta evidencia"));
+    connect(m_shotRemove, &QPushButton::clicked, this, [this]() {
+        if (m_selectedShot && !isInheritedShot(m_selectedShot)) m_cases.removeShot(m_run.state().caseId, m_selectedShot);
     });
-    bh->addWidget(remove);
+    bh->addWidget(m_shotRemove);
     sv->addWidget(m_shotBar);
 
     m_preview = new EvidencePreview;
@@ -306,7 +307,7 @@ QWidget* RunView::buildStage() {
                                      .arg(theme::tint(theme::Panel, 225), theme::TextSoft, theme::Border));
     m_preview->installEventFilter(this);
     sv->addWidget(m_preview, 1);
-    m_shotControls = {assignLabel, m_assign, zoom, annotate, remove, m_shotPrev, m_shotNext};
+    m_shotControls = {assignLabel, m_assign, zoom, annotate, m_shotRemove, m_shotPrev, m_shotNext};
     v->addWidget(m_stage, 1);
 
     v->addWidget(buildFilmStrip());
@@ -1055,8 +1056,9 @@ void RunView::refreshShots() {
     ui::clearLayout(m_shotsLayout);
     const TestCase* c = m_cases.find(m_run.state().caseId);
     if (!c) return;
-    // Sólo las de esta ejecución: las de las anteriores están en su ficha del historial.
-    const QList<Screenshot> shots = c->shotsOfRun(QString());
+    // Las de esta ejecución y, si retoma otra, las de los pasos que heredó de ella: son la prueba de
+    // esos veredictos. Las de las demás ejecuciones están en su ficha del historial.
+    const QList<Screenshot> shots = visibleShots(*c);
     m_shotsCount->setText(shots.isEmpty() ? tr("CAPTURAS") : tr("CAPTURAS · %1").arg(shots.size()));
 
     // La captura recién hecha se abre sola en el visor; si la elegida ya no está, la última.
@@ -1090,6 +1092,11 @@ void RunView::refreshShots() {
         card->setFixedWidth(kFilmCardWidth);
         card->setThumbWidthHint(kFilmCardWidth - 2);
         card->setSelected(shot.id == m_selectedShot);
+        // La heredada es de la ejecución que se retoma: se mira y se anota, pero no se borra ni se
+        // cambia de paso, que reescribiría aquélla.
+        const bool inherited = !shot.runId.isEmpty();
+        card->setReadOnly(inherited);
+        if (inherited) card->setToolTip(tr("Heredada de %1: el paso no se ha vuelto a probar").arg(shot.runId));
         if (shot.id == m_selectedShot) {
             selectedCard = card;
             position = i + 1;
@@ -1120,6 +1127,9 @@ void RunView::refreshShots() {
     m_preview->setShot(shot ? *shot : Screenshot{});
     m_preview->setPlaceholder(tr("Aún no hay evidencias de este caso.\nPulsa «Capturar» o arrastra un fichero a la ventana."));
     for (auto* w : m_shotControls) w->setEnabled(shot != nullptr);
+    const bool inheritedShot = shot && !shot->runId.isEmpty();
+    m_assign->setEnabled(shot && !inheritedShot);
+    m_shotRemove->setEnabled(shot && !inheritedShot);
     m_shotPrev->setVisible(shots.size() > 1);
     m_shotNext->setVisible(shots.size() > 1);
     m_shotCounter->setVisible(shot != nullptr);
@@ -1137,7 +1147,9 @@ void RunView::refreshShots() {
     // La etiqueta del paso lleva el color de su veredicto: de un vistazo, si es la prueba de un fallo.
     const RunState& r = m_run.state();
     const QString stepColorName = shot->step > 0 ? stepColor(shot->step - 1, r) : theme::Amber;
-    m_shotStep->setText(shot->step > 0 ? tr("PASO %1").arg(shot->step) : tr("SIN PASO"));
+    m_shotStep->setText(inheritedShot ? tr("PASO %1 · DE %2").arg(shot->step).arg(shot->runId)
+                        : shot->step > 0 ? tr("PASO %1").arg(shot->step) : tr("SIN PASO"));
+    m_shotStep->setToolTip(inheritedShot ? tr("Evidencia heredada de la ejecución que se retoma: el paso no se ha vuelto a probar") : QString());
     m_shotStep->setStyleSheet(QStringLiteral("background:%1;color:%2;border:1px solid %3;border-radius:4px;padding:2px 8px;"
                                              "font-size:11px;font-weight:800;")
                                   .arg(theme::tint(stepColorName, 40), stepColorName == theme::Border ? theme::TextSoft : stepColorName,
@@ -1339,6 +1351,18 @@ QWidget* RunView::caseCard(const QString& caseId, const QHash<QString, Verdict>&
     return card;
 }
 
+QList<Screenshot> RunView::visibleShots(const TestCase& c) const {
+    const RunState& r = m_run.state();
+    QList<int> inherited;
+    for (int i = 0; i < r.results.size(); ++i) if (r.results[i].marked && r.results[i].inherited) inherited << i + 1;
+    return m_history.evidenceOfSteps(m_run.continuesRunId(), inherited) + c.shotsOfRun(QString());
+}
+
+bool RunView::isInheritedShot(int shotId) const {
+    const Screenshot* shot = selectedShot();
+    return shot && shot->id == shotId && !shot->runId.isEmpty();
+}
+
 const Screenshot* RunView::selectedShot() const {
     const TestCase* c = m_cases.find(m_run.state().caseId);
     if (!c) return nullptr;
@@ -1390,10 +1414,13 @@ bool RunView::eventFilter(QObject* watched, QEvent* event) {
 
 void RunView::selectRelativeShot(int delta) {
     const TestCase* c = m_cases.find(m_run.state().caseId);
-    if (!c || c->shots.isEmpty()) return;
+    if (!c) return;
+    // Se recorre lo que enseña la tira, no todas las evidencias del caso.
+    const QList<Screenshot> shots = visibleShots(*c);
+    if (shots.isEmpty()) return;
     int index = 0;
-    for (int i = 0; i < c->shots.size(); ++i) if (c->shots[i].id == m_selectedShot) index = i;
-    selectShot(c->shots[std::clamp(index + delta, 0, static_cast<int>(c->shots.size()) - 1)].id);
+    for (int i = 0; i < shots.size(); ++i) if (shots[i].id == m_selectedShot) index = i;
+    selectShot(shots[std::clamp(index + delta, 0, static_cast<int>(shots.size()) - 1)].id);
 }
 
 } // namespace qaflow

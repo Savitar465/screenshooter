@@ -73,7 +73,7 @@ private:
     /// Fila con la historia de Jira y el Test de Zephyr del caso; nullptr si no tiene ninguno.
     QWidget* issueLinks(const QString& jiraKey, const QString& testKey);
     /// Rejilla con las evidencias que se capturaron en esa ejecución; nullptr si no hubo ninguna.
-    QWidget* evidenceGrid(const QString& caseId, const QString& runId, int columns);
+    QWidget* evidenceGrid(const RunRecord& run, int columns);
     void exportMarkdown(const PlanReport& report);
     void copyMarkdown(const PlanReport& report);
     /// Crea en Zephyr el ciclo con las ejecuciones del informe, sus pasos y sus evidencias.

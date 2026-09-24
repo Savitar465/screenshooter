@@ -126,6 +126,11 @@ private:
     void selectShot(int shotId);
     void selectRelativeShot(int delta);
     const Screenshot* selectedShot() const;
+    /// Evidencias de la tira: las heredadas de la ejecución que se retoma (de sus pasos heredados) y
+    /// las de esta ejecución.
+    QList<Screenshot> visibleShots(const TestCase& c) const;
+    /// La evidencia abierta es heredada: no se borra ni se cambia de paso desde aquí.
+    bool isInheritedShot(int shotId) const;
     void openSelectedShot();
     void annotateSelectedShot();
     /// Coloca las flechas y el contador que van sobre el visor.
@@ -164,6 +169,7 @@ private:
     QPushButton* m_shotPrev;
     QPushButton* m_shotNext;
     QLabel* m_shotCounter;
+    QPushButton* m_shotRemove;
 
     // Tira de capturas
     QFrame* m_filmPanel;

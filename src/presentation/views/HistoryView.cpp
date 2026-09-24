@@ -461,7 +461,7 @@ void HistoryView::renderPlan(const PlanReport& report) {
         for (const auto& bug : row.bugs) cv->addWidget(bugRow(bug, false));
         if (row.executed) cv->addWidget(stepsList(row.run));
         if (row.executed)
-            if (auto* shots = evidenceGrid(row.caseId, row.run.id, 4)) cv->addWidget(shots);
+            if (auto* shots = evidenceGrid(row.run, 4)) cv->addWidget(shots);
         m_detailLayout->addWidget(card);
     }
 }
@@ -709,7 +709,7 @@ void HistoryView::renderRun(const RunRecord& run) {
     m_detailLayout->addWidget(card);
 
     // Lo que se capturó ejecutando: es de esta ejecución y aquí es donde se ve.
-    if (auto* shots = evidenceGrid(run.caseId, run.id, 3)) {
+    if (auto* shots = evidenceGrid(run, 3)) {
         auto* box = ui::card("card");
         auto* bv = ui::vbox(box, 0, 10);
         bv->setContentsMargins(16, 14, 16, 14);
@@ -738,11 +738,13 @@ QWidget* HistoryView::issueLinks(const QString& jiraKey, const QString& testKey)
     return row;
 }
 
-QWidget* HistoryView::evidenceGrid(const QString& caseId, const QString& runId, int columns) {
+QWidget* HistoryView::evidenceGrid(const RunRecord& run, int columns) {
+    const QString caseId = run.caseId;
     const TestCase* c = m_cases.find(caseId);
     if (!c) return nullptr;
-    // Las evidencias son de la ejecución: se enseñan aquí, con el paso al que se asignaron.
-    const QList<Screenshot> shots = c->shotsOfRun(runId);
+    // Las evidencias son de la ejecución: se enseñan aquí, con el paso al que se asignaron. Las de una
+    // continuación traen también las de los pasos que heredó, que son lo que se publica con ella.
+    const QList<Screenshot> shots = m_history.evidenceOf(run);
     if (shots.isEmpty()) return nullptr;
     auto* box = new QWidget;
     auto* v = ui::vbox(box, 0, 8);
@@ -756,6 +758,7 @@ QWidget* HistoryView::evidenceGrid(const QString& caseId, const QString& runId, 
         // La ejecución ya pasó: su evidencia se mira, se anota y se copia, pero no se reordena ni
         // se reasigna de paso, que la cambiaría después de haberse publicado.
         card->setReadOnly(true);
+        if (shots[i].runId != run.id) card->setToolTip(tr("Heredada de %1: el paso no se volvió a probar").arg(shots[i].runId));
         if (m_evidence) evidence::wireCard(card, this, m_cases, *m_evidence, caseId);
         grid->addWidget(card, i / columns, i % columns);
     }

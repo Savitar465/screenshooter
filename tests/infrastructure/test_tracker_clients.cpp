@@ -666,7 +666,7 @@ private slots:
                 {"id":"11","name":"Detener","to":{"name":"Por hacer","statusCategory":{"key":"new"}}},
                 {"id":"31","name":"Resolver","to":{"name":"Resuelta","statusCategory":{"key":"done"}}},
                 {"id":"41","name":"Cerrar","to":{"name":"Cerrada","statusCategory":{"key":"done"}},
-                 "fields":{"resolution":{"required":true,"allowedValues":[{"name":"No se hará"},{"name":"Hecho"}]}}}]})");
+                 "fields":{"resolution":{"required":true,"allowedValues":[{"id":"10001","name":"No se hará"},{"id":"10000","name":"Listo"}]}}}]})");
         });
         server.route("POST", "/rest/api/2/issue/SHOP-12/transitions", [](const HttpRequest&) { return HttpResponse::json(204, ""); });
         JiraClient client;
@@ -678,8 +678,10 @@ private slots:
         QVERIFY2(out.ok, qPrintable(out.error));
         const QJsonObject body = bodyOf(server.requests.last());
         QCOMPARE(body[QStringLiteral("transition")].toObject()[QStringLiteral("id")].toString(), QStringLiteral("41"));
-        QCOMPARE(body[QStringLiteral("fields")].toObject()[QStringLiteral("resolution")].toObject()[QStringLiteral("name")].toString(),
-                 QStringLiteral("Hecho"));
+        // Por id: el nombre viene traducido («Listo») y Jira no lo acepta como nombre.
+        const QJsonObject resolution = body[QStringLiteral("fields")].toObject()[QStringLiteral("resolution")].toObject();
+        QCOMPARE(resolution[QStringLiteral("id")].toString(), QStringLiteral("10000"));
+        QVERIFY(!resolution.contains(QStringLiteral("name")));
     }
 
     // Uno ya cerrado no se toca, y uno sin salida a «hecho» se explica.

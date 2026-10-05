@@ -11,6 +11,7 @@
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
 #include "presentation/views/BugDetailWindow.h"
+#include "presentation/views/BugCloseDialog.h"
 #include "presentation/views/BugDialog.h"
 #include "presentation/views/BugView.h"
 #include "presentation/widgets/ShotCard.h"
@@ -51,6 +52,8 @@
 #include <QPushButton>
 #include <QProgressBar>
 #include <QUrl>
+#include <QPlainTextEdit>
+#include <QTemporaryDir>
 #include <QtTest>
 
 using namespace qaflow;
@@ -3041,9 +3044,19 @@ private slots:
         auto* closeBug = window->findChild<QPushButton*>(QStringLiteral("bugDetailCloseBug"));
         QVERIFY(closeBug && closeBug->isVisible());
         closeBug->click();
+        // Con un comentario y la evidencia de la corrección, que van al gestor antes del cierre.
+        auto* closeDialog = window->findChild<BugCloseDialog*>();
+        QVERIFY(closeDialog);
+        closeDialog->findChild<QPlainTextEdit*>(QStringLiteral("bugCloseComment"))->setPlainText(QStringLiteral("Verificado en staging"));
+        QTemporaryDir shots;
+        const QString gif = shots.filePath(QStringLiteral("fix.gif"));
+        { QFile file(gif); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("GIF89a"); }
+        closeDialog->addAttachments({gif, shots.filePath(QStringLiteral("no-existe.png"))});
         auto* accept = window->findChild<QPushButton*>(QStringLiteral("bugDetailCloseAccept"));
         QVERIFY(accept);
         accept->click();
+        QCOMPARE(f.app.tracker->comments.last(), QStringLiteral("Verificado en staging"));
+        QCOMPARE(f.app.tracker->commentAttachments.last(), QStringList{gif});
         QCOMPARE(f.app.tracker->closed, QStringList{QStringLiteral("SHOP-77")});
         QVERIFY(f.app.bugLedger.findIssue(QStringLiteral("SHOP-77"))->resolved);
         QTRY_VERIFY(!closeBug->isVisible());   // cerrado, ya no se ofrece

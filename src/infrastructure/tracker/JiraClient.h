@@ -52,8 +52,8 @@ public:
     /// De las transiciones que ofrece un issue (`GET …/transitions?expand=transitions.fields`), la que
     /// lo cierra: una que lleve a la categoría «done», mejor si se llama como un cierre («Cerrar»,
     /// «Close», «Done»…). Vacía si no hay ninguna. `resolution` es la resolución con la que se manda
-    /// cuando la transición la pide, o vacía si no la pide.
-    static QString closingTransition(const QJsonArray& transitions, QString* resolution = nullptr);
+    /// cuando la transición la pide (`{"id": …}`), o vacía si no la pide.
+    static QString closingTransition(const QJsonArray& transitions, QJsonObject* resolution = nullptr);
 
 private:
     /// El usuario de las credenciales, tal y como Jira lo asigna: `accountId` en Cloud, `name` en

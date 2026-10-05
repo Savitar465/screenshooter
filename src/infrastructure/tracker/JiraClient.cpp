@@ -261,7 +261,7 @@ void JiraClient::assignToMyself(const TrackerSettings& s, IssueResult result, st
     });
 }
 
-QString JiraClient::closingTransition(const QJsonArray& transitions, QString* resolution) {
+QString JiraClient::closingTransition(const QJsonArray& transitions, QJsonObject* resolution) {
     // Los nombres con los que se suele llamar al cierre, en el orden en que se prefieren: un flujo
     // puede ofrecer varias salidas a «hecho» («Resolver» y «Cerrar») y la definitiva es la de cerrar.
     static const QStringList preferred{QStringLiteral("cerrar"), QStringLiteral("close"), QStringLiteral("finaliz"),
@@ -280,20 +280,26 @@ QString JiraClient::closingTransition(const QJsonArray& transitions, QString* re
     }
     if (best.isEmpty()) return {};
     if (resolution) {
-        resolution->clear();
+        *resolution = {};
         const QJsonObject field = best[QStringLiteral("fields")].toObject()[QStringLiteral("resolution")].toObject();
         const QJsonArray allowed = field[QStringLiteral("allowedValues")].toArray();
+        // Se manda por `id`: `allowedValues` trae los nombres traducidos al idioma del usuario («Listo»)
+        // y Jira sólo reconoce por nombre el original, así que mandar el traducido da un 400.
+        auto ref = [](const QJsonObject& a) {
+            const QString id = a[QStringLiteral("id")].toString();
+            return id.isEmpty() ? QJsonObject{{"name", a[QStringLiteral("name")].toString()}} : QJsonObject{{"id", id}};
+        };
         // La resolución se manda sólo si la transición la pide; entre las que admite, la de «hecho».
         for (const auto& wanted : {QStringLiteral("Done"), QStringLiteral("Hecho"), QStringLiteral("Fixed"), QStringLiteral("Resuelta"),
                                    QStringLiteral("Resuelto"), QStringLiteral("Finalizado"), QStringLiteral("Listo")}) {
             for (const auto& a : allowed)
                 if (a.toObject()[QStringLiteral("name")].toString().compare(wanted, Qt::CaseInsensitive) == 0) {
-                    *resolution = a.toObject()[QStringLiteral("name")].toString();
+                    *resolution = ref(a.toObject());
                     break;
                 }
             if (!resolution->isEmpty()) break;
         }
-        if (resolution->isEmpty() && !allowed.isEmpty()) *resolution = allowed.first().toObject()[QStringLiteral("name")].toString();
+        if (resolution->isEmpty() && !allowed.isEmpty()) *resolution = ref(allowed.first().toObject());
     }
     return best[QStringLiteral("id")].toString();
 }
@@ -316,7 +322,7 @@ void JiraClient::closeIssue(const TrackerSettings& s, const QString& key, std::f
         get(request(s, QStringLiteral("/rest/api/2/issue/%1/transitions?expand=transitions.fields").arg(issue)),
             [this, s, issue, res, done](const Response& r) mutable {
                 if (!r.ok) { res.error = errorFor(s, r); res.retryable = r.retryable; done(res); return; }
-                QString resolution;
+                QJsonObject resolution;
                 const QString transition = closingTransition(r.json.object()[QStringLiteral("transitions")].toArray(), &resolution);
                 if (transition.isEmpty()) {
                     res.error = QCoreApplication::translate("infrastructure",
@@ -326,7 +332,7 @@ void JiraClient::closeIssue(const TrackerSettings& s, const QString& key, std::f
                     return;
                 }
                 QJsonObject body{{"transition", QJsonObject{{"id", transition}}}};
-                if (!resolution.isEmpty()) body["fields"] = QJsonObject{{"resolution", QJsonObject{{"name", resolution}}}};
+                if (!resolution.isEmpty()) body["fields"] = QJsonObject{{"resolution", resolution}};
                 postJson(request(s, QStringLiteral("/rest/api/2/issue/%1/transitions").arg(issue)), QJsonDocument(body),
                          [s, res, done](const Response& r2) mutable {
                              if (!r2.ok) { res.error = errorFor(s, r2); res.retryable = r2.retryable; done(res); return; }

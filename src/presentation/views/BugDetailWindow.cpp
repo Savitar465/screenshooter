@@ -1,5 +1,6 @@
 #include "BugDetailWindow.h"
 #include "application/BugReportService.h"
+#include "presentation/views/BugCloseDialog.h"
 
 #include "core/models/BugReport.h"
 #include "presentation/theme/Theme.h"
@@ -9,7 +10,6 @@
 #include <QClipboard>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -90,39 +90,37 @@ void BugDetailWindow::setBugService(BugReportService* service) {
 
 void BugDetailWindow::closeInTracker() {
     if (!m_service || m_closing || m_bug.resolved) return;
-    // Cerrar cambia el estado en el gestor para todo el equipo: se pregunta antes.
-    auto* box = new QMessageBox(QMessageBox::Question, tr("Cerrar el bug"),
-                                tr("¿Cerrar %1 en el gestor? Se da por corregido.").arg(m_bug.key), QMessageBox::NoButton, this);
-    box->setObjectName(QStringLiteral("bugDetailCloseConfirm"));
-    QPushButton* accept = box->addButton(tr("Cerrar %1").arg(m_bug.key), QMessageBox::AcceptRole);
-    accept->setObjectName(QStringLiteral("bugDetailCloseAccept"));
-    box->addButton(tr("Cancelar"), QMessageBox::RejectRole);
-    box->setDefaultButton(accept);
-    box->setAttribute(Qt::WA_DeleteOnClose);
-    connect(box, &QMessageBox::buttonClicked, this, [this, accept](QAbstractButton* clicked) {
-        if (clicked != accept || !m_service) return;
+    // Cerrar cambia el estado en el gestor para todo el equipo: se pregunta antes, y de paso se deja
+    // dicho cómo se comprobó la corrección, con su evidencia.
+    auto* dialog = new BugCloseDialog(m_bug.key, m_service->canCommentBugs(), this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &QDialog::accepted, this, [this, dialog]() {
+        if (!m_service) return;
+        const BugReportService::CloseNote note = dialog->note();
         m_closing = true;
         refresh();
         QPointer<BugDetailWindow> self(this);
         const QString key = m_bug.key;
-        m_service->closeBugs({key}, [self, key](const BugReportService::CloseResult& r) {
+        const int attachments = int(note.attachments.size());
+        m_service->closeBug(key, note, [self, key, attachments](const BugReportService::CloseResult& r) {
             if (!self) return;
             self->m_closing = false;
             // El libro ya tiene el estado nuevo y quien abrió la ficha la pone al día; aquí se dice qué pasó.
             if (r.closed.contains(key)) {
                 self->m_bug.resolved = true;
-                self->m_status->setText(tr("Cerrado en el gestor"));
-            } else {
                 self->refresh();
-                self->m_status->setText(r.uncertain.contains(key) ? tr("El cierre no quedó confirmado: compruébalo en el gestor")
-                                                                  : r.failed.value(0));
-                self->m_status->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Red));
+                self->m_status->setText(attachments == 0 ? tr("Cerrado en el gestor")
+                                                         : tr("Cerrado en el gestor · %1 de %2 adjuntos subidos")
+                                                               .arg(r.attachmentsUploaded).arg(attachments));
                 return;
             }
             self->refresh();
+            self->m_status->setText(r.uncertain.contains(key) ? tr("El cierre no quedó confirmado: compruébalo en el gestor")
+                                                              : r.failed.value(0));
+            self->m_status->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Red));
         });
     });
-    box->open();
+    dialog->open();
 }
 
 void BugDetailWindow::setBug(const IssueLink& bug) {

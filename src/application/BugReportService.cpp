@@ -166,6 +166,31 @@ void BugReportService::closeBugs(const QStringList& keys, std::function<void(con
     closeNext(keys, CloseResult{}, std::move(done));
 }
 
+bool BugReportService::canCommentBugs() const { return m_tracker && m_tracker->canCommentIssues(m_settings.tracker()); }
+
+void BugReportService::closeBug(const QString& key, const CloseNote& note, std::function<void(const CloseResult&)> done) {
+    if (note.isEmpty()) { closeBugs({key}, std::move(done)); return; }
+    if (!canCloseBugs() || !canCommentBugs()) {
+        CloseResult refused;
+        refused.failed << tr("%1: el gestor configurado no admite cerrar con comentario desde QAflow").arg(key);
+        done(refused);
+        return;
+    }
+    // El gestor no admite comentarios vacíos: sólo con adjuntos, se dice de qué son.
+    const QString body = note.comment.trimmed().isEmpty() ? tr("Evidencia del cierre del bug") : note.comment.trimmed();
+    m_tracker->commentIssue(m_settings.tracker(), key, body, note.attachments, [this, key, done](const IssueResult& r) {
+        if (!r.ok) {
+            CloseResult out;
+            out.failed << tr("%1: no se pudo dejar el comentario · %2").arg(key, r.error);
+            done(out);
+            return;
+        }
+        CloseResult acc;
+        acc.attachmentsUploaded = r.attachmentsUploaded;
+        closeNext({key}, acc, done);
+    });
+}
+
 void BugReportService::closeNext(QStringList keys, CloseResult acc, std::function<void(const CloseResult&)> done) {
     if (keys.isEmpty()) { done(acc); return; }
     const QString key = keys.takeFirst();

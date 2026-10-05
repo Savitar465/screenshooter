@@ -1709,6 +1709,61 @@
     </message>
 </context>
 <context>
+    <name>qaflow::BugCloseDialog</name>
+    <message>
+        <source>Cerrar %1</source>
+        <translation>Close %1</translation>
+    </message>
+    <message>
+        <source>¿Cerrar %1 en el gestor? Se da por corregido.</source>
+        <translation>Close %1 in the tracker? It will be considered fixed.</translation>
+    </message>
+    <message>
+        <source>COMENTARIO</source>
+        <translation>COMMENT</translation>
+    </message>
+    <message>
+        <source>Cómo se comprobó la corrección (opcional)</source>
+        <translation>How the fix was verified (optional)</translation>
+    </message>
+    <message>
+        <source>Comentario de cierre de %1</source>
+        <translation>Closing comment for %1</translation>
+    </message>
+    <message>
+        <source>+ Adjuntar archivo…</source>
+        <translation>+ Attach file…</translation>
+    </message>
+    <message>
+        <source>Capturas, vídeos o GIF que prueban la corrección; también se pueden soltar aquí</source>
+        <translation>Screenshots, videos or GIFs that prove the fix; you can also drop them here</translation>
+    </message>
+    <message>
+        <source>Adjuntar al cierre</source>
+        <translation>Attach to closing</translation>
+    </message>
+    <message>
+        <source>Imágenes y vídeos (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.mp4 *.webm *.mkv *.mov);;Todos los archivos (*)</source>
+        <translation>Images and videos (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.mp4 *.webm *.mkv *.mov);;All files (*)</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>ADJUNTOS · %1</source>
+        <translation>ATTACHMENTS · %1</translation>
+    </message>
+    <message>
+        <source>Abrir con la aplicación del sistema</source>
+        <translation>Open with the system application</translation>
+    </message>
+    <message>
+        <source>Quitar</source>
+        <translation>Remove</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::BugDetailWindow</name>
     <message>
         <source>Copiar clave</source>
@@ -1779,22 +1834,6 @@
         <translation>Moves the bug to a resolved status in the tracker: mark it as fixed</translation>
     </message>
     <message>
-        <source>Cerrar el bug</source>
-        <translation>Close the bug</translation>
-    </message>
-    <message>
-        <source>¿Cerrar %1 en el gestor? Se da por corregido.</source>
-        <translation>Close %1 in the tracker? It will be considered fixed.</translation>
-    </message>
-    <message>
-        <source>Cerrar %1</source>
-        <translation>Close %1</translation>
-    </message>
-    <message>
-        <source>Cancelar</source>
-        <translation>Cancel</translation>
-    </message>
-    <message>
         <source>Cerrado en el gestor</source>
         <translation>Closed in the tracker</translation>
     </message>
@@ -1805,6 +1844,10 @@
     <message>
         <source>Cerrando…</source>
         <translation>Closing…</translation>
+    </message>
+    <message>
+        <source>Cerrado en el gestor · %1 de %2 adjuntos subidos</source>
+        <translation>Closed in the tracker · %1 of %2 attachments uploaded</translation>
     </message>
 </context>
 <context>
@@ -2079,6 +2122,18 @@
     <message>
         <source>Cerrado</source>
         <translation>Closed</translation>
+    </message>
+    <message>
+        <source>%1: el gestor configurado no admite cerrar con comentario desde QAflow</source>
+        <translation>%1: the configured tracker doesn't support closing with a comment from QAflow</translation>
+    </message>
+    <message>
+        <source>Evidencia del cierre del bug</source>
+        <translation>Evidence for closing the bug</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo dejar el comentario · %2</source>
+        <translation>%1: the comment couldn't be added · %2</translation>
     </message>
 </context>
 <context>

@@ -36,7 +36,7 @@ signals:
 
 private:
     void refresh();
-    /// Pregunta y cierra el bug en el gestor.
+    /// Pregunta (con comentario y adjuntos, si el gestor los admite) y cierra el bug en el gestor.
     void closeInTracker();
 
     IssueLink m_bug;

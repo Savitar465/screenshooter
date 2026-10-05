@@ -81,11 +81,26 @@ public:
         QStringList closed;      // claves que quedaron cerradas (o ya lo estaban)
         QStringList failed;      // «CLAVE: motivo» de las que no se pudieron cerrar
         QStringList uncertain;   // claves cuyo cierre se cortó sin respuesta: pueden haberse cerrado
+        int attachmentsUploaded = 0;   // adjuntos de la nota de cierre que entraron en el gestor
     };
     /// Cierra esos bugs en el gestor, uno tras otro, con la transición que ofrezca su flujo, y deja en
     /// el libro el estado con el que quedaron. Uno que falle no para a los demás. Nada se cierra solo:
     /// esto lo pide quien da los bugs por corregidos.
     void closeBugs(const QStringList& keys, std::function<void(const CloseResult&)> done);
+
+    /// Lo que se deja dicho en el gestor al cerrar un bug: cómo se comprobó la corrección y la
+    /// evidencia (capturas, vídeos, GIF…).
+    struct CloseNote {
+        QString comment;
+        QStringList attachments;   // rutas de los ficheros que se suben
+
+        bool isEmpty() const { return comment.trimmed().isEmpty() && attachments.isEmpty(); }
+    };
+    /// ¿Se puede dejar una nota (comentario y adjuntos) al cerrar? Depende del gestor configurado.
+    bool canCommentBugs() const;
+    /// Cierra un bug dejando antes la nota en el gestor. Si la nota no se puede dejar, el bug no se
+    /// cierra: quien lo cierra quiere que la evidencia quede con él. Una nota vacía cierra sin más.
+    void closeBug(const QString& key, const CloseNote& note, std::function<void(const CloseResult&)> done);
 
     void testConnection(std::function<void(const ConnectionResult&)> done);
 

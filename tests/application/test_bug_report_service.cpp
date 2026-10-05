@@ -214,6 +214,48 @@ private slots:
         QCOMPARE(r.failed.size(), 1);
     }
 
+    /// Al cerrar se puede dejar una nota: el comentario y los adjuntos van antes que el cierre, y si
+    /// la nota no entra el bug no se cierra.
+    void closingABugLeavesTheNoteBeforeClosingIt() {
+        AppFixture f;
+        IssueLink bug;
+        bug.key = QStringLiteral("SHOP-7");
+        bug.tracker = QStringLiteral("Jira");
+        f.bugLedger.recordIssue(bug);
+        QVERIFY(f.bugs.canCommentBugs());
+
+        // Sin comentario del gestor, la nota no entra y el bug sigue abierto.
+        f.tracker->mode = testing::FakeIssueTracker::Mode::RejectContent;
+        BugReportService::CloseResult r;
+        f.bugs.closeBug(QStringLiteral("SHOP-7"), {QStringLiteral("Verificado en staging"), {}},
+                        [&](const BugReportService::CloseResult& x) { r = x; });
+        QCOMPARE(r.failed.size(), 1);
+        QVERIFY(f.tracker->closed.isEmpty());
+        QVERIFY(!f.bugLedger.findIssue(QStringLiteral("SHOP-7"))->resolved);
+
+        f.tracker->mode = testing::FakeIssueTracker::Mode::Succeed;
+        f.tracker->comments.clear();
+        const QStringList files{QStringLiteral("/tmp/ok.png"), QStringLiteral("/tmp/ok.mp4")};
+        f.bugs.closeBug(QStringLiteral("SHOP-7"), {QStringLiteral("Verificado en staging"), files},
+                        [&](const BugReportService::CloseResult& x) { r = x; });
+        QCOMPARE(r.closed, QStringList{QStringLiteral("SHOP-7")});
+        QCOMPARE(r.attachmentsUploaded, 2);
+        QCOMPARE(f.tracker->comments, QStringList{QStringLiteral("Verificado en staging")});
+        QCOMPARE(f.tracker->commentAttachments.last(), files);
+        QCOMPARE(f.tracker->closed, QStringList{QStringLiteral("SHOP-7")});
+        QVERIFY(f.bugLedger.findIssue(QStringLiteral("SHOP-7"))->resolved);
+
+        // Sólo con adjuntos, el comentario dice de qué son (el gestor no admite uno vacío).
+        IssueLink other;
+        other.key = QStringLiteral("SHOP-8");
+        other.tracker = QStringLiteral("Jira");
+        f.bugLedger.recordIssue(other);
+        f.bugs.closeBug(QStringLiteral("SHOP-8"), {QString(), {QStringLiteral("/tmp/fix.gif")}},
+                        [&](const BugReportService::CloseResult& x) { r = x; });
+        QCOMPARE(r.closed, QStringList{QStringLiteral("SHOP-8")});
+        QVERIFY(!f.tracker->comments.last().isEmpty());
+    }
+
     /// La pantalla de bugs trae del gestor los que creó QAflow: los que ya están se actualizan con
     /// lo que diga hoy Jira y los que no (reportados desde otro equipo) entran en el libro, con su
     /// caso sacado de las etiquetas.

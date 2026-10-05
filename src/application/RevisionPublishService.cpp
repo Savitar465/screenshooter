@@ -272,16 +272,17 @@ QStringList RevisionPublishService::casesWithoutTest(const QString& issueId, con
 }
 
 void RevisionPublishService::prepareTests(const QString& issueId, const QStringList& caseIds,
-                                          std::function<void(const TestsPrepared&)> done) {
+                                          std::function<void(const TestsPrepared&)> done, bool sync) {
     if (!canPrepareTests()) {
         TestsPrepared refused;
         refused.error = tr("Activa Zephyr en Ajustes para crear los Tests");
         done(refused);
         return;
     }
-    m_zephyr->createTests(issueId, caseIds, [this, issueId, done](const PublishResult& r) {
+    auto prepared = [this, issueId, done](const PublishResult& r) {
         TestsPrepared out;
         out.created = r.testsCreated;
+        out.updated = r.testsUpdated;
         out.problems = r.skipped + r.warnings;
         if (!r.ok) {
             out.error = r.error;
@@ -301,7 +302,9 @@ void RevisionPublishService::prepareTests(const QString& issueId, const QStringL
             out.problems += links.failed;
             done(out);
         });
-    });
+    };
+    if (sync) m_zephyr->syncTests(issueId, caseIds, prepared);
+    else m_zephyr->createTests(issueId, caseIds, prepared);
 }
 
 void RevisionPublishService::finish(const std::shared_ptr<Run>& run, const Outcome& outcome) {

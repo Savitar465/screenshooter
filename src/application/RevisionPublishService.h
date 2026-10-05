@@ -96,6 +96,7 @@ public:
     struct TestsPrepared {
         bool ok = false;
         int created = 0;          // Tests creados ahora
+        int updated = 0;          // Tests que ya existían, puestos al día con su caso
         int linked = 0;           // enlaces nuevos al issue del gestor
         QStringList problems;     // lo que no se pudo crear o enlazar, con su motivo
         QString error;            // lo que impidió empezar
@@ -103,7 +104,9 @@ public:
     /// Lo primero del control de calidad en Zephyr: crea los Tests que les faltan a esos casos del issue
     /// (uno por caso, el que usarán todos sus ciclos) y los enlaza a su issue del gestor, para que desde
     /// el requerimiento se vea con qué se va a probar. Nada se crea solo: lo pide quien prepara el plan.
-    void prepareTests(const QString& issueId, const QStringList& caseIds, std::function<void(const TestsPrepared&)> done);
+    /// Con `sync`, además pone al día los Tests que ya existen (título, descripción y pasos).
+    void prepareTests(const QString& issueId, const QStringList& caseIds, std::function<void(const TestsPrepared&)> done,
+                      bool sync = false);
 
     struct Options {
         bool zephyr = true;

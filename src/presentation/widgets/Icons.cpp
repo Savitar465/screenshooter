@@ -186,6 +186,56 @@ void drawFit(QPainter& p) {
     p.drawRoundedRect(QRectF(8, 9, 8, 6), 1, 1);
 }
 
+/// Caja con una flecha que sale: abrir en su pantalla (o fuera de la aplicación).
+void drawOpen(QPainter& p) {
+    QPainterPath box;
+    box.moveTo(11, 5);
+    box.lineTo(6.5, 5);
+    box.quadTo(5, 5, 5, 6.5);
+    box.lineTo(5, 17.5);
+    box.quadTo(5, 19, 6.5, 19);
+    box.lineTo(17.5, 19);
+    box.quadTo(19, 19, 19, 17.5);
+    box.lineTo(19, 13);
+    p.drawPath(box);
+    p.drawLine(QPointF(11.5, 12.5), QPointF(19, 5));
+    p.drawLine(QPointF(14, 5), QPointF(19, 5));
+    p.drawLine(QPointF(19, 5), QPointF(19, 10));
+}
+
+/// Ojo: ver el detalle (una ejecución).
+void drawEye(QPainter& p) {
+    QPainterPath eye;
+    eye.moveTo(3.5, 12);
+    eye.quadTo(12, 3.5, 20.5, 12);
+    eye.quadTo(12, 20.5, 3.5, 12);
+    p.drawPath(eye);
+    p.drawEllipse(QPointF(12, 12), 2.6, 2.6);
+}
+
+/// Flecha en círculo: volver a ejecutar lo que se rompió.
+void drawRetry(QPainter& p) {
+    p.drawArc(QRectF(5, 5, 14, 14), 60 * 16, 290 * 16);
+    p.drawLine(QPointF(15.5, 4.5), QPointF(16, 8.6));
+    p.drawLine(QPointF(16, 8.6), QPointF(19.8, 7.2));
+}
+
+/// Aspa: quitar (desvincular).
+void drawClose(QPainter& p) {
+    p.drawLine(QPointF(7, 7), QPointF(17, 17));
+    p.drawLine(QPointF(17, 7), QPointF(7, 17));
+}
+
+void drawChevronRight(QPainter& p) {
+    p.drawLine(QPointF(10, 6.5), QPointF(15.5, 12));
+    p.drawLine(QPointF(15.5, 12), QPointF(10, 17.5));
+}
+
+void drawChevronDown(QPainter& p) {
+    p.drawLine(QPointF(6.5, 10), QPointF(12, 15.5));
+    p.drawLine(QPointF(12, 15.5), QPointF(17.5, 10));
+}
+
 } // namespace
 
 QPixmap pixmap(Glyph g, const QString& color, int size) {
@@ -218,6 +268,12 @@ QPixmap pixmap(Glyph g, const QString& color, int size) {
         case Glyph::Blur: drawBlur(p); break;
         case Glyph::Undo: drawUndo(p); break;
         case Glyph::Fit: drawFit(p); break;
+        case Glyph::Open: drawOpen(p); break;
+        case Glyph::Eye: drawEye(p); break;
+        case Glyph::Retry: drawRetry(p); break;
+        case Glyph::Close: drawClose(p); break;
+        case Glyph::ChevronRight: drawChevronRight(p); break;
+        case Glyph::ChevronDown: drawChevronDown(p); break;
     }
     return pm;
 }

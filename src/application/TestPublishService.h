@@ -50,6 +50,9 @@ public:
     /// Crea en Zephyr los Tests que les faltan a esos casos del issue, sin ciclo, y los guarda en él:
     /// son los que se enlazan a su issue del gestor y los que usarán todos sus ciclos.
     void createTests(const QString& issueId, const QStringList& caseIds, std::function<void(const PublishResult&)> done);
+    /// Pone al día en Zephyr los Tests de esos casos del issue: crea los que faltan y a los que ya tienen
+    /// les reescribe título, descripción y pasos con lo que dice hoy el caso.
+    void syncTests(const QString& issueId, const QStringList& caseIds, std::function<void(const PublishResult&)> done);
 
     /// ¿Está configurada la publicación? (gestor Jira, conectado y Zephyr activado en Ajustes).
     bool enabled() const;
@@ -80,6 +83,9 @@ public:
     PublishRequest requestFor(const PlanReport& report, bool update = false) const;
 
 private:
+    /// Lo común de `createTests` y `syncTests`: arma la petición con esos casos (cada uno con su Test,
+    /// si ya lo tiene) y guarda en el issue los que se crean.
+    void prepareTests(const QString& issueId, const QStringList& caseIds, bool sync, std::function<void(const PublishResult&)> done);
     void send(const PlanReport& report, bool update, std::function<void(const PublishResult&)> done);
     /// El nombre de siempre de un ciclo propio: requerimiento, revisión, plan, continuación, fecha y
     /// ambiente. Es el de los ciclos sueltos y el de los que se publicaron antes de los ciclos de fase.

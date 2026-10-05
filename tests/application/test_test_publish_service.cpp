@@ -159,6 +159,33 @@ private slots:
         QCOMPARE(zephyr->testsRequested.size(), 1);   // nada que crear: no se llama a Zephyr
     }
 
+    // Actualizar Zephyr manda todos los casos: los que ya tienen Test, con su clave para reescribirlo, y
+    // los que no, sin ella para crearlo.
+    void syncingTheTestsSendsEveryCaseWithItsTest() {
+        AppFixture f;
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
+        auto zephyr = std::make_shared<FakeTestManagement>();
+        TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
+        publish.setIssues(&f.issues);
+        const QString issueId = issueFor(f);
+        PublishResult out;
+        publish.createTests(issueId, {QStringLiteral("TC-101")}, [&out](const PublishResult& r) { out = r; });
+        QVERIFY(out.ok);
+
+        const QStringList cases{QStringLiteral("TC-101"), QStringLiteral("TC-102")};
+        publish.syncTests(issueId, cases, [&out](const PublishResult& r) { out = r; });
+        QVERIFY(out.ok);
+        QCOMPARE(zephyr->testsSynced.size(), 1);
+        const PublishRequest& sent = zephyr->testsSynced[0];
+        QCOMPARE(sent.cases.size(), 2);
+        QCOMPARE(sent.cases[0].testKey, QStringLiteral("SHOP-101"));   // existe: se reescribe
+        QVERIFY(sent.cases[1].testKey.isEmpty());                      // falta: se crea
+        QVERIFY(!sent.cases[0].design.isEmpty());
+        QCOMPARE(out.testsUpdated, 1);
+        QCOMPARE(out.testsCreated, 1);
+        QCOMPARE(f.issues.find(issueId)->zephyr.tests.value(QStringLiteral("TC-102")), QStringLiteral("SHOP-102"));
+    }
+
     void publishingIsOffUntilZephyrIsEnabledForJira() {
         AppFixture f;
         auto zephyr = std::make_shared<FakeTestManagement>();

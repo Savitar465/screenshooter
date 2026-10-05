@@ -265,6 +265,8 @@ void run(MainWindow& window, AppContext& ctx) {
             ctx.issues->select(first);
             window.navigate(Screen::Issues);
         }},
+        // El detalle de ese issue: la revisión con su stepper y, al lado, el panel con sus datos.
+        {"11b-issue-detalle", [&] { window.openIssue(ctx.issues->selectedId()); }},
         // El parte, en su ventana. Se le da su tamaño a mano porque la pantalla virtual con la que
         // se generan las capturas es más pequeña que cualquier monitor.
         {"04b-bug-nuevo", [&] {

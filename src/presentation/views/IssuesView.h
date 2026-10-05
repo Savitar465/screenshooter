@@ -9,11 +9,13 @@
 #include <QMessageBox>
 #include <QPoint>
 #include <QPointer>
+#include <QSet>
 #include <QWidget>
 #include <functional>
 #include <optional>
 
 class QAction;
+class QBoxLayout;
 class QComboBox;
 class QGridLayout;
 class QFrame;
@@ -60,15 +62,17 @@ class IssueListView;
 /// de los resultados de la revisión en curso, así que un issue sale de ella en cuanto se repite lo roto.
 ///
 /// Al abrir un issue (doble clic, «Abrir el issue», uno nuevo o uno importado) se pasa a su **detalle**,
-/// en tres bloques: lo importado del requerimiento (con lo que cambió y si sigue en la bandeja), **la
-/// revisión paso a paso** y las rondas ya cerradas.
+/// en dos columnas: a la izquierda el trabajo —**la revisión**— y a la derecha un panel con el contexto:
+/// estado, prioridad, fases, el gestor y el origen, el requerimiento importado (con lo que cambió, si
+/// sigue en la bandeja y su ficha plegada) y el historial de rondas cerradas.
 ///
-/// La revisión es el corazón del issue, así que se enseña como lo que es: una serie de pasos —preparar
-/// el plan, ejecutarlo, revisar los bugs, levantar el acta, cerrar la revisión y publicar el resultado—,
-/// cada uno con lo que lleva hecho, su acción y lo que cuelga de él: el plan con sus casos, los ciclos
-/// con sus ejecuciones y los bugs. Así el issue no se lee saltando entre tarjetas sueltas.
+/// La revisión es el corazón del issue, así que se enseña como lo que es: arriba cómo va la ronda (una
+/// barra con lo que salió de sus casos y sus cifras) y debajo sus pasos —preparar el plan, ejecutarlo,
+/// revisar los bugs, levantar el acta, cerrar la revisión y publicar el resultado— como un stepper. Se
+/// ve sólo el paso que toca, con su acción principal destacada y lo que cuelga de él (el plan con sus
+/// casos, los ciclos, los destinos); los demás se abren desde su pestaña. Los bugs van siempre a la vista.
 ///
-/// La representación en el gestor no es trabajo, es contexto: no tiene tarjeta, es el tag de la cabecera
+/// La representación en el gestor no es trabajo, es contexto: no tiene tarjeta, es un tag del panel
 /// —clave y estado— y de su menú cuelgan publicar, vincular, abrir, consultar el estado y desvincular.
 ///
 /// Lo que se prueba de un requerimiento son **planes**: el issue no agrupa casos sueltos, sus casos son
@@ -229,8 +233,23 @@ private:
     QWidget* boardCard(const Issue& issue, const RevisionSnapshot& snapshot, Column column);
     /// Pasa del tablero al detalle del issue elegido (o vuelve).
     void showDetail(bool on);
+    /// Pone el panel lateral del detalle a la derecha o, si la ventana es estrecha, debajo.
+    void placeDetailColumns();
+    /// Enseña en el detalle el paso `index` de la revisión (los demás quedan en su pestaña del stepper).
+    void showStep(int index);
     void loadDetail();
     void refreshRequirement(const Issue& issue);
+    /// Una fila plegable de las listas del detalle (un plan con sus casos, un ciclo con sus ejecuciones):
+    /// la cabecera, con su chevron, y debajo el cuerpo. Se abre y se cierra al pulsar la cabecera, y
+    /// queda como se dejó entre refrescos (`m_expanded`, por `key`).
+    struct Collapsible {
+        QFrame* header = nullptr;
+        QHBoxLayout* head = nullptr;
+        QVBoxLayout* body = nullptr;
+    };
+    Collapsible collapsible(const QString& key, QVBoxLayout* into);
+    /// Abre o cierra la fila plegable de esa cabecera.
+    void toggleSection(QObject* header);
     /// Los planes del issue con sus casos, dentro del paso que manda prepararlos.
     void fillPlans(const Issue& issue, QVBoxLayout* into);
     /// Los resultados del issue —los ciclos de sus planes, con lo que salió de cada caso—, dentro del
@@ -245,7 +264,8 @@ private:
     /// Menú para elegir en qué fases se prueba el issue elegido (sólo QA, sólo PRE…).
     void choosePhases(QWidget* anchor);
     /// Pregunta y crea en Zephyr los Tests que les faltan a esos casos del issue, y los enlaza a su issue.
-    void prepareTests(const QStringList& caseIds);
+    /// Con `sync`, en vez de crear sólo los que faltan, pone al día en Zephyr los Tests de esos casos.
+    void prepareTests(const QStringList& caseIds, bool sync = false);
     /// Aplica un cambio al issue seleccionado sin que el refresco pise lo que se está escribiendo.
     void editSelected(const std::function<void(Issue&)>& mutate);
     void createPlan();
@@ -357,20 +377,27 @@ private:
     QWidget* m_drawer;
     QSplitter* m_boardSplit;   // tablero | panel del issue: el borde se arrastra
     QVBoxLayout* m_drawerLayout;   // se rehace en cada refresco
-    // Detalle
+    // Detalle: la columna del trabajo (la revisión) y, al lado, el panel con los datos del issue.
     QWidget* m_empty;
     QWidget* m_detail;
+    QBoxLayout* m_detailColumns;
+    QWidget* m_sidebar;
     QLabel* m_idLabel;
     QLabel* m_sourceChip;
     QPushButton* m_jiraChip;   // tag del gestor: clave, estado y, en su menú, lo que se puede hacer
     QLineEdit* m_title;
     QComboBox* m_state;
     QComboBox* m_priority;
+    QLabel* m_phaseTrack;
+    QPushButton* m_phasesButton;
     QWidget* m_requirementCard;
     QWidget* m_changes;
     QLabel* m_changesText;
     QWidget* m_missing;
     QLabel* m_missingText;
+    QLabel* m_requirementSummary;
+    QPushButton* m_toggleRequirement;
+    QWidget* m_requirementMore;   // la ficha entera, plegada: se abre con `m_toggleRequirement`
     QLabel* m_requirementInfo;
     QPushButton* m_loadDetail;
     QPushButton* m_openRequirement;
@@ -389,7 +416,23 @@ private:
     QWidget* m_revisionCard;
     QLabel* m_revisionHeader;
     QLabel* m_revisionProgress;
-    QVBoxLayout* m_revisionSteps;   // los pasos, que se rehacen en cada refresco
+    QVBoxLayout* m_progressBar;   // la barra de resultados de la ronda, que se rehace en cada refresco
+    QLabel* m_tileExecuted;
+    QLabel* m_tilePassed;
+    QLabel* m_tileFailed;
+    QLabel* m_tileBlocked;
+    QHBoxLayout* m_stepper;         // una pestaña por paso, que se rehacen en cada refresco
+    QVBoxLayout* m_revisionSteps;   // la tarjeta de cada paso; sólo se ve la del elegido
+    QList<QPushButton*> m_stepTabs;
+    QList<QWidget*> m_stepCards;
+    QList<QString> m_stepColors;    // color de la barra de cada pestaña: hecho, el que toca o pendiente
+    int m_stepChoice = -1;          // paso elegido a mano; -1 = el que toca
+    int m_stepCurrent = -1;         // el que tocaba en el último refresco: si cambia, se vuelve a él
+    QString m_stepIssue;            // issue del último refresco: otro issue empieza por el paso que toca
+    QSet<QString> m_expanded;       // filas plegables abiertas: «plan:PL-0001», «cycle:PR-0003»
+    QWidget* m_bugsSection;
+    QLabel* m_bugsHeader;
+    QVBoxLayout* m_bugsList;
     QWidget* m_historyCard;
     QVBoxLayout* m_revisionsList;
 };

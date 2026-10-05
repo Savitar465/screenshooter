@@ -85,6 +85,15 @@ QStringList TestPublishService::casesWithoutTest(const QString& issueId, const Q
 }
 
 void TestPublishService::createTests(const QString& issueId, const QStringList& caseIds, std::function<void(const PublishResult&)> done) {
+    prepareTests(issueId, casesWithoutTest(issueId, caseIds), false, std::move(done));
+}
+
+void TestPublishService::syncTests(const QString& issueId, const QStringList& caseIds, std::function<void(const PublishResult&)> done) {
+    prepareTests(issueId, caseIds, true, std::move(done));
+}
+
+void TestPublishService::prepareTests(const QString& issueId, const QStringList& caseIds, bool sync,
+                                      std::function<void(const PublishResult&)> done) {
     const Issue* issue = m_issues ? m_issues->find(issueId) : nullptr;
     PublishResult refused;
     if (!enabled()) refused.error = tr("Activa Zephyr en Ajustes para crear los Tests");
@@ -93,11 +102,12 @@ void TestPublishService::createTests(const QString& issueId, const QStringList& 
     PublishRequest req;
     req.versionName = m_settings.tracker().zephyrVersion;
     req.testContext = testContextOf(*issue);
-    for (const auto& caseId : casesWithoutTest(issueId, caseIds)) {
+    for (const auto& caseId : caseIds) {
         const TestCase* c = m_cases.find(caseId);
         if (!c) continue;
         PublishCase pc;
         pc.caseId = caseId;
+        pc.testKey = issue->zephyr.tests.value(caseId).trimmed();   // vacío = hay que crearlo
         pc.title = c->title;
         pc.preconditions = c->preconditions;
         pc.design = c->steps;
@@ -109,13 +119,15 @@ void TestPublishService::createTests(const QString& issueId, const QStringList& 
         done(nothing);
         return;
     }
-    m_zephyr->createTests(m_settings.tracker(), req, [this, issueId, done = std::move(done)](const PublishResult& r) {
+    auto finished = [this, issueId, done = std::move(done)](const PublishResult& r) {
         // Lo creado se guarda aunque otros no salieran: ya existe en Jira y no hay que duplicarlo.
         QHash<QString, QString> created;
         for (auto it = r.createdTests.constBegin(); it != r.createdTests.constEnd(); ++it) created.insert(it.key(), it.value());
         if (m_issues) m_issues->noteZephyrTests(issueId, created);
         done(r);
-    });
+    };
+    if (sync) m_zephyr->syncTests(m_settings.tracker(), req, std::move(finished));
+    else m_zephyr->createTests(m_settings.tracker(), req, std::move(finished));
 }
 
 int TestPublishService::continuationDepth(const PlanRun& plan) const {

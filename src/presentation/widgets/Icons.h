@@ -11,7 +11,9 @@ namespace qaflow::icons {
 enum class Glyph {
     Cases, Plan, Run, History, Bug, Metrics, Issues, Capture, Focus, Annotate,
     // Herramientas del editor de anotaciones.
-    Arrow, Rectangle, Ellipse, Highlight, Text, Blur, Undo, Fit
+    Arrow, Rectangle, Ellipse, Highlight, Text, Blur, Undo, Fit,
+    // Acciones pequeñas de las listas: abrir, ver, reintentar, quitar y plegar o desplegar.
+    Open, Eye, Retry, Close, ChevronRight, ChevronDown
 };
 
 /// Glifo `g` dibujado en `color` sobre un lienzo cuadrado de `size` puntos, listo para HiDPI.

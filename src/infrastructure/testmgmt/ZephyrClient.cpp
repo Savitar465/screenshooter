@@ -47,6 +47,8 @@ struct ZephyrClient::Job {
     QList<Upload> uploads;     // evidencias del caso, ya resueltas a su destino
     /// Sólo se crean los Tests que faltan: sin ciclo, sin ejecuciones (`createTests`).
     bool testsOnly = false;
+    /// Con `testsOnly`, los Tests que ya existen también se reescriben (`syncTests`).
+    bool syncExisting = false;
 
     const PublishCase& current() const { return request.cases[index]; }
     /// ¿Se actualiza un ciclo ya publicado en vez de crear uno?
@@ -268,11 +270,21 @@ void ZephyrClient::publish(const TrackerSettings& s, const PublishRequest& reque
 }
 
 void ZephyrClient::createTests(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) {
+    prepareTests(s, request, false, std::move(done));
+}
+
+void ZephyrClient::syncTests(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) {
+    prepareTests(s, request, true, std::move(done));
+}
+
+void ZephyrClient::prepareTests(const TrackerSettings& s, const PublishRequest& request, bool sync,
+                                std::function<void(const PublishResult&)> done) {
     auto job = std::make_shared<Job>();
     job->settings = s;
     job->request = request;
     job->done = std::move(done);
     job->testsOnly = true;
+    job->syncExisting = sync;
     // Los pasos del Test se crean por la API de Zephyr, así que hace falta la ruta igual que al publicar.
     resolveProject(s, request.versionName, [this, job](bool ok, const Project& project, const QString& error) {
         if (!ok) { job->result.error = error; job->finish(); return; }
@@ -384,8 +396,13 @@ void ZephyrClient::nextCase(const std::shared_ptr<Job>& job) {
     const PublishCase& c = job->current();
     // Si el caso aún no tiene Test se le crea uno a partir del caso; si lo tiene, se reutiliza.
     if (c.testKey.trimmed().isEmpty()) { createTestForCase(job); return; }
-    // Creando sólo los Tests, el que ya existe no se toca.
-    if (job->testsOnly) { ++job->index; nextCase(job); return; }
+    // Preparando sólo los Tests, el que ya existe no se toca, salvo que se pida ponerlo al día.
+    if (job->testsOnly) {
+        if (job->syncExisting) { updateTestForCase(job); return; }
+        ++job->index;
+        nextCase(job);
+        return;
+    }
     // Zephyr crea la ejecución con el id numérico del issue, no con su clave.
     get(jira(job->settings, QStringLiteral("/rest/api/2/issue/%1?fields=id").arg(c.testKey.trimmed())), [this, job](const Response& r) {
         const PublishCase& c = job->current();
@@ -473,6 +490,95 @@ void ZephyrClient::createTestForCase(const std::shared_ptr<Job>& job) {
             });
         });
     });
+}
+
+void ZephyrClient::updateTestForCase(const std::shared_ptr<Job>& job) {
+    const QString key = job->current().testKey.trimmed();
+    auto next = [this, job]() { ++job->index; nextCase(job); };
+    // Los pasos de Zephyr cuelgan del id numérico del issue, no de su clave.
+    get(jira(job->settings, QStringLiteral("/rest/api/2/issue/%1?fields=id").arg(key)), [this, job, key, next](const Response& r) {
+        const PublishCase& c = job->current();
+        if (!r.ok) {
+            job->skip(QCoreApplication::translate("infrastructure", "%1: no se encontró el Test %2").arg(c.caseId, key));
+            next();
+            return;
+        }
+        const QString issueId = r.json.object()[QStringLiteral("id")].toString();
+        const QString context = job->request.testContext.trimmed().isEmpty() ? job->request.cycleName : job->request.testContext;
+        const QJsonObject fields{{"summary", c.title}, {"description", testDescription(c, context)}};
+        sendCustom("PUT", jira(job->settings, QStringLiteral("/rest/api/2/issue/%1").arg(key)),
+                   QJsonDocument(QJsonObject{{"fields", fields}}).toJson(QJsonDocument::Compact),
+                   [this, job, key, issueId, next](const Response& r) {
+                       const PublishCase& c = job->current();
+                       if (!r.ok) {
+                           job->skip(QCoreApplication::translate("infrastructure", "%1: no se pudo actualizar el Test %2 · %3").arg(c.caseId, key, r.error));
+                           next();
+                           return;
+                       }
+                       get(zephyr(job->settings, QStringLiteral("/teststep/%1").arg(issueId)), [this, job, key, issueId, next](const Response& r) {
+                           const PublishCase& c = job->current();
+                           if (!r.ok) {
+                               job->skip(QCoreApplication::translate("infrastructure", "%1: no se pudieron leer los pasos del Test %2 · %3")
+                                             .arg(c.caseId, key, r.error));
+                               next();
+                               return;
+                           }
+                           // Según la versión, la lista a secas o dentro de «stepBeanCollection»; en el orden del Test.
+                           const QJsonArray list = r.json.isArray() ? r.json.array() : r.json.object()[QStringLiteral("stepBeanCollection")].toArray();
+                           auto asString = [](const QJsonValue& v) { return v.isString() ? v.toString() : QString::number(v.toInteger()); };
+                           QList<QPair<int, ExistingStep>> ordered;
+                           for (const auto& v : list) {
+                               const QJsonObject o = v.toObject();
+                               ordered.append({o[QStringLiteral("orderId")].toInt(int(ordered.size())),
+                                               ExistingStep{asString(o[QStringLiteral("id")]), o[QStringLiteral("step")].toString(),
+                                                            o[QStringLiteral("data")].toString(), o[QStringLiteral("result")].toString()}});
+                           }
+                           std::stable_sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+                           QList<ExistingStep> existing;
+                           for (const auto& [order, step] : ordered) existing << step;
+                           syncTestSteps(job, issueId, existing, 0, {}, [job, next](const QStringList& failed) {
+                               job->result.skipped += failed;
+                               ++job->result.testsUpdated;
+                               next();
+                           });
+                       });
+                   });
+    });
+}
+
+void ZephyrClient::syncTestSteps(const std::shared_ptr<Job>& job, const QString& issueId, const QList<ExistingStep>& existing, int index,
+                                 const QStringList& failed, std::function<void(const QStringList&)> done) {
+    const QList<TestStep>& design = job->current().design;
+    if (index >= design.size() && index >= existing.size()) { done(failed); return; }
+    const QString caseId = job->current().caseId;
+    auto continueWith = [this, job, issueId, existing, index, failed, done, caseId](const Response& r, const char* what) {
+        QStringList sofar = failed;
+        // Un paso que no entra no deja el Test a medias: se anota y se sigue con el resto.
+        if (!r.ok)
+            sofar << QCoreApplication::translate("infrastructure", what).arg(caseId, QString::number(index + 1), r.error);
+        syncTestSteps(job, issueId, existing, index + 1, sofar, done);
+    };
+    if (index >= design.size()) {
+        // El caso tiene menos pasos que el Test: el que sobra se quita.
+        sendCustom("DELETE", zephyr(job->settings, QStringLiteral("/teststep/%1/%2").arg(issueId, existing[index].id)), {},
+                   [continueWith](const Response& r) { continueWith(r, QT_TRANSLATE_NOOP("infrastructure", "%1: no se pudo quitar el paso %2 del Test · %3")); });
+        return;
+    }
+    const TestStep& wanted = design[index];
+    const QJsonObject body{{"step", wanted.action}, {"data", wanted.data}, {"result", wanted.expected}};
+    if (index >= existing.size()) {
+        postJson(zephyr(job->settings, QStringLiteral("/teststep/%1").arg(issueId)), QJsonDocument(body),
+                 [continueWith](const Response& r) { continueWith(r, QT_TRANSLATE_NOOP("infrastructure", "%1: no se pudo crear el paso %2 del Test · %3")); });
+        return;
+    }
+    const ExistingStep& have = existing[index];
+    if (have.step == wanted.action && have.data == wanted.data && have.result == wanted.expected) {
+        syncTestSteps(job, issueId, existing, index + 1, failed, done);   // igual: no se toca
+        return;
+    }
+    sendCustom("PUT", zephyr(job->settings, QStringLiteral("/teststep/%1/%2").arg(issueId, have.id)),
+               QJsonDocument(body).toJson(QJsonDocument::Compact),
+               [continueWith](const Response& r) { continueWith(r, QT_TRANSLATE_NOOP("infrastructure", "%1: no se pudo actualizar el paso %2 del Test · %3")); });
 }
 
 void ZephyrClient::executeCase(const std::shared_ptr<Job>& job, const QString& issueId) {

@@ -77,6 +77,7 @@ struct PublishResult {
     int steps = 0;           // pasos con veredicto
     int attachments = 0;     // evidencias subidas
     int testsCreated = 0;    // Tests creados en Jira a partir de casos de QAflow
+    int testsUpdated = 0;    // Tests que ya existían, reescritos con lo que dice hoy su caso (`syncTests`)
     /// Clave del Test creado para cada caso (TC-104 → SHOP-77): es de la ejecución publicada, que la
     /// guarda para reutilizarlo si ese mismo informe se vuelve a publicar.
     QHash<QString, QString> createdTests;
@@ -110,6 +111,16 @@ public:
         Q_UNUSED(s); Q_UNUSED(request);
         PublishResult r;
         r.error = QCoreApplication::translate("core", "Esta herramienta no crea Tests sueltos");
+        done(r);
+    }
+    /// Pone al día los Tests de esos casos: crea los que faltan (como `createTests`) y a los que ya
+    /// existen (`PublishCase::testKey`) les reescribe el título, la descripción y los pasos con lo que
+    /// dice hoy el caso. Los pasos se editan en su sitio —no se borran y se vuelven a crear— para que
+    /// los resultados por paso de las ejecuciones anteriores sigan colgando de ellos.
+    virtual void syncTests(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) {
+        Q_UNUSED(s); Q_UNUSED(request);
+        PublishResult r;
+        r.error = QCoreApplication::translate("core", "Esta herramienta no actualiza Tests");
         done(r);
     }
 

@@ -713,6 +713,64 @@ private slots:
         QCOMPARE(created, 1);
     }
 
+    // Actualizar los Tests reescribe el que ya existe —título y descripción en Jira, pasos en Zephyr
+    // editados en su sitio: el igual no se toca, el distinto se edita, el que sobra se quita— y crea el
+    // que falta. Sin ciclos ni ejecuciones.
+    void syncingTestsRewritesTheExistingOnesInPlace() {
+        FakeHttpServer server;
+        routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+        routeMyself(server, "es_ES");
+        server.route("PUT", "/rest/api/2/issue/SHOP-77/assignee", [](const HttpRequest&) { return HttpResponse::json(204, ""); });
+        server.route("PUT", "/rest/api/2/issue/SHOP-42", [](const HttpRequest&) { return HttpResponse::json(204, ""); });
+        // El Test SHOP-42 (id 10600) tiene tres pasos; el caso ahora tiene dos y el segundo cambió.
+        server.route("GET", "/rest/zapi/latest/teststep/10600", [](const HttpRequest&) {
+            return HttpResponse::json(200, "{\"stepBeanCollection\":["
+                                           "{\"id\":5,\"orderId\":1,\"step\":\"Abrir carrito\",\"data\":\"\",\"result\":\"Se abre\"},"
+                                           "{\"id\":6,\"orderId\":2,\"step\":\"Pagar\",\"data\":\"\",\"result\":\"Cobra\"},"
+                                           "{\"id\":7,\"orderId\":3,\"step\":\"Salir\",\"data\":\"\",\"result\":\"Sale\"}]}");
+        });
+        server.route("PUT", "/rest/zapi/latest/teststep/10600/6", [](const HttpRequest&) { return HttpResponse::json(200, "{}"); });
+        server.route("DELETE", "/rest/zapi/latest/teststep/10600/7", [](const HttpRequest&) { return HttpResponse::json(200, "{}"); });
+
+        PublishCase known = caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado, {});
+        known.title = QStringLiteral("Checkout con cupón");
+        known.design = {TestStep{QStringLiteral("Abrir carrito"), {}, QStringLiteral("Se abre")},
+                        TestStep{QStringLiteral("Pagar con cupón"), QStringLiteral("QA10"), QStringLiteral("Descuenta el 10 %")}};
+        PublishCase fresh = caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {});
+        fresh.design = {TestStep{QStringLiteral("Abrir carrito"), {}, QStringLiteral("Se abre")}};
+        PublishRequest request;
+        request.testContext = QStringLiteral("GREQ 2026997 · Cupones");
+        request.cases = {known, fresh};
+
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.syncTests(settingsFor(server.baseUrl()), request, [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QVERIFY2(out.skipped.isEmpty(), qPrintable(out.skipped.join(QLatin1Char('\n'))));
+        QCOMPARE(out.testsUpdated, 1);
+        QCOMPARE(out.testsCreated, 1);
+
+        bool renamed = false, edited = false, removed = false;
+        for (const auto& r : server.requests) {
+            if (r.method != "GET") QVERIFY2(!r.path.contains("/cycle") && !r.path.contains("/execution"), r.path.constData());
+            QVERIFY2(!(r.method == "PUT" && r.path.endsWith("/teststep/10600/5")), "el paso que no cambió no se toca");
+            if (r.method == "PUT" && r.path == "/rest/api/2/issue/SHOP-42")
+                renamed = bodyOf(r)[QStringLiteral("fields")].toObject()[QStringLiteral("summary")].toString() == QStringLiteral("Checkout con cupón");
+            if (r.method == "PUT" && r.path == "/rest/zapi/latest/teststep/10600/6") {
+                const QJsonObject body = bodyOf(r);
+                edited = body[QStringLiteral("step")].toString() == QStringLiteral("Pagar con cupón") &&
+                         body[QStringLiteral("data")].toString() == QStringLiteral("QA10");
+            }
+            if (r.method == "DELETE" && r.path == "/rest/zapi/latest/teststep/10600/7") removed = true;
+        }
+        QVERIFY(renamed);
+        QVERIFY(edited);
+        QVERIFY(removed);
+    }
+
     void unknownVersionStopsThePublicationBeforeCreatingAnything() {
         FakeHttpServer server;
         routeProject(server);

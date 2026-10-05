@@ -17,6 +17,7 @@ public:
     /// Ciclo nuevo que devuelve cada publicación que crea uno (el 77 si no se dice otro).
     QString nextCycleId = QStringLiteral("77");
     QList<PublishRequest> testsRequested;
+    QList<PublishRequest> testsSynced;
     /// Tests que «crea» `createTests` para cada caso sin clave: TC-101 → SHOP-101 si no se dice otro.
     QHash<QString, QString> testsToCreate;
 
@@ -54,6 +55,17 @@ public:
             ++r.testsCreated;
         }
         done(r);
+    }
+
+    /// Como `createTests`, y además cuenta como actualizados los que ya tenían Test.
+    void syncTests(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) override {
+        testsSynced << request;
+        createTests(s, request, [request, done](PublishResult r) {
+            for (const auto& c : request.cases)
+                if (!c.testKey.isEmpty()) ++r.testsUpdated;
+            done(r);
+        });
+        testsRequested.removeLast();   // la petición es de sincronizar, no de crear
     }
 };
 

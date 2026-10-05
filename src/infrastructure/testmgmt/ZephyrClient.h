@@ -23,6 +23,7 @@ public:
     void testConnection(const TrackerSettings& s, std::function<void(const ConnectionResult&)> done) override;
     void publish(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) override;
     void createTests(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) override;
+    void syncTests(const TrackerSettings& s, const PublishRequest& request, std::function<void(const PublishResult&)> done) override;
 
     /// Ruta detectada de la API ("/rest/zapi/latest"); vacía mientras no se haya detectado.
     QString apiPath() const { return m_api; }
@@ -93,6 +94,22 @@ private:
 
     /// Al actualizar: comprueba que el ciclo sigue existiendo en Zephyr antes de tocarlo.
     void checkCycle(const std::shared_ptr<Job>& job);
+
+    /// Un paso que el Test ya tiene en Zephyr: su id y lo que dice.
+    struct ExistingStep {
+        QString id;
+        QString step;
+        QString data;
+        QString result;
+    };
+    /// Crea o pone al día los Tests de la petición, sin ciclo: lo común de `createTests` y `syncTests`.
+    void prepareTests(const TrackerSettings& s, const PublishRequest& request, bool sync, std::function<void(const PublishResult&)> done);
+    /// Reescribe el Test que ya tiene el caso: título y descripción en Jira y, en Zephyr, sus pasos.
+    void updateTestForCase(const std::shared_ptr<Job>& job);
+    /// Deja los pasos del Test iguales a los del caso: edita los que cambiaron, añade los que faltan y
+    /// quita los que sobran, paso a paso. Devuelve con su motivo lo que no se pudo tocar.
+    void syncTestSteps(const std::shared_ptr<Job>& job, const QString& issueId, const QList<ExistingStep>& existing, int index,
+                       const QStringList& failed, std::function<void(const QStringList& failed)> done);
 
     void nextCase(const std::shared_ptr<Job>& job);
     /// Estrena en Jira el Test del caso que aún no está enlazado a ninguno y sigue con su ejecución.

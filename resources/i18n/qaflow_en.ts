@@ -853,6 +853,10 @@
         <source>Esta herramienta no crea Tests sueltos</source>
         <translation>This tool does not create standalone Tests</translation>
     </message>
+    <message>
+        <source>Esta herramienta no actualiza Tests</source>
+        <translation>This tool does not update Tests</translation>
+    </message>
 </context>
 <context>
     <name>infrastructure</name>
@@ -1402,6 +1406,22 @@
     <message>
         <source>Creado por QAflow a partir del caso %1 para «%2»</source>
         <translation>Created by QAflow from case %1 for “%2”</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo actualizar el Test %2 · %3</source>
+        <translation>%1: could not update Test %2 · %3</translation>
+    </message>
+    <message>
+        <source>%1: no se pudieron leer los pasos del Test %2 · %3</source>
+        <translation>%1: could not read the steps of Test %2 · %3</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo quitar el paso %2 del Test · %3</source>
+        <translation>%1: could not remove step %2 from the Test · %3</translation>
+    </message>
+    <message>
+        <source>%1: no se pudo actualizar el paso %2 del Test · %3</source>
+        <translation>%1: could not update step %2 of the Test · %3</translation>
     </message>
 </context>
 <context>
@@ -2125,7 +2145,7 @@
     </message>
     <message>
         <source>%1: el gestor configurado no admite cerrar con comentario desde QAflow</source>
-        <translation>%1: the configured tracker doesn't support closing with a comment from QAflow</translation>
+        <translation>%1: the configured tracker doesn&apos;t support closing with a comment from QAflow</translation>
     </message>
     <message>
         <source>Evidencia del cierre del bug</source>
@@ -2133,7 +2153,7 @@
     </message>
     <message>
         <source>%1: no se pudo dejar el comentario · %2</source>
-        <translation>%1: the comment couldn't be added · %2</translation>
+        <translation>%1: the comment couldn&apos;t be added · %2</translation>
     </message>
 </context>
 <context>
@@ -3764,10 +3784,6 @@
         <translation>QA status</translation>
     </message>
     <message>
-        <source>REQUERIMIENTO DE GESREQ</source>
-        <translation>GESREQ REQUIREMENT</translation>
-    </message>
-    <message>
         <source>Cargar ficha</source>
         <translation>Load record</translation>
     </message>
@@ -3894,14 +3910,6 @@
     <message>
         <source>Desvincular el plan del issue (el plan no se borra)</source>
         <translation>Unlink the plan from the issue (the plan is not deleted)</translation>
-    </message>
-    <message>
-        <source>Ver</source>
-        <translation>View</translation>
-    </message>
-    <message>
-        <source>Abrir la ejecución en el historial</source>
-        <translation>Open the run in the history</translation>
     </message>
     <message>
         <source>Vincular plan a %1</source>
@@ -4072,10 +4080,6 @@ Create another one anyway?</translation>
         <translation>Generate record…</translation>
     </message>
     <message>
-        <source>Arma el acta de control de calidad (R-213) con lo que hay en el issue y la guarda como .docx</source>
-        <translation>Builds the quality control record (R-213) from the issue and saves it as .docx</translation>
-    </message>
-    <message>
         <source>Cerrar revisión…</source>
         <translation>Close review…</translation>
     </message>
@@ -4090,10 +4094,6 @@ Create another one anyway?</translation>
     <message>
         <source>El requerimiento vuelve a pruebas: abre la ronda siguiente del acta</source>
         <translation>The requirement goes back to testing: opens the next round of the record</translation>
-    </message>
-    <message>
-        <source>nada pendiente</source>
-        <translation>nothing pending</translation>
     </message>
     <message>
         <source>Abrir revisión</source>
@@ -4172,18 +4172,6 @@ Create another one anyway?</translation>
         <translation>No plan of the issue has been run yet.</translation>
     </message>
     <message>
-        <source>REVISIÓN EN CURSO</source>
-        <translation>CURRENT REVISION</translation>
-    </message>
-    <message>
-        <source>EN ZEPHYR</source>
-        <translation>IN ZEPHYR</translation>
-    </message>
-    <message>
-        <source>Ver plan</source>
-        <translation>View plan</translation>
-    </message>
-    <message>
         <source>Abrir el plan de esta ejecución</source>
         <translation>Open the plan of this run</translation>
     </message>
@@ -4210,14 +4198,6 @@ Create another one anyway?</translation>
     <message>
         <source>REVISIÓN %1 · %2</source>
         <translation>REVISION %1 · %2</translation>
-    </message>
-    <message>
-        <source>Cerrada como %1 · %2 de %3 casos ejecutados · %4 bugs (%5 abiertos)</source>
-        <translation>Closed as %1 · %2 of %3 cases executed · %4 bugs (%5 open)</translation>
-    </message>
-    <message>
-        <source>%1 de %2 casos ejecutados · %3 superados · %4 fallidos · %5 bloqueados · %6 bugs (%7 abiertos) · resultado propuesto: %8 (%9)</source>
-        <translation>%1 of %2 cases executed · %3 passed · %4 failed · %5 blocked · %6 bugs (%7 open) · proposed result: %8 (%9)</translation>
     </message>
     <message>
         <source>Preparar el plan de pruebas</source>
@@ -4272,10 +4252,6 @@ Create another one anyway?</translation>
         <translation>Publish the result</translation>
     </message>
     <message>
-        <source>Los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ</source>
-        <translation>The cycles to Zephyr, the result and the record to the tracker and the registration in GESREQ</translation>
-    </message>
-    <message>
         <source>Publicado en %1</source>
         <translation>Published in %1</translation>
     </message>
@@ -4296,24 +4272,12 @@ Create another one anyway?</translation>
         <translation>Opens another testing round of the requirement</translation>
     </message>
     <message>
-        <source>Sin plan todavía. Crea el plan con el que se prueba el requerimiento: sus casos son los casos del issue y sus ejecuciones, sus resultados.</source>
-        <translation>No plan yet. Create the plan the requirement is tested with: its cases are the issue cases and its runs, its results.</translation>
-    </message>
-    <message>
-        <source>    El plan todavía no tiene casos: ábrelo y añádeselos.</source>
-        <translation>    The plan has no cases yet: open it and add some.</translation>
-    </message>
-    <message>
         <source>%1 · pruebas del requerimiento %2 · plan %3 listo</source>
         <translation>%1 · tests of requirement %2 · plan %3 ready</translation>
     </message>
     <message>
         <source>%1 · paso %2</source>
         <translation>%1 · step %2</translation>
-    </message>
-    <message>
-        <source>ESTA REVISIÓN</source>
-        <translation>THIS REVISION</translation>
     </message>
     <message>
         <source>Abrir el bug en el gestor</source>
@@ -4336,10 +4300,6 @@ Create another one anyway?</translation>
         <translation>Run plan…</translation>
     </message>
     <message>
-        <source>Arranca un ciclo del plan: pregunta el ambiente y lleva a la ejecución</source>
-        <translation>Starts a cycle of the plan: asks for the environment and takes you to the run</translation>
-    </message>
-    <message>
         <source>Ejecutar</source>
         <translation>Run</translation>
     </message>
@@ -4360,24 +4320,8 @@ Create another one anyway?</translation>
         <translation>Continue what failed…</translation>
     </message>
     <message>
-        <source>CONTINÚA %1</source>
-        <translation>CONTINUES %1</translation>
-    </message>
-    <message>
-        <source>Continuar</source>
-        <translation>Continue</translation>
-    </message>
-    <message>
         <source>Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo</source>
         <translation>Run the %1 failed or blocked case(s) of this cycle again</translation>
-    </message>
-    <message>
-        <source>REVISIONES ANTERIORES</source>
-        <translation>PREVIOUS REVIEWS</translation>
-    </message>
-    <message>
-        <source>+ Otro plan</source>
-        <translation>+ Another plan</translation>
     </message>
     <message>
         <source>Enlaza al issue un plan que ya existe en el proyecto</source>
@@ -4388,20 +4332,8 @@ Create another one anyway?</translation>
         <translation>%1 run(s) of its plans</translation>
     </message>
     <message>
-        <source> · %1 de %2 casos ejecutados en esta revisión</source>
-        <translation> · %1 of %2 cases run in this review</translation>
-    </message>
-    <message>
-        <source> · arrancar un ciclo del plan abre la revisión y deja el issue en pruebas</source>
-        <translation> · starting a cycle of the plan opens the review and moves the issue to testing</translation>
-    </message>
-    <message>
         <source>Revisar los bugs reportados</source>
         <translation>Review the reported bugs</translation>
-    </message>
-    <message>
-        <source>Los que se reporten en sus ejecuciones salen aquí, cuentan en el acta y se enlazan al publicar</source>
-        <translation>The ones reported in its runs show up here, count in the record and are linked when publishing</translation>
     </message>
     <message>
         <source>%1 bug(s) · %2 abierto(s)</source>
@@ -4426,10 +4358,6 @@ Create another one anyway?</translation>
     <message>
         <source>Falta publicar el resultado de la revisión %1 en %2</source>
         <translation>The result of review %1 has not been published in %2 yet</translation>
-    </message>
-    <message>
-        <source>%1 de %2 ejecutados · %3 superados · %4 fallidos · %5 bloqueados · %6</source>
-        <translation>%1 of %2 run · %3 passed · %4 failed · %5 blocked · %6</translation>
     </message>
     <message>
         <source>PENDIENTE</source>
@@ -4784,10 +4712,6 @@ Create another one anyway?</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <source>Generar con IA…</source>
-        <translation>Generate with AI…</translation>
-    </message>
-    <message>
         <source>Arma un prompt con el requerimiento para ChatGPT u otra IA y añade al plan los casos que devuelva</source>
         <translation>Builds a prompt with the requirement for ChatGPT or another AI and adds the cases it returns to the plan</translation>
     </message>
@@ -4897,28 +4821,12 @@ Create another one anyway?</translation>
         <translation>REVISION %1 · %2 · %3</translation>
     </message>
     <message>
-        <source>Fases: %1</source>
-        <translation>Phases: %1</translation>
-    </message>
-    <message>
         <source>Cada fase se prueba en una o más revisiones. Conforme en una fase la aprueba y se pasa a la siguiente; sólo el Conforme de la última registra el OK en GESREQ y cierra el issue del gestor.</source>
         <translation>Each phase is tested in one or more revisions. Conforming in a phase approves it and moves on to the next; only conforming in the last one registers the OK in GESREQ and closes the tracker issue.</translation>
     </message>
     <message>
-        <source>Se cierra con el resultado del control: conforme (el cierre final) u observado</source>
-        <translation>It is closed with the control result: conforming (the final closure) or observed</translation>
-    </message>
-    <message>
-        <source>Se cierra aprobando %1 (y se pasa a %2) u observada</source>
-        <translation>It is closed approving %1 (moving on to %2) or observed</translation>
-    </message>
-    <message>
         <source>%1 aprobada: la revisión %2 es de %3</source>
         <translation>%1 passed: revision %2 is %3</translation>
-    </message>
-    <message>
-        <source>El requerimiento quedó observado: al corregirlo se abre la revisión %1 en %2</source>
-        <translation>The requirement was observed: once fixed, revision %1 opens in %2</translation>
     </message>
     <message>
         <source>Arranca un ciclo del plan en %1: abre la revisión %2</source>
@@ -5025,10 +4933,6 @@ Create another one anyway?</translation>
         <translation>Its step was retested after the bug and passed: it can be closed</translation>
     </message>
     <message>
-        <source>Fases…</source>
-        <translation>Phases…</translation>
-    </message>
-    <message>
         <source>Elige en qué fases se prueba este requerimiento</source>
         <translation>Choose the phases this requirement is tested in</translation>
     </message>
@@ -5041,10 +4945,6 @@ Create another one anyway?</translation>
         <translation>Zephyr: %1 of %2 case(s) with a Test</translation>
     </message>
     <message>
-        <source>Crear Tests en Zephyr (%1)…</source>
-        <translation>Create Tests in Zephyr (%1)…</translation>
-    </message>
-    <message>
         <source>Crea en Zephyr un Test por caso (el que usarán los ciclos de QA y de PRE) y los enlaza al issue</source>
         <translation>Creates one Test per case in Zephyr (used by the QA and PRE cycles) and links them to the issue</translation>
     </message>
@@ -5052,20 +4952,12 @@ Create another one anyway?</translation>
         <source>El requerimiento tiene que probarse al menos en una fase</source>
         <translation>The requirement has to be tested in at least one phase</translation>
     </message>
-    <message>
-        <source>Crear Tests en Zephyr</source>
-        <translation>Create Tests in Zephyr</translation>
-    </message>
     <message numerus="yes">
         <source>¿Crear en Zephyr %n Test(s), uno por caso, y enlazarlos al issue del requerimiento?</source>
         <translation>
             <numerusform>Create %n Test in Zephyr, one per case, and link it to the requirement issue?</numerusform>
             <numerusform>Create %n Tests in Zephyr, one per case, and link them to the requirement issue?</numerusform>
         </translation>
-    </message>
-    <message>
-        <source>Crear Tests</source>
-        <translation>Create Tests</translation>
     </message>
     <message>
         <source>No se crearon los Tests · %1</source>
@@ -5100,6 +4992,263 @@ Create another one anyway?</translation>
     <message>
         <source>No se puede quitar %1: %2</source>
         <translation>%1 cannot be removed: %2</translation>
+    </message>
+    <message>
+        <source>ejecutados</source>
+        <translation>executed</translation>
+    </message>
+    <message>
+        <source>pasan</source>
+        <translation>passed</translation>
+    </message>
+    <message>
+        <source>fallan</source>
+        <translation>failed</translation>
+    </message>
+    <message>
+        <source>bloqueados</source>
+        <translation>blocked</translation>
+    </message>
+    <message>
+        <source>Estado</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>Editar</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Fases</source>
+        <translation>Phases</translation>
+    </message>
+    <message>
+        <source>Gestor</source>
+        <translation>Tracker</translation>
+    </message>
+    <message>
+        <source>Origen</source>
+        <translation>Source</translation>
+    </message>
+    <message>
+        <source>REQUERIMIENTO</source>
+        <translation>REQUIREMENT</translation>
+    </message>
+    <message>
+        <source>Ver ficha</source>
+        <translation>View record</translation>
+    </message>
+    <message>
+        <source>Ocultar ficha</source>
+        <translation>Hide record</translation>
+    </message>
+    <message>
+        <source>HISTORIAL</source>
+        <translation>HISTORY</translation>
+    </message>
+    <message>
+        <source>Eliminar issue…</source>
+        <translation>Delete issue…</translation>
+    </message>
+    <message>
+        <source>PASO %1 · HECHO</source>
+        <translation>STEP %1 · DONE</translation>
+    </message>
+    <message>
+        <source>PASO %1 · TOCA AHORA</source>
+        <translation>STEP %1 · UP NEXT</translation>
+    </message>
+    <message>
+        <source>PASO %1 · PENDIENTE</source>
+        <translation>STEP %1 · PENDING</translation>
+    </message>
+    <message>
+        <source>Cerrada como %1</source>
+        <translation>Closed as %1</translation>
+    </message>
+    <message>
+        <source>Propuesto: %1</source>
+        <translation>Proposed: %1</translation>
+    </message>
+    <message>
+        <source>Plan</source>
+        <translation>Plan</translation>
+    </message>
+    <message>
+        <source>Más ▾</source>
+        <translation>More ▾</translation>
+    </message>
+    <message>
+        <source>Otro plan</source>
+        <translation>Another plan</translation>
+    </message>
+    <message>
+        <source>Generar casos con IA…</source>
+        <translation>Generate cases with AI…</translation>
+    </message>
+    <message>
+        <source>Arranca un ciclo del plan: pregunta el ambiente y lleva a la ejecución. El primero abre la revisión y deja el issue en pruebas</source>
+        <translation>Starts a cycle of the plan: asks for the environment and takes you to the run. The first one opens the revision and puts the issue in testing</translation>
+    </message>
+    <message>
+        <source>Bugs</source>
+        <translation>Bugs</translation>
+    </message>
+    <message>
+        <source>Sin bugs reportados</source>
+        <translation>No bugs reported</translation>
+    </message>
+    <message>
+        <source>BUGS · %1 ABIERTO(S)</source>
+        <translation>BUGS · %1 OPEN</translation>
+    </message>
+    <message>
+        <source>BUGS</source>
+        <translation>BUGS</translation>
+    </message>
+    <message>
+        <source>Acta</source>
+        <translation>Record</translation>
+    </message>
+    <message>
+        <source>Todavía sin generar</source>
+        <translation>Not generated yet</translation>
+    </message>
+    <message>
+        <source>Arma el acta de control de calidad (R-213) con lo del requerimiento, la ejecución elegida y los bugs de la revisión, y la guarda como .docx</source>
+        <translation>Builds the quality control record (R-213) from the requirement, the chosen run and the revision bugs, and saves it as .docx</translation>
+    </message>
+    <message>
+        <source>Conforme (el cierre final) u observada</source>
+        <translation>Compliant (the final close) or observed</translation>
+    </message>
+    <message>
+        <source>Aprueba %1 y pasa a %2, u observada</source>
+        <translation>Approves %1 and moves to %2, or observed</translation>
+    </message>
+    <message>
+        <source>Zephyr, el gestor y GESREQ</source>
+        <translation>Zephyr, the tracker and GESREQ</translation>
+    </message>
+    <message>
+        <source>Repetir</source>
+        <translation>Repeat</translation>
+    </message>
+    <message>
+        <source>Revisión</source>
+        <translation>Revision</translation>
+    </message>
+    <message>
+        <source>Quedó observado: al corregirlo se abre la revisión %1 en %2</source>
+        <translation>Left observed: once fixed, revision %1 opens in %2</translation>
+    </message>
+    <message>
+        <source>Rev %1 · %2</source>
+        <translation>Rev %1 · %2</translation>
+    </message>
+    <message>
+        <source>Solicita %1</source>
+        <translation>Requested by %1</translation>
+    </message>
+    <message>
+        <source>QA %1 – %2</source>
+        <translation>QA %1 – %2</translation>
+    </message>
+    <message>
+        <source>de esta revisión</source>
+        <translation>from this revision</translation>
+    </message>
+    <message>
+        <source>Plegar</source>
+        <translation>Collapse</translation>
+    </message>
+    <message>
+        <source>Desplegar</source>
+        <translation>Expand</translation>
+    </message>
+    <message>
+        <source>Sin plan todavía: sus casos serán los casos del issue.</source>
+        <translation>No plan yet: its cases will be the issue cases.</translation>
+    </message>
+    <message>
+        <source>Abrir el caso</source>
+        <translation>Open the test case</translation>
+    </message>
+    <message>
+        <source>%1 superados · %2 fallidos · %3 bloqueados</source>
+        <translation>%1 passed · %2 failed · %3 blocked</translation>
+    </message>
+    <message>
+        <source>De la revisión en curso</source>
+        <translation>From the current revision</translation>
+    </message>
+    <message>
+        <source>Continúa %1</source>
+        <translation>Continues %1</translation>
+    </message>
+    <message>
+        <source>Publicado en Zephyr</source>
+        <translation>Published in Zephyr</translation>
+    </message>
+    <message>
+        <source>Ver la ejecución en el historial</source>
+        <translation>View the run in the history</translation>
+    </message>
+    <message>
+        <source>Zephyr: sin Tests todavía</source>
+        <translation>Zephyr: no Tests yet</translation>
+    </message>
+    <message>
+        <source>Publicar en Zephyr (%1)…</source>
+        <translation>Publish to Zephyr (%1)…</translation>
+    </message>
+    <message>
+        <source>Actualizar Zephyr…</source>
+        <translation>Update Zephyr…</translation>
+    </message>
+    <message>
+        <source>Reescribe en Zephyr el título, la descripción y los pasos de los Tests con lo que tienen hoy los casos</source>
+        <translation>Rewrites the title, description and steps of the Tests in Zephyr with what the cases have today</translation>
+    </message>
+    <message>
+        <source>Reescribe en Zephyr los Tests que ya existen con lo que tienen hoy los casos y crea los %1 que faltan</source>
+        <translation>Rewrites the existing Tests in Zephyr with what the cases have today and creates the %1 missing ones</translation>
+    </message>
+    <message numerus="yes">
+        <source>¿Actualizar en Zephyr los Tests de %n caso(s)? Se reescriben su título, su descripción y sus pasos con lo que tienen hoy en QAflow.</source>
+        <translation>
+            <numerusform>Update the Tests of %n case in Zephyr? Their title, description and steps are rewritten with what they have today in QAflow.</numerusform>
+            <numerusform>Update the Tests of %n cases in Zephyr? Their title, description and steps are rewritten with what they have today in QAflow.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Los %n que faltan se crean.</source>
+        <translation>
+            <numerusform>The %n missing one is created.</numerusform>
+            <numerusform>The %n missing ones are created.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Actualizar Zephyr</source>
+        <translation>Update Zephyr</translation>
+    </message>
+    <message>
+        <source>Publicar en Zephyr</source>
+        <translation>Publish to Zephyr</translation>
+    </message>
+    <message>
+        <source>Actualizar</source>
+        <translation>Update</translation>
+    </message>
+    <message>
+        <source>No se actualizó Zephyr · %1</source>
+        <translation>Zephyr was not updated · %1</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n Test(s) actualizado(s) en Zephyr</source>
+        <translation>
+            <numerusform>%n Test updated in Zephyr</numerusform>
+            <numerusform>%n Tests updated in Zephyr</numerusform>
+        </translation>
     </message>
 </context>
 <context>

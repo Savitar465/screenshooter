@@ -32,12 +32,18 @@ private slots:
         QVERIFY(f.history.findPlan(first)->isFinished());
         QCOMPARE(f.history.report(first).brokenCaseIds(), (QStringList{QStringLiteral("TC-102"), QStringLiteral("TC-103")}));
 
+        // Un ciclo suelto (o de una ronda abierta) se continúa reabriéndolo: es el mismo ciclo, en su
+        // ambiente, y sólo vuelven a la cola los casos rotos.
         QVERIFY(f.run.continueCycle(first, QStringLiteral("Staging")));
-        const PlanRun* second = f.history.findPlan(f.run.planRunId());
-        QVERIFY(second);
-        QCOMPARE(second->continuesCycleId, first);
-        QCOMPARE(second->caseIds, (QStringList{QStringLiteral("TC-102"), QStringLiteral("TC-103")}));
-        QCOMPARE(second->environment, QStringLiteral("Staging"));
+        QCOMPARE(f.run.planRunId(), first);
+        QCOMPARE(f.history.plans().size(), 1);
+        const PlanRun* reopened = f.history.findPlan(first);
+        QVERIFY(!reopened->isFinished());
+        QVERIFY(!reopened->isContinuation());
+        QCOMPARE(reopened->continuations, 1);
+        QCOMPARE(reopened->environment, QStringLiteral("QA"));
+        QVERIFY(!f.run.isQueued(QStringLiteral("TC-101")));
+        QVERIFY(f.run.isQueued(QStringLiteral("TC-103")));
 
         // TC-102 se retoma en el paso 2: el 1 viene de la ejecución anterior y ya está marcado.
         QCOMPARE(f.run.state().caseId, QStringLiteral("TC-102"));
@@ -59,6 +65,65 @@ private slots:
         QVERIFY(!resumed.continuesRunId.isEmpty());
         QCOMPARE(f.run.state().caseId, QStringLiteral("TC-103"));   // sigue con el otro caso roto
         QCOMPARE(f.run.state().idx, 0);                             // su único paso se rompió: se repite entero
+
+        // Al terminar, el informe del ciclo es el de todo el plan: lo superado antes y lo repetido ahora.
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        const PlanReport report = f.history.report(first);
+        QVERIFY(report.plan.isFinished());
+        QCOMPARE(report.executed, 3);
+        QCOMPARE(report.passed, 3);
+        QVERIFY(!report.canContinue());
+    }
+
+    // Lo que ya tenía el ciclo sigue siendo suyo al continuarlo: las evidencias de lo superado, las de
+    // los pasos heredados, sus bugs y los Tests de Zephyr con los que ya se publicó.
+    void continuingACycleKeepsItsEvidenceBugsAndZephyrTests() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-102")}, QStringLiteral("Regresión"), QStringLiteral("PL-0001"));
+        const QString cycle = f.run.planRunId();
+        f.store.addShot(QStringLiteral("TC-101"), Screenshot{1, 1, QStringLiteral("a.png"), QStringLiteral("/tmp/qaflow-test/a.png"), {}});
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+        f.run.finish();
+        f.store.addShot(QStringLiteral("TC-102"), Screenshot{2, 1, QStringLiteral("b.png"), QStringLiteral("/tmp/qaflow-test/b.png"), {}});
+        f.run.mark(StepResult::Pass);
+        const QString failedRun = f.run.state().runId;
+        f.run.mark(StepResult::Fail);
+        IssueLink bug;
+        bug.key = QStringLiteral("SHOP-9");
+        bug.caseId = QStringLiteral("TC-102");
+        bug.runId = failedRun;
+        bug.planRunId = cycle;
+        bug.step = 2;
+        bug.createdAt = QDateTime::currentDateTime();
+        f.bugLedger.recordIssue(bug);
+        f.run.finish();
+        // Publicado: cada ejecución con su Test.
+        QHash<QString, QString> keys;
+        for (const auto& run : f.history.runsForPlan(cycle)) keys.insert(run.id, run.caseId == QStringLiteral("TC-101") ? QStringLiteral("SHOP-1") : QStringLiteral("SHOP-2"));
+        f.history.assignTestKeys(keys);
+        f.history.markPublished(cycle, QStringLiteral("77"));
+
+        QVERIFY(f.run.continueCycle(cycle));
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+
+        const PlanReport report = f.history.report(cycle);
+        QCOMPARE(report.passed, 2);
+        QVERIFY(report.plan.isPublished());   // sigue publicado: se actualiza, no se publica otro
+        const PlanReportRow& first = report.rows[0];
+        const PlanReportRow& second = report.rows[1];
+        QCOMPARE(f.history.evidenceOf(first.run).size(), 1);
+        QCOMPARE(f.history.evidenceOf(second.run).size(), 1);   // la del paso 1, heredado
+        QCOMPARE(f.history.evidenceOf(second.run).first().step, 1);
+        QCOMPARE(second.bugs.size(), 1);
+        // Y la ejecución que retomó el caso lleva los bugs de la que se rompió.
+        QCOMPARE(f.history.bugsOfRun(second.run).size(), 1);
+        QCOMPARE(f.history.bugsOfRun(second.run).first().key, QStringLiteral("SHOP-9"));
+        QCOMPARE(first.testKey, QStringLiteral("SHOP-1"));
+        QCOMPARE(second.testKey, QStringLiteral("SHOP-2"));   // el de la ejecución anterior del caso
+        QVERIFY(f.publish.casesNeedingTest(report).isEmpty());
+        QCOMPARE(f.publish.requestFor(report, true).cycleId, QStringLiteral("77"));
     }
 
     void aCycleWithoutBrokenCasesIsNotContinued() {

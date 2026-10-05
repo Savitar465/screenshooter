@@ -58,8 +58,10 @@ public:
     void startSequence(const QStringList& caseIds, const QString& planName = QString(), const QString& planId = QString(),
                        const QString& environment = QString());
     /// Continúa un ciclo terminado: vuelve a ejecutar **sólo sus casos fallados y bloqueados**, cada uno
-    /// retomado en el paso que se rompió (los anteriores conservan su veredicto y su nota). Es la misma
-    /// ronda de pruebas, no otra: el ciclo nuevo cuelga del anterior (`PlanRun::continuesCycleId`).
+    /// retomado en el paso que se rompió (los anteriores conservan su veredicto y su nota).
+    /// **Se reabre el mismo ciclo**: lo ya probado, sus evidencias, sus bugs y su ciclo de Zephyr siguen
+    /// ahí, y lo repetido sustituye a lo roto. El ambiente es el suyo (`environment` sólo se anota si no
+    /// tenía). Si la ronda del issue ya se cerró, `planStarted` lo lleva a la siguiente.
     /// Falso si el ciclo no existe, no terminó, no dejó nada roto o ninguno de sus casos sigue estando.
     bool continueCycle(const QString& planRunId, const QString& environment = QString());
     void restart();

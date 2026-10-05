@@ -370,14 +370,45 @@ CycleStartDialog::Setup MainWindow::cycleSetup(const QString& planId, const QStr
         setup.environment = next.phase;
         setup.phases = true;
         setup.environments = m_ctx.issues->phasesOf(*issue);
-        // Una revisión abierta que ya tiene ciclos es de su fase: otra fase pide cerrarla antes.
-        if (const IssueRevision* open = issue->currentRevision();
-            open && !IssueStore::cyclesOfRevision(*issue, *m_ctx.history, open->number).isEmpty())
-            for (const QString& phase : setup.environments)
-                if (phase.compare(next.phase, Qt::CaseInsensitive) != 0)
-                    setup.blocked.insert(phase, tr("La revisión %1 ya tiene ciclos en %2: para probar en %3, ciérrala antes desde el issue.")
+        // Una revisión abierta que ya tiene ciclos es de su fase. Pasar a una fase posterior es aprobar
+        // ésta: si sus ciclos terminaron y salió limpia, se aprueba al arrancar (sin registrar nada en
+        // GESREQ ni cerrar nada en el gestor); si no, se dice qué falta. Volver a una fase anterior pide
+        // cerrarla antes desde el issue.
+        const IssueRevision* open = issue->currentRevision();
+        const QList<PlanRun> cycles = open ? IssueStore::cyclesOfRevision(*issue, *m_ctx.history, open->number) : QList<PlanRun>{};
+        if (!cycles.isEmpty()) {
+            const QStringList& phases = setup.environments;
+            const int current = int(phases.indexOf(next.phase));
+            const bool running = std::any_of(cycles.cbegin(), cycles.cend(), [](const PlanRun& c) { return !c.isFinished(); });
+            const IssueProgress progress = m_ctx.records ? m_ctx.records->progressFor(issue->id) : IssueProgress{};
+            for (int i = 0; i < phases.size(); ++i) {
+                const QString& phase = phases.at(i);
+                if (i == current) continue;
+                if (i < current || current < 0) {
+                    setup.blocked.insert(phase, tr("La revisión %1 ya tiene ciclos en %2: para volver a %3, ciérrala antes desde el issue.")
                                                     .arg(open->number)
                                                     .arg(next.phase, phase));
+                } else if (running) {
+                    setup.blocked.insert(phase, tr("La revisión %1 tiene un ciclo de %2 sin terminar: termínalo antes de pasar a %3.")
+                                                    .arg(open->number)
+                                                    .arg(next.phase, phase));
+                } else if (progress.suggested != QaOutcome::Conforme) {
+                    const QString why = progress.blockers.isEmpty() ? tr("no quedó conforme") : progress.blockers.join(QStringLiteral(", "));
+                    setup.blocked.insert(phase, tr("%1 todavía no está aprobada en la revisión %2 (%3). Para pasar a %4 tiene que quedar "
+                                                   "conforme en %1; si no, ciérrala como observada desde el issue.")
+                                                    .arg(next.phase)
+                                                    .arg(open->number)
+                                                    .arg(why, phase));
+                } else {
+                    setup.notes.insert(phase, tr("Al arrancar, la revisión %1 se cierra como «Aprobada en %2» y el ciclo abre la revisión %3 en "
+                                                 "%4. No se registra nada en GESREQ ni se cierra nada en el gestor.")
+                                                  .arg(open->number)
+                                                  .arg(next.phase)
+                                                  .arg(open->number + 1)
+                                                  .arg(phase));
+                }
+            }
+        }
         return setup;
     }
     // Un ciclo suelto: los ambientes de siempre y las fases del proyecto, con el último usado propuesto.
@@ -391,14 +422,21 @@ CycleStartDialog::Setup MainWindow::cycleSetup(const QString& planId, const QStr
 void MainWindow::askCycleEnvironment(const QString& planId, const QString& planName) {
     // El ambiente se pregunta al arrancar porque es de este ciclo, no del plan: el mismo plan se prueba
     // en QA y luego en PRE, y cada ejecución tiene que decir de dónde salieron sus resultados.
-    auto* dialog = new CycleStartDialog(cycleSetup(planId, planName), this);
+    const CycleStartDialog::Setup setup = cycleSetup(planId, planName);
+    // Las fases con nota son las que se alcanzan aprobando la revisión abierta.
+    const QString issueId = m_ctx.issues->nextCycleContext(planId).issueId;
+    const QStringList approving = setup.notes.keys();
+    auto* dialog = new CycleStartDialog(setup, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    connect(dialog, &QDialog::accepted, this, [this, planId, dialog]() { beginPlanRun(planId, dialog->environment()); });
+    connect(dialog, &QDialog::accepted, this, [this, planId, dialog, issueId, approving]() {
+        const QString environment = dialog->environment();
+        beginPlanRun(planId, environment, approving.contains(environment) ? issueId : QString());
+    });
     dialog->open();
     updateActions();
 }
 
-void MainWindow::beginPlanRun(const QString& planId, const QString& environment) {
+void MainWindow::beginPlanRun(const QString& planId, const QString& environment, const QString& approve) {
     // Se vuelve a comprobar todo: entre la pregunta y la respuesta puede haber arrancado otra cosa.
     if (!m_ctx.run->state().caseId.isEmpty()) {
         showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
@@ -410,6 +448,8 @@ void MainWindow::beginPlanRun(const QString& planId, const QString& environment)
         showToast(tr("El plan no tiene casos que ejecutar"), theme::Amber);
         return;
     }
+    // Se pasa a la fase siguiente: la revisión abierta queda aprobada en la suya (comprobado al preguntar).
+    if (!approve.isEmpty()) m_ctx.issues->closeRevision(approve, QaOutcome::Conforme);
     m_ctx.plan->setActive(planId);
     m_ctx.run->startSequence(ids, plan->name, planId, environment);
     navigateInto(Screen::Run);
@@ -430,18 +470,21 @@ void MainWindow::continueCycleRun(const QString& planRunId) {
         return;
     }
     CycleStartDialog::Setup setup = cycleSetup(report.plan.planId, report.plan.name);
-    // Continuar es seguir donde se estaba probando: en el ambiente de aquel ciclo. El de un issue no se
-    // cambia (es la fase de su ronda); uno suelto se puede cambiar.
+    // Continuar es seguir con el mismo ciclo, en su ambiente: no se cambia. Sólo un ciclo que no lo
+    // anotó deja elegirlo, y se queda con el que se elija.
     if (!report.plan.environment.trimmed().isEmpty()) setup.environment = report.plan.environment.trimmed();
-    if (setup.phases) {
+    if (setup.phases || !setup.environment.trimmed().isEmpty()) {
         setup.phases = false;
         setup.fixedEnvironment = true;
         setup.blocked.clear();
+        setup.notes.clear();
     }
-    setup.continuation = tr("Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o "
-                            "bloqueado(s), cada uno desde el paso que se rompió.")
+    setup.continuation = tr("Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o bloqueado(s), "
+                            "cada uno desde el paso que se rompió. Es el mismo ciclo: lo ya probado, sus capturas "
+                            "y sus bugs se conservan%3.")
                              .arg(planRunId)
-                             .arg(report.brokenCaseIds().size());
+                             .arg(report.brokenCaseIds().size())
+                             .arg(report.plan.isPublished() ? tr(", y al terminar se actualiza su ciclo de Zephyr") : QString());
     auto* dialog = new CycleStartDialog(setup, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, planRunId, dialog]() { beginContinuation(planRunId, dialog->environment()); });

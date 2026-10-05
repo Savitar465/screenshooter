@@ -823,7 +823,16 @@ void RunView::refresh() {
         if (cycle->revision > 0) parts << tr("revisión %1").arg(cycle->revision);
         if (!cycle->environment.trimmed().isEmpty()) parts << cycle->environment.trimmed();
         QString text;
-        if (cycle->isContinuation()) {
+        if (cycle->wasContinued() && !cycle->isFinished()) {
+            // Continuar reabre el mismo ciclo: lo que pasó sigue en él y sólo se repite lo roto.
+            text = tr("<b>CONTINUANDO EL CICLO %1</b> · se repiten sólo los casos que fallaron o quedaron bloqueados; "
+                      "lo ya superado, sus capturas y sus bugs se conservan")
+                       .arg(cycle->id);
+            if (!parts.isEmpty()) text += QStringLiteral(" · ") + parts.join(QStringLiteral(" · "));
+            if (!m_run.continuesRunId().isEmpty())
+                text += tr("<br>Este caso se retoma en el paso que se rompió; los anteriores vienen de la ejecución %1.")
+                            .arg(m_run.continuesRunId());
+        } else if (cycle->isContinuation()) {
             text = tr("<b>CONTINUANDO LA %1</b> · se repiten sólo los casos que fallaron o quedaron bloqueados en el ciclo %2")
                        .arg(parts.isEmpty() ? tr("ronda de pruebas") : tr("REVISIÓN %1").arg(cycle->revision), cycle->continuesCycleId);
             if (!cycle->environment.trimmed().isEmpty()) text += tr(" · ambiente %1").arg(cycle->environment.trimmed());
@@ -835,7 +844,7 @@ void RunView::refresh() {
         }
         m_continuationText->setText(text);
         m_continuationText->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;")
-                                              .arg(cycle->isContinuation() ? theme::Amber : theme::Muted));
+                                              .arg(cycle->isContinuation() || cycle->wasContinued() ? theme::Amber : theme::Muted));
         m_continuation->setVisible(!text.isEmpty() && !m_focusMode);
     }
 
@@ -1187,6 +1196,9 @@ QList<IssueLink> RunView::bugsOfRun() const {
                                     && bug.createdAt >= r.startedAt;
         if (mine) out.prepend(bug);   // el libro va del primero al último: aquí, el más reciente arriba
     }
+    // Un caso retomado al continuar el ciclo sigue teniendo los bugs de cuando se rompió.
+    for (const auto& bug : m_history.bugsOfRun(m_run.continuesRunId()))
+        if (std::none_of(out.cbegin(), out.cend(), [&bug](const IssueLink& b) { return b.key == bug.key; })) out << bug;
     return out;
 }
 

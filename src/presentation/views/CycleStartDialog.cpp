@@ -43,6 +43,7 @@ CycleStartDialog::CycleStartDialog(const Setup& setup, QWidget* parent) : QDialo
     m_environment = new QComboBox;
     m_environment->setObjectName(QStringLiteral("cycleStartEnvironment"));
     m_blocked = setup.blocked;
+    m_notes = setup.notes;
     if (setup.fixedEnvironment) {
         m_environment->addItem(setup.environment.trimmed());
         m_environment->setEnabled(false);
@@ -106,9 +107,12 @@ QString CycleStartDialog::environment() const { return m_environment->currentTex
 
 void CycleStartDialog::refreshBlocked() {
     const QString reason = m_blocked.value(environment());
+    // Lo que impide arrancar va en ámbar; lo que sólo conviene saber, en verde.
+    const QString text = reason.isEmpty() ? m_notes.value(environment()) : reason;
     if (m_blockedNote) {
-        m_blockedNote->setText(reason);
-        m_blockedNote->setVisible(!reason.isEmpty());
+        m_blockedNote->setText(text);
+        m_blockedNote->setVisible(!text.isEmpty());
+        m_blockedNote->setStyleSheet(QStringLiteral("color:%1;").arg(reason.isEmpty() ? theme::Green : theme::Amber));
     }
     if (m_accept) m_accept->setEnabled(reason.isEmpty());
 }

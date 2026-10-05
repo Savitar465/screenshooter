@@ -48,11 +48,14 @@ public:
 
     /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos). `environment` es el
     /// ambiente en el que se va a probar ("QA", "Staging"…), que acompaña al ciclo hasta Zephyr.
-    /// `continuesCycleId` lo marca como continuación de ese ciclo: hereda su issue y su revisión,
-    /// porque continuar es seguir con la misma ronda de pruebas, no empezar otra.
     QString startPlan(const QString& name, const QStringList& caseIds, const QString& planId = QString(),
-                      const QString& environment = QString(), const QString& continuesCycleId = QString());
+                      const QString& environment = QString());
     void finishPlan(const QString& planRunId);
+    /// Vuelve a abrir un ciclo terminado para continuarlo: sigue siendo el mismo, con sus ejecuciones,
+    /// sus evidencias, sus bugs y su ciclo de Zephyr, y lo que se repita ahora sustituye en el informe a
+    /// lo que se rompió. Su ambiente no cambia; `environment` sólo se anota si no tenía ninguno.
+    /// Falso si no existe o no había terminado.
+    bool reopenPlan(const QString& planRunId, const QString& environment = QString());
     /// Anota de qué control de calidad es el ciclo: el issue del requerimiento y la revisión que
     /// estaba abierta al arrancarlo. Lo llama quien coordina el arranque, en cuanto el issue abre su
     /// ronda; sin issue (ciclo suelto) no hay nada que anotar.
@@ -78,9 +81,13 @@ public:
     /// Añade una ejecución terminada. Respeta el id reservado si trae uno libre; si no, le asigna el
     /// siguiente. Devuelve el registro guardado.
     RunRecord addRun(RunRecord record);
-    /// Bugs que se encontraron en esa ejecución, del más reciente al primero. Salen del libro de
+    /// Bugs que se encontraron en esa ejecución y, si retoma otra (`RunRecord::continuesRunId`), en
+    /// ésa y en las que retomaba a su vez: al continuar un ciclo, el caso sigue teniendo los bugs que se
+    /// reportaron cuando se rompió. Del más reciente al primero, sin repetir. Salen del libro de
     /// `setBugs()`; sin él, ninguno.
     QList<IssueLink> bugsOfRun(const RunRecord& run) const;
+    /// Los de `bugsOfRun` de la ejecución archivada `runId`; ninguno si no existe.
+    QList<IssueLink> bugsOfRun(const QString& runId) const;
     /// Elimina un ciclo de plan con sus ejecuciones y las evidencias de éstas (los ficheros se
     /// liberan a través de TestCaseStore). Si a algún caso se le borró su última ejecución, su
     /// «última ejecución» vuelve a ser la más reciente que quede. Definitivo: no se puede deshacer.

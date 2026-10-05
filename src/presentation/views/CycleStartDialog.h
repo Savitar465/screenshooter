@@ -38,6 +38,9 @@ public:
         QStringList environments;      // los que se ofrecen cuando se elige
         /// Fases en las que no se puede arrancar ahora, con el motivo.
         QHash<QString, QString> blocked;
+        /// Lo que pasará al arrancar en esa fase y conviene saber antes («la revisión 1 se cierra como
+        /// Aprobada en QA»). No impide arrancar.
+        QHash<QString, QString> notes;
         /// Qué ciclo se continúa y con qué casos; vacío = ciclo nuevo con todo el plan.
         QString continuation;
     };
@@ -51,6 +54,7 @@ private:
 
     QComboBox* m_environment;
     QHash<QString, QString> m_blocked;
+    QHash<QString, QString> m_notes;
     QLabel* m_blockedNote = nullptr;
     QPushButton* m_accept = nullptr;
 };

@@ -43,7 +43,7 @@ QStringList TestPublishService::casesNeedingTest(const PlanReport& report) const
     QStringList out;
     for (const auto& row : report.rows) {
         if (!row.executed) continue;
-        const QString key = issue ? issue->zephyr.tests.value(row.caseId, row.run.testKey) : row.run.testKey;
+        const QString key = issue ? issue->zephyr.tests.value(row.caseId, row.zephyrTest()) : row.zephyrTest();
         if (key.trimmed().isEmpty()) out << row.caseId;
     }
     return out;
@@ -196,8 +196,9 @@ PublishRequest TestPublishService::requestFor(const PlanReport& report, bool upd
         pc.caseId = row.caseId;
         pc.runId = row.run.id;
         // El Test de un caso del issue es el del issue (el mismo en todas sus fases); a falta de él, el
-        // que ya tenga la ejecución. En un ciclo suelto, el de la ejecución. Sin ninguno, se crea.
-        pc.testKey = (owner ? owner->zephyr.tests.value(row.caseId, row.run.testKey) : row.run.testKey).trimmed();
+        // que ya tenga el caso en este ciclo (`PlanReportRow::zephyrTest`). En un ciclo suelto, ése. Sin
+        // ninguno, se crea.
+        pc.testKey = (owner ? owner->zephyr.tests.value(row.caseId, row.zephyrTest()) : row.zephyrTest()).trimmed();
         pc.title = row.title;
         pc.verdict = row.run.verdict;
         pc.steps = row.run.steps;

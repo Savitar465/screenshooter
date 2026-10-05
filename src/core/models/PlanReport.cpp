@@ -78,12 +78,20 @@ PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOf
     PlanReport r;
     r.plan = plan;
 
-    // Si un caso se repitió dentro del plan cuenta la última ejecución.
+    // Si un caso se repitió dentro del plan (al continuarlo, o con «Repetir») cuenta la última ejecución.
+    // Su Test de Zephyr es el del caso en este ciclo: si la última todavía no tiene, el de la anterior
+    // que ya se publicó, para que actualizar el ciclo reutilice esa ejecución en vez de estrenar otra.
     QHash<QString, const RunRecord*> latest;
+    QHash<QString, const RunRecord*> published;
     for (const auto& run : runsOfPlan) {
         if (run.planRunId != plan.id) continue;
         const auto it = latest.constFind(run.caseId);
-        if (it == latest.cend() || (*it)->finishedAt < run.finishedAt) latest[run.caseId] = &run;
+        // A igual hora gana la que se archivó después, que va detrás en la lista.
+        if (it == latest.cend() || !(run.finishedAt < (*it)->finishedAt)) latest[run.caseId] = &run;
+        if (!run.testKey.trimmed().isEmpty()) {
+            const auto pub = published.constFind(run.caseId);
+            if (pub == published.cend() || !(run.finishedAt < (*pub)->finishedAt)) published[run.caseId] = &run;
+        }
         r.durationSecs += run.durationSecs;
     }
 
@@ -96,7 +104,8 @@ PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOf
         if (const auto it = latest.constFind(caseId); it != latest.cend()) {
             row.executed = true;
             row.run = **it;
-            row.testKey = row.run.testKey;
+            row.testKey = row.run.testKey.trimmed().isEmpty() && published.contains(caseId) ? published.value(caseId)->testKey
+                                                                                            : row.run.testKey;
             row.title = row.run.caseTitle;
             row.suite = row.run.suite;
             ++r.executed;

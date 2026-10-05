@@ -17,12 +17,18 @@ struct PlanReportRow {
     QString title;
     QString suite;
     QString jiraKey;          // historia de Jira enlazada al caso
-    QString testKey;          // Test de Zephyr creado para esta ejecución al publicar el informe (vacío si no se publicó)
+    /// Test de Zephyr del caso en este ciclo: el de su última ejecución o, si ésta todavía no se publicó
+    /// (se repitió al continuar el ciclo), el de la anterior que sí. Vacío si no se publicó nunca.
+    QString testKey;
     bool executed = false;
     RunRecord run;            // válido sólo si executed (la última ejecución de ese caso dentro del plan)
     /// Bugs de ese caso reportados mientras corría el ciclo, del más reciente al primero. Vacío si el
     /// informe se construyó sin el libro de bugs.
     QList<IssueLink> bugs;
+
+    /// El Test de Zephyr con el que se publica la fila: el del caso en el ciclo o, si no se anotó, el de
+    /// su ejecución.
+    QString zephyrTest() const { return (testKey.trimmed().isEmpty() ? run.testKey : testKey).trimmed(); }
 };
 
 /// Informe de una ejecución de plan. Se calcula a partir del historial; no se persiste.

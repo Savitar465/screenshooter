@@ -249,16 +249,20 @@ private slots:
         QCOMPARE(IssueStore::cyclesOfRevision(*session.issues->find(issueId), *session.history, 1).size(), 1);
         QCOMPARE(IssueStore::cyclesOfRevision(*session.issues->find(issueId), *session.history, 2).size(), 1);
 
-        // Y continuar lo que se rompió en una ronda ya cerrada es volver a probar: abre la siguiente y
-        // el ciclo de la continuación es de ella, no de la ronda que quedó observada.
+        // Y continuar lo que se rompió en una ronda ya cerrada sigue con el mismo ciclo (sus capturas, sus
+        // bugs y su Zephyr), que pasa a la ronda siguiente: la que se abre para volver a probar.
         session.run->mark(StepResult::Fail);
         session.run->finish();
         session.issues->closeRevision(issueId, QaOutcome::Observado);
         QVERIFY(session.run->continueCycle(secondId, QStringLiteral("QA")));
-        const PlanRun* third = session.history->findPlan(session.run->planRunId());
-        QVERIFY(third);
-        QCOMPARE(third->continuesCycleId, secondId);
-        QCOMPARE(third->revision, 3);
+        QCOMPARE(session.run->planRunId(), secondId);
+        QCOMPARE(session.history->plans().size(), 2);
+        const PlanRun* reopened = session.history->findPlan(secondId);
+        QVERIFY(reopened);
+        QVERIFY(!reopened->isContinuation());
+        QCOMPARE(reopened->continuations, 1);
+        QCOMPARE(reopened->revision, 3);
+        QCOMPARE(reopened->environment, QStringLiteral("Producción"));   // el suyo, no el que se pidió
         QCOMPARE(session.issues->find(issueId)->revisions.size(), 3);
 
         // Las fases son las del proyecto, y cambiarlas llega a la sesión abierta: la ronda siguiente a una

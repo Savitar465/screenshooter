@@ -2169,6 +2169,7 @@ private slots:
         f.app.issues.openRevision(id);
         f.app.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Plan GREQ 2026997"), planId);
         const QString firstCycle = f.app.run.planRunId();
+        f.app.history.noteCycleRevision(firstCycle, id, 1);   // lo que hace `ProjectSession` al arrancarlo
         while (!f.app.run.state().finished) f.app.run.mark(StepResult::Fail);   // deja el caso fallado
         f.app.run.finish();
         f.app.issues.select(id);
@@ -2206,8 +2207,8 @@ private slots:
         QVERIFY2(f.liveLabel("issueStepPublishDetail")->text().startsWith(QStringLiteral("Publicado en")),
                  qPrintable(f.liveLabel("issueStepPublishDetail")->text()));
 
-        // Y al lado de lo que toca se ofrece volver a probar sólo lo que se rompió: eso abre la revisión
-        // siguiente y el ciclo nuevo es de ella, no de la ronda ya cerrada.
+        // Y al lado de lo que toca se ofrece volver a probar sólo lo que se rompió: sigue con el mismo
+        // ciclo, con lo que ya tenía.
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         auto* retry = f.window->findChild<QPushButton*>(QStringLiteral("issueNextAlso"));
         QVERIFY(retry);
@@ -2215,11 +2216,12 @@ private slots:
         retry->click();
         QVERIFY(f.answerCycleDialog());
         QCOMPARE(f.window->currentScreen(), Screen::Run);
-        const PlanRun* cycle = f.app.history.findPlan(f.app.run.planRunId());
+        QCOMPARE(f.app.run.planRunId(), firstCycle);
+        const PlanRun* cycle = f.app.history.findPlan(firstCycle);
         QVERIFY(cycle);
-        QCOMPARE(cycle->continuesCycleId, firstCycle);
-        // Que ese ciclo sea ya de la revisión siguiente lo pone en pie `ProjectSession` (esta ventana
-        // monta los servicios a mano): lo comprueba `startingAPlanCycleStampsTheIssueAndItsRevisionOnIt`.
+        QCOMPARE(cycle->continuations, 1);
+        // Que ese ciclo pase a la revisión siguiente lo pone en pie `ProjectSession` (esta ventana monta
+        // los servicios a mano): lo comprueba `startingAPlanCycleStampsTheIssueAndItsRevisionOnIt`.
     }
 
     // Una ronda que se cerró sin publicar se termina desde su fila del historial: el issue ya está
@@ -2485,36 +2487,78 @@ private slots:
         menu->close();
     }
 
-    // Con ciclos ya ejecutados en la revisión, arrancar en otra fase se explica y no se deja.
-    void theCycleDialogExplainsWhyAnotherPhaseCannotStartYet() {
+    // Con los ciclos de QA terminados, arrancar en PRE es aprobar QA: si salió limpia, el diálogo lo avisa
+    // y lo hace al arrancar; si no, dice qué falta y no deja.
+    void startingPreApprovesACleanQaRevision() {
         WindowFixture f;
         const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
         const QString planId = f.app.plans.activeId();
+        const QStringList cases = f.app.plans.orderedCaseIds(planId);
         f.app.issues.linkPlan(issueId, planId);
         f.app.issues.select(issueId);
         f.app.issues.openRevision(issueId);
-        const QString cycle = f.app.history.startPlan(QStringLiteral("Regresión"), {f.app.plans.orderedCaseIds(planId).first()}, planId,
-                                                      QStringLiteral("QA"));
-        f.app.history.noteCycleRevision(cycle, issueId, 1);
-        f.app.history.finishPlan(cycle);
+        // Un ciclo de QA, ya terminado, con un solo caso: los demás quedan sin ejecutar.
+        auto cycleOf = [&f, &planId, &issueId](const QStringList& ids) {
+            const QString cycle = f.app.history.startPlan(QStringLiteral("Regresión"), ids, planId, QStringLiteral("QA"));
+            f.app.history.noteCycleRevision(cycle, issueId, 1);
+            for (const auto& id : ids) {
+                RunRecord run;
+                run.caseId = id;
+                run.planRunId = cycle;
+                run.verdict = Verdict::Superado;
+                run.startedAt = QDateTime::currentDateTime();
+                run.finishedAt = run.startedAt.addSecs(30);
+                f.app.history.addRun(run);
+            }
+            f.app.history.finishPlan(cycle);
+        };
+        cycleOf({cases.first()});
         f.window->navigate(Screen::Issues);
 
-        auto runButton = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issueStepRun")); };
-        QTRY_VERIFY(runButton() && runButton()->isEnabled());
-        runButton()->click();
-        auto* dialog = f.window->findChild<CycleStartDialog*>();
+        // Un clic, un diálogo: el botón de ejecutar se busca cuando ya está, y se pulsa una sola vez.
+        auto openDialog = [&f]() -> CycleStartDialog* {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            const auto before = f.window->findChildren<CycleStartDialog*>();
+            auto* run = f.window->findChild<QPushButton*>(QStringLiteral("issueStepRun"));
+            if (!run || !run->isEnabled()) return nullptr;
+            run->click();
+            for (auto* dialog : f.window->findChildren<CycleStartDialog*>())
+                if (!before.contains(dialog)) return dialog;
+            return nullptr;
+        };
+        QTRY_VERIFY(f.window->findChild<QPushButton*>(QStringLiteral("issueStepRun")));
+        CycleStartDialog* dialog = openDialog();
         QVERIFY(dialog);
         auto* combo = dialog->findChild<QComboBox*>(QStringLiteral("cycleStartEnvironment"));
         auto* accept = dialog->findChild<QPushButton*>(QStringLiteral("cycleStartAccept"));
         auto* note = dialog->findChild<QLabel*>(QStringLiteral("cycleStartBlocked"));
         QVERIFY(combo && accept && note);
-        QVERIFY(accept->isEnabled());                 // QA, la de la revisión
         combo->setCurrentText(QStringLiteral("PRE"));
-        QVERIFY(!accept->isEnabled());
-        QVERIFY2(note->text().contains(QStringLiteral("ciérrala")), qPrintable(note->text()));
-        combo->setCurrentText(QStringLiteral("QA"));
-        QVERIFY(accept->isEnabled());
+        QVERIFY(!accept->isEnabled());   // QA no quedó completa: falta ejecutar casos
+        QVERIFY2(note->text().contains(QStringLiteral("sin ejecutar")), qPrintable(note->text()));
         dialog->reject();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+
+        // Ejecutado todo y superado: PRE se puede arrancar, y QA queda aprobada al hacerlo.
+        cycleOf(cases);
+        dialog = openDialog();
+        QVERIFY(dialog);
+        combo = dialog->findChild<QComboBox*>(QStringLiteral("cycleStartEnvironment"));
+        accept = dialog->findChild<QPushButton*>(QStringLiteral("cycleStartAccept"));
+        note = dialog->findChild<QLabel*>(QStringLiteral("cycleStartBlocked"));
+        combo->setCurrentText(QStringLiteral("PRE"));
+        QVERIFY2(accept->isEnabled(), qPrintable(note->text()));
+        QVERIFY2(note->text().contains(QStringLiteral("Aprobada en QA")), qPrintable(note->text()));
+        accept->click();
+
+        const Issue* issue = f.app.issues.find(issueId);
+        QVERIFY(issue->revisions.first().outcome == QaOutcome::Conforme);
+        QVERIFY(!issue->revisions.first().isOpen());
+        QVERIFY(issue->state == IssueState::Testing);   // aprobar QA no termina nada
+        const PlanRun* started = f.app.history.findPlan(f.app.run.planRunId());
+        QVERIFY(started);
+        QCOMPARE(started->environment, QStringLiteral("PRE"));
+        QCOMPARE(f.app.issues.nextCycleContext(planId).phase, QStringLiteral("PRE"));
     }
 
     // Con Zephyr activado, el paso 1 del issue crea los Tests de sus casos (uno por caso, el de todas sus
@@ -2791,12 +2835,18 @@ private slots:
         back->click();
         QVERIFY(!back->isVisible());
 
+        // La ronda sigue abierta: continuar reabre el mismo ciclo, con TC-101 ya superado dentro.
         f.window->findChild<QPushButton*>(QStringLiteral("issueNextAction"))->click();
         QVERIFY(f.answerCycleDialog(QStringLiteral("QA")));
         QCOMPARE(f.window->currentScreen(), Screen::Run);
-        const PlanRun* cycle = f.app.history.findPlan(f.app.run.planRunId());
+        QCOMPARE(f.app.run.planRunId(), planRunId);
+        const PlanRun* cycle = f.app.history.findPlan(planRunId);
         QVERIFY(cycle);
-        QCOMPARE(cycle->continuesCycleId, planRunId);
+        QVERIFY(!cycle->isFinished());
+        QVERIFY(!cycle->isContinuation());
+        QCOMPARE(cycle->continuations, 1);
+        QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-102"));
+        QCOMPARE(f.app.history.report(planRunId).passed, 1);
     }
 
     // La tarjeta del issue se maneja sin salir del tablero: su botón hace lo siguiente que toca, su menú
@@ -2874,8 +2924,8 @@ private slots:
         QTRY_VERIFY(f.app.issues.find(issueId)->state == IssueState::Done);
     }
 
-    // Lo que falló o quedó bloqueado se retoma desde el informe: el ciclo nuevo repite sólo esos casos,
-    // cuelga del anterior y la pantalla de ejecución dice que se está continuando la revisión.
+    // Lo que falló o quedó bloqueado se retoma desde el informe: con la ronda abierta se reabre el mismo
+    // ciclo, que repite sólo esos casos, y la pantalla de ejecución dice que se está continuando.
     void theReportContinuesTheCycleWithItsBrokenCases() {
         WindowFixture f;
         const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
@@ -2891,6 +2941,14 @@ private slots:
         f.app.run.finish();
         f.app.run.mark(StepResult::Pass);                                       // TC-102, paso 1
         f.app.run.mark(StepResult::Fail);                                       // TC-102, paso 2
+        IssueLink bug;   // reportado desde el paso que falló
+        bug.key = QStringLiteral("SHOP-88");
+        bug.caseId = QStringLiteral("TC-102");
+        bug.runId = f.app.run.state().runId;
+        bug.planRunId = planRunId;
+        bug.step = 2;
+        bug.createdAt = QDateTime::currentDateTime();
+        f.app.bugLedger.recordIssue(bug);
         f.window->finishRun();
         f.window->navigate(Screen::Historial);
         auto* history = f.window->findChild<HistoryView*>();
@@ -2903,12 +2961,15 @@ private slots:
         proceed->click();
         QVERIFY(f.answerCycleDialog(QStringLiteral("QA")));
 
-        // Arrancó la continuación: mismo issue y misma revisión, sólo con el caso roto.
+        // Arrancó la continuación en el mismo ciclo: mismo issue y misma revisión, y sólo el caso roto en
+        // la cola (TC-101 sigue superado dentro del ciclo).
         QCOMPARE(f.window->currentScreen(), Screen::Run);
-        const PlanRun* cycle = f.app.history.findPlan(f.app.run.planRunId());
+        QCOMPARE(f.app.run.planRunId(), planRunId);
+        const PlanRun* cycle = f.app.history.findPlan(planRunId);
         QVERIFY(cycle);
-        QCOMPARE(cycle->continuesCycleId, planRunId);
-        QCOMPARE(cycle->caseIds, QStringList{QStringLiteral("TC-102")});
+        QCOMPARE(cycle->continuations, 1);
+        QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-102"));
+        QVERIFY(!f.app.run.isQueued(QStringLiteral("TC-101")));
         QCOMPARE(cycle->revision, 1);
         QCOMPARE(cycle->issueId, issueId);
 
@@ -2920,6 +2981,9 @@ private slots:
         QVERIFY2(text.contains(QStringLiteral("CONTINUANDO")) && text.contains(planRunId), qPrintable(text));
         QCOMPARE(f.app.run.state().idx, 1);
         QVERIFY(f.app.run.state().results[0].inherited);
+        // Y el bug que se reportó cuando se rompió sigue con el caso.
+        QTRY_VERIFY(f.window->findChild<QPushButton*>(QStringLiteral("runBug-SHOP-88")));
+        QCOMPARE(f.window->findChild<QPushButton*>(QStringLiteral("runBugsTab"))->text(), QStringLiteral("Bugs · 1"));
     }
 
     // La columna de la derecha tiene dos pestañas: las capturas y los bugs de la ejecución, los dos

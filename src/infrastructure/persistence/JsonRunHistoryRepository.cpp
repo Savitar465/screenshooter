@@ -68,7 +68,7 @@ QJsonObject toJson(const PlanRun& p) {
         {"id", p.id}, {"planId", p.planId}, {"name", p.name}, {"caseIds", QJsonArray::fromStringList(p.caseIds)},
         {"startedAt", isoOrEmpty(p.startedAt)}, {"finishedAt", isoOrEmpty(p.finishedAt)},
         {"issueId", p.issueId}, {"revision", p.revision}, {"environment", p.environment},
-        {"continuesCycleId", p.continuesCycleId},
+        {"continuesCycleId", p.continuesCycleId}, {"continuations", p.continuations},
         {"zephyrCycleId", p.zephyrCycleId}, {"publishedAt", isoOrEmpty(p.publishedAt)},
     };
 }
@@ -85,6 +85,7 @@ PlanRun planFromJson(const QJsonObject& o) {
     p.revision = o["revision"].toInt();
     p.environment = o["environment"].toString();
     p.continuesCycleId = o["continuesCycleId"].toString();
+    p.continuations = o["continuations"].toInt();
     p.zephyrCycleId = o["zephyrCycleId"].toString();
     p.publishedAt = QDateTime::fromString(o["publishedAt"].toString(), Qt::ISODate);
     return p;

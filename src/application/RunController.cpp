@@ -189,15 +189,16 @@ bool RunController::continueCycle(const QString& planRunId, const QString& envir
         resume.insert(row.caseId, row.run);
     }
     if (caseIds.isEmpty()) return false;
-    // Lo que hace falta del ciclo que se continúa se copia ahora: apuntar un ciclo nuevo reubica la
-    // lista del historial y el puntero deja de valer. Con él se iba el plan del aviso de arranque, y
-    // sin plan nadie abría la revisión siguiente ni sellaba con ella el ciclo de la continuación.
-    const QString name = cycle->name, planId = cycle->planId, previous = cycle->id;
+    // Se copia antes de cerrar lo que estuviera en curso: cerrar escribe en el historial.
+    const QString planId = cycle->planId;
 
     commitRun(false);
     closePlan();
+    // Continuar es seguir con el mismo ciclo: se reabre y sólo se ponen en cola sus casos rotos. El aviso
+    // de arranque lo lleva a la ronda abierta del issue (o abre la siguiente si la suya ya se cerró).
+    if (!m_history.reopenPlan(planRunId, environment)) return false;
     m_resume = resume;
-    m_planRunId = m_history.startPlan(name, caseIds, planId, environment, previous);
+    m_planRunId = planRunId;
     m_queue = caseIds.mid(1);
     begin(caseIds.first());
     changed();

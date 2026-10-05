@@ -89,7 +89,7 @@ PlanReport RunHistoryStore::report(const QString& planRunId) const {
 }
 
 QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseIds, const QString& planId,
-                                  const QString& environment, const QString& continuesCycleId) {
+                                  const QString& environment) {
     if (caseIds.isEmpty()) return {};
     PlanRun p;
     p.id = nextId(m_history.plans, QStringLiteral("PR-"));
@@ -97,13 +97,6 @@ QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseI
     p.name = name;
     p.caseIds = caseIds;
     p.environment = environment.trimmed();
-    // Continuar es seguir con la misma ronda: el ciclo nace con el issue y la revisión del que continúa
-    // (si el issue tiene otra ronda abierta, `noteCycleRevision` la corrige después).
-    if (const PlanRun* previous = continuesCycleId.isEmpty() ? nullptr : findPlan(continuesCycleId)) {
-        p.continuesCycleId = previous->id;
-        p.issueId = previous->issueId;
-        p.revision = previous->revision;
-    }
     p.startedAt = QDateTime::currentDateTime();
     m_history.plans.append(p);
     persist();
@@ -137,6 +130,19 @@ void RunHistoryStore::finishPlan(const QString& planRunId) {
         persist();
         return;
     }
+}
+
+bool RunHistoryStore::reopenPlan(const QString& planRunId, const QString& environment) {
+    for (auto& p : m_history.plans) {
+        if (p.id != planRunId) continue;
+        if (!p.isFinished()) return false;
+        p.finishedAt = QDateTime();
+        if (p.environment.trimmed().isEmpty()) p.environment = environment.trimmed();
+        ++p.continuations;
+        persist();
+        return true;
+    }
+    return false;
 }
 
 int RunHistoryStore::adoptLooseEvidence(const QString& runningCaseId) {
@@ -185,11 +191,24 @@ QString RunHistoryStore::reserveRunId() const {
 
 QList<IssueLink> RunHistoryStore::bugsOfRun(const RunRecord& run) const {
     if (!m_bugs) return {};
+    // La cadena de ejecuciones que se retoman es finita, pero se acota por si un history.json editado a
+    // mano la cerrara en círculo.
+    QList<const RunRecord*> chain{&run};
+    for (const RunRecord* r = &run; !r->continuesRunId.isEmpty() && chain.size() < 100;) {
+        r = findRun(r->continuesRunId);
+        if (!r || chain.contains(r)) break;
+        chain << r;
+    }
     QList<IssueLink> out;
     for (const auto& bug : m_bugs->issues())
-        if (PlanReport::foundIn(run, bug)) out << bug;
+        if (std::any_of(chain.cbegin(), chain.cend(), [&bug](const RunRecord* r) { return PlanReport::foundIn(*r, bug); })) out << bug;
     std::sort(out.begin(), out.end(), [](const IssueLink& a, const IssueLink& b) { return a.createdAt > b.createdAt; });
     return out;
+}
+
+QList<IssueLink> RunHistoryStore::bugsOfRun(const QString& runId) const {
+    const RunRecord* run = runId.isEmpty() ? nullptr : findRun(runId);
+    return run ? bugsOfRun(*run) : QList<IssueLink>{};
 }
 
 RunRecord RunHistoryStore::addRun(RunRecord record) {

@@ -405,9 +405,22 @@ corta la ejecución: un bloqueo se queda en su paso y se sigue navegando por el 
 
 Un requerimiento se corrige y se vuelve a probar, y repetir el plan entero es tiempo tirado: lo que
 hay que volver a ver es **lo que falló o quedó bloqueado**. `RunController::continueCycle(planRunId)`
-abre un ciclo nuevo con sólo esos casos (`PlanReport::brokenCaseIds()`, en el orden del plan y sin los
-que ya no están en el catálogo) que **cuelga del anterior** (`PlanRun::continuesCycleId`) y hereda su
-issue y su revisión: continuar es seguir con la misma ronda, no abrir otra.
+pone en la cola sólo esos casos (`PlanReport::brokenCaseIds()`, en el orden del plan y sin los que ya
+no están en el catálogo).
+
+**Se reabre el mismo ciclo** (`RunHistoryStore::reopenPlan`, que borra su fin y suma
+`PlanRun::continuations`): lo ya superado, sus
+evidencias, sus bugs (`IssueLink::planRunId`) y su ciclo de Zephyr siguen siendo suyos, y el informe
+toma de cada caso su última ejecución, así que lo repetido sustituye a lo roto. Al terminar, «Actualizar
+en Zephyr» manda al mismo ciclo las ejecuciones nuevas sobre los Tests que ya tenían
+(`PlanReportRow::testKey` cae al de la ejecución anterior del caso si la nueva aún no tiene).
+
+Los bugs del caso viajan con él: `RunHistoryStore::bugsOfRun` cuenta también los de la ejecución que se
+retoma (`RunRecord::continuesRunId`), y la pestaña «Bugs» de la ejecución los enseña.
+
+Si la ronda del issue **ya se cerró** (quedó observada), el aviso de arranque (`planStarted` →
+`notePlanStarted`) abre la siguiente y el ciclo reabierto pasa a ella. Los historiales anteriores pueden
+tener ciclos de continuación aparte (`PlanRun::continuesCycleId`); se siguen leyendo y enseñando.
 
 Cada caso, además, **se retoma en el paso que se rompió**: `resumeFrom()` copia los veredictos y las
 notas de los pasos anteriores al primer fallo o bloqueo (`RunRecord::brokenStepIndex()`) y deja
@@ -418,16 +431,18 @@ nada a partir del primer paso que ya no diga lo mismo: lo que cambió hay que pr
 siempre empieza de cero —el tiempo es el de ahora— y la ejecución archivada recuerda a cuál retoma
 (`RunRecord::continuesRunId`).
 
-La pantalla de ejecución lo dice bajo la barra del caso: «CONTINUANDO LA REVISIÓN 2 · se repiten sólo
-los casos que fallaron o quedaron bloqueados en el ciclo PR-0003», con el ambiente y, en el caso en
-curso, de qué ejecución vienen sus pasos heredados. Un ciclo normal enseña ahí su ronda y su ambiente.
+La pantalla de ejecución lo dice bajo la barra del caso: «CONTINUANDO EL CICLO PR-0003 · se repiten sólo
+los casos que fallaron o quedaron bloqueados» (los ciclos de continuación antiguos, «CONTINUANDO LA
+REVISIÓN 2…»), con la ronda, el ambiente y, en el caso en curso, de qué ejecución vienen sus pasos
+heredados. Un ciclo normal enseña ahí su ronda y su ambiente.
 
 Se ofrece desde los tres sitios donde se ven los ciclos —el informe del historial, el «Historial de
 ciclos» del plan y la pantalla del issue (paso 2 de la revisión y cada ciclo de «Resultados»)—, todos
 con la misma señal `continueCycleRequested(planRunId)` que atiende `MainWindow::continueCycleRun`:
 comprueba que no hay nada en curso y que el ciclo dejó algo roto (`PlanReport::canContinue()`),
-pregunta el ambiente con el `CycleStartDialog` (que dice qué se va a repetir) y arranca. En Zephyr, la
-continuación lleva `Cont. N` en el nombre del ciclo —si no, se llamaría igual que aquel al que
+pregunta el ambiente con el `CycleStartDialog` (que dice qué se va a repetir; el ambiente es el del
+ciclo y no se cambia) y arranca. En Zephyr, los ciclos de continuación antiguos llevan `Cont. N` en
+el nombre del ciclo —si no, se llamaría igual que aquel al que
 continúa: mismo plan, misma revisión, mismo día y mismo ambiente— y lo dice en su descripción.
 
 ## Historial de ejecuciones e informes de plan
@@ -1038,7 +1053,7 @@ acta es el de la ronda.
 | Momento | Qué pasa |
 |---------|----------|
 | Arranca un ciclo del plan del issue (desde el issue o desde el plan) | Se abre la revisión (la primera, o la siguiente si la anterior está cerrada) y el issue pasa a «En pruebas» |
-| Se continúa un ciclo con lo que quedó roto | El ciclo nuevo hereda el issue y la revisión de aquél: es la misma ronda, y sus resultados sustituyen a los de los casos que repite. Si esa ronda **ya se cerró**, `notePlanStarted` abre la siguiente y el ciclo de la continuación es de ella: continuar lo fallado es el camino corto de volver a probar |
+| Se continúa un ciclo con lo que quedó roto | Se reabre el mismo ciclo (mismo issue, evidencias, bugs y ciclo de Zephyr), y sus resultados nuevos sustituyen a los de los casos que repite. Si su ronda **ya se cerró**, `notePlanStarted` abre la siguiente y el ciclo pasa a ella: continuar lo fallado es el camino corto de volver a probar |
 | Durante la ronda | `issueProgress()` (core, función pura) cuenta la **última ejecución de cada caso dentro de la revisión** y los bugs del issue: de ahí salen los contadores y el resultado que se propone |
 | Se genera el acta | `QualityRecordService` la arma con el **ciclo de plan** que se elija (`cyclesFor`), la escribe y la guarda en la revisión, con lo escrito en ella y con cuál fue ese ciclo (`IssueRevision::planRunId`) |
 | Se cierra la revisión | Queda con su resultado. **Conforme en la última fase** finaliza el issue; Conforme en otra aprueba esa fase y deja el issue en pruebas para la siguiente (ver «Fases del control de calidad»); **Observado** lo devuelve a «En pruebas» y a la columna «Fallido / bloqueado», y el trabajo sigue en la misma ronda: el acta y la publicación del resultado. Volver a probar abre la siguiente |
@@ -1077,8 +1092,12 @@ ronda y la fase a las que pertenecería un ciclo que arrancara ahora —la misma
 `notePlanStarted` al arrancarlo—, y `MainWindow::cycleSetup` se la da al `CycleStartDialog`, que la propone
 y deja elegir otra de las fases del requerimiento (sin escribir ambientes sueltos). La elegida viaja como
 ambiente del ciclo y `ProjectSession` se la pasa a `notePlanStarted(planId, phase)`: la revisión nueva nace en
-ella, y una abierta sin ciclos pasa a ella. Si la revisión abierta ya tiene ciclos, las demás fases salen
-bloqueadas con el motivo («ciérrala antes») y el botón no arranca. Continuar un ciclo sigue en su fase. Un
+ella, y una abierta sin ciclos pasa a ella. Si la revisión abierta ya tiene ciclos, pasar a una fase **posterior**
+es aprobar la suya: con sus ciclos terminados y el resultado propuesto Conforme (todo ejecutado, sin fallos
+ni bugs abiertos), el diálogo lo avisa en verde y `MainWindow::beginPlanRun` la cierra como «Aprobada en
+QA» antes de arrancar (nada va a GESREQ ni al gestor), con lo que el ciclo abre la revisión siguiente en la
+fase elegida. Si no salió limpia, o tiene un ciclo sin terminar, la fase sale bloqueada con lo que falta
+(«3 casos sin ejecutar»); volver a una fase anterior pide cerrar la revisión desde el issue. Continuar un ciclo sigue en su fase. Un
 ciclo que no prueba ningún issue sigue eligiendo su ambiente libremente.
 Las revisiones se numeran seguidas entre fases (Rev 1 QA, Rev 2 QA, Rev 3 PRE): es el «Número de Revisión»
 del acta y la secuencia de registros de GESREQ. La fase va en el resumen («revisión 2 (QA): Aprobada en

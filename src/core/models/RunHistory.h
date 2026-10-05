@@ -81,8 +81,11 @@ struct PlanRun {
     /// Vacío = no se indicó. Viaja al ciclo de Zephyr, en su nombre y en su campo «environment».
     QString environment;
     /// Ciclo al que continúa: éste sólo repite sus casos fallados y bloqueados, en la misma revisión.
-    /// Vacío = ciclo normal, con todos los casos del plan.
+    /// Sólo en historiales antiguos: hoy continuar reabre el mismo ciclo (`continuations`).
     QString continuesCycleId;
+    /// Veces que se ha continuado **este mismo ciclo**: se reabre para repetir sus casos fallados y
+    /// bloqueados, y lo ya probado (con sus evidencias y sus bugs) sigue siendo suyo. 0 = nunca.
+    int continuations = 0;
     /// Dónde quedaron estos resultados en la herramienta de gestión de pruebas: el ciclo de Zephyr
     /// que se creó al publicarlos y cuándo se hizo. Vacío mientras no se haya publicado.
     QString zephyrCycleId;
@@ -91,6 +94,7 @@ struct PlanRun {
     bool isFinished() const { return finishedAt.isValid(); }
     bool isPublished() const { return !zephyrCycleId.isEmpty(); }
     bool isContinuation() const { return !continuesCycleId.isEmpty(); }
+    bool wasContinued() const { return continuations > 0; }
 };
 
 /// Todo el historial. Un único agregado para que la persistencia sea trivial.

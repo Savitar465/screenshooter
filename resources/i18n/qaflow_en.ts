@@ -63,35 +63,35 @@
     </message>
     <message>
         <source>Prioridad: %1</source>
-        <translation type="unfinished">Priority: %1</translation>
+        <translation>Priority: %1</translation>
     </message>
     <message>
         <source>Componente: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Component: %1</translation>
     </message>
     <message>
         <source>Etiquetas: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Labels: %1</translation>
     </message>
     <message>
         <source>Precondiciones</source>
-        <translation type="unfinished">Preconditions</translation>
+        <translation>Preconditions</translation>
     </message>
     <message>
         <source>Acción</source>
-        <translation type="unfinished"></translation>
+        <translation>Action</translation>
     </message>
     <message>
         <source>Datos</source>
-        <translation type="unfinished">Data</translation>
+        <translation>Data</translation>
     </message>
     <message>
         <source>Resultado esperado</source>
-        <translation type="unfinished">Expected result</translation>
+        <translation>Expected result</translation>
     </message>
     <message>
         <source>falta</source>
-        <translation type="unfinished"></translation>
+        <translation>missing</translation>
     </message>
 </context>
 <context>
@@ -162,15 +162,15 @@
     <name>application</name>
     <message>
         <source>%1 · %2 modelos disponibles</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 · %2 models available</translation>
     </message>
     <message>
         <source> · «%1» no está entre ellos: elige otro</source>
-        <translation type="unfinished"></translation>
+        <translation> · “%1” is not among them: choose another</translation>
     </message>
     <message>
         <source>No se pudo descargar «%1» · %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Could not download “%1” · %2</translation>
     </message>
 </context>
 <context>
@@ -827,7 +827,7 @@
     </message>
     <message>
         <source>Este conector no descarga adjuntos</source>
-        <translation type="unfinished"></translation>
+        <translation>This connector does not download attachments</translation>
     </message>
     <message>
         <source>Aprobada en %1</source>
@@ -1378,19 +1378,19 @@
     </message>
     <message>
         <source>El adjunto no es de esta conexión de GESREQ: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>The attachment does not belong to this GESREQ connection: %1</translation>
     </message>
     <message>
         <source>GESREQ ya no tiene el adjunto %1</source>
-        <translation type="unfinished"></translation>
+        <translation>GESREQ no longer has attachment %1</translation>
     </message>
     <message>
         <source>GESREQ no conserva la sesión al descargar el adjunto</source>
-        <translation type="unfinished"></translation>
+        <translation>GESREQ does not keep the session when downloading the attachment</translation>
     </message>
     <message>
         <source>GESREQ respondió con una página en lugar del adjunto %1</source>
-        <translation type="unfinished"></translation>
+        <translation>GESREQ answered with a page instead of attachment %1</translation>
     </message>
     <message numerus="yes">
         <source>GESREQ no acepta un control «OK» con %n observación(es) sin corregir que no sean recomendaciones: cierra sus bugs o registra esta ronda como observada</source>
@@ -1408,217 +1408,217 @@
     <name>qaflow</name>
     <message>
         <source>«%1» no tiene texto que leer (¿es una imagen escaneada?)</source>
-        <translation type="unfinished"></translation>
+        <translation>“%1” has no text to read (is it a scanned image?)</translation>
     </message>
 </context>
 <context>
     <name>qaflow::AiCaseGenerationDialog</name>
     <message>
         <source>Generar casos con IA</source>
-        <translation type="unfinished"></translation>
+        <translation>Generate cases with AI</translation>
     </message>
     <message>
         <source>Copia el prompt, pégalo en ChatGPT u otra IA y trae aquí su respuesta. Los casos que elijas se añaden %1 en Borrador y con la etiqueta «%2».</source>
-        <translation type="unfinished"></translation>
+        <translation>Copy the prompt, paste it into ChatGPT or another AI and bring its answer back here. The cases you choose are added %1 as Draft and with the label “%2”.</translation>
     </message>
     <message>
         <source>Texto del requerimiento</source>
-        <translation type="unfinished"></translation>
+        <translation>Requirement text</translation>
     </message>
     <message>
         <source>Es lo que compartirás con la IA: quita lo que no deba salir y añade lo que falte.</source>
-        <translation type="unfinished"></translation>
+        <translation>This is what you will share with the AI: remove whatever must not leave and add whatever is missing.</translation>
     </message>
     <message>
         <source>Marca los que sean parte de la especificación y añádelos al texto.</source>
-        <translation type="unfinished"></translation>
+        <translation>Check the ones that are part of the specification and add them to the text.</translation>
     </message>
     <message>
         <source>Sin conexión con GESREQ: abre los adjuntos y copia su texto a mano.</source>
-        <translation type="unfinished"></translation>
+        <translation>No connection to GESREQ: open the attachments and copy their text by hand.</translation>
     </message>
     <message>
         <source>Añadir al texto</source>
-        <translation type="unfinished"></translation>
+        <translation>Add to the text</translation>
     </message>
     <message>
         <source>Adjuntos del requerimiento</source>
-        <translation type="unfinished"></translation>
+        <translation>Requirement attachments</translation>
     </message>
     <message>
         <source>Opcional: «céntrate en las validaciones del formulario», «máximo 10 casos»…</source>
-        <translation type="unfinished"></translation>
+        <translation>Optional: “focus on the form validations”, “10 cases at most”…</translation>
     </message>
     <message>
         <source>Indicaciones para la IA</source>
-        <translation type="unfinished"></translation>
+        <translation>Instructions for the AI</translation>
     </message>
     <message>
         <source>Copiar prompt</source>
-        <translation type="unfinished"></translation>
+        <translation>Copy prompt</translation>
     </message>
     <message>
         <source>%1 caracteres en el prompt: puede no caber en el chat de la IA; quita lo que no haga falta</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 characters in the prompt: it may not fit in the AI chat; remove what is not needed</translation>
     </message>
     <message>
         <source>%1 caracteres en el prompt</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 characters in the prompt</translation>
     </message>
     <message>
         <source>1 · Prompt</source>
-        <translation type="unfinished"></translation>
+        <translation>1 · Prompt</translation>
     </message>
     <message>
         <source>Pega aquí la respuesta completa de la IA (el JSON, aunque venga con texto alrededor)</source>
-        <translation type="unfinished"></translation>
+        <translation>Paste the full AI answer here (the JSON, even if it comes with text around it)</translation>
     </message>
     <message>
         <source>Respuesta de la IA</source>
-        <translation type="unfinished"></translation>
+        <translation>AI answer</translation>
     </message>
     <message>
         <source>Interpretar</source>
-        <translation type="unfinished"></translation>
+        <translation>Parse</translation>
     </message>
     <message>
         <source>2 · Respuesta</source>
-        <translation type="unfinished"></translation>
+        <translation>2 · Answer</translation>
     </message>
     <message>
         <source>Cancelar</source>
-        <translation type="unfinished">Cancel</translation>
+        <translation>Cancel</translation>
     </message>
     <message>
         <source>Añadir casos</source>
-        <translation type="unfinished"></translation>
+        <translation>Add cases</translation>
     </message>
     <message>
         <source>Marca al menos un adjunto</source>
-        <translation type="unfinished"></translation>
+        <translation>Check at least one attachment</translation>
     </message>
     <message>
         <source>leyendo…</source>
-        <translation type="unfinished"></translation>
+        <translation>reading…</translation>
     </message>
     <message>
         <source>Descargando y leyendo %1…</source>
-        <translation type="unfinished"></translation>
+        <translation>Downloading and reading %1…</translation>
     </message>
     <message>
         <source>añadido (%1 caracteres)</source>
-        <translation type="unfinished"></translation>
+        <translation>added (%1 characters)</translation>
     </message>
     <message>
         <source>Revisa el texto añadido: quita índices, firmas o anexos que no sirvan para probar.</source>
-        <translation type="unfinished"></translation>
+        <translation>Review the added text: remove indexes, signatures or appendices that are no use for testing.</translation>
     </message>
     <message>
         <source>no se pudo leer</source>
-        <translation type="unfinished"></translation>
+        <translation>could not be read</translation>
     </message>
     <message>
         <source>Generar con IA</source>
-        <translation type="unfinished"></translation>
+        <translation>Generate with AI</translation>
     </message>
     <message>
         <source>«Generar con IA» envía este prompt a %1 con tu clave. Revisa antes el texto: es todo lo que sale del equipo.</source>
-        <translation type="unfinished"></translation>
+        <translation>“Generate with AI” sends this prompt to %1 with your key. Review the text first: it is all that leaves this computer.</translation>
     </message>
     <message>
         <source>Genera los casos con la IA configurada, o copia el prompt para usar otra. Los casos que elijas se añaden %1 en Borrador y con la etiqueta «%2».</source>
-        <translation type="unfinished"></translation>
+        <translation>Generate the cases with the configured AI, or copy the prompt to use another one. The cases you choose are added %1 as Draft and with the label “%2”.</translation>
     </message>
     <message>
         <source>Generando…</source>
-        <translation type="unfinished"></translation>
+        <translation>Generating…</translation>
     </message>
     <message>
         <source>Esperando la respuesta de la IA; puede tardar un par de minutos</source>
-        <translation type="unfinished"></translation>
+        <translation>Waiting for the AI answer; it may take a couple of minutes</translation>
     </message>
     <message>
         <source>La respuesta llegó cortada por el tope de tokens (súbelo en Ajustes o pide menos casos) · %1</source>
-        <translation type="unfinished"></translation>
+        <translation>The answer was cut off by the token limit (raise it in Settings or ask for fewer cases) · %1</translation>
     </message>
     <message>
         <source>Copiado: pégalo en la IA y trae su respuesta</source>
-        <translation type="unfinished"></translation>
+        <translation>Copied: paste it into the AI and bring back its answer</translation>
     </message>
     <message>
         <source>%1 · %2 · %3 paso(s)</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 · %2 · %3 step(s)</translation>
     </message>
     <message>
         <source>%1 caso(s) leídos</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 case(s) read</translation>
     </message>
     <message>
         <source> · revisa: %1</source>
-        <translation type="unfinished"></translation>
+        <translation> · review: %1</translation>
     </message>
     <message>
         <source>Añadir %1 caso(s)</source>
-        <translation type="unfinished"></translation>
+        <translation>Add %1 case(s)</translation>
     </message>
 </context>
 <context>
     <name>qaflow::AiClient</name>
     <message>
         <source>No se pudo conectar con %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Could not connect to %1</translation>
     </message>
     <message>
         <source>%1 rechazó la clave de API (no es válida o no tiene permiso)</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 rejected the API key (it is not valid or lacks permission)</translation>
     </message>
     <message>
         <source>%1 no tiene el modelo «%2» para esta clave</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 does not have model “%2” for this key</translation>
     </message>
     <message>
         <source>%1 alcanzó el límite de uso de la clave: espera un momento o revisa el plan</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 reached the usage limit of the key: wait a moment or check the plan</translation>
     </message>
     <message>
         <source>%1 está saturado: vuelve a intentarlo en un momento</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 is overloaded: try again in a moment</translation>
     </message>
     <message>
         <source>%1 no aceptó la petición</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 did not accept the request</translation>
     </message>
     <message>
         <source>%1 respondió con un error (HTTP %2)</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 answered with an error (HTTP %2)</translation>
     </message>
     <message>
         <source>Falta la clave de API de %1 en Ajustes</source>
-        <translation type="unfinished"></translation>
+        <translation>The %1 API key is missing in Settings</translation>
     </message>
     <message>
         <source>OpenAI no respondió: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>OpenAI did not answer: %1</translation>
     </message>
     <message>
         <source>Gemini bloqueó el prompt (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Gemini blocked the prompt (%1)</translation>
     </message>
     <message>
         <source>Gemini no respondió (%1)</source>
-        <translation type="unfinished"></translation>
+        <translation>Gemini did not answer (%1)</translation>
     </message>
     <message>
         <source>La respuesta se cortó antes de empezar: sube el tope de tokens en Ajustes</source>
-        <translation type="unfinished"></translation>
+        <translation>The answer was cut off before it started: raise the token limit in Settings</translation>
     </message>
     <message>
         <source>%1 respondió sin texto</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 answered without text</translation>
     </message>
     <message>
         <source>Indica la clave de API de %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Enter the %1 API key</translation>
     </message>
 </context>
 <context>
@@ -1788,7 +1788,7 @@
     </message>
     <message>
         <source>Cancelar</source>
-        <translation type="unfinished">Cancel</translation>
+        <translation>Cancel</translation>
     </message>
     <message>
         <source>Cerrado en el gestor</source>
@@ -2680,50 +2680,50 @@
     </message>
     <message>
         <source>Se propone la fase que le toca a la revisión; aprobada una fase desde el issue, se pasa a la siguiente.</source>
-        <translation>The revision's phase is proposed; once a phase is approved from the issue, the next one follows.</translation>
+        <translation>The revision&apos;s phase is proposed; once a phase is approved from the issue, the next one follows.</translation>
     </message>
 </context>
 <context>
     <name>qaflow::DocumentReader</name>
     <message>
         <source>«%1» está vacío</source>
-        <translation type="unfinished"></translation>
+        <translation>“%1” is empty</translation>
     </message>
     <message>
         <source>No se pudo leer «%1»: %2</source>
-        <translation type="unfinished"></translation>
+        <translation>Could not read “%1”: %2</translation>
     </message>
     <message>
         <source>Para leer PDF hace falta pdftotext (paquete poppler-utils); instálalo o copia el texto de «%1» a mano</source>
-        <translation type="unfinished"></translation>
+        <translation>Reading PDF needs pdftotext (package poppler-utils); install it or copy the text of “%1” by hand</translation>
     </message>
     <message>
         <source>Para leer «%1» hace falta LibreOffice; instálalo o copia su texto a mano</source>
-        <translation type="unfinished"></translation>
+        <translation>Reading “%1” needs LibreOffice; install it or copy its text by hand</translation>
     </message>
     <message>
         <source>QAflow no sabe leer el texto de «%1»: copia a mano lo que haga falta</source>
-        <translation type="unfinished"></translation>
+        <translation>QAflow cannot read the text of “%1”: copy what you need by hand</translation>
     </message>
     <message>
         <source>No se pudo crear un directorio temporal para leer el documento</source>
-        <translation type="unfinished"></translation>
+        <translation>Could not create a temporary directory to read the document</translation>
     </message>
     <message>
         <source>No se pudo escribir el documento en el directorio temporal</source>
-        <translation type="unfinished"></translation>
+        <translation>Could not write the document to the temporary directory</translation>
     </message>
     <message>
         <source>%1 no pudo leer el documento%2</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 could not read the document%2</translation>
     </message>
     <message>
         <source>No se pudo ejecutar %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Could not run %1</translation>
     </message>
     <message>
         <source>La lectura del documento tardó demasiado y se canceló</source>
-        <translation type="unfinished"></translation>
+        <translation>Reading the document took too long and was cancelled</translation>
     </message>
 </context>
 <context>
@@ -3403,7 +3403,7 @@
     </message>
     <message>
         <source>Heredada de %1: el paso no se volvió a probar</source>
-        <translation type="unfinished"></translation>
+        <translation>Inherited from %1: the step was not tested again</translation>
     </message>
     <message>
         <source>Publica estas ejecuciones en el ciclo «%1» de Zephyr, el de su fase</source>
@@ -4726,35 +4726,35 @@ Create another one anyway?</translation>
     </message>
     <message>
         <source>Generar con IA…</source>
-        <translation type="unfinished"></translation>
+        <translation>Generate with AI…</translation>
     </message>
     <message>
         <source>Arma un prompt con el requerimiento para ChatGPT u otra IA y añade al plan los casos que devuelva</source>
-        <translation type="unfinished"></translation>
+        <translation>Builds a prompt with the requirement for ChatGPT or another AI and adds the cases it returns to the plan</translation>
     </message>
     <message>
         <source>Notas de QA:</source>
-        <translation type="unfinished"></translation>
+        <translation>QA notes:</translation>
     </message>
     <message>
         <source>al plan %1 (%2)</source>
-        <translation type="unfinished"></translation>
+        <translation>to plan %1 (%2)</translation>
     </message>
     <message>
         <source>a un plan nuevo de %1</source>
-        <translation type="unfinished"></translation>
+        <translation>to a new plan of %1</translation>
     </message>
     <message>
         <source>La conexión con GESREQ ya no está disponible</source>
-        <translation type="unfinished"></translation>
+        <translation>The GESREQ connection is no longer available</translation>
     </message>
     <message>
         <source>La IA ya no está disponible</source>
-        <translation type="unfinished"></translation>
+        <translation>The AI is no longer available</translation>
     </message>
     <message>
         <source>%1 caso(s) generados en Borrador y añadidos a %2: revísalos antes de ejecutarlos</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 case(s) generated as Draft and added to %2: review them before running them</translation>
     </message>
     <message>
         <source>▦ Tablero</source>
@@ -5541,10 +5541,6 @@ Create another one anyway?</translation>
         <translation>That cycle left no failed or blocked case to continue</translation>
     </message>
     <message>
-        <source>Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o bloqueado(s), cada uno desde el paso que se rompió.</source>
-        <translation>Continues cycle %1: its %2 failed or blocked case(s) run again, each from the step that broke.</translation>
-    </message>
-    <message>
         <source>No se pudo continuar el ciclo: sus casos fallados ya no están en el proyecto</source>
         <translation>The cycle could not be continued: its failed cases are no longer in the project</translation>
     </message>
@@ -5585,8 +5581,32 @@ Create another one anyway?</translation>
         <translation>%1 · revision %2</translation>
     </message>
     <message>
-        <source>La revisión %1 ya tiene ciclos en %2: para probar en %3, ciérrala antes desde el issue.</source>
-        <translation>Revision %1 already has cycles in %2: to test in %3, close it first from the issue.</translation>
+        <source>La revisión %1 ya tiene ciclos en %2: para volver a %3, ciérrala antes desde el issue.</source>
+        <translation>Revision %1 already has cycles in %2: to go back to %3, close it first from the issue.</translation>
+    </message>
+    <message>
+        <source>La revisión %1 tiene un ciclo de %2 sin terminar: termínalo antes de pasar a %3.</source>
+        <translation>Revision %1 has an unfinished %2 cycle: finish it before moving to %3.</translation>
+    </message>
+    <message>
+        <source>no quedó conforme</source>
+        <translation>it did not pass</translation>
+    </message>
+    <message>
+        <source>%1 todavía no está aprobada en la revisión %2 (%3). Para pasar a %4 tiene que quedar conforme en %1; si no, ciérrala como observada desde el issue.</source>
+        <translation>%1 is not approved yet in revision %2 (%3). To move to %4 it has to pass in %1; otherwise, close it as observed from the issue.</translation>
+    </message>
+    <message>
+        <source>Al arrancar, la revisión %1 se cierra como «Aprobada en %2» y el ciclo abre la revisión %3 en %4. No se registra nada en GESREQ ni se cierra nada en el gestor.</source>
+        <translation>On start, revision %1 is closed as “Passed in %2” and the cycle opens revision %3 in %4. Nothing is registered in GESREQ and nothing is closed in the tracker.</translation>
+    </message>
+    <message>
+        <source>Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o bloqueado(s), cada uno desde el paso que se rompió. Es el mismo ciclo: lo ya probado, sus capturas y sus bugs se conservan%3.</source>
+        <translation>Continues cycle %1: its %2 failed or blocked case(s) are run again, each one from the step that broke. It is the same cycle: what was already tested, its screenshots and its bugs are kept%3.</translation>
+    </message>
+    <message>
+        <source>, y al terminar se actualiza su ciclo de Zephyr</source>
+        <translation>, and when it finishes its Zephyr cycle is updated</translation>
     </message>
 </context>
 <context>
@@ -7449,15 +7469,19 @@ Press “Capture” or drop a file on the window.</translation>
     </message>
     <message>
         <source>Heredada de %1: el paso no se ha vuelto a probar</source>
-        <translation type="unfinished"></translation>
+        <translation>Inherited from %1: the step has not been tested again</translation>
     </message>
     <message>
         <source>PASO %1 · DE %2</source>
-        <translation type="unfinished"></translation>
+        <translation>STEP %1 · FROM %2</translation>
     </message>
     <message>
         <source>Evidencia heredada de la ejecución que se retoma: el paso no se ha vuelto a probar</source>
-        <translation type="unfinished"></translation>
+        <translation>Evidence inherited from the run being resumed: the step has not been tested again</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;CONTINUANDO EL CICLO %1&lt;/b&gt; · se repiten sólo los casos que fallaron o quedaron bloqueados; lo ya superado, sus capturas y sus bugs se conservan</source>
+        <translation>&lt;b&gt;CONTINUING CYCLE %1&lt;/b&gt; · only the cases that failed or were blocked are repeated; what already passed, its screenshots and its bugs are kept</translation>
     </message>
 </context>
 <context>
@@ -7934,75 +7958,75 @@ Press “Capture” or drop a file on the window.</translation>
     </message>
     <message>
         <source>Probar la clave con el proveedor</source>
-        <translation type="unfinished"></translation>
+        <translation>Test the key with the provider</translation>
     </message>
     <message>
         <source>IA para generar casos</source>
-        <translation type="unfinished"></translation>
+        <translation>AI to generate cases</translation>
     </message>
     <message>
         <source>Con una clave de API, «Generar con IA» envía el prompt revisado al proveedor y trae los casos sin copiar ni pegar. Sin clave, se sigue pudiendo copiar el prompt a ChatGPT u otra IA.</source>
-        <translation type="unfinished"></translation>
+        <translation>With an API key, “Generate with AI” sends the reviewed prompt to the provider and brings back the cases without copying and pasting. Without a key, you can still copy the prompt to ChatGPT or another AI.</translation>
     </message>
     <message>
         <source>Elegir entre los modelos disponibles para la clave</source>
-        <translation type="unfinished"></translation>
+        <translation>Choose among the models available for the key</translation>
     </message>
     <message>
         <source>Sólo si se usa un proxy de la organización o un servidor compatible; vacío = la API oficial</source>
-        <translation type="unfinished"></translation>
+        <translation>Only when using an organisation proxy or a compatible server; empty = the official API</translation>
     </message>
     <message>
         <source>Tope de la respuesta: si los casos llegan cortados, súbelo</source>
-        <translation type="unfinished"></translation>
+        <translation>Limit of the answer: if the cases arrive cut off, raise it</translation>
     </message>
     <message>
         <source>Proveedor</source>
-        <translation type="unfinished"></translation>
+        <translation>Provider</translation>
     </message>
     <message>
         <source>Clave de API</source>
-        <translation type="unfinished"></translation>
+        <translation>API key</translation>
     </message>
     <message>
         <source>Modelo</source>
-        <translation type="unfinished"></translation>
+        <translation>Model</translation>
     </message>
     <message>
         <source>Tope de tokens de la respuesta</source>
-        <translation type="unfinished"></translation>
+        <translation>Answer token limit</translation>
     </message>
     <message>
         <source>Dirección de la API (opcional)</source>
-        <translation type="unfinished"></translation>
+        <translation>API address (optional)</translation>
     </message>
     <message>
         <source>●  Sin probar</source>
-        <translation type="unfinished"></translation>
+        <translation>●  Not tested</translation>
     </message>
     <message>
         <source>🔒 Clave · se guarda en: %1. Lo que se envía es sólo el prompt que revisas en el diálogo.</source>
-        <translation type="unfinished"></translation>
+        <translation>🔒 Key · stored in: %1. Only the prompt you review in the dialog is sent.</translation>
     </message>
     <message>
         <source>⚠ Clave · se guarda %1. Instala un llavero (secret-tool / libsecret en Linux) para cifrar el dato.</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠ Key · stored %1. Install a keyring (secret-tool / libsecret on Linux) to encrypt it.</translation>
     </message>
     <message>
         <source>Conectado · %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Connected · %1</translation>
     </message>
     <message>
         <source>No se pudo conectar con la IA · %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Could not connect to the AI · %1</translation>
     </message>
     <message>
         <source>Modelo de %1</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 model</translation>
     </message>
     <message>
         <source>Consultando los modelos disponibles…</source>
-        <translation type="unfinished"></translation>
+        <translation>Fetching the available models…</translation>
     </message>
     <message>
         <source>Ambientes en los que se prueba cada requerimiento, en orden y separados por comas. Aprobado uno se pasa al siguiente; sólo el Conforme del último registra el OK en GESREQ y cierra el issue del gestor.</source>
@@ -8442,39 +8466,39 @@ First %1 Test(s) will be created in Jira, one per case, which the requirement wi
     <name>qaflow::documents</name>
     <message>
         <source>No se pudo descomprimir el documento</source>
-        <translation type="unfinished"></translation>
+        <translation>Could not decompress the document</translation>
     </message>
     <message>
         <source>El documento está dañado: su contenido comprimido no se puede leer</source>
-        <translation type="unfinished"></translation>
+        <translation>The document is damaged: its compressed content cannot be read</translation>
     </message>
     <message>
         <source>Esta instalación de QAflow no puede descomprimir documentos (compilada sin zlib)</source>
-        <translation type="unfinished"></translation>
+        <translation>This QAflow installation cannot decompress documents (built without zlib)</translation>
     </message>
     <message>
         <source>El documento no es un ZIP válido</source>
-        <translation type="unfinished"></translation>
+        <translation>The document is not a valid ZIP</translation>
     </message>
     <message>
         <source>El índice del documento está dañado</source>
-        <translation type="unfinished"></translation>
+        <translation>The document index is damaged</translation>
     </message>
     <message>
         <source>El documento está dañado</source>
-        <translation type="unfinished"></translation>
+        <translation>The document is damaged</translation>
     </message>
     <message>
         <source>El documento está incompleto</source>
-        <translation type="unfinished"></translation>
+        <translation>The document is incomplete</translation>
     </message>
     <message>
         <source>El documento usa una compresión que QAflow no sabe leer</source>
-        <translation type="unfinished"></translation>
+        <translation>The document uses a compression QAflow cannot read</translation>
     </message>
     <message>
         <source>El documento no tiene %1</source>
-        <translation type="unfinished"></translation>
+        <translation>The document has no %1</translation>
     </message>
 </context>
 </TS>

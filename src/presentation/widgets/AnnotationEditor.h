@@ -22,10 +22,17 @@ struct Annotation {
     QPointF to;        // flecha: punta; resto: esquina opuesta
     QString text;      // sólo Text
     QColor color = QColor(0xef, 0x44, 0x44);
-    int width = 3;     // grosor del trazo / tamaño relativo del texto
+    int width = 3;     // grosor del trazo
+    int fontSize = 0;  // sólo Text: tamaño en px; 0 = derivado del grosor
 
     QRectF rect() const { return QRectF(from, to).normalized(); }
+    bool operator==(const Annotation&) const = default;
 };
+
+/// Tamaño en px de la letra de una anotación de texto.
+int textPixelSize(const Annotation& a);
+/// Caja que ocupa una anotación de texto (esquina superior izquierda en `from`), en coordenadas de la imagen.
+QRectF textBounds(const Annotation& a);
 
 /// Dibuja las anotaciones sobre `base` y devuelve la imagen resultante. Función pura, también
 /// la usan los tests.
@@ -34,8 +41,9 @@ QImage renderAnnotations(const QImage& base, const QList<Annotation>& items);
 class AnnotationCanvas;
 
 /// Editor de anotaciones de una captura: flechas, rectángulos, elipses, marcador, texto y
-/// difuminado de datos sensibles. Deshacer (Ctrl+Z), color y grosor (fino, medio, grueso). `Guardar` devuelve
-/// `QDialog::Accepted` y `result()` la imagen anotada.
+/// difuminado de datos sensibles. Deshacer (Ctrl+Z), color y grosor (fino, medio, grueso). Con la
+/// herramienta Texto, los textos se pueden mover, editar (doble clic), redimensionar (esquina o +/-)
+/// y borrar (Supr). `Guardar` devuelve `QDialog::Accepted` y `result()` la imagen anotada.
 class AnnotationEditor : public QDialog {
     Q_OBJECT
 public:
@@ -63,6 +71,9 @@ private:
     void zoomBy(double factor);
     void updateToolButtons();
     void updateZoomLabel();
+    void updateHint();
+    /// Pide el texto en un diálogo; devuelve una cadena vacía si se canceló.
+    QString askText(const QString& initial);
 
     AnnotationCanvas* m_canvas;
     QScrollArea* m_scroll;

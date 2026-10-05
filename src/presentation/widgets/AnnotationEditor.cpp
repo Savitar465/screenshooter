@@ -21,6 +21,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <utility>
 
 namespace qaflow {
 
@@ -48,21 +50,21 @@ void drawArrow(QPainter& p, const Annotation& a) {
     p.drawPath(h);
 }
 
+constexpr auto kTextFlags = Qt::AlignLeft | Qt::AlignTop;
+
+QFont textFont(const Annotation& a) {
+    QFont f = QApplication::font();
+    f.setPixelSize(textPixelSize(a));
+    f.setBold(true);
+    return f;
+}
+
+/// Sólo la letra, sin caja de fondo.
 void drawText(QPainter& p, const Annotation& a) {
     if (a.text.isEmpty()) return;
-    QFont f = p.font();
-    f.setPixelSize(std::max(12, 10 + a.width * 4));
-    f.setBold(true);
-    p.setFont(f);
-    const QFontMetrics fm(f);
-    const QRect box = fm.boundingRect(QRect(0, 0, 4000, 4000), Qt::AlignLeft | Qt::TextWordWrap, a.text);
-    const QRectF bg(a.from, QSizeF(box.width() + 16, box.height() + 10));
-    QPainterPath bp;
-    bp.addRoundedRect(bg, 6, 6);
-    p.setPen(Qt::NoPen);
-    p.fillPath(bp, QColor(0, 0, 0, 165));
+    p.setFont(textFont(a));
     p.setPen(a.color);
-    p.drawText(bg.adjusted(8, 5, -8, -5), Qt::AlignLeft | Qt::TextWordWrap, a.text);
+    p.drawText(textBounds(a), kTextFlags, a.text);
 }
 
 void drawBlur(QPainter& p, const QImage& base, const Annotation& a) {
@@ -75,6 +77,16 @@ void drawBlur(QPainter& p, const QImage& base, const Annotation& a) {
 }
 
 } // namespace
+
+int textPixelSize(const Annotation& a) {
+    return a.fontSize > 0 ? a.fontSize : std::max(12, 10 + a.width * 4);
+}
+
+QRectF textBounds(const Annotation& a) {
+    const QFontMetrics fm(textFont(a));
+    const QRect box = fm.boundingRect(QRect(0, 0, 100000, 100000), kTextFlags, a.text);
+    return QRectF(a.from, QSizeF(box.size()));
+}
 
 QImage renderAnnotations(const QImage& base, const QList<Annotation>& items) {
     QImage out = base.convertToFormat(QImage::Format_ARGB32_Premultiplied);
@@ -110,81 +122,224 @@ QImage renderAnnotations(const QImage& base, const QList<Annotation>& items) {
 
 // ---- Lienzo ------------------------------------------------------------------------------------
 
-/// Muestra la imagen a escala y traduce el ratón a coordenadas de la imagen.
+/// Muestra la imagen a escala y traduce el ratón a coordenadas de la imagen. Con la herramienta
+/// Texto, un clic sobre un texto lo selecciona: se arrastra para moverlo y desde la esquina inferior
+/// derecha para cambiar su tamaño. Cada cambio guarda el estado anterior para deshacerlo.
 class AnnotationCanvas : public QWidget {
     Q_OBJECT
 public:
     explicit AnnotationCanvas(const QImage& image, QWidget* parent = nullptr) : QWidget(parent), m_base(image) {
+        setObjectName(QStringLiteral("annotationCanvas"));
         setMouseTracking(true);
         setCursor(Qt::CrossCursor);
     }
 
+    static constexpr int kMinFont = 8;
+    static constexpr int kMaxFont = 400;
+
     const QImage& base() const { return m_base; }
     const QList<Annotation>& items() const { return m_items; }
     QImage rendered() const { return renderAnnotations(m_base, m_items); }
-    void add(const Annotation& a) { m_items.append(a); update(); emit changed(); }
-    void undo() { if (!m_items.isEmpty()) { m_items.removeLast(); update(); emit changed(); } }
+    void add(const Annotation& a) {
+        remember();
+        m_items.append(a);
+        m_selected = a.tool == Annotation::Tool::Text ? static_cast<int>(m_items.size()) - 1 : -1;
+        update();
+        emit changed();
+    }
+    bool canUndo() const { return !m_history.isEmpty(); }
+    void undo() {
+        if (m_history.isEmpty()) return;
+        m_items = m_history.takeLast();
+        m_selected = -1;
+        update();
+        emit changed();
+    }
     void setZoom(double z) { m_zoom = std::clamp(z, 0.05, 6.0); resize(sizeHint()); update(); }
     double zoom() const { return m_zoom; }
-    void setTool(Annotation::Tool t) { m_tool = t; setCursor(t == Annotation::Tool::Text ? Qt::IBeamCursor : Qt::CrossCursor); }
+    void setTool(Annotation::Tool t) {
+        m_tool = t;
+        m_selected = -1;
+        setCursor(t == Annotation::Tool::Text ? Qt::IBeamCursor : Qt::CrossCursor);
+        update();
+    }
     Annotation::Tool tool() const { return m_tool; }
-    void setColor(const QColor& c) { m_color = c; }
+    void setColor(const QColor& c) { m_color = c; modifySelected([&](Annotation& a) { a.color = c; }); }
     QColor color() const { return m_color; }
-    void setWidth(int w) { m_width = w; }
+    void setWidth(int w) {
+        m_width = w;
+        modifySelected([&](Annotation& a) { a.width = w; a.fontSize = 0; });
+    }
     int width() const { return m_width; }
+
+    int selected() const { return m_selected; }
+    void select(int index) { m_selected = index >= 0 && index < m_items.size() && m_items[index].tool == Annotation::Tool::Text ? index : -1; update(); }
+    /// Cambia el texto seleccionado; si queda vacío, lo borra.
+    void setSelectedText(const QString& text) {
+        if (text.isEmpty()) removeSelected();
+        else modifySelected([&](Annotation& a) { a.text = text; });
+    }
+    void removeSelected() {
+        if (m_selected < 0) return;
+        remember();
+        m_items.removeAt(m_selected);
+        m_selected = -1;
+        update();
+        emit changed();
+    }
+    /// Multiplica el tamaño de la letra del texto seleccionado.
+    void scaleSelected(double factor) {
+        modifySelected([&](Annotation& a) { a.fontSize = std::clamp(qRound(textPixelSize(a) * factor), kMinFont, kMaxFont); });
+    }
 
     QSize sizeHint() const override { return (QSizeF(m_base.size()) * m_zoom).toSize().expandedTo(QSize(1, 1)); }
 
 signals:
     void changed();
     void textRequested(const QPointF& at);
+    void editRequested(int index);
 
 protected:
     void paintEvent(QPaintEvent*) override {
         QPainter p(this);
         p.setRenderHint(QPainter::SmoothPixmapTransform, m_zoom < 1.0);
         QList<Annotation> items = m_items;
-        if (m_dragging) items.append(m_draft);
+        if (m_drag == Drag::Draw) items.append(m_draft);
         const QImage frame = renderAnnotations(m_base, items);
         p.drawImage(QRectF(QPointF(0, 0), QSizeF(frame.size()) * m_zoom), frame);
+        if (m_selected >= 0) {
+            // Marco discontinuo y tirador de tamaño: sólo en pantalla, no forman parte de la imagen.
+            p.setRenderHint(QPainter::Antialiasing);
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(QColor(theme::Blue), 1, Qt::DashLine));
+            p.drawRect(selectionRect());
+            p.setPen(QPen(Qt::white, 1));
+            p.setBrush(QColor(theme::Blue));
+            p.drawRect(handleRect());
+        }
     }
     void mousePressEvent(QMouseEvent* e) override {
         if (e->button() != Qt::LeftButton) return;
         const QPointF at = toImage(e->position());
-        if (m_tool == Annotation::Tool::Text) { emit textRequested(at); return; }
-        m_dragging = true;
+        if (m_tool == Annotation::Tool::Text) {
+            if (m_selected >= 0 && handleRect().contains(e->position())) {
+                beginDrag(Drag::Resize);
+                m_grab = QPointF(textPixelSize(m_items[m_selected]), std::max(1.0, textBounds(m_items[m_selected]).height()));
+                return;
+            }
+            if (const int hit = textAt(e->position()); hit >= 0) {
+                m_selected = hit;
+                beginDrag(Drag::Move);
+                m_grab = at - m_items[hit].from;
+                update();
+                return;
+            }
+            // Un clic fuera de un texto seleccionado sólo lo deselecciona; el siguiente escribe uno nuevo.
+            if (m_selected >= 0) { m_selected = -1; update(); return; }
+            emit textRequested(at);
+            return;
+        }
+        m_drag = Drag::Draw;
         m_draft = Annotation{m_tool, at, at, {}, m_color, m_width};
         update();
     }
     void mouseMoveEvent(QMouseEvent* e) override {
-        if (!m_dragging) return;
-        m_draft.to = toImage(e->position());
+        const QPointF at = toImage(e->position());
+        switch (m_drag) {
+            case Drag::None:
+                if (m_tool == Annotation::Tool::Text) {
+                    if (m_selected >= 0 && handleRect().contains(e->position())) setCursor(Qt::SizeFDiagCursor);
+                    else setCursor(textAt(e->position()) >= 0 ? Qt::SizeAllCursor : Qt::IBeamCursor);
+                }
+                return;
+            case Drag::Draw:
+                m_draft.to = at;
+                break;
+            case Drag::Move: {
+                Annotation& a = m_items[m_selected];
+                a.from = a.to = at - m_grab;
+                break;
+            }
+            case Drag::Resize: {
+                // La altura nueva de la caja (de su borde superior al ratón) escala la letra.
+                Annotation& a = m_items[m_selected];
+                const double height = std::max(1.0, at.y() - a.from.y());
+                a.fontSize = std::clamp(qRound(m_grab.x() * height / m_grab.y()), kMinFont, kMaxFont);
+                break;
+            }
+        }
         update();
     }
     void mouseReleaseEvent(QMouseEvent* e) override {
-        if (e->button() != Qt::LeftButton || !m_dragging) return;
-        m_dragging = false;
+        if (e->button() != Qt::LeftButton || m_drag == Drag::None) return;
+        const Drag drag = std::exchange(m_drag, Drag::None);
+        if (drag != Drag::Draw) {
+            if (m_items != m_before) { m_history.append(m_before); emit changed(); }
+            update();
+            return;
+        }
         m_draft.to = toImage(e->position());
         const QRectF r = m_draft.rect();
         const bool tiny = m_tool == Annotation::Tool::Arrow ? QLineF(m_draft.from, m_draft.to).length() < 4 : (r.width() < 3 || r.height() < 3);
         if (!tiny) add(m_draft);
         else update();
     }
+    void mouseDoubleClickEvent(QMouseEvent* e) override {
+        if (e->button() != Qt::LeftButton || m_tool != Annotation::Tool::Text) return;
+        if (const int hit = textAt(e->position()); hit >= 0) {
+            m_selected = hit;
+            update();
+            emit editRequested(hit);
+        }
+    }
 
 private:
+    enum class Drag { None, Draw, Move, Resize };
+
     QPointF toImage(const QPointF& widgetPos) const {
         return QPointF(std::clamp(widgetPos.x() / m_zoom, 0.0, static_cast<double>(m_base.width())),
                        std::clamp(widgetPos.y() / m_zoom, 0.0, static_cast<double>(m_base.height())));
     }
+    QRectF toWidget(const QRectF& imageRect) const {
+        return QRectF(imageRect.topLeft() * m_zoom, imageRect.size() * m_zoom);
+    }
+    QRectF selectionRect() const { return toWidget(textBounds(m_items[m_selected])).adjusted(-4, -4, 4, 4); }
+    QRectF handleRect() const {
+        const QPointF c = selectionRect().bottomRight();
+        return QRectF(c - QPointF(5, 5), QSizeF(10, 10));
+    }
+    /// Texto más alto (el último dibujado) bajo `widgetPos`, o -1.
+    int textAt(const QPointF& widgetPos) const {
+        for (int i = static_cast<int>(m_items.size()) - 1; i >= 0; --i) {
+            if (m_items[i].tool == Annotation::Tool::Text && toWidget(textBounds(m_items[i])).adjusted(-4, -4, 4, 4).contains(widgetPos)) return i;
+        }
+        return -1;
+    }
+    void remember() { m_history.append(m_items); }
+    void beginDrag(Drag d) { m_drag = d; m_before = m_items; }
+    void modifySelected(const std::function<void(Annotation&)>& change) {
+        if (m_selected < 0) return;
+        Annotation a = m_items[m_selected];
+        change(a);
+        if (a == m_items[m_selected]) return;
+        remember();
+        m_items[m_selected] = a;
+        update();
+        emit changed();
+    }
 
     QImage m_base;
     QList<Annotation> m_items;
+    QList<QList<Annotation>> m_history;   // estados anteriores, para deshacer
+    QList<Annotation> m_before;            // estado al empezar a mover o redimensionar
     Annotation m_draft;
     Annotation::Tool m_tool = Annotation::Tool::Arrow;
     QColor m_color = QColor(0xef, 0x44, 0x44);
     int m_width = 3;
     double m_zoom = 1.0;
-    bool m_dragging = false;
+    Drag m_drag = Drag::None;
+    int m_selected = -1;
+    QPointF m_grab;   // mover: desplazamiento del ratón respecto a `from`; redimensionar: (tamaño, altura) iniciales
 };
 
 // ---- Editor ------------------------------------------------------------------------------------
@@ -326,19 +481,22 @@ AnnotationEditor::AnnotationEditor(const QImage& image, QWidget* parent) : QDial
     sh->addWidget(m_zoomLabel);
     v->addWidget(status);
 
-    connect(m_canvas, &AnnotationCanvas::changed, this, [this]() { m_undo->setEnabled(!m_canvas->items().isEmpty()); });
+    connect(m_canvas, &AnnotationCanvas::changed, this, [this]() { m_undo->setEnabled(m_canvas->canUndo()); });
     connect(m_canvas, &AnnotationCanvas::textRequested, this, [this](const QPointF& at) {
+        const QString text = askText(QString());
+        if (text.isEmpty()) return;
+        Annotation a;
+        a.tool = Annotation::Tool::Text;
+        a.from = a.to = at;
+        a.text = text;
+        a.color = m_canvas->color();
+        a.width = m_canvas->width();
+        m_canvas->add(a);
+    });
+    connect(m_canvas, &AnnotationCanvas::editRequested, this, [this](int index) {
         bool ok = false;
-        const QString text = QInputDialog::getMultiLineText(this, tr("Texto"), tr("Texto de la anotación"), QString(), &ok);
-        if (ok && !text.trimmed().isEmpty()) {
-            Annotation a;
-            a.tool = Annotation::Tool::Text;
-            a.from = a.to = at;
-            a.text = text.trimmed();
-            a.color = m_canvas->color();
-            a.width = m_canvas->width();
-            m_canvas->add(a);
-        }
+        const QString text = QInputDialog::getMultiLineText(this, tr("Texto"), tr("Texto de la anotación"), m_canvas->items().at(index).text, &ok);
+        if (ok) m_canvas->setSelectedText(text.trimmed());   // vacío = borrar el texto
     });
     m_undo->setEnabled(false);
     setTool(Annotation::Tool::Arrow);
@@ -359,6 +517,19 @@ AnnotationEditor::AnnotationEditor(const QImage& image, QWidget* parent) : QDial
 void AnnotationEditor::setTool(Annotation::Tool tool) {
     m_canvas->setTool(tool);
     updateToolButtons();
+    updateHint();
+}
+
+void AnnotationEditor::updateHint() {
+    m_hint->setText(m_canvas->tool() == Annotation::Tool::Text
+        ? tr("Clic para escribir · arrastra un texto para moverlo y su esquina para cambiar el tamaño (o +/-) · doble clic edita · Supr borra")
+        : tr("Arrastra para dibujar · Ctrl+Z deshace · Ctrl+rueda amplía · 0 ajusta"));
+}
+
+QString AnnotationEditor::askText(const QString& initial) {
+    bool ok = false;
+    const QString text = QInputDialog::getMultiLineText(this, tr("Texto"), tr("Texto de la anotación"), initial, &ok);
+    return ok ? text.trimmed() : QString();
 }
 
 void AnnotationEditor::updateToolButtons() {
@@ -436,6 +607,18 @@ void AnnotationEditor::keyPressEvent(QKeyEvent* e) {
     if (e->matches(QKeySequence::ZoomOut)) { zoomBy(1 / 1.25); return; }
     if (e->key() == Qt::Key_Escape) { reject(); return; }
     if (e->key() == Qt::Key_0) { fitToWindow(); return; }
+    if (const int sel = m_canvas->selected(); sel >= 0) {
+        switch (e->key()) {
+            case Qt::Key_Delete:
+            case Qt::Key_Backspace: m_canvas->removeSelected(); return;
+            case Qt::Key_Return:
+            case Qt::Key_Enter:
+            case Qt::Key_F2: emit m_canvas->editRequested(sel); return;
+            case Qt::Key_Plus: m_canvas->scaleSelected(1.15); return;
+            case Qt::Key_Minus: m_canvas->scaleSelected(1 / 1.15); return;
+            default: break;
+        }
+    }
     if (e->modifiers() == Qt::NoModifier) {
         switch (e->key()) {
             case Qt::Key_A: setTool(Annotation::Tool::Arrow); return;

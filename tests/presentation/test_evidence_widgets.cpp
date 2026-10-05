@@ -65,15 +65,83 @@ private slots:
         QCOMPARE(out.pixelColor(6, 5), img.pixelColor(6, 5));
     }
 
-    void textDrawsABackgroundBox() {
+    void textDrawsOnlyTheLettersWithoutBackground() {
         Annotation text;
         text.tool = Annotation::Tool::Text;
         text.from = text.to = QPointF(10, 10);
         text.text = QStringLiteral("Bug aquí");
         text.color = Qt::yellow;
         const QImage out = renderAnnotations(white(200, 100), {text});
-        QVERIFY(out.pixelColor(14, 14) != QColor(Qt::white));   // caja oscura tras el texto
+        const QRect box = textBounds(text).toRect().intersected(out.rect());
+        int painted = 0;
+        for (int y = box.top(); y <= box.bottom(); ++y) {
+            for (int x = box.left(); x <= box.right(); ++x) {
+                const QColor c = out.pixelColor(x, y);
+                QVERIFY(c.red() > 200 && c.green() > 200);   // sólo blanco o amarillo: sin caja oscura
+                if (c != QColor(Qt::white)) ++painted;
+            }
+        }
+        QVERIFY(painted > 0);
         QCOMPARE(out.pixelColor(190, 90), QColor(Qt::white));
+    }
+
+    void textSizeGrowsTheBounds() {
+        Annotation text;
+        text.tool = Annotation::Tool::Text;
+        text.text = QStringLiteral("Hola");
+        text.fontSize = 20;
+        const QRectF small = textBounds(text);
+        text.fontSize = 40;
+        const QRectF big = textBounds(text);
+        QVERIFY(big.width() > small.width() * 1.5);
+        QVERIFY(big.height() > small.height() * 1.5);
+    }
+
+    void editorMovesResizesAndUndoesText() {
+        AnnotationEditor editor(white(400, 300));
+        editor.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&editor));
+        editor.setTool(Annotation::Tool::Text);
+        Annotation t;
+        t.tool = Annotation::Tool::Text;
+        t.from = t.to = QPointF(20, 20);
+        t.text = QStringLiteral("Texto");
+        t.fontSize = 20;
+        editor.addAnnotation(t);
+        auto* canvas = editor.findChild<QWidget*>(QStringLiteral("annotationCanvas"));
+        QVERIFY(canvas);
+        QTRY_VERIFY(canvas->width() > 0);
+        const double zoom = canvas->width() / 400.0;
+        auto send = [&](QEvent::Type type, QPointF imagePos, Qt::MouseButtons buttons) {
+            const QPointF pos = imagePos * zoom;
+            QMouseEvent ev(type, pos, canvas->mapToGlobal(pos), type == QEvent::MouseMove ? Qt::NoButton : Qt::LeftButton, buttons, Qt::NoModifier);
+            QApplication::sendEvent(canvas, &ev);
+        };
+
+        // Mover: arrastrar desde dentro del texto.
+        const QPointF inside = textBounds(t).center();
+        send(QEvent::MouseButtonPress, inside, Qt::LeftButton);
+        send(QEvent::MouseMove, inside + QPointF(50, 30), Qt::LeftButton);
+        send(QEvent::MouseButtonRelease, inside + QPointF(50, 30), Qt::NoButton);
+        QCOMPARE(editor.annotations().size(), 1);
+        const QPointF moved = editor.annotations().first().from;
+        QVERIFY(std::abs(moved.x() - 70) < 2 && std::abs(moved.y() - 50) < 2);
+
+        // Redimensionar: arrastrar el tirador de la esquina inferior derecha hacia abajo.
+        const QRectF box = textBounds(editor.annotations().first());
+        const QPointF handle = box.bottomRight() + QPointF(4, 4) / zoom;
+        send(QEvent::MouseButtonPress, handle, Qt::LeftButton);
+        send(QEvent::MouseMove, handle + QPointF(0, box.height()), Qt::LeftButton);
+        send(QEvent::MouseButtonRelease, handle + QPointF(0, box.height()), Qt::NoButton);
+        QVERIFY(editor.annotations().first().fontSize > 30);
+
+        // Deshacer revierte el tamaño y luego la posición, sin borrar el texto.
+        editor.undo();
+        QCOMPARE(editor.annotations().first().fontSize, 20);
+        editor.undo();
+        QCOMPARE(editor.annotations().first().from, QPointF(20, 20));
+        editor.undo();
+        QVERIFY(editor.annotations().isEmpty());
     }
 
     void emptyListLeavesTheImageUntouched() {

@@ -1684,6 +1684,10 @@
         <translation>Drag to draw · Ctrl+Z undoes · Ctrl+wheel zooms · 0 fits</translation>
     </message>
     <message>
+        <source>Clic para escribir · arrastra un texto para moverlo y su esquina para cambiar el tamaño (o +/-) · doble clic edita · Supr borra</source>
+        <translation>Click to type · drag a text to move it and its corner to resize it (or +/-) · double-click edits · Del deletes</translation>
+    </message>
+    <message>
         <source>Trazo fino</source>
         <translation>Thin stroke</translation>
     </message>

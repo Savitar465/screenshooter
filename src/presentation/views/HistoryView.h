@@ -3,13 +3,16 @@
 #include "core/models/IssueLink.h"
 #include "core/models/RunHistory.h"
 
+#include <QPointer>
 #include <QWidget>
 
 class QLabel;
+class QPushButton;
 class QLineEdit;
 class QLayout;
 class QVBoxLayout;
 class QHBoxLayout;
+class QSplitter;
 
 namespace qaflow {
 
@@ -19,9 +22,13 @@ class TestCaseStore;
 class RunHistoryStore;
 class TrendChart;
 struct PlanReport;
+struct PlanReportRow;
 
 /// Pantalla "Historial": lista de ejecuciones de planes y de casos a la izquierda;
 /// a la derecha, el informe del plan (exportable a Markdown) o el detalle de una ejecución.
+/// El informe del plan es maestro-detalle: la lista de sus casos y, al lado, el elegido con sus
+/// pasos y evidencias. Sólo se construye un caso a la vez, así que abrir un ciclo grande no lee
+/// todas sus capturas.
 class TestPublishService;
 
 class HistoryView : public QWidget {
@@ -56,12 +63,18 @@ signals:
 private:
     enum class Mode { All, Plans, Runs, Metrics };
 
-    void buildListPane(QHBoxLayout* root);
-    void buildDetailPane(QHBoxLayout* root);
+    void buildListPane(QSplitter* root);
+    void buildDetailPane(QSplitter* root);
     void refreshFilters();
     void refreshList();
     void refreshDetail();
     void renderPlan(const PlanReport& report);
+    /// Fila de la lista de casos del informe: veredicto, título, pasos y cuántas evidencias tiene.
+    QPushButton* caseRow(const PlanReportRow& row);
+    /// Elige el caso del informe que se ve al lado de la lista; sólo rehace ese panel.
+    void selectPlanCase(const QString& caseId);
+    /// Panel del caso elegido (`m_selectedCase`) del informe: enlaces, bugs, pasos y evidencias.
+    void renderPlanCase(const PlanReport& report);
     /// Tarjeta «Bugs encontrados» del informe: los reportados mientras corría el ciclo, con su caso,
     /// el paso que falló y su estado en el gestor. nullptr si el ciclo no dejó ninguno.
     QWidget* bugsCard(const PlanReport& report);
@@ -92,12 +105,15 @@ private:
     QString m_search;
     QString m_selectedPlan;
     QString m_selectedRun;
+    QString m_selectedCase;  // caso del informe del plan que se ve en detalle
     QString m_metricsPlan;   // plan cuya evolución se muestra (vacío = todos)
 
     QLineEdit* m_searchBox = nullptr;
     QLayout* m_filterRow = nullptr;
     QVBoxLayout* m_listLayout = nullptr;
     QVBoxLayout* m_detailLayout = nullptr;
+    QPointer<QWidget> m_caseList;          // lista de casos del informe abierto
+    QPointer<QVBoxLayout> m_caseLayout;    // panel del caso elegido
     QLabel* m_empty = nullptr;
 };
 

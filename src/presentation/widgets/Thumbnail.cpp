@@ -2,9 +2,9 @@
 
 #include "core/models/TestCase.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/ThumbnailLoader.h"
 
 #include <QFileInfo>
-#include <QImageReader>
 #include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
@@ -16,23 +16,52 @@ Thumbnail::Thumbnail(const QString& imagePath, int step, int seed, QWidget* pare
     : QWidget(parent), m_path(imagePath), m_step(step), m_seed(seed) {
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     setCursor(Qt::PointingHandCursor);
+    connect(&ThumbnailLoader::instance(), &ThumbnailLoader::loaded, this, &Thumbnail::onLoaded);
     reload();
 }
 
 void Thumbnail::reload() {
     m_pixmap = QPixmap();
+    m_scaled = QPixmap();
     m_extension.clear();
+    m_loading = false;
     Screenshot s;
     s.path = m_path;
     m_animation = s.isAnimation();
-    if (s.isImage()) {
-        QImageReader reader(m_path);
-        reader.setScaledSize(reader.size().scaled(480, 300, Qt::KeepAspectRatio));
-        const QImage img = reader.read();
-        if (!img.isNull()) m_pixmap = QPixmap::fromImage(img);
+    m_key = ThumbnailLoader::keyFor(m_path);
+    if (!m_key.isEmpty()) {
+        if (s.isImage() && !ThumbnailLoader::instance().failed(m_key)) {
+            // Ya decodificada (otra pantalla la enseñó): se pinta sin esperar.
+            if (!ThumbnailLoader::instance().find(m_key, &m_pixmap)) {
+                m_loading = true;
+                if (isVisible()) requestImage();
+            }
+        } else {
+            m_extension = s.extension().toUpper();
+        }
     }
-    if (m_pixmap.isNull() && QFileInfo::exists(m_path)) m_extension = s.extension().toUpper();
     setToolTip(QFileInfo(m_path).fileName());
+    update();
+}
+
+void Thumbnail::requestImage() {
+    if (m_loading) ThumbnailLoader::instance().request(m_path, m_key);
+}
+
+void Thumbnail::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    requestImage();
+}
+
+void Thumbnail::onLoaded(const QString& key) {
+    if (!m_loading || key != m_key) return;
+    m_loading = false;
+    if (!ThumbnailLoader::instance().find(m_key, &m_pixmap)) {
+        Screenshot s;
+        s.path = m_path;
+        m_extension = s.extension().toUpper();   // no se pudo decodificar: se enseña como fichero
+    }
+    m_scaled = QPixmap();
     update();
 }
 
@@ -60,8 +89,19 @@ void Thumbnail::paintEvent(QPaintEvent*) {
 
     if (!m_pixmap.isNull()) {
         p.fillRect(rect(), QColor(theme::Field));
-        const QPixmap scaled = m_pixmap.scaled(size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-        p.drawPixmap((width() - scaled.width()) / 2, (height() - scaled.height()) / 2, scaled);
+        // El reescalado suave es caro: se hace una vez por tamaño, no en cada repintado (pasar el
+        // ratón, desplazar la página…).
+        const qreal dpr = devicePixelRatioF();
+        const QSize target = size() * dpr;
+        if (m_scaled.isNull() || m_scaled.size() != target) {
+            const QPixmap fill = m_pixmap.scaled(target, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+            m_scaled = fill.copy((fill.width() - target.width()) / 2, (fill.height() - target.height()) / 2, target.width(), target.height());
+            m_scaled.setDevicePixelRatio(dpr);
+        }
+        p.drawPixmap(0, 0, m_scaled);
+    } else if (m_loading) {
+        // Hueco mientras se decodifica en segundo plano.
+        p.fillRect(rect(), QColor(theme::Field));
     } else if (!m_extension.isEmpty()) {
         // Fichero que no es imagen: icono de documento con la extensión.
         p.fillRect(rect(), QColor(theme::Field));

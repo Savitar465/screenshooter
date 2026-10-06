@@ -1,6 +1,7 @@
 #include "ShotCard.h"
 
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/Thumbnail.h"
 #include "presentation/widgets/Ui.h"
 
@@ -62,6 +63,38 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
         h->addWidget(annotate);
         remove->setStyleSheet(QStringLiteral("font-size:13px;"));
         h->addWidget(remove);
+        v->addWidget(bottom);
+        return;
+    }
+
+    if (layout == Layout::Archive) {
+        // Sólo lectura: ni selector de paso (un QComboBox por tarjeta, con todos los pasos), ni
+        // flechas, ni borrar. El paso al que se asignó se lee en la miniatura y debajo.
+        m_readOnly = true;
+        delete remove;   // nunca se colocan: sin padre quedarían sueltos
+        delete name;
+        setProperty("role", QStringLiteral("shot-card"));
+        auto* v = ui::vbox(this, 0, 0);
+        m_thumb->setWidthHint(200);
+        v->addWidget(m_thumb);
+        auto* bottom = new QWidget;
+        auto* bv = ui::vbox(bottom, 0, 2);
+        bv->setContentsMargins(10, 7, 6, 8);
+        QString stepText = tr("Sin paso asignado");
+        if (shot.step > 0 && shot.step <= steps.size()) stepText = tr("Paso %1 · %2").arg(shot.step).arg(steps[shot.step - 1].action);
+        else if (shot.step > 0) stepText = tr("Paso %1").arg(shot.step);
+        // Nombre y paso recortados al ancho de la tarjeta (el texto entero, en el tooltip): con su
+        // texto completo, una rejilla de varias columnas no cabía en una ventana estrecha.
+        auto* file = new ElidedLabel(shot.fileName);
+        file->setProperty("role", QStringLiteral("mono-muted"));
+        auto* row = new QWidget;
+        auto* h = ui::hbox(row, 0, 4);
+        h->addWidget(file, 1);
+        h->addWidget(annotate);
+        bv->addWidget(row);
+        auto* step = new ElidedLabel(stepText);
+        step->setProperty("role", QStringLiteral("muted-sm"));
+        bv->addWidget(step);
         v->addWidget(bottom);
         return;
     }

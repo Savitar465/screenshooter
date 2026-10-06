@@ -13,12 +13,14 @@ class Thumbnail;
 /// `Layout::Grid` es la tarjeta vertical (Casos), `Layout::Row` la fila compacta,
 /// `Layout::Compact` la tarjeta pequeña sin selector (Reportar bug) y `Layout::Film` la del
 /// tira de capturas de la ejecución: como la compacta pero con estado seleccionado.
+/// `Layout::Archive` es la tarjeta del historial: la de la rejilla, pero de sólo lectura desde que
+/// se construye (el paso se lee, no se elige), sin los controles que nunca se van a usar.
 /// Un clic en la miniatura pide abrirla a tamaño completo; el botón de anotar y el menú
 /// contextual (botón derecho) dan acceso al resto de acciones.
 class ShotCard : public QFrame {
     Q_OBJECT
 public:
-    enum class Layout { Grid, Row, Compact, Film };
+    enum class Layout { Grid, Row, Compact, Film, Archive };
 
     ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout layout, QWidget* parent = nullptr);
 

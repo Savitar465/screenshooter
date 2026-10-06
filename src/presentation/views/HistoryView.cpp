@@ -9,16 +9,19 @@
 #include "core/models/Metrics.h"
 #include "core/models/PlanReport.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/MetricBars.h"
 #include "presentation/widgets/ProgressCells.h"
+#include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/Ui.h"
 #include "presentation/widgets/ZephyrPublishFlow.h"
 
 #include <QCoreApplication>
 #include <QApplication>
+#include <QMenu>
 #include <QClipboard>
 #include <QDir>
 #include <QFile>
@@ -31,6 +34,8 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QSettings>
+#include <QSplitter>
 #include <QStandardPaths>
 
 #include <algorithm>
@@ -58,11 +63,40 @@ QString resultColor(StepResult r) {
     return theme::Muted;
 }
 
-QLabel* verdictPill(Verdict v) {
-    return ui::pill(label(v).toUpper(), verdictColor(v), v == Verdict::Fallido ? QStringLiteral("#ffffff") : theme::Bg);
+/// Veredicto como punto de color y texto: se distingue igual que una etiqueta rellena y pesa menos
+/// cuando hay muchos en pantalla.
+QWidget* verdictTag(const QString& text, const QString& color) {
+    auto* w = new QWidget;
+    auto* h = ui::hbox(w, 0, 6);
+    h->addWidget(ui::dot(color, 8), 0, Qt::AlignVCenter);
+    auto* l = new QLabel(text);
+    l->setStyleSheet(QStringLiteral("color:%1;font-weight:600;").arg(color));
+    h->addWidget(l);
+    return w;
 }
 
+QWidget* verdictTag(Verdict v) { return verdictTag(label(v), verdictColor(v)); }
+
 QString when(const QDateTime& dt) { return dt.isValid() ? dt.toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QStringLiteral("—"); }
+
+/// Cabecera de grupo de la lista: «Hoy», «Ayer» o la fecha.
+QString dayLabel(const QDate& d) {
+    const QDate today = QDate::currentDate();
+    if (d == today) return QCoreApplication::translate("HistoryView", "HOY");
+    if (d == today.addDays(-1)) return QCoreApplication::translate("HistoryView", "AYER");
+    return d.isValid() ? d.toString(QStringLiteral("dd/MM/yyyy")) : QStringLiteral("—");
+}
+
+/// Un cuadradito por paso ejecutado, del color de su resultado.
+QWidget* stepCells(const RunRecord& run) {
+    QStringList colors;
+    for (const auto& s : run.steps) colors << resultColor(s.result);
+    for (int i = run.steps.size(); i < run.plannedSteps; ++i) colors << theme::Border;
+    auto* cells = new ProgressCells;
+    cells->setColors(colors);
+    cells->setFixedSize(std::max(1, int(colors.size())) * 11 - 3, 6);
+    return cells;
+}
 
 QWidget* stat(const QString& title, const QString& value, const QString& color = QString()) {
     auto* w = new QWidget;
@@ -86,9 +120,25 @@ struct Entry {
 HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish,
                          EvidenceService* evidence, RunController* run, QWidget* parent)
     : QWidget(parent), m_cases(cases), m_history(history), m_publish(publish), m_evidence(evidence), m_run(run) {
-    auto* root = ui::hbox(this, 0, 0);
+    auto* outer = ui::hbox(this, 0, 0);
+    // La lista se ensancha o se estrecha arrastrando su borde; el ancho se recuerda.
+    auto* root = new QSplitter(Qt::Horizontal);
+    root->setObjectName(QStringLiteral("historySplit"));
+    root->setChildrenCollapsible(false);
+    root->setHandleWidth(5);
+    root->setStyleSheet(QStringLiteral("QSplitter#historySplit::handle{background:transparent;}"
+                                       "QSplitter#historySplit::handle:hover{background:%1;}")
+                            .arg(theme::tint(theme::Blue, 70)));
+    outer->addWidget(root);
     buildListPane(root);
     buildDetailPane(root);
+    root->setStretchFactor(0, 0);
+    root->setStretchFactor(1, 1);
+    const int listWidth = QSettings().value(QStringLiteral("history/listWidth"), 290).toInt();
+    root->setSizes({listWidth, 4 * listWidth});
+    connect(root, &QSplitter::splitterMoved, this, [root]() {
+        QSettings().setValue(QStringLiteral("history/listWidth"), root->widget(0)->width());
+    });
 
     connect(&m_history, &RunHistoryStore::historyChanged, this, [this]() { refreshList(); refreshDetail(); });
     refreshFilters();
@@ -96,10 +146,11 @@ HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPub
     refreshDetail();
 }
 
-void HistoryView::buildListPane(QHBoxLayout* root) {
+void HistoryView::buildListPane(QSplitter* root) {
     auto* pane = ui::card("list-pane");
-    pane->setMinimumWidth(260);
-    pane->setMaximumWidth(320);
+    pane->setObjectName(QStringLiteral("historyList"));
+    pane->setMinimumWidth(220);
+    pane->setMaximumWidth(560);
     pane->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     auto* v = ui::vbox(pane, 0, 0);
 
@@ -127,16 +178,19 @@ void HistoryView::buildListPane(QHBoxLayout* root) {
     root->addWidget(pane);
 }
 
-void HistoryView::buildDetailPane(QHBoxLayout* root) {
+void HistoryView::buildDetailPane(QSplitter* root) {
     QWidget* content;
     QVBoxLayout* outer;
     auto* sa = ui::scrollArea(&content, &outer);
-    outer->setContentsMargins(32, 28, 32, 28);
+    sa->setMinimumWidth(360);
+    // Todo el detalle se adapta al ancho; si algo aun así no cabe, se desplaza en vez de cortarse.
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    outer->setContentsMargins(28, 24, 28, 28);
     auto* page = new QWidget;
-    page->setMaximumWidth(900);
+    page->setMaximumWidth(1180);
     m_detailLayout = ui::vbox(page, 0, 18);
     outer->addWidget(page, 0, Qt::AlignTop);
-    root->addWidget(sa, 1);
+    root->addWidget(sa);
 }
 
 void HistoryView::refreshFilters() {
@@ -182,49 +236,65 @@ void HistoryView::refreshList() {
         return;
     }
 
+    // Agrupada por día: la fecha se lee una vez en la cabecera y cada fila sólo lleva la hora.
+    QDate day;
+    bool first = true;
     for (const auto& e : entries) {
         const RunRecord* r = e.isPlan ? nullptr : m_history.findRun(e.id);
         if (!e.isPlan && !r) continue;
-        auto* row = ui::button(QString(), "row");
-        auto* v = ui::vbox(row, 0, 4);
-        v->setContentsMargins(12, 10, 12, 10);
-        auto* top = new QWidget;
-        auto* th = ui::hbox(top, 0, 8);
+        if (first || e.at.date() != day) {
+            day = e.at.date();
+            auto* g = ui::label(dayLabel(day), "group");
+            g->setContentsMargins(10, first ? 4 : 12, 0, 4);
+            m_listLayout->addWidget(g);
+            first = false;
+        }
+        const QString time = e.at.isValid() ? e.at.toString(QStringLiteral("HH:mm")) : QStringLiteral("—");
+        auto* row = ui::button(QString(), "row-soft");
+        auto* h = ui::hbox(row, 0, 10);
+        h->setContentsMargins(10, 9, 10, 9);
+        auto* text = new QWidget;
+        auto* v = ui::vbox(text, 0, 3);
         auto* title = new QLabel;
         title->setWordWrap(true);
         title->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;color:%1;").arg(theme::Text));
         auto* bottom = ui::label(QString(), "muted-sm");
+        bottom->setWordWrap(true);
+        QString color;
 
         if (e.isPlan) {
             const PlanReport rep = m_history.report(e.id);
-            th->addWidget(ui::label(e.id, "mono-muted"));
-            th->addStretch(1);
-            th->addWidget(ui::pill(QStringLiteral("PLAN"), theme::tint(theme::Blue, 38), theme::Blue));
-            if (rep.plan.isFinished()) th->addWidget(verdictPill(rep.verdict()));
-            else th->addWidget(ui::pill(tr("EN CURSO"), theme::tint(theme::Muted, 38), theme::Muted));
+            color = rep.plan.isFinished() ? verdictColor(rep.verdict()) : theme::Muted;
             title->setText(rep.plan.name.isEmpty() ? tr("(plan sin nombre)") : rep.plan.name);
-            QString info = tr("%1 · %2/%3 casos · %4 %").arg(when(rep.plan.startedAt)).arg(rep.executed).arg(rep.total()).arg(rep.successRate());
+            QString info = rep.plan.isFinished() ? tr("Plan · %1/%2 casos · %3 %").arg(rep.executed).arg(rep.total()).arg(rep.successRate())
+                                                 : tr("Plan en curso · %1/%2 casos").arg(rep.executed).arg(rep.total());
             // Dos ciclos del mismo plan se distinguen por su ronda y su ambiente, no sólo por la fecha.
             if (rep.plan.revision > 0) info += tr(" · revisión %1").arg(rep.plan.revision);
             if (!rep.plan.environment.trimmed().isEmpty()) info += QStringLiteral(" · ") + rep.plan.environment.trimmed();
-            bottom->setText(info);
+            bottom->setText(info + QStringLiteral(" · ") + time);
+            row->setToolTip(tr("%1 · %2").arg(e.id, when(rep.plan.startedAt)));
             ui::setFlag(row, "active", e.id == m_selectedPlan);
             connect(row, &QPushButton::clicked, this, [this, id = e.id]() { showPlan(id); });
         } else {
-            th->addWidget(ui::label(r->caseId, "mono-muted"));
-            th->addWidget(ui::label(QStringLiteral("· %1").arg(r->suite), "mono-muted"));
-            th->addStretch(1);
-            th->addWidget(verdictPill(r->verdict));
+            color = verdictColor(r->verdict);
             title->setText(r->caseTitle.isEmpty() ? tr("(sin título)") : r->caseTitle);
-            QString info = tr("%1 · %2/%3 pasos").arg(when(r->finishedAt)).arg(r->steps.size()).arg(r->plannedSteps);
+            QString info = tr("%1 · %2/%3 pasos").arg(r->caseId).arg(r->steps.size()).arg(r->plannedSteps);
             if (const PlanRun* p = r->planRunId.isEmpty() ? nullptr : m_history.findPlan(r->planRunId)) info += QStringLiteral(" · ") + p->name;
-            bottom->setText(info);
+            bottom->setText(info + QStringLiteral(" · ") + time);
+            row->setToolTip(tr("%1 · %2 · %3").arg(r->id, r->suite, when(r->finishedAt)));
             ui::setFlag(row, "active", e.id == m_selectedRun);
             connect(row, &QPushButton::clicked, this, [this, id = e.id]() { showRun(id); });
         }
-        v->addWidget(top);
+        auto* dotBox = new QWidget;
+        dotBox->setFixedWidth(8);
+        auto* dv = ui::vbox(dotBox, 0, 0);
+        dv->setContentsMargins(0, 6, 0, 0);
+        dv->addWidget(ui::dot(color, 8));
+        dv->addStretch(1);
+        h->addWidget(dotBox);
         v->addWidget(title);
         v->addWidget(bottom);
+        h->addWidget(text, 1);
         for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
         m_listLayout->addWidget(row);
     }
@@ -238,6 +308,7 @@ void HistoryView::refresh() {
 
 void HistoryView::showPlan(const QString& planRunId) {
     if (m_mode == Mode::Metrics || m_mode == Mode::Runs) { m_mode = Mode::All; refreshFilters(); }
+    if (planRunId != m_selectedPlan) m_selectedCase.clear();
     m_selectedPlan = planRunId;
     m_selectedRun.clear();
     refreshList();
@@ -304,32 +375,34 @@ void HistoryView::renderPlan(const PlanReport& report) {
     const PlanRun& plan = report.plan;
 
     // Cabecera: el título con su estado y, debajo, las acciones en una fila que se ajusta al ancho
-    // (con Zephyr son cinco botones, y en una pantalla estrecha aplastaban al título).
+    // (con Zephyr son varios botones, y en una pantalla estrecha aplastaban al título).
     auto* head = new QWidget;
-    auto* hv = ui::vbox(head, 0, 10);
+    auto* hv = ui::vbox(head, 0, 12);
     auto* actions = new QWidget;
     auto* ah = new FlowLayout(actions, 0, 8, 8);
     auto* titleBlock = new QWidget;
-    auto* tv = ui::vbox(titleBlock, 0, 2);
-    QString eyebrow = tr("INFORME DE PLAN · %1 · %2").arg(plan.id, when(plan.startedAt));
+    auto* tv = ui::vbox(titleBlock, 0, 4);
+    QString eyebrow = tr("%1 · %2").arg(plan.id, when(plan.startedAt));
     // De qué ronda del control de calidad son estos resultados y dónde se obtuvieron: lo mismo que
     // viaja con el ciclo a Zephyr.
-    if (plan.revision > 0) eyebrow += tr(" · REVISIÓN %1").arg(plan.revision);
-    if (!plan.environment.trimmed().isEmpty()) eyebrow += QStringLiteral(" · ") + plan.environment.trimmed().toUpper();
-    tv->addWidget(ui::label(eyebrow, "eyebrow"));
+    if (plan.revision > 0) eyebrow += tr(" · revisión %1").arg(plan.revision);
+    if (!plan.environment.trimmed().isEmpty()) eyebrow += QStringLiteral(" · ") + plan.environment.trimmed();
+    auto* eyebrowLabel = ui::label(eyebrow, "muted-sm");
+    eyebrowLabel->setWordWrap(true);
+    tv->addWidget(eyebrowLabel);
     auto* title = ui::label(plan.name.isEmpty() ? tr("(plan sin nombre)") : plan.name, "h1");
     title->setWordWrap(true);
     tv->addWidget(title);
+    // Estado y fecha en una fila que salta de línea si no cabe.
     auto* sub = new QWidget;
-    auto* sh = ui::hbox(sub, 0, 8);
+    auto* sh = new FlowLayout(sub, 0, 8, 4);
     if (plan.isFinished()) {
-        sh->addWidget(verdictPill(report.verdict()));
-        sh->addWidget(ui::label(tr("Terminado el %1").arg(when(plan.finishedAt)), "muted-sm"));
+        sh->addWidget(verdictTag(report.verdict()));
+        sh->addWidget(ui::label(tr("· terminado el %1").arg(when(plan.finishedAt)), "muted-sm"));
     } else {
-        sh->addWidget(ui::pill(tr("EN CURSO"), theme::tint(theme::Muted, 38), theme::Muted));
-        sh->addWidget(ui::label(tr("La ejecución del plan no ha terminado"), "muted-sm"));
+        sh->addWidget(verdictTag(tr("En curso"), theme::Muted));
+        sh->addWidget(ui::label(tr("· la ejecución del plan no ha terminado"), "muted-sm"));
     }
-    sh->addStretch(1);
     tv->addWidget(sub);
     // Dónde acabaron estos resultados: sin esto, saber si un ciclo ya se publicó era mirarlo en Jira.
     // En su propia línea y con ajuste de texto: apretada contra los botones de la cabecera se cortaba.
@@ -355,16 +428,9 @@ void HistoryView::renderPlan(const PlanReport& report) {
         tv->addWidget(where);
     }
     hv->addWidget(titleBlock);
-    auto* exportBtn = ui::button(tr("Exportar Markdown…"), "outline");
-    connect(exportBtn, &QPushButton::clicked, this, [this, report]() { exportMarkdown(report); });
-    auto* copyBtn = ui::button(tr("Copiar"), "outline");
-    copyBtn->setToolTip(tr("Copiar el informe en Markdown al portapapeles"));
-    connect(copyBtn, &QPushButton::clicked, this, [this, report]() { copyMarkdown(report); });
-    ah->addWidget(exportBtn);
-    ah->addWidget(copyBtn);
     // Lo que quedó roto se retoma desde aquí: es lo siguiente que se hace con un informe con fallos.
     if (report.canContinue()) {
-        auto* continueBtn = ui::button(tr("Continuar ciclo…"), "primary");
+        auto* continueBtn = ui::button(tr("Continuar ciclo (%1)").arg(report.toContinue().size()), "primary");
         continueBtn->setObjectName(QStringLiteral("continueCycle"));
         continueBtn->setToolTip(tr("Vuelve a ejecutar los %1 caso(s) por terminar —los rotos desde el paso que se rompió y "
                                    "los que no se ejecutaron, enteros—, en el mismo ciclo")
@@ -376,7 +442,7 @@ void HistoryView::renderPlan(const PlanReport& report) {
     if (m_publish && m_publish->enabled() && plan.isFinished() && report.executed > 0) {
         // Ya publicado: lo normal es actualizar aquel ciclo; crear otro queda como opción secundaria.
         if (plan.isPublished()) {
-            auto* updateBtn = ui::button(tr("Actualizar en Zephyr"), "primary");
+            auto* updateBtn = ui::button(tr("Actualizar en Zephyr"), report.canContinue() ? "outline" : "primary");
             updateBtn->setObjectName(QStringLiteral("updateZephyr"));
             updateBtn->setToolTip(tr("Vuelve a mandar al ciclo %1 de Zephyr el veredicto de cada caso y de cada paso, y sube las evidencias que falten").arg(plan.zephyrCycleId));
             connect(updateBtn, &QPushButton::clicked, this, [this, report]() { updateInZephyr(report); });
@@ -384,7 +450,8 @@ void HistoryView::renderPlan(const PlanReport& report) {
         }
         // El ciclo de un issue va siempre al de su fase: no hay «ciclo nuevo» que ofrecer.
         if (!plan.isPublished() || !m_publish->sharesPhaseCycle(report)) {
-            auto* zephyrBtn = ui::button(plan.isPublished() ? tr("Publicar como ciclo nuevo") : tr("Publicar en Zephyr"), plan.isPublished() ? "outline" : "primary");
+            const bool isMain = !plan.isPublished() && !report.canContinue();
+            auto* zephyrBtn = ui::button(plan.isPublished() ? tr("Publicar como ciclo nuevo") : tr("Publicar en Zephyr"), isMain ? "primary" : "outline");
             zephyrBtn->setObjectName(QStringLiteral("publishZephyr"));
             zephyrBtn->setToolTip(m_publish->sharesPhaseCycle(report)
                                       ? tr("Publica estas ejecuciones en el ciclo «%1» de Zephyr, el de su fase").arg(m_publish->cycleName(report))
@@ -393,82 +460,219 @@ void HistoryView::renderPlan(const PlanReport& report) {
             ah->addWidget(zephyrBtn);
         }
     }
+    // Lo que se usa de vez en cuando (exportar, copiar, eliminar) va en un menú: a la vista sólo queda
+    // lo siguiente que se hace con el informe.
+    auto* more = ui::button(QStringLiteral("⋯"), "outline");
+    more->setObjectName(QStringLiteral("planMore"));
+    more->setToolTip(tr("Más acciones: exportar, copiar, eliminar"));
+    more->setAccessibleName(tr("Más acciones"));
+    // Las acciones van encoladas: eliminar rehace la pantalla, y el menú (hijo del botón) no puede
+    // destruirse mientras todavía está abierto.
+    auto* menu = new QMenu(more);
+    menu->addAction(tr("Exportar Markdown…"), this, [this, report]() { exportMarkdown(report); }, Qt::QueuedConnection)->setObjectName(QStringLiteral("exportPlan"));
+    menu->addAction(tr("Copiar informe en Markdown"), this, [this, report]() { copyMarkdown(report); }, Qt::QueuedConnection)->setObjectName(QStringLiteral("copyPlan"));
     // El ciclo en curso no se elimina: la ejecución sigue escribiendo en él. Un ciclo sin terminar
     // que no es el actual quedó a medias (la sesión se perdió) y sí puede irse.
     const bool inProgress = !plan.isFinished() && (!m_run || m_run->planRunId() == plan.id);
     if (!inProgress) {
-        auto* deleteBtn = ui::button(tr("Eliminar…"), "outline");
-        deleteBtn->setObjectName(QStringLiteral("deletePlan"));
-        deleteBtn->setToolTip(tr("Eliminar este informe del historial, con sus ejecuciones y evidencias"));
-        deleteBtn->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Red));
-        connect(deleteBtn, &QPushButton::clicked, this, [this, report]() { deletePlan(report); });
-        ah->addWidget(deleteBtn);
+        menu->addSeparator();
+        auto* del = menu->addAction(tr("Eliminar informe…"), this, [this, report]() { deletePlan(report); }, Qt::QueuedConnection);
+        del->setObjectName(QStringLiteral("deletePlan"));
+        del->setToolTip(tr("Eliminar este informe del historial, con sus ejecuciones y evidencias"));
     }
+    connect(more, &QPushButton::clicked, this, [more, menu]() { menu->exec(more->mapToGlobal(QPoint(0, more->height() + 4))); });
+    ah->addWidget(more);
     hv->addWidget(actions);
     m_detailLayout->addWidget(head);
 
-    // Resumen
+    // Resumen en una línea: el porcentaje, la barra y las cuentas.
     auto* stats = ui::card("card");
-    auto* sg = ui::hbox(stats, 18, 22);
+    auto* sg = ui::hbox(stats, 0, 20);
     sg->setContentsMargins(20, 14, 20, 14);
-    sg->addWidget(stat(tr("Casos"), QString::number(report.total())));
-    sg->addWidget(stat(tr("Superados"), QString::number(report.passed), theme::Green));
-    sg->addWidget(stat(tr("Fallidos"), QString::number(report.failed), theme::Red));
-    sg->addWidget(stat(tr("Bloqueados"), QString::number(report.blocked), theme::Amber));
-    sg->addWidget(stat(tr("Pendientes"), QString::number(report.pending()), theme::Muted));
-    sg->addWidget(stat(tr("Éxito"), QStringLiteral("%1 %").arg(report.successRate()), theme::Blue));
+    auto* rateBox = new QWidget;
+    auto* rv = ui::vbox(rateBox, 0, 0);
+    auto* rate = ui::label(report.executed ? QStringLiteral("%1 %").arg(report.successRate()) : QStringLiteral("—"), "stat");
+    rate->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Blue));
+    rv->addWidget(rate);
+    rv->addWidget(ui::label(tr("de éxito"), "muted-sm"));
+    sg->addWidget(rateBox);
+    auto* barBox = new QWidget;
+    auto* bv = ui::vbox(barBox, 0, 8);
+    auto* bar = new RateBar;
+    bar->setCounts(report.passed, report.failed, report.blocked, report.pending());
+    bv->addWidget(bar);
+    QStringList counts;
+    auto count = [&](int n, const QString& what, const QString& color) {
+        counts << QStringLiteral("<b style='color:%1'>%2</b> %3").arg(color).arg(n).arg(what);
+    };
+    count(report.passed, tr("superados"), theme::Green);
+    count(report.failed, tr("fallidos"), theme::Red);
+    count(report.blocked, tr("bloqueados"), theme::Amber);
+    count(report.pending(), tr("pendientes"), theme::Text);
+    QString line = counts.join(QStringLiteral(" &nbsp;·&nbsp; "));
+    line += QStringLiteral(" &nbsp;·&nbsp; ") + tr("%1 en total").arg(formatDuration(report.durationSecs));
     // Los bugs sólo ocupan sitio en el resumen si el ciclo dejó alguno.
     if (const int bugs = report.bugCount(); bugs > 0) {
         const int open = report.openBugCount();
-        sg->addWidget(stat(tr("Bugs"), open > 0 ? tr("%1 · %2 abiertos").arg(bugs).arg(open) : QString::number(bugs),
-                           open > 0 ? theme::Red : theme::Green));
+        line += QStringLiteral(" &nbsp;·&nbsp; ") + (open > 0 ? tr("<b style='color:%1'>%2</b> de %3 bugs abiertos").arg(theme::Red).arg(open).arg(bugs)
+                                                             : tr("%1 bugs, todos cerrados").arg(bugs));
     }
-    sg->addWidget(stat(tr("Duración"), formatDuration(report.durationSecs)));
-    sg->addStretch(1);
+    auto* legend = ui::label(line, "muted-sm");
+    legend->setTextFormat(Qt::RichText);
+    legend->setWordWrap(true);
+    bv->addWidget(legend);
+    sg->addWidget(barBox, 1);
     m_detailLayout->addWidget(stats);
-
-    QStringList colors;
-    for (const auto& row : report.rows) colors << (row.executed ? verdictColor(row.run.verdict) : theme::Border);
-    auto* cells = new ProgressCells;
-    cells->setColors(colors);
-    m_detailLayout->addWidget(cells);
 
     if (auto* bugs = bugsCard(report)) m_detailLayout->addWidget(bugs);
 
-    // Una tarjeta por caso del plan
-    auto* rowsHead = ui::label(tr("CASOS · %1").arg(report.total()), "eyebrow");
-    m_detailLayout->addWidget(rowsHead);
-    for (const auto& row : report.rows) {
-        auto* card = ui::card("card");
-        auto* cv = ui::vbox(card, 0, 10);
-        cv->setContentsMargins(16, 12, 16, 12);
-        auto* top = new QWidget;
-        auto* th = ui::hbox(top, 0, 10);
-        auto* idBtn = ui::button(row.caseId, "ghost");
-        idBtn->setToolTip(tr("Abrir el caso"));
-        idBtn->setStyleSheet(QStringLiteral("padding:2px 6px;font-size:12px;font-weight:700;font-family:'Consolas','DejaVu Sans Mono',monospace;color:%1;").arg(theme::Blue));
-        connect(idBtn, &QPushButton::clicked, this, [this, id = row.caseId]() { emit openCaseRequested(id); });
-        th->addWidget(idBtn);
-        auto* t = new QLabel(row.title.isEmpty() ? tr("(sin título)") : row.title);
-        t->setWordWrap(true);
-        t->setStyleSheet(QStringLiteral("font-size:14px;font-weight:600;"));
-        th->addWidget(t, 1);
-        if (row.executed) {
-            th->addWidget(ui::label(tr("%1/%2 pasos · %3").arg(row.run.steps.size()).arg(row.run.plannedSteps).arg(formatDuration(row.run.durationSecs)), "muted-sm"));
-            th->addWidget(verdictPill(row.run.verdict));
-        } else {
-            th->addWidget(ui::pill(tr("PENDIENTE"), theme::tint(theme::Muted, 38), theme::Muted));
-        }
-        cv->addWidget(top);
-        // Con qué está enlazado: la historia de Jira del caso y el Test que se creó para esta ejecución.
-        if (auto* links = issueLinks(row.jiraKey, row.testKey)) cv->addWidget(links);
-        // Los bugs que salieron de este caso, junto a los pasos donde se vieron.
-        for (const auto& bug : row.bugs) cv->addWidget(bugRow(bug, false));
-        if (row.executed) cv->addWidget(stepsList(row.run));
-        if (row.executed)
-            if (auto* shots = evidenceGrid(row.run, 4)) cv->addWidget(shots);
-        m_detailLayout->addWidget(card);
+    if (report.rows.isEmpty()) {
+        m_detailLayout->addWidget(ui::label(tr("El ciclo no tiene casos."), "muted"));
+        return;
     }
+
+    // Maestro-detalle: la lista de casos a la izquierda y el elegido a la derecha. Sólo se construye
+    // (y se leen las evidencias de) un caso a la vez: con un ciclo grande, pintar todos los casos con
+    // todas sus capturas era lo que hacía tardar al abrir el informe.
+    bool known = false;
+    for (const auto& row : report.rows) known = known || row.caseId == m_selectedCase;
+    if (!known) {
+        // Lo primero que se mira de un informe es lo que se rompió.
+        m_selectedCase = report.rows.first().caseId;
+        for (const auto& row : report.rows)
+            if (row.executed && row.run.isBroken()) { m_selectedCase = row.caseId; break; }
+    }
+
+    // Lado a lado si hay sitio; en un panel estrecho, la lista encima del caso.
+    auto* card = ui::card("card");
+    card->setObjectName(QStringLiteral("planCases"));
+    auto* cardBox = ui::vbox(card, 0, 0);
+    m_caseList = new QWidget;
+    auto* lv = ui::vbox(m_caseList, 0, 2);
+    lv->setContentsMargins(8, 12, 8, 12);
+    auto* casesHead = ui::label(tr("CASOS · %1").arg(report.total()), "eyebrow");
+    casesHead->setContentsMargins(10, 0, 0, 6);
+    lv->addWidget(casesHead);
+    for (const auto& row : report.rows) lv->addWidget(caseRow(row));
+    lv->addStretch(1);
+    auto* detail = new QWidget;
+    m_caseLayout = ui::vbox(detail, 0, 16);
+    m_caseLayout->setContentsMargins(22, 18, 22, 20);
+    auto* split = new AdaptiveSplit(m_caseList, detail, 280, 700);
+    split->setObjectName(QStringLiteral("planCasesSplit"));
+    cardBox->addWidget(split);
+    m_detailLayout->addWidget(card);
+    renderPlanCase(report);
+}
+
+QPushButton* HistoryView::caseRow(const PlanReportRow& row) {
+    auto* b = ui::button(QString(), "row-soft");
+    b->setObjectName(QStringLiteral("planCase-%1").arg(row.caseId));
+    b->setProperty("caseId", row.caseId);
+    ui::setFlag(b, "active", row.caseId == m_selectedCase);
+    const QString title = row.title.isEmpty() ? tr("(sin título)") : row.title;
+    b->setToolTip(title);
+    auto* h = ui::hbox(b, 0, 10);
+    h->setContentsMargins(10, 8, 10, 8);
+    auto* dotBox = new QWidget;
+    dotBox->setFixedWidth(8);
+    auto* dv = ui::vbox(dotBox, 0, 0);
+    dv->setContentsMargins(0, 5, 0, 0);
+    dv->addWidget(ui::dot(row.executed ? verdictColor(row.run.verdict) : theme::Muted, 8));
+    dv->addStretch(1);
+    h->addWidget(dotBox);
+    auto* text = new QWidget;
+    auto* v = ui::vbox(text, 0, 4);
+    // Recortado al ancho de la columna, a dos líneas: el título entero está en el panel de al lado.
+    auto* t = new ElidedLabel(title);
+    t->setMaxLines(2);
+    t->setStyleSheet(QStringLiteral("font-weight:600;color:%1;").arg(theme::Text));
+    v->addWidget(t);
+    auto* meta = new QWidget;
+    auto* mh = ui::hbox(meta, 0, 8);
+    mh->addWidget(ui::label(row.caseId, "mono-muted"));
+    if (row.executed) {
+        mh->addWidget(stepCells(row.run), 0, Qt::AlignVCenter);
+    } else {
+        mh->addWidget(ui::label(tr("pendiente"), "muted-sm"));
+    }
+    mh->addStretch(1);
+    // Cuántas evidencias tiene, sin leerlas: se cuentan en el historial, no en disco.
+    if (row.executed)
+        if (const int n = int(m_history.evidenceOf(row.run).size()); n > 0)
+            mh->addWidget(ui::label(n == 1 ? tr("1 evid.") : tr("%1 evid.").arg(n), "muted-sm"));
+    v->addWidget(meta);
+    h->addWidget(text, 1);
+    for (auto* child : b->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+    connect(b, &QPushButton::clicked, this, [this, id = row.caseId]() { selectPlanCase(id); });
+    return b;
+}
+
+void HistoryView::selectPlanCase(const QString& caseId) {
+    if (caseId == m_selectedCase || !m_caseLayout || !m_caseList || !m_history.findPlan(m_selectedPlan)) return;
+    m_selectedCase = caseId;
+    for (auto* b : m_caseList->findChildren<QPushButton*>())
+        if (b->property("caseId").isValid()) ui::setFlag(b, "active", b->property("caseId").toString() == caseId);
+    // Sólo se rehace el panel del caso: la cabecera, el resumen y la lista se quedan como están.
+    renderPlanCase(m_history.report(m_selectedPlan));
+}
+
+void HistoryView::renderPlanCase(const PlanReport& report) {
+    ui::clearLayout(m_caseLayout);
+    const PlanReportRow* found = nullptr;
+    for (const auto& r : report.rows) if (r.caseId == m_selectedCase) { found = &r; break; }
+    if (!found) return;
+    const PlanReportRow& row = *found;
+
+    auto* top = new QWidget;
+    auto* th = ui::hbox(top, 0, 12);
+    auto* tb = new QWidget;
+    auto* tv = ui::vbox(tb, 0, 4);
+    auto* id = ui::label(row.caseId, "mono-muted");
+    id->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Blue));
+    tv->addWidget(id);
+    auto* t = new QLabel(row.title.isEmpty() ? tr("(sin título)") : row.title);
+    t->setWordWrap(true);
+    t->setStyleSheet(QStringLiteral("font-size:17px;font-weight:700;"));
+    tv->addWidget(t);
+    auto* state = new QWidget;
+    auto* st = new FlowLayout(state, 0, 8, 4);
+    if (row.executed) {
+        st->addWidget(verdictTag(row.run.verdict));
+        st->addWidget(ui::label(tr("· %1/%2 pasos · %3").arg(row.run.steps.size()).arg(row.run.plannedSteps).arg(formatDuration(row.run.durationSecs)), "muted-sm"));
+    } else {
+        st->addWidget(verdictTag(tr("Pendiente"), theme::Muted));
+    }
+    tv->addWidget(state);
+    th->addWidget(tb, 1);
+    auto* open = ui::button(tr("Abrir caso"), "outline");
+    open->setObjectName(QStringLiteral("openPlanCase"));
+    connect(open, &QPushButton::clicked, this, [this, cid = row.caseId]() { emit openCaseRequested(cid); });
+    th->addWidget(open, 0, Qt::AlignTop);
+    m_caseLayout->addWidget(top);
+    // Con qué está enlazado: la historia de Jira del caso y el Test que se creó para esta ejecución.
+    if (auto* links = issueLinks(row.jiraKey, row.testKey)) m_caseLayout->addWidget(links);
+    // Los bugs del caso ya están, con su paso, en la tarjeta de bugs del ciclo: aquí sólo se avisa.
+    if (!row.bugs.isEmpty()) {
+        QStringList keys;
+        for (const auto& bug : row.bugs) keys << bug.key;
+        auto* note = ui::label(row.bugs.size() == 1 ? tr("1 bug reportado desde este caso: %1").arg(keys.first())
+                                                    : tr("%1 bugs reportados desde este caso: %2").arg(row.bugs.size()).arg(keys.join(QStringLiteral(", "))),
+                               "muted-sm");
+        note->setWordWrap(true);
+        m_caseLayout->addWidget(note);
+    }
+    if (!row.executed) {
+        m_caseLayout->addWidget(ui::label(tr("Este caso no se llegó a ejecutar en el ciclo."), "muted"));
+    } else {
+        auto* steps = new QWidget;
+        auto* sv = ui::vbox(steps, 0, 6);
+        sv->addWidget(ui::label(tr("PASOS"), "eyebrow"));
+        sv->addWidget(stepsList(row.run));
+        m_caseLayout->addWidget(steps);
+        if (auto* shots = evidenceGrid(row.run, 3)) m_caseLayout->addWidget(shots);
+    }
+    m_caseLayout->addStretch(1);
 }
 
 QWidget* HistoryView::bugsCard(const PlanReport& report) {
@@ -479,7 +683,7 @@ QWidget* HistoryView::bugsCard(const PlanReport& report) {
     auto* v = ui::vbox(card, 0, 8);
     v->setContentsMargins(16, 14, 16, 14);
     auto* head = new QWidget;
-    auto* hh = ui::hbox(head, 0, 10);
+    auto* hh = new FlowLayout(head, 0, 10, 6);
     hh->addWidget(ui::label(tr("BUGS ENCONTRADOS · %1").arg(bugs.size()), "eyebrow"));
     // Probando salen las dos cosas: errores y mejoras. El informe dice cuántos de cada uno en vez de
     // meterlos a todos en el mismo saco.
@@ -492,34 +696,43 @@ QWidget* HistoryView::bugsCard(const PlanReport& report) {
     }
     hh->addWidget(open > 0 ? ui::pill(tr("%1 ABIERTOS").arg(open), theme::tint(theme::Red, 38), theme::Red)
                            : ui::pill(tr("TODOS CERRADOS"), theme::tint(theme::Green, 38), theme::Green));
-    hh->addStretch(1);
     v->addWidget(head);
-    v->addWidget(ui::label(tr("Errores y mejoras encontrados ejecutando este ciclo, en los casos que estaba probando."), "muted-sm"));
+    auto* intro = ui::label(tr("Errores y mejoras encontrados ejecutando este ciclo, en los casos que estaba probando."), "muted-sm");
+    intro->setWordWrap(true);
+    v->addWidget(intro);
     for (const auto& bug : bugs) v->addWidget(bugRow(bug, true));
     return card;
 }
 
 QWidget* HistoryView::bugRow(const IssueLink& bug, bool withCase) {
+    // El título arriba, a todo lo ancho, y debajo sus datos en una fila que salta de línea: en una
+    // sola fila, siete elementos no cabían en un panel estrecho.
     auto* row = ui::card("card-flat");
     auto* h = ui::hbox(row, 0, 10);
-    h->setContentsMargins(12, 7, 12, 7);
-    const QString color = bug.resolved ? theme::Green : theme::Red;
-    h->addWidget(ui::pill(BugReport::severityLabel(bug.severity).toUpper(), theme::tint(color, 46), color));
-    auto* key = ui::label(bug.key, "mono-muted");
-    key->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Blue));
-    h->addWidget(key);
-    // Error o mejora: lo que se trae del gestor son las dos cosas y cuál es cada una se ve aquí.
-    if (const QString type = bug.issueType.trimmed(); !type.isEmpty())
-        h->addWidget(ui::pill(type.toUpper(), theme::tint(theme::Muted, 30), theme::Muted));
+    h->setContentsMargins(12, 8, 10, 8);
+    auto* body = new QWidget;
+    auto* bv = ui::vbox(body, 0, 5);
     auto* title = new QLabel(bug.title.isEmpty() ? tr("(sin título)") : bug.title);
     title->setWordWrap(true);
-    h->addWidget(title, 1);
+    bv->addWidget(title);
+    auto* meta = new QWidget;
+    auto* mh = new FlowLayout(meta, 0, 8, 4);
+    const QString color = bug.resolved ? theme::Green : theme::Red;
+    mh->addWidget(ui::pill(BugReport::severityLabel(bug.severity).toUpper(), theme::tint(color, 46), color));
+    auto* key = ui::label(bug.key, "mono-muted");
+    key->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Blue));
+    mh->addWidget(key);
+    // Error o mejora: lo que se trae del gestor son las dos cosas y cuál es cada una se ve aquí.
+    if (const QString type = bug.issueType.trimmed(); !type.isEmpty())
+        mh->addWidget(ui::pill(type.toUpper(), theme::tint(theme::Muted, 30), theme::Muted));
     // De dónde salió: en la tarjeta del ciclo hace falta el caso; dentro del caso basta el paso.
     const QString origin = withCase ? (bug.step > 0 ? tr("%1 · paso %2").arg(bug.caseId).arg(bug.step) : bug.caseId)
                                     : (bug.step > 0 ? tr("paso %1").arg(bug.step) : QString());
-    if (!origin.isEmpty()) h->addWidget(ui::label(origin, "muted-sm"));
-    h->addWidget(ui::label(bug.status.isEmpty() ? (bug.resolved ? tr("Cerrado") : tr("Abierto")) : bug.status, "muted-sm"));
-    h->addWidget(ui::label(when(bug.createdAt), "muted-sm"));
+    if (!origin.isEmpty()) mh->addWidget(ui::label(origin, "muted-sm"));
+    mh->addWidget(ui::label(bug.status.isEmpty() ? (bug.resolved ? tr("Cerrado") : tr("Abierto")) : bug.status, "muted-sm"));
+    mh->addWidget(ui::label(when(bug.createdAt), "muted-sm"));
+    bv->addWidget(meta);
+    h->addWidget(body, 1);
     if (!bug.url.isEmpty() || !bug.key.isEmpty()) {
         auto* open = ui::button(tr("Abrir"), "chip");
         open->setObjectName(QStringLiteral("openBug-%1").arg(bug.key));
@@ -528,7 +741,7 @@ QWidget* HistoryView::bugRow(const IssueLink& bug, bool withCase) {
             if (!url.isEmpty()) emit openUrlRequested(url);
             else emit openJiraRequested(key);
         });
-        h->addWidget(open);
+        h->addWidget(open, 0, Qt::AlignVCenter);
     }
     return row;
 }
@@ -549,7 +762,7 @@ void HistoryView::renderMetrics() {
 
     const int rate = sum.successRate();
     auto* stats = ui::card("card");
-    auto* sg = ui::hbox(stats, 18, 22);
+    auto* sg = new FlowLayout(stats, 0, 28, 12);
     sg->setContentsMargins(20, 14, 20, 14);
     sg->addWidget(stat(tr("Casos"), QString::number(sum.cases)));
     sg->addWidget(stat(tr("Ejecutados"), QString::number(sum.executed())));
@@ -559,7 +772,6 @@ void HistoryView::renderMetrics() {
     sg->addWidget(stat(tr("Tasa de éxito"), sum.executed() ? QStringLiteral("%1 %").arg(rate) : QStringLiteral("—"),
                        rate >= 80 ? theme::Green : rate >= 50 ? theme::Amber : theme::Red));
     sg->addWidget(stat(tr("Ciclos"), QString::number(allCycles.size())));
-    sg->addStretch(1);
     m_detailLayout->addWidget(stats);
 
     // Por suite
@@ -574,7 +786,8 @@ void HistoryView::renderMetrics() {
     for (const auto& s : metrics::bySuite(m_cases.cases())) {
         auto* name = new QLabel(s.suite.isEmpty() ? tr("(sin suite)") : s.suite);
         name->setStyleSheet(QStringLiteral("font-weight:600;"));
-        name->setMinimumWidth(140);
+        name->setWordWrap(true);
+        name->setMinimumWidth(100);
         grid->addWidget(name, rowIdx, 0);
         auto* bar = new RateBar;
         bar->setCounts(s.passed, s.failed, s.blocked, s.notRun());
@@ -586,6 +799,7 @@ void HistoryView::renderMetrics() {
         pct->setStyleSheet(QStringLiteral("font-weight:800;color:%1;").arg(!s.executed() ? theme::Muted : r >= 80 ? theme::Green : r >= 50 ? theme::Amber : theme::Red));
         grid->addWidget(pct, rowIdx, 2);
         auto* detail = ui::label(tr("%1 ✓ · %2 ✗ · %3 bloq. · %4 sin ejecutar · %5 casos").arg(s.passed).arg(s.failed).arg(s.blocked).arg(s.notRun()).arg(s.cases), "muted-sm");
+        detail->setWordWrap(true);
         grid->addWidget(detail, rowIdx, 3);
         ++rowIdx;
     }
@@ -638,53 +852,70 @@ void HistoryView::renderMetrics() {
 
 void HistoryView::renderRun(const RunRecord& run) {
     auto* head = new QWidget;
-    auto* hh = ui::hbox(head, 0, 16);
+    auto* hh = ui::vbox(head, 0, 12);
     auto* titleBlock = new QWidget;
-    auto* tv = ui::vbox(titleBlock, 0, 2);
-    QString eyebrow = tr("EJECUCIÓN · %1 · %2 · %3").arg(run.id, run.caseId, run.suite.toUpper());
-    if (const PlanRun* p = run.planRunId.isEmpty() ? nullptr : m_history.findPlan(run.planRunId)) eyebrow += tr(" · PLAN %1").arg(p->name.toUpper());
-    tv->addWidget(ui::label(eyebrow, "eyebrow"));
+    auto* tv = ui::vbox(titleBlock, 0, 4);
+    QString eyebrow = tr("%1 · %2 · %3").arg(run.caseId, run.suite, run.id);
+    if (const PlanRun* p = run.planRunId.isEmpty() ? nullptr : m_history.findPlan(run.planRunId)) eyebrow += tr(" · plan %1").arg(p->name);
+    auto* eyebrowLabel = ui::label(eyebrow, "muted-sm");
+    eyebrowLabel->setWordWrap(true);
+    tv->addWidget(eyebrowLabel);
     auto* title = ui::label(run.caseTitle.isEmpty() ? tr("(sin título)") : run.caseTitle, "h1");
     title->setWordWrap(true);
     tv->addWidget(title);
     auto* sub = new QWidget;
-    auto* sh = ui::hbox(sub, 0, 8);
-    sh->addWidget(verdictPill(run.verdict));
-    sh->addWidget(ui::label(QStringLiteral("%1 → %2").arg(when(run.startedAt), when(run.finishedAt)), "muted-sm"));
+    auto* sh = new FlowLayout(sub, 0, 8, 4);
+    sh->addWidget(verdictTag(run.verdict));
+    sh->addWidget(ui::label(QStringLiteral("· %1 → %2").arg(when(run.startedAt), when(run.finishedAt)), "muted-sm"));
     // Dónde se publicó esta ejecución: el ciclo de Zephyr del plan al que pertenece.
     if (const PlanRun* p = run.planRunId.isEmpty() ? nullptr : m_history.findPlan(run.planRunId); p && p->isPublished()) {
         auto* cycle = ui::label(tr("· Zephyr · ciclo %1").arg(p->zephyrCycleId), "muted-sm");
         cycle->setObjectName(QStringLiteral("runZephyrCycle"));
         cycle->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Green));
-        cycle->setMinimumWidth(cycle->sizeHint().width());   // que no se lo coma la fila
-        sh->addWidget(cycle);
+        sh->addWidget(cycle);   // en la fila que se ajusta: si no cabe, baja entero a la siguiente línea
     }
-    sh->addStretch(1);
     tv->addWidget(sub);
     // Y con qué está enlazado: la historia del caso y el Test de Zephyr de esta ejecución.
     const TestCase* linked = m_cases.find(run.caseId);
     if (auto* links = issueLinks(linked ? linked->jiraKey : QString(), run.testKey)) tv->addWidget(links);
-    hh->addWidget(titleBlock, 1);
+    hh->addWidget(titleBlock);
+    // Las acciones, debajo y en una fila que se ajusta: al lado del título le quitaban el sitio.
+    auto* actions = new QWidget;
+    auto* ah = new FlowLayout(actions, 0, 8, 8);
     auto* open = ui::button(tr("Abrir caso"), "outline");
     connect(open, &QPushButton::clicked, this, [this, id = run.caseId]() { emit openCaseRequested(id); });
-    hh->addWidget(open, 0, Qt::AlignTop);
+    ah->addWidget(open);
     if (!run.planRunId.isEmpty()) {
         auto* planBtn = ui::button(tr("Ver informe del plan"), "outline");
-        connect(planBtn, &QPushButton::clicked, this, [this, id = run.planRunId]() { m_mode = Mode::All; refreshFilters(); showPlan(id); });
-        hh->addWidget(planBtn, 0, Qt::AlignTop);
+        connect(planBtn, &QPushButton::clicked, this, [this, id = run.planRunId, caseId = run.caseId]() {
+            m_mode = Mode::All;
+            refreshFilters();
+            showPlan(id);
+            selectPlanCase(caseId);   // y, en él, el caso del que se venía
+        });
+        ah->addWidget(planBtn);
     }
+    hh->addWidget(actions);
     m_detailLayout->addWidget(head);
 
+    // Resumen en una línea, como el del informe del plan.
     auto* stats = ui::card("card");
-    auto* sg = ui::hbox(stats, 18, 22);
-    sg->setContentsMargins(20, 14, 20, 14);
-    sg->addWidget(stat(tr("Pasos"), QStringLiteral("%1/%2").arg(run.steps.size()).arg(run.plannedSteps)));
-    sg->addWidget(stat(tr("Pasan"), QString::number(run.count(StepResult::Pass)), theme::Green));
-    sg->addWidget(stat(tr("Fallan"), QString::number(run.count(StepResult::Fail)), theme::Red));
-    sg->addWidget(stat(tr("Bloqueados"), QString::number(run.count(StepResult::Block)), theme::Amber));
-    sg->addWidget(stat(QStringLiteral("N/A"), QString::number(run.count(StepResult::Skip)), theme::Muted));
-    sg->addWidget(stat(tr("Duración"), formatDuration(run.durationSecs)));
-    sg->addStretch(1);
+    auto* sg = ui::hbox(stats, 0, 16);
+    sg->setContentsMargins(20, 12, 20, 12);
+    sg->addWidget(stepCells(run), 0, Qt::AlignVCenter);
+    QStringList counts{tr("<b>%1/%2</b> pasos").arg(run.steps.size()).arg(run.plannedSteps)};
+    auto count = [&](StepResult r, const QString& what, const QString& color) {
+        if (const int n = run.count(r); n > 0) counts << QStringLiteral("<b style='color:%1'>%2</b> %3").arg(color).arg(n).arg(what);
+    };
+    count(StepResult::Pass, tr("pasan"), theme::Green);
+    count(StepResult::Fail, tr("fallan"), theme::Red);
+    count(StepResult::Block, tr("bloqueados"), theme::Amber);
+    count(StepResult::Skip, tr("N/A"), theme::Text);
+    counts << formatDuration(run.durationSecs);
+    auto* legend = ui::label(counts.join(QStringLiteral(" &nbsp;·&nbsp; ")), "muted-sm");
+    legend->setTextFormat(Qt::RichText);
+    legend->setWordWrap(true);
+    sg->addWidget(legend, 1);
     m_detailLayout->addWidget(stats);
 
     // Lo que salió de estas pruebas: los bugs se encuentran ejecutando, y es aquí donde se ven los
@@ -696,31 +927,25 @@ void HistoryView::renderRun(const RunRecord& run) {
         bv->setContentsMargins(16, 14, 16, 14);
         const int open = int(std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
         auto* head2 = new QWidget;
-        auto* h2 = ui::hbox(head2, 0, 10);
+        auto* h2 = new FlowLayout(head2, 0, 10, 6);
         h2->addWidget(ui::label(tr("BUGS DE ESTA EJECUCIÓN · %1").arg(bugs.size()), "eyebrow"));
-        h2->addWidget(open > 0 ? ui::pill(tr("%1 ABIERTOS").arg(open), theme::tint(theme::Red, 38), theme::Red)
-                               : ui::pill(tr("TODOS CERRADOS"), theme::tint(theme::Green, 38), theme::Green));
-        h2->addStretch(1);
+        h2->addWidget(open > 0 ? verdictTag(tr("%1 abiertos").arg(open), theme::Red) : verdictTag(tr("Todos cerrados"), theme::Green));
         bv->addWidget(head2);
         for (const auto& bug : bugs) bv->addWidget(bugRow(bug, false));
         m_detailLayout->addWidget(box);
     }
 
     auto* card = ui::card("card");
-    auto* cv = ui::vbox(card, 0, 10);
-    cv->setContentsMargins(16, 14, 16, 14);
-    cv->addWidget(ui::label(tr("REGISTRO"), "eyebrow"));
-    cv->addWidget(stepsList(run));
-    m_detailLayout->addWidget(card);
-
+    auto* cv = ui::vbox(card, 0, 16);
+    cv->setContentsMargins(20, 16, 20, 18);
+    auto* steps = new QWidget;
+    auto* sv = ui::vbox(steps, 0, 6);
+    sv->addWidget(ui::label(tr("PASOS"), "eyebrow"));
+    sv->addWidget(stepsList(run));
+    cv->addWidget(steps);
     // Lo que se capturó ejecutando: es de esta ejecución y aquí es donde se ve.
-    if (auto* shots = evidenceGrid(run, 3)) {
-        auto* box = ui::card("card");
-        auto* bv = ui::vbox(box, 0, 10);
-        bv->setContentsMargins(16, 14, 16, 14);
-        bv->addWidget(shots);
-        m_detailLayout->addWidget(box);
-    }
+    if (auto* shots = evidenceGrid(run, 3)) cv->addWidget(shots);
+    m_detailLayout->addWidget(card);
 }
 
 QWidget* HistoryView::issueLinks(const QString& jiraKey, const QString& testKey) {
@@ -754,49 +979,54 @@ QWidget* HistoryView::evidenceGrid(const RunRecord& run, int columns) {
     auto* box = new QWidget;
     auto* v = ui::vbox(box, 0, 8);
     v->addWidget(ui::label(tr("EVIDENCIAS · %1").arg(shots.size()), "eyebrow"));
-    auto* gridBox = new QWidget;
-    auto* grid = new QGridLayout(gridBox);
-    grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(10);
+    // Tantas columnas como quepan (hasta `columns`): en un panel estrecho bajan de fila.
+    auto* grid = new AutoGrid(190, columns, 12);
     for (int i = 0; i < shots.size(); ++i) {
-        auto* card = new ShotCard(shots[i], c->steps, ShotCard::Layout::Grid);
         // La ejecución ya pasó: su evidencia se mira, se anota y se copia, pero no se reordena ni
-        // se reasigna de paso, que la cambiaría después de haberse publicado.
-        card->setReadOnly(true);
+        // se reasigna de paso, que la cambiaría después de haberse publicado. La tarjeta de archivo
+        // ni siquiera crea esos controles, y su miniatura se lee en segundo plano al enseñarse.
+        auto* card = new ShotCard(shots[i], c->steps, ShotCard::Layout::Archive);
         if (shots[i].runId != run.id) card->setToolTip(tr("Heredada de %1: el paso no se volvió a probar").arg(shots[i].runId));
         if (m_evidence) evidence::wireCard(card, this, m_cases, *m_evidence, caseId);
-        grid->addWidget(card, i / columns, i % columns);
+        grid->addWidget(card);
     }
-    for (int col = 0; col < columns; ++col) grid->setColumnStretch(col, 1);
-    v->addWidget(gridBox);
+    v->addWidget(grid);
     return box;
 }
 
 QWidget* HistoryView::stepsList(const RunRecord& run) const {
     auto* list = new QWidget;
-    auto* lv = ui::vbox(list, 0, 6);
+    auto* lv = ui::vbox(list, 0, 0);
     if (run.steps.isEmpty()) {
         lv->addWidget(ui::label(tr("No se ejecutó ningún paso."), "muted-sm"));
         return list;
     }
+    // Filas separadas por una línea, sin tarjeta por paso: el resultado se lee por su color.
     for (int i = 0; i < run.steps.size(); ++i) {
         const auto& s = run.steps[i];
-        auto* row = ui::card("card-flat");
+        auto* line = new QFrame;
+        line->setFixedHeight(1);
+        line->setStyleSheet(QStringLiteral("background:%1;").arg(theme::Border));
+        lv->addWidget(line);
+        auto* row = new QWidget;
         auto* g = new QGridLayout(row);
-        g->setContentsMargins(10, 8, 10, 8);
-        g->setHorizontalSpacing(10);
-        g->setVerticalSpacing(4);
+        g->setContentsMargins(0, 9, 0, 9);
+        g->setHorizontalSpacing(12);
+        g->setVerticalSpacing(3);
         auto* n = ui::label(QString::number(i + 1), "mono-muted");
-        n->setFixedWidth(22);
+        n->setFixedWidth(20);
         g->addWidget(n, 0, 0, Qt::AlignTop);
         auto* a = new QLabel(s.action);
         a->setWordWrap(true);
         a->setStyleSheet(QStringLiteral("color:%1;").arg(theme::TextSoft));
         g->addWidget(a, 0, 1);
         auto* secs = ui::label(formatDuration(s.durationSecs), "muted-sm");
-        secs->setStyleSheet(QStringLiteral("font-size:11px;"));
         g->addWidget(secs, 0, 2, Qt::AlignTop);
-        g->addWidget(ui::pill(label(s.result).toUpper(), resultColor(s.result), s.result == StepResult::Fail ? QStringLiteral("#ffffff") : theme::Bg), 0, 3, Qt::AlignTop);
+        auto* result = new QLabel(label(s.result));
+        result->setStyleSheet(QStringLiteral("color:%1;font-weight:700;font-size:12px;").arg(resultColor(s.result)));
+        result->setMinimumWidth(64);
+        result->setAlignment(Qt::AlignRight | Qt::AlignTop);
+        g->addWidget(result, 0, 3, Qt::AlignTop);
         // Con qué datos se probó el paso, tal y como decía el caso entonces.
         if (!s.data.trimmed().isEmpty()) {
             auto* data = new QLabel(tr("Datos: %1").arg(s.data.trimmed()));

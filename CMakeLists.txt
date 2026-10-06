@@ -259,6 +259,10 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/MetricBars.cpp
         src/presentation/widgets/Thumbnail.h
         src/presentation/widgets/Thumbnail.cpp
+        src/presentation/widgets/ThumbnailLoader.h
+        src/presentation/widgets/ThumbnailLoader.cpp
+        src/presentation/widgets/Responsive.h
+        src/presentation/widgets/Responsive.cpp
         src/presentation/widgets/TextArea.h
         src/presentation/widgets/TextArea.cpp
         src/presentation/widgets/MarkupEditorDialog.h

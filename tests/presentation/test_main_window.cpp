@@ -32,6 +32,7 @@
 #include "presentation/widgets/AnnotationEditor.h"
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/EvidencePreview.h"
+#include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/Thumbnail.h"
 #include "presentation/widgets/Toast.h"
@@ -43,6 +44,7 @@
 #include <QFrame>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSplitter>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -1345,6 +1347,91 @@ private slots:
             QVERIFY2(!l->text().contains(QStringLiteral("BUG")), qPrintable(l->text()));
     }
 
+    // El informe de un ciclo es maestro-detalle: abre en el caso roto con sólo sus evidencias, y
+    // elegir otro caso de la lista cambia el panel (y las evidencias que se cargan) por las suyas.
+    void thePlanReportShowsOneCaseAtATime() {
+        WindowFixture f;
+        const QString passed = QStringLiteral("TC-103"), broken = QStringLiteral("TC-107");
+        f.app.run.startSequence({passed, broken}, QStringLiteral("Regresión"));
+        const QString cycle = f.app.run.planRunId();
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(passed)->shots.size(), 1);
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        QCOMPARE(f.app.run.state().caseId, broken);
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(broken)->shots.size(), 1);
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Fail);
+        f.window->finishRun();
+
+        f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        history->showPlan(cycle);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto row = [&](const QString& id) { return history->findChild<QPushButton*>(QStringLiteral("planCase-%1").arg(id)); };
+        QVERIFY(row(passed) && row(broken));
+        QCOMPARE(row(broken)->property("active").toBool(), true);
+        QCOMPARE(row(passed)->property("active").toBool(), false);
+        auto shownShots = [&]() {
+            QStringList paths;
+            for (auto* c : history->findChildren<ShotCard*>()) paths << c->shot().path;
+            return paths;
+        };
+        QCOMPARE(shownShots(), QStringList{f.app.store.find(broken)->shots.first().path});
+
+        QTest::mouseClick(row(passed), Qt::LeftButton);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QCOMPARE(row(passed)->property("active").toBool(), true);
+        QCOMPARE(row(broken)->property("active").toBool(), false);
+        QCOMPARE(shownShots(), QStringList{f.app.store.find(passed)->shots.first().path});
+    }
+
+    // El historial se adapta al ancho: con la ventana al mínimo y la lista ensanchada al máximo
+    // (arrastrando su borde), ni el informe del ciclo —con sus evidencias— ni el detalle de una
+    // ejecución se salen por la derecha; la lista de casos baja encima del caso. Con sitio, al lado.
+    void theHistoryFitsANarrowWindow() {
+        WindowFixture f;
+        const QString caseId = QStringLiteral("TC-107");
+        f.app.run.startSequence({caseId}, QStringLiteral("Regresión con un nombre bastante largo para el título"));
+        const QString cycle = f.app.run.planRunId();
+        for (int i = 0; i < 4; ++i) f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(caseId)->shots.size(), 4);
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Fail);
+        f.window->finishRun();
+
+        f.window->resize(400, 700);   // se queda en su mínimo
+        f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        auto* split = history->findChild<QSplitter*>(QStringLiteral("historySplit"));
+        QVERIFY(split);
+        split->setSizes({2000, 1});
+        QVERIFY(split->widget(0)->width() > 300);   // la lista se ensancha
+        history->showPlan(cycle);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* detail = qobject_cast<QScrollArea*>(split->widget(1));
+        QVERIFY(detail);
+        auto fits = [&]() { return detail->widget()->width() <= detail->viewport()->width(); };
+        QTRY_VERIFY2(fits(), qPrintable(QStringLiteral("%1 > %2").arg(detail->widget()->width()).arg(detail->viewport()->width())));
+        auto* cases = history->findChild<AdaptiveSplit*>(QStringLiteral("planCasesSplit"));
+        QVERIFY(cases);
+        QTRY_VERIFY(cases->isStacked());
+
+        history->showRun(f.app.history.runsForCase(caseId).first().id);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QTRY_VERIFY2(fits(), qPrintable(QStringLiteral("%1 > %2").arg(detail->widget()->width()).arg(detail->viewport()->width())));
+
+        // Con una ventana ancha, la lista de casos vuelve a ir al lado del caso.
+        f.window->resize(1700, 900);
+        split->setSizes({240, 1460});
+        history->showPlan(cycle);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        cases = history->findChild<AdaptiveSplit*>(QStringLiteral("planCasesSplit"));
+        QVERIFY(cases);
+        QTRY_VERIFY(!cases->isStacked());
+    }
+
     void thePlanReportOffersDeletingEveryCycleButTheOneInProgress() {
         WindowFixture f;
         f.window->navigate(Screen::Historial);
@@ -1358,14 +1445,14 @@ private slots:
         f.window->finishRun();
         history->showPlan(finished);
         QTest::qWait(50);
-        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("deletePlan")));
+        QVERIFY(f.window->findChild<QAction*>(QStringLiteral("deletePlan")));   // en el menú «⋯»
 
         // El que se está ejecutando, no: la ejecución sigue escribiendo en él.
         f.app.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("En curso"));
         const QString running = f.app.run.planRunId();
         history->showPlan(running);
         QTest::qWait(50);
-        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("deletePlan")));
+        QVERIFY(!f.window->findChild<QAction*>(QStringLiteral("deletePlan")));
 
         // Al borrar el terminado, el historial deja de listarlo y el informe abierto pasa a otro.
         QVERIFY(f.app.history.removePlanRun(finished));

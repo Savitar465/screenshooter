@@ -7,6 +7,7 @@
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/Thumbnail.h"
 
+#include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -287,6 +288,51 @@ private slots:
         QSignalSpy openLog(&logCard, &ShotCard::openRequested);
         QTest::mouseClick(logCard.findChild<Thumbnail*>(), Qt::LeftButton);
         QCOMPARE(openLog.count(), 1);
+    }
+
+    // La imagen se lee en segundo plano la primera vez que la miniatura se enseña; una segunda
+    // miniatura del mismo fichero la toma de la caché sin esperar. Un fichero que dice ser imagen y
+    // no se puede leer acaba como fichero, sin colgar la miniatura en «cargando».
+    void thumbnailsDecodeInTheBackgroundAndShareTheCache() {
+        QTemporaryDir dir;
+        const QString path = save(dir, QStringLiteral("cap_010.png"), white(1600, 1000));
+        Thumbnail hidden(path, 1, 1);
+        QVERIFY(!hidden.isLoaded());   // sin enseñarse no se lee nada
+        QTest::qWait(20);
+        QVERIFY(!hidden.isLoaded());
+
+        Thumbnail first(path, 1, 1);
+        first.setWidthHint(200);
+        first.show();
+        QTRY_VERIFY(first.isLoaded());
+        Thumbnail second(path, 1, 2);
+        QVERIFY(second.isLoaded());   // ya en la caché
+        QTRY_VERIFY(hidden.isLoaded());   // y la que esperaba también se entera
+
+        const QString broken = dir.filePath(QStringLiteral("cap_011.png"));
+        { QFile f(broken); f.open(QIODevice::WriteOnly); f.write("no es un png"); }
+        Thumbnail bad(broken, 1, 3);
+        bad.show();
+        QTRY_VERIFY(bad.isLoaded());
+    }
+
+    // La tarjeta del historial es de sólo lectura desde que se construye: sin selector de paso ni
+    // controles de mover o borrar, con el paso escrito y la miniatura que sigue abriendo el editor.
+    void archiveCardIsReadOnly() {
+        QTemporaryDir dir;
+        const Screenshot image{1, 2, QStringLiteral("cap_001.png"), save(dir, QStringLiteral("cap_001.png"), white(40, 30))};
+        const QList<TestStep> steps{TestStep{QStringLiteral("Abrir"), {}, {}}, TestStep{QStringLiteral("Pagar con tarjeta"), {}, {}}};
+        ShotCard card(image, steps, ShotCard::Layout::Archive);
+        card.show();
+        QVERIFY(!card.findChild<QComboBox*>());
+        for (auto* b : card.findChildren<QPushButton*>())
+            QVERIFY2(b->isHidden() || b->text() == QStringLiteral("✎"), qPrintable(b->text()));
+        bool stepShown = false;
+        for (auto* l : card.findChildren<QLabel*>()) stepShown = stepShown || l->text().contains(QStringLiteral("Paso 2 · Pagar con tarjeta"));
+        QVERIFY(stepShown);
+        QSignalSpy annotate(&card, &ShotCard::annotateRequested);
+        QTest::mouseClick(card.findChild<Thumbnail*>(), Qt::LeftButton);
+        QCOMPARE(annotate.count(), 1);
     }
 };
 

@@ -203,7 +203,8 @@ void run(MainWindow& window, AppContext& ctx) {
                       QStringLiteral("TC-107"), 1, QStringLiteral("Menor"), QStringLiteral("To Do"), false,
                       BugReport::jiraIssueTypes().value(1));
             ctx.run->mark(StepResult::Block);
-            window.finishRun();   // termina el plan y abre su informe
+            window.finishRun();   // termina el plan
+            window.navigate(Screen::Historial);   // y se enseña su informe
         }},
         {"08-historial-caso", [&] { window.navigate(Screen::Casos); ctx.cases->select(QStringLiteral("TC-102")); }},
         {"10-metricas", [&] {

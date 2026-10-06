@@ -2319,6 +2319,93 @@
     </message>
 </context>
 <context>
+    <name>qaflow::CaseCreateDialog</name>
+    <message>
+        <source>Nuevo caso de prueba</source>
+        <translation>New test case</translation>
+    </message>
+    <message>
+        <source>Qué se prueba: «Pago con cupón vencido»</source>
+        <translation>What is tested: “Payment with an expired coupon”</translation>
+    </message>
+    <message>
+        <source>Título</source>
+        <translation>Title</translation>
+    </message>
+    <message>
+        <source>Suite</source>
+        <translation>Suite</translation>
+    </message>
+    <message>
+        <source>Prioridad</source>
+        <translation>Priority</translation>
+    </message>
+    <message>
+        <source>Estado inicial del sistema, datos de prueba, cuenta…</source>
+        <translation>Initial system state, test data, account…</translation>
+    </message>
+    <message>
+        <source>Precondiciones</source>
+        <translation>Preconditions</translation>
+    </message>
+    <message>
+        <source>+ Añadir paso</source>
+        <translation>+ Add step</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Crear caso</source>
+        <translation>Create case</translation>
+    </message>
+    <message>
+        <source>ACCIÓN</source>
+        <translation>ACTION</translation>
+    </message>
+    <message>
+        <source>DATOS DE LA PRUEBA</source>
+        <translation>TEST DATA</translation>
+    </message>
+    <message>
+        <source>RESULTADO ESPERADO</source>
+        <translation>EXPECTED RESULT</translation>
+    </message>
+    <message>
+        <source>Qué se hace…</source>
+        <translation>What is done…</translation>
+    </message>
+    <message>
+        <source>Con qué datos…</source>
+        <translation>With which data…</translation>
+    </message>
+    <message>
+        <source>Qué tiene que pasar…</source>
+        <translation>What has to happen…</translation>
+    </message>
+    <message>
+        <source>Quitar el paso</source>
+        <translation>Remove the step</translation>
+    </message>
+    <message>
+        <source>PASOS · %1</source>
+        <translation>STEPS · %1</translation>
+    </message>
+    <message>
+        <source>Ponle un título al caso</source>
+        <translation>Give the case a title</translation>
+    </message>
+    <message>
+        <source>Escribe al menos un paso con su acción</source>
+        <translation>Write at least one step with its action</translation>
+    </message>
+    <message>
+        <source>Cada paso necesita su acción</source>
+        <translation>Each step needs its action</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::CaseTransferService</name>
     <message>
         <source>No se pudo escribir %1</source>
@@ -3261,10 +3348,6 @@
         <translation>LOG</translation>
     </message>
     <message>
-        <source>No se ejecutó ningún paso.</source>
-        <translation>No steps were run.</translation>
-    </message>
-    <message>
         <source>Exportar informe</source>
         <translation>Export report</translation>
     </message>
@@ -3315,10 +3398,6 @@
     <message>
         <source>Publicado en Zephyr · ciclo %1</source>
         <translation>Published to Zephyr · cycle %1</translation>
-    </message>
-    <message>
-        <source>EVIDENCIAS · %1</source>
-        <translation>EVIDENCE · %1</translation>
     </message>
     <message>
         <source>Eliminar…</source>
@@ -3457,10 +3536,6 @@
         <translation>Continue cycle…</translation>
     </message>
     <message>
-        <source>Datos: %1</source>
-        <translation>Data: %1</translation>
-    </message>
-    <message>
         <source>BUGS DE ESTA EJECUCIÓN · %1</source>
         <translation>BUGS FROM THIS RUN · %1</translation>
     </message>
@@ -3477,16 +3552,28 @@
         <translation>Bugs and improvements found while running this cycle, in the test cases it was running.</translation>
     </message>
     <message>
-        <source>Heredada de %1: el paso no se volvió a probar</source>
-        <translation>Inherited from %1: the step was not tested again</translation>
-    </message>
-    <message>
         <source>Publica estas ejecuciones en el ciclo «%1» de Zephyr, el de su fase</source>
         <translation>Publishes these executions in the Zephyr cycle “%1”, the one of their phase</translation>
     </message>
     <message>
         <source>Vuelve a ejecutar los %1 caso(s) por terminar —los rotos desde el paso que se rompió y los que no se ejecutaron, enteros—, en el mismo ciclo</source>
         <translation>Runs again the %1 case(s) left to finish —the broken ones from the step that broke and the ones not run, in full— in the same cycle</translation>
+    </message>
+    <message>
+        <source>EVIDENCIAS · %1</source>
+        <translation>EVIDENCE · %1</translation>
+    </message>
+    <message>
+        <source>Heredada de %1: el paso no se volvió a probar</source>
+        <translation>Inherited from %1: the step was not tested again</translation>
+    </message>
+    <message>
+        <source>No se ejecutó ningún paso.</source>
+        <translation>No steps were run.</translation>
+    </message>
+    <message>
+        <source>Datos: %1</source>
+        <translation>Data: %1</translation>
     </message>
 </context>
 <context>
@@ -3964,10 +4051,6 @@
         <translation>Update in the tracker…</translation>
     </message>
     <message>
-        <source>⚠ El título o la descripción cambiaron desde lo último que se publicó. En el gestor sigue lo anterior.</source>
-        <translation>⚠ The title or the description changed since the last publication. The tracker still has the previous one.</translation>
-    </message>
-    <message>
         <source>⚠ El último envío se cortó sin respuesta (%1): puede haberse creado igualmente. Búscalo en %2 por la etiqueta %3 y vincúlalo; si no está, vuelve a publicar.</source>
         <translation>⚠ The last send was cut off without an answer (%1): it may have been created anyway. Look for it in %2 by the label %3 and link it; if it is not there, publish again.</translation>
     </message>
@@ -4320,16 +4403,8 @@ Create another one anyway?</translation>
         <translation>Open in the tracker</translation>
     </message>
     <message>
-        <source>Levanta el acta de la revisión %1 con lo que se probó en ella</source>
-        <translation>Raises the record of review %1 with what was tested in it</translation>
-    </message>
-    <message>
         <source>Completar publicación…</source>
         <translation>Finish publishing…</translation>
-    </message>
-    <message>
-        <source>Falta publicar el resultado de la revisión %1 en %2</source>
-        <translation>The result of review %1 has not been published in %2 yet</translation>
     </message>
     <message>
         <source>PENDIENTE</source>
@@ -5283,6 +5358,46 @@ Create another one anyway?</translation>
         <source>Volver a ejecutar los %1 caso(s) por terminar de este ciclo: fallados, bloqueados o sin ejecutar</source>
         <translation>Run again the %1 case(s) left to finish in this cycle: failed, blocked or not run</translation>
     </message>
+    <message>
+        <source>Volver a la revisión en curso</source>
+        <translation>Back to the current revision</translation>
+    </message>
+    <message>
+        <source>REVISIÓN %1 · %2 · ANTERIOR</source>
+        <translation>REVISION %1 · %2 · PREVIOUS</translation>
+    </message>
+    <message>
+        <source>Estás viendo la revisión %1 (%2), cerrada el %3. Lo que se ejecute, continúe o cierre es de la revisión en curso; desde aquí se regenera su acta y se completa su publicación.</source>
+        <translation>You are viewing revision %1 (%2), closed on %3. Anything run, continued or closed belongs to the current revision; from here you can regenerate its record and complete its publication.</translation>
+    </message>
+    <message>
+        <source>%1 ejecución(es) en esta revisión</source>
+        <translation>%1 run(s) in this revision</translation>
+    </message>
+    <message>
+        <source>EN PANTALLA</source>
+        <translation>ON SCREEN</translation>
+    </message>
+    <message>
+        <source>Abre la revisión %1 aquí: sus ejecuciones, sus bugs, su acta y dónde llegó su resultado</source>
+        <translation>Opens revision %1 here: its runs, its bugs, its record and where its result was published</translation>
+    </message>
+    <message>
+        <source>Falta publicar su resultado en %1: se completa desde ella</source>
+        <translation>Its result still needs to be published to %1: complete it from the revision</translation>
+    </message>
+    <message>
+        <source>Todavía sin acta: se levanta desde ella</source>
+        <translation>No record yet: generate it from the revision</translation>
+    </message>
+    <message>
+        <source>Ver revisión</source>
+        <translation>View revision</translation>
+    </message>
+    <message>
+        <source>Reescribe el título y la descripción del issue del gestor con los de QAflow, revisándolos antes</source>
+        <translation>Rewrites the tracker issue&apos;s title and description with QAflow&apos;s, reviewing them first</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::JiraPublishDialog</name>
@@ -5862,6 +5977,14 @@ Create another one anyway?</translation>
     <message>
         <source>%1 sale(n) del ciclo en curso</source>
         <translation>%1 leaves the running cycle</translation>
+    </message>
+    <message>
+        <source>El caso nuevo va al plan del ciclo en curso, y este ciclo no es de ningún plan</source>
+        <translation>The new case goes to the plan of the running cycle, and this cycle has no plan</translation>
+    </message>
+    <message>
+        <source>Se añade al plan «%1» y entra al final del ciclo en curso.</source>
+        <translation>It is added to plan “%1” and joins the end of the running cycle.</translation>
     </message>
 </context>
 <context>
@@ -7710,10 +7833,6 @@ Press “Capture” or drop a file on the window.</translation>
         <translation>Go to this case; the current one is paused</translation>
     </message>
     <message>
-        <source>Ya archivado en el historial de este ciclo</source>
-        <translation>Already archived in this cycle&apos;s history</translation>
-    </message>
-    <message>
         <source>(caso eliminado)</source>
         <translation>(deleted case)</translation>
     </message>
@@ -7746,20 +7865,56 @@ Press “Capture” or drop a file on the window.</translation>
         <translation>PAUSED · STEP %1 / %2</translation>
     </message>
     <message>
-        <source>Heredada de %1: el paso no se ha vuelto a probar</source>
-        <translation>Inherited from %1: the step has not been tested again</translation>
-    </message>
-    <message>
         <source>PASO %1 · DE %2</source>
         <translation>STEP %1 · FROM %2</translation>
     </message>
     <message>
-        <source>Evidencia heredada de la ejecución que se retoma: el paso no se ha vuelto a probar</source>
-        <translation>Evidence inherited from the run being resumed: the step has not been tested again</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;CONTINUANDO EL CICLO %1&lt;/b&gt; · se repiten sólo los casos que fallaron o quedaron bloqueados; lo ya superado, sus capturas y sus bugs se conservan</source>
         <translation>&lt;b&gt;CONTINUING CYCLE %1&lt;/b&gt; · only the cases that failed or were blocked are repeated; what already passed, its screenshots and its bugs are kept</translation>
+    </message>
+    <message>
+        <source>+ Nuevo caso</source>
+        <translation>+ New case</translation>
+    </message>
+    <message>
+        <source>Escribe un caso nuevo: se añade al plan y entra al final del ciclo en curso</source>
+        <translation>Write a new case: it is added to the plan and joins the end of the running cycle</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;REVISANDO %1&lt;/b&gt; · lo archivado de %2 llega heredado paso a paso. Cambia un veredicto o una nota, o añade evidencia, para corregirlo; si no tocas nada, al seguir queda como estaba</source>
+        <translation>&lt;b&gt;REVIEWING %1&lt;/b&gt; · what was archived for %2 is inherited step by step. Change a verdict or a note, or add evidence, to correct it; if you change nothing, it stays as it was when you move on</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;CORRIGIENDO %1&lt;/b&gt; · al cerrar se archiva como una ejecución nueva del ciclo y sustituye a la anterior en su informe</source>
+        <translation>&lt;b&gt;CORRECTING %1&lt;/b&gt; · when closed it is archived as a new run of the cycle and replaces the previous one in its report</translation>
+    </message>
+    <message>
+        <source>Terminar revisión</source>
+        <translation>Finish review</translation>
+    </message>
+    <message>
+        <source>Guardar corrección</source>
+        <translation>Save correction</translation>
+    </message>
+    <message>
+        <source>REVISANDO</source>
+        <translation>REVIEWING</translation>
+    </message>
+    <message>
+        <source>Abrir su ejecución archivada (%1) para revisarla; el actual queda en pausa. Si no cambias nada, sigue como estaba</source>
+        <translation>Open its archived run (%1) to review it; the current one is paused. If you change nothing, it stays as it was</translation>
+    </message>
+    <message>
+        <source>De %1, la ejecución que se retoma: se conserva mientras su paso no se vuelva a marcar</source>
+        <translation>From %1, the run being resumed: kept until its step is marked again</translation>
+    </message>
+    <message>
+        <source>SIN PASO · DE %1</source>
+        <translation>NO STEP · FROM %1</translation>
+    </message>
+    <message>
+        <source>Evidencia de la ejecución que se retoma: se conserva mientras su paso no se vuelva a marcar</source>
+        <translation>Evidence from the run being resumed: kept until its step is marked again</translation>
     </message>
 </context>
 <context>

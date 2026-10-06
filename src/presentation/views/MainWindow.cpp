@@ -6,6 +6,7 @@
 #include "core/models/RunHistory.h"   // label(Verdict)
 #include "presentation/theme/Theme.h"
 #include "presentation/views/BugDialog.h"
+#include "presentation/views/CaseCreateDialog.h"
 #include "presentation/views/BugView.h"
 #include "presentation/views/CasesView.h"
 #include "presentation/views/HistoryView.h"
@@ -467,6 +468,24 @@ void MainWindow::beginPlanRun(const QString& planId, const QString& environment,
     navigateInto(Screen::Run);
 }
 
+void MainWindow::createCaseForRun() {
+    const PlanRun* cycle = m_ctx.run->planRunId().isEmpty() ? nullptr : m_ctx.history->findPlan(m_ctx.run->planRunId());
+    const TestPlan* plan = cycle ? m_ctx.plan->find(cycle->planId) : nullptr;
+    if (!plan) {
+        showToast(tr("El caso nuevo va al plan del ciclo en curso, y este ciclo no es de ningún plan"), theme::Amber);
+        return;
+    }
+    auto* dialog = new CaseCreateDialog(m_ctx.cases->suites(),
+                                        tr("Se añade al plan «%1» y entra al final del ciclo en curso.").arg(plan->name), this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &QDialog::accepted, this, [this, dialog, planId = plan->id]() {
+        const QStringList ids = m_ctx.cases->addCases({dialog->testCase()});
+        // Añadirlo al plan basta: el ciclo en curso sigue a su plan (lo mete en la cola y en Zephyr).
+        if (!ids.isEmpty() && m_ctx.plan->find(planId)) m_ctx.plan->addCases(planId, ids);
+    });
+    dialog->open();
+}
+
 void MainWindow::continueCycleRun(const QString& planRunId) {
     if (!m_ctx.run->state().caseId.isEmpty()) {
         showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
@@ -824,6 +843,7 @@ void MainWindow::wireRun() {
     connect(m_run, &RunView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });
     connect(m_run, &RunView::captureRequested, this, &MainWindow::captureScreen);
     connect(m_run, &RunView::reportBugRequested, this, &MainWindow::reportBug);
+    connect(m_run, &RunView::newCaseRequested, this, &MainWindow::createCaseForRun);
     connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
     // El modo foco deja la evidencia sola: la ventana esconde su marco mientras dura.
     connect(m_run, &RunView::focusModeChanged, this, [this](bool on) {

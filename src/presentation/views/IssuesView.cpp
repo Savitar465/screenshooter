@@ -394,6 +394,7 @@ void IssuesView::focusSearch() {
 }
 
 void IssuesView::showDetail(bool on) {
+    if (!on) m_viewedRevision = 0;   // al volver a entrar, el issue se abre por la ronda en curso
     m_pages->setCurrentIndex(static_cast<int>(on && selected() ? Page::Detail : Page::Board));
 }
 
@@ -433,11 +434,13 @@ void IssuesView::openIssue(const QString& issueId) {
     showDetail(true);
 }
 
-IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
+IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue, int revision) const {
     RevisionSnapshot s;
-    if (m_records) s.progress = m_records->progressFor(issue.id);
-    const IssueRevision* open = issue.currentRevision();
-    const IssueRevision* last = issue.revisions.isEmpty() ? nullptr : &issue.revisions.last();
+    // Una ronda anterior ya está cerrada: lo que cuenta es lo que salió de ella, no lo que toca ahora.
+    const IssueRevision* past = revision > 0 && revision != issue.currentRevisionNumber() ? issue.revision(revision) : nullptr;
+    if (m_records) s.progress = m_records->progressFor(issue.id, past ? past->number : 0);
+    const IssueRevision* open = past ? nullptr : issue.currentRevision();
+    const IssueRevision* last = past ? past : (issue.revisions.isEmpty() ? nullptr : &issue.revisions.last());
     s.open = open != nullptr;
     s.closed = !open && last != nullptr;
     s.number = last ? last->number : 1;
@@ -450,11 +453,13 @@ IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
         if (phases.at(i).compare(s.phase, Qt::CaseInsensitive) == 0) s.following = phases.at(i + 1);
     s.hasPlan = !issue.planId.isEmpty() && !IssueStore::caseIdsOf(issue, m_plans).isEmpty();
     s.executed = s.progress.executed > 0;
-    const QList<IssueLink> bugs = bugsOf(issue);
+    const QList<IssueLink> bugs = past ? (m_records ? m_records->revisionBugs(issue, past->number) : QList<IssueLink>{}) : bugsOf(issue);
     s.openBugs = int(std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
-    const QList<RunRecord> runs = IssueStore::runsOf(issue, m_history);
-    for (const auto& bug : bugs)
-        if (!bug.resolved && retestPassed(bug, runs)) s.verifiedBugs << bug.key;
+    if (!past) {
+        const QList<RunRecord> runs = IssueStore::runsOf(issue, m_history);
+        for (const auto& bug : bugs)
+            if (!bug.resolved && retestPassed(bug, runs)) s.verifiedBugs << bug.key;
+    }
     s.hasRecord = last && last->hasDocument();
     // Publicada es la ronda a la que no le falta ningún destino, y eso lo sabe el servicio que publica:
     // mira los tres (Zephyr, el gestor y GESREQ), no sólo lo que quedó anotado en la revisión. Sólo se
@@ -480,7 +485,7 @@ IssuesView::RevisionSnapshot IssuesView::snapshotOf(const Issue& issue) const {
     } else {
         s.published = last && (!last->jira.isEmpty() || !last->gesreq.isEmpty());
     }
-    s.continuable = continuableCycle(issue, s.number);
+    if (!past) s.continuable = continuableCycle(issue, s.number);
     // Cada fase lleva su acta, también la que se aprueba antes de la última; lo que no hace ésa es
     // registrarse en GESREQ (lo descuenta `published`).
     // Los bugs de una ronda cerrada ya no son un paso pendiente: se cerró sabiéndolos (es lo que la deja
@@ -1728,6 +1733,7 @@ void IssuesView::buildDetail(QVBoxLayout* root) {
     QWidget* content;
     QVBoxLayout* outer;
     auto* sa = ui::scrollArea(&content, &outer);
+    m_detailScroll = sa;
     outer->setContentsMargins(28, 16, 28, 28);
     auto* page = new QWidget;
     page->setMaximumWidth(1200);
@@ -1776,17 +1782,7 @@ void IssuesView::buildDetail(QVBoxLayout* root) {
     m_detailColumns->addWidget(main, 1, Qt::AlignTop);
 
     // ---- Columna del trabajo -----------------------------------------------------------------------
-    // Del gestor sólo piden algo lo pendiente y lo que quedó sin confirmar: van arriba, a la vista.
-    QBoxLayout* pendingLayout;
-    auto* jiraPending = notice(&m_jiraPendingText, &pendingLayout, false);
-    jiraPending->setObjectName(QStringLiteral("issueJiraPending"));
-    m_jiraPending = jiraPending;
-    m_updateJiraButton = smallButton(tr("Actualizar en el gestor…"), "outline");
-    m_updateJiraButton->setObjectName(QStringLiteral("issueUpdateJira"));
-    connect(m_updateJiraButton, &QPushButton::clicked, this, [this]() { openPublishDialog(true); });
-    pendingLayout->addWidget(m_updateJiraButton, 0, Qt::AlignVCenter);
-    mv->addWidget(jiraPending);
-
+    // Del gestor sólo pide algo lo que quedó sin confirmar: va arriba, a la vista.
     auto* jiraUncertain = notice(&m_jiraUncertainText, nullptr, false);
     jiraUncertain->setObjectName(QStringLiteral("issueJiraUncertain"));
     m_jiraUncertain = jiraUncertain;
@@ -1797,6 +1793,19 @@ void IssuesView::buildDetail(QVBoxLayout* root) {
     m_revisionCard->setObjectName(QStringLiteral("issueRevisionCard"));
     auto* rv = ui::vbox(m_revisionCard, 0, 14);
     mv->addWidget(m_revisionCard);
+
+    // Abierta una ronda anterior desde el historial, se dice cuál es y cómo volver a la que está en curso.
+    QBoxLayout* pastLayout;
+    auto* pastBanner = notice(&m_pastBannerText, &pastLayout, false);
+    pastBanner->setObjectName(QStringLiteral("issuePastRevision"));
+    m_pastBanner = pastBanner;
+    m_pastBannerText->setStyleSheet(QStringLiteral("color:%1;").arg(theme::TextSoft));
+    auto* backToCurrent = smallButton(tr("Volver a la revisión en curso"), "outline");
+    backToCurrent->setObjectName(QStringLiteral("issueBackToCurrentRevision"));
+    connect(backToCurrent, &QPushButton::clicked, this, [this]() { viewRevision(0); });
+    pastLayout->addWidget(backToCurrent, 0, Qt::AlignVCenter);
+    m_pastBanner->setVisible(false);
+    rv->addWidget(pastBanner);
 
     auto* summary = ui::card("card");
     auto* sv = ui::vbox(summary, 0, 12);
@@ -2118,26 +2127,45 @@ void IssuesView::refreshRevision(const Issue& issue) {
     m_stepTabs.clear();
     m_stepCards.clear();
     m_stepColors.clear();
-    // Lo mismo que cuentan la tarjeta y el panel del tablero, para que los tres digan igual qué toca.
-    const RevisionSnapshot snapshot = snapshotOf(issue);
-    m_phaseTrack->setText(phaseTrack(issue, snapshot));
+    // La ronda que se ve: la de otro issue nunca, y una que ya no está (o que es la última) es la en curso.
+    if (issue.id != m_stepIssue) m_viewedRevision = 0;
+    const IssueRevision* viewed = m_viewedRevision > 0 ? issue.revision(m_viewedRevision) : nullptr;
+    if (!viewed || viewed->isOpen() || viewed->number == issue.currentRevisionNumber()) {
+        viewed = nullptr;
+        m_viewedRevision = 0;
+    }
+    const bool past = viewed != nullptr;
+    // Lo mismo que cuentan la tarjeta y el panel del tablero, para que los tres digan igual qué toca. Las
+    // fases dicen cómo va el issue, así que hablan siempre de la ronda en curso.
+    const RevisionSnapshot ongoing = snapshotOf(issue);
+    m_phaseTrack->setText(phaseTrack(issue, ongoing));
+    const RevisionSnapshot snapshot = past ? snapshotOf(issue, m_viewedRevision) : ongoing;
     // Sin el servicio (tests con un contexto mínimo) la revisión no tiene nada que contar.
     m_revisionCard->setVisible(m_records != nullptr);
     m_historyCard->setVisible(false);
+    m_pastBanner->setVisible(false);
     if (!m_records) return;
 
     const IssueProgress& progress = snapshot.progress;
-    const IssueRevision* open = issue.currentRevision();
-    const IssueRevision* last = issue.revisions.isEmpty() ? nullptr : &issue.revisions.last();
+    // La ronda de la que se habla: la abierta, la última o la anterior elegida en el historial.
+    const IssueRevision* open = past ? nullptr : issue.currentRevision();
+    const IssueRevision* last = past ? viewed : (issue.revisions.isEmpty() ? nullptr : &issue.revisions.last());
     const bool closed = snapshot.closed;
     const int number = snapshot.number;
     const QaOutcome outcome = closed ? issue.lastOutcome() : progress.suggested;
     const QString outcomeName = outcomeText(issue, outcome, snapshot.phase);
 
     // Cómo va la ronda: la barra con lo que salió de sus casos y, debajo, las cifras.
-    m_revisionHeader->setText(issue.revisions.isEmpty()
-                                  ? tr("REVISIÓN")
-                                  : tr("REVISIÓN %1 · %2 · %3").arg(number).arg(snapshot.phase.toUpper(), label(issue.state).toUpper()));
+    m_revisionHeader->setText(issue.revisions.isEmpty() ? tr("REVISIÓN")
+                              : past ? tr("REVISIÓN %1 · %2 · ANTERIOR").arg(number).arg(snapshot.phase.toUpper())
+                                     : tr("REVISIÓN %1 · %2 · %3").arg(number).arg(snapshot.phase.toUpper(), label(issue.state).toUpper()));
+    if (past) {
+        m_pastBannerText->setText(tr("Estás viendo la revisión %1 (%2), cerrada el %3. Lo que se ejecute, continúe o cierre "
+                                     "es de la revisión en curso; desde aquí se regenera su acta y se completa su publicación.")
+                                      .arg(number)
+                                      .arg(snapshot.phase, when(viewed->closedAt)));
+        m_pastBanner->setVisible(true);
+    }
     m_revisionProgress->setText(closed ? tr("Cerrada como %1").arg(outcomeName) : tr("Propuesto: %1").arg(outcomeName));
     m_revisionProgress->setToolTip(closed || progress.blockers.isEmpty() ? QString() : progress.blockers.join(QLatin1Char('\n')));
     m_revisionProgress->setStyleSheet(QStringLiteral("color:%1;font-weight:600;").arg(outcomeColor(outcome)));
@@ -2182,14 +2210,14 @@ void IssuesView::refreshRevision(const Issue& issue) {
                                  QStringLiteral("issueStepPlanDetail"));
         // Un plan por requerimiento: sin él, el paso ofrece crearlo; con él, se abre desde su fila.
         QPushButton* create = nullptr;
-        if (!plan) {
+        if (!plan && !past) {
             create = smallButton(tr("Crear plan"), role(row, hasPlan));
             create->setObjectName(QStringLiteral("issueStepPlan"));
             connect(create, &QPushButton::clicked, this, &IssuesView::createPlan);
         }
         // Zephyr: el plan entero —sus Tests, el ciclo de la fase con todos sus casos y lo ya ejecutado—.
         // Sin ningún Test todavía se sube; con alguno, se pone al día (y de paso se crea lo que falte).
-        if (m_revisionPublish && m_revisionPublish->canPrepareTests() && !caseIds.isEmpty()) {
+        if (!past && m_revisionPublish && m_revisionPublish->canPrepareTests() && !caseIds.isEmpty()) {
             const QStringList missing = m_revisionPublish->casesWithoutTest(issue.id, caseIds);
             const bool none = missing.size() == caseIds.size();
             const QString phase = m_revisionPublish->uploadPhase(issue);
@@ -2224,20 +2252,23 @@ void IssuesView::refreshRevision(const Issue& issue) {
             row.actions->addWidget(upload);
         }
         // Lo que se hace de vez en cuando con el plan va en un menú, para que el paso tenga una sola acción.
-        QMenu* menu;
-        auto* more = menuButton(tr("Más ▾"), &menu);
-        more->setObjectName(QStringLiteral("issueStepPlanMore"));
-        if (!plan) {
-            QAction* link = menu->addAction(tr("Vincular plan…"));
-            link->setObjectName(QStringLiteral("issueLinkPlan"));
-            link->setToolTip(tr("Usa como plan del requerimiento uno que ya existe en el proyecto"));
-            connect(link, &QAction::triggered, this, &IssuesView::pickPlan);
+        // El plan es uno para todas las rondas: se compone desde la que está en curso.
+        if (!past) {
+            QMenu* menu;
+            auto* more = menuButton(tr("Más ▾"), &menu);
+            more->setObjectName(QStringLiteral("issueStepPlanMore"));
+            if (!plan) {
+                QAction* link = menu->addAction(tr("Vincular plan…"));
+                link->setObjectName(QStringLiteral("issueLinkPlan"));
+                link->setToolTip(tr("Usa como plan del requerimiento uno que ya existe en el proyecto"));
+                connect(link, &QAction::triggered, this, &IssuesView::pickPlan);
+            }
+            QAction* generate = menu->addAction(tr("Generar casos con IA…"));
+            generate->setObjectName(QStringLiteral("issueGenerateCases"));
+            generate->setToolTip(tr("Arma un prompt con el requerimiento para ChatGPT u otra IA y añade al plan los casos que devuelva"));
+            connect(generate, &QAction::triggered, this, &IssuesView::generateCases);
+            row.actions->addWidget(more);
         }
-        QAction* generate = menu->addAction(tr("Generar casos con IA…"));
-        generate->setObjectName(QStringLiteral("issueGenerateCases"));
-        generate->setToolTip(tr("Arma un prompt con el requerimiento para ChatGPT u otra IA y añade al plan los casos que devuelva"));
-        connect(generate, &QAction::triggered, this, &IssuesView::generateCases);
-        row.actions->addWidget(more);
         if (create) row.actions->addWidget(create);
         fillPlan(issue, row.body);
     }
@@ -2250,8 +2281,9 @@ void IssuesView::refreshRevision(const Issue& issue) {
         for (const auto& cycle : IssueStore::cyclesOfRevision(issue, m_history, number))
             if (const QString env = cycle.environment.trimmed(); !env.isEmpty() && !environments.contains(env))
                 environments << env;
-        const QList<PlanRun> cycles = IssueStore::cyclesOf(issue, m_history);
-        QString detail = tr("%1 ejecución(es) de su plan").arg(cycles.size());
+        // De una ronda anterior, sólo sus ciclos: los de las demás no son lo que salió de ella.
+        const QList<PlanRun> cycles = past ? IssueStore::cyclesOfRevision(issue, m_history, number) : IssueStore::cyclesOf(issue, m_history);
+        QString detail = past ? tr("%1 ejecución(es) en esta revisión").arg(cycles.size()) : tr("%1 ejecución(es) de su plan").arg(cycles.size());
         if (!environments.isEmpty()) detail += tr(" · ambiente: %1").arg(environments.join(tr(", ")));
         const StepRow row = step(executed, tr("Ejecutar"), tr("Ejecutar el plan"), detail, QStringLiteral("issueStepRunDetail"));
         auto* actions = row.actions;
@@ -2264,38 +2296,42 @@ void IssuesView::refreshRevision(const Issue& issue) {
             if (issue && !issue->planId.isEmpty()) emit openPlanRequested(issue->planId);
         });
         actions->addWidget(open);
-        // Lo que quedó roto no obliga a repetir el plan entero: se continúa la ronda por donde se quedó
-        // y, si ya está cerrada, la continuación abre la siguiente y es de ella. Si lo hay, es lo que toca.
-        const QString pending = snapshot.continuable;
-        // El ciclo se arranca desde aquí: es el paso siguiente del issue y no hay por qué salir a buscarlo.
-        auto* run = smallButton(tr("Ejecutar plan…"), pending.isEmpty() ? role(row, executed) : "outline",
-                                tr("Arranca un ciclo del plan: pregunta el ambiente y lleva a la ejecución. El primero abre la "
-                                   "revisión y deja el issue en pruebas"));
-        run->setObjectName(QStringLiteral("issueStepRun"));
-        addIcon(run, icons::Glyph::Run);
-        run->setEnabled(!runnablePlan(issue).isEmpty());
-        connect(run, &QPushButton::clicked, this, [this]() { runPlan(); });
-        actions->addWidget(run);
-        if (!pending.isEmpty()) {
-            const PlanReport report = m_history.report(pending);
-            auto* proceed = smallButton(tr("Continuar lo fallado…"), row.current ? "primary" : "outline",
-                                        tr("Vuelve a ejecutar los %1 caso(s) por terminar del ciclo %2 en la revisión %3: los rotos desde el "
-                                           "paso que se rompió y los que no se ejecutaron (o se añadieron al plan después), enteros")
-                                            .arg(continuationOf(report).size())
-                                            .arg(pending)
-                                            .arg(closed ? number + 1 : number));
-            proceed->setObjectName(QStringLiteral("issueStepContinue"));
-            addIcon(proceed, icons::Glyph::Retry);
-            connect(proceed, &QPushButton::clicked, this, [this, pending]() { emit continueCycleRequested(pending); });
-            actions->addWidget(proceed);
+        // Ejecutar y continuar abren o siguen la ronda en curso: desde una anterior no se ofrecen.
+        if (!past) {
+            // Lo que quedó roto no obliga a repetir el plan entero: se continúa la ronda por donde se quedó
+            // y, si ya está cerrada, la continuación abre la siguiente y es de ella. Si lo hay, es lo que toca.
+            const QString pending = snapshot.continuable;
+            // El ciclo se arranca desde aquí: es el paso siguiente del issue y no hay por qué salir a buscarlo.
+            auto* run = smallButton(tr("Ejecutar plan…"), pending.isEmpty() ? role(row, executed) : "outline",
+                                    tr("Arranca un ciclo del plan: pregunta el ambiente y lleva a la ejecución. El primero abre la "
+                                       "revisión y deja el issue en pruebas"));
+            run->setObjectName(QStringLiteral("issueStepRun"));
+            addIcon(run, icons::Glyph::Run);
+            run->setEnabled(!runnablePlan(issue).isEmpty());
+            connect(run, &QPushButton::clicked, this, [this]() { runPlan(); });
+            actions->addWidget(run);
+            if (!pending.isEmpty()) {
+                const PlanReport report = m_history.report(pending);
+                auto* proceed = smallButton(tr("Continuar lo fallado…"), row.current ? "primary" : "outline",
+                                            tr("Vuelve a ejecutar los %1 caso(s) por terminar del ciclo %2 en la revisión %3: los rotos desde el "
+                                               "paso que se rompió y los que no se ejecutaron (o se añadieron al plan después), enteros")
+                                                .arg(continuationOf(report).size())
+                                                .arg(pending)
+                                                .arg(closed ? number + 1 : number));
+                proceed->setObjectName(QStringLiteral("issueStepContinue"));
+                addIcon(proceed, icons::Glyph::Retry);
+                connect(proceed, &QPushButton::clicked, this, [this, pending]() { emit continueCycleRequested(pending); });
+                actions->addWidget(proceed);
+            }
         }
-        fillResults(issue, cycles, row.body);
+        fillResults(issue, cycles, row.body, past);
     }
 
     // 3 · Los bugs que salieron de esas ejecuciones: con alguno abierto, el requerimiento no queda conforme.
     // La lista va debajo de los pasos, siempre a la vista; el paso dice cuántos hay y cierra los verificados.
     {
-        const QList<IssueLink> bugs = bugsOf(issue);
+        // De una ronda anterior, los que salieron de ella.
+        const QList<IssueLink> bugs = past ? m_records->revisionBugs(issue, number) : bugsOf(issue);
         const int openBugs = int(std::count_if(bugs.cbegin(), bugs.cend(), [](const IssueLink& b) { return !b.resolved; }));
         // Cerrada la ronda, sus bugs ya no son un paso pendiente: se cerró con ellos a la vista.
         const StepRow row = step(snapshot.done[2], tr("Bugs"), tr("Revisar los bugs reportados"),
@@ -2341,7 +2377,7 @@ void IssuesView::refreshRevision(const Issue& issue) {
                                       "los bugs de la revisión, y la guarda como .docx"));
         record->setObjectName(QStringLiteral("issueGenerateRecord"));
         record->setEnabled(!issue.revisions.isEmpty() || progress.executed > 0);
-        connect(record, &QPushButton::clicked, this, [this]() { generateRecord(); });
+        connect(record, &QPushButton::clicked, this, [this, which = past ? number : 0]() { generateRecord(which); });
         row.actions->addWidget(record);
     }
 
@@ -2386,7 +2422,7 @@ void IssuesView::refreshRevision(const Issue& issue) {
         publish->setObjectName(QStringLiteral("issuePublishRevision"));
         publish->setEnabled(m_revisionPublish != nullptr && closed);
         if (!closed) publish->setToolTip(tr("Cierra antes la revisión: se publica el resultado de una revisión terminada"));
-        connect(publish, &QPushButton::clicked, this, [this]() { publishRevision(); });
+        connect(publish, &QPushButton::clicked, this, [this, which = past ? number : 0]() { publishRevision(which); });
         row.actions->addWidget(publish);
         // Y debajo, destino por destino: lo que llegó y lo que falta, con lo que dice de él la propia
         // publicación. El cierre en el gestor sólo sale cuando está hecho: no es un destino del resultado.
@@ -2408,7 +2444,7 @@ void IssuesView::refreshRevision(const Issue& issue) {
 
     // Y, cerrada la ronda, la siguiente: un requerimiento observado vuelve a pruebas en la misma fase, y
     // una fase aprobada pasa a la siguiente.
-    if (!open) {
+    if (!open && !past) {
         const QString title = snapshot.phaseApproved ? tr("Probar en %1").arg(snapshot.upcoming) : tr("Volver a probar");
         const QString tab = snapshot.phaseApproved ? snapshot.upcoming : (closed ? tr("Repetir") : tr("Revisión"));
         const StepRow row = step(false, tab, title,
@@ -2449,8 +2485,9 @@ void IssuesView::refreshRevision(const Issue& issue) {
     // El stepper: una pestaña por paso. Se ve el que toca, salvo que se haya elegido otro a mano; y si
     // cambia el que toca (se hizo algo) o el issue, se vuelve a él.
     if (current < 0) current = int(m_stepCards.size()) - 1;
-    if (issue.id != m_stepIssue || current != m_stepCurrent) m_stepChoice = -1;
+    if (issue.id != m_stepIssue || m_viewedRevision != m_stepRevision || current != m_stepCurrent) m_stepChoice = -1;
     m_stepIssue = issue.id;
+    m_stepRevision = m_viewedRevision;
     m_stepCurrent = current;
     for (int i = 0; i < m_stepCards.size(); ++i) {
         auto* tab = new QPushButton(QStringLiteral("%1  %2").arg(i + 1).arg(tabNames.at(i)));
@@ -2501,36 +2538,39 @@ void IssuesView::refreshRevision(const Issue& issue) {
                 chip->setToolTip(step.detail);
                 flow->addWidget(chip);
             }
-        if (it->hasDocument()) {
-            auto* openRecord = smallButton(tr("Abrir acta"), "ghost");
-            connect(openRecord, &QPushButton::clicked, this, [this, path = it->documentPath]() {
-                emit openUrlRequested(QUrl::fromLocalFile(path).toString());
-            });
-            flow->addWidget(openRecord);
-        } else if (m_records) {
-            // Sin acta no hay nada que adjuntar ni que registrar en GESREQ: se puede levantar ahora.
-            auto* record = smallButton(tr("Generar acta…"), "ghost",
-                                       tr("Levanta el acta de la revisión %1 con lo que se probó en ella").arg(number));
-            record->setObjectName(QStringLiteral("issueRevisionRecord-%1").arg(number));
-            connect(record, &QPushButton::clicked, this, [this, number]() { generateRecord(number); });
-            flow->addWidget(record);
+        // La ronda se abre en la columna del trabajo: allí se ve lo que salió de ella y se termina lo que le
+        // falte (el acta, la publicación). La última es la que ya se enseña cuando no hay otra abierta.
+        const int shown = m_viewedRevision > 0 ? m_viewedRevision : issue.currentRevisionNumber();
+        if (number == shown) {
+            flow->addWidget(ui::pill(tr("EN PANTALLA"), theme::tint(theme::Blue, 30), theme::Blue));
+        } else {
+            QString tip = tr("Abre la revisión %1 aquí: sus ejecuciones, sus bugs, su acta y dónde llegó su resultado").arg(number);
+            if (m_revisionPublish)
+                if (const QList<RevisionPublishService::Destination> pending = m_revisionPublish->pendingFor(issue.id, number);
+                    !pending.isEmpty()) {
+                    QStringList names;
+                    for (const auto destination : pending) names << RevisionPublishService::label(destination);
+                    tip += QStringLiteral("\n") + tr("Falta publicar su resultado en %1: se completa desde ella").arg(names.join(tr(" y ")));
+                }
+            if (!it->hasDocument()) tip += QStringLiteral("\n") + tr("Todavía sin acta: se levanta desde ella");
+            auto* view = smallButton(tr("Ver revisión"), "outline", tip);
+            view->setObjectName(QStringLiteral("issueRevisionView-%1").arg(number));
+            addIcon(view, icons::Glyph::Eye);
+            connect(view, &QPushButton::clicked, this, [this, number]() { viewRevision(number); });
+            flow->addWidget(view);
         }
-        // Una ronda que se quedó a medias (se abrió la siguiente antes de publicarla) se termina desde aquí.
-        if (m_revisionPublish)
-            if (const QList<RevisionPublishService::Destination> pending = m_revisionPublish->pendingFor(issue.id, number);
-                !pending.isEmpty()) {
-                QStringList names;
-                for (const auto destination : pending) names << RevisionPublishService::label(destination);
-                auto* publish = smallButton(tr("Completar publicación…"), "outline",
-                                            tr("Falta publicar el resultado de la revisión %1 en %2").arg(number).arg(names.join(tr(" y "))));
-                publish->setObjectName(QStringLiteral("issueRevisionPublish-%1").arg(number));
-                connect(publish, &QPushButton::clicked, this, [this, number]() { publishRevision(number); });
-                flow->addWidget(publish);
-            }
         rv->addWidget(extra);
         m_revisionsList->addWidget(row);
     }
     m_historyCard->setVisible(closedRevisions > 0);
+}
+
+void IssuesView::viewRevision(int revision) {
+    m_viewedRevision = std::max(0, revision);
+    m_stepChoice = -1;
+    loadDetail();
+    // La ronda se enseña en la columna del trabajo; si el panel va debajo (ventana estrecha), se sube a ella.
+    m_detailScroll->ensureWidgetVisible(m_revisionCard, 0, 0);
 }
 
 void IssuesView::generateRecord(int revision) {
@@ -2890,6 +2930,10 @@ QMenu* IssuesView::buildJiraMenu() {
     connect(m_openJiraAction, &QAction::triggered, this, [this]() {
         if (const Issue* issue = selected()) emit openUrlRequested(issue->publication.url);
     });
+    m_updateJiraAction = menu->addAction(tr("Actualizar en el gestor…"));
+    m_updateJiraAction->setObjectName(QStringLiteral("issueUpdateJira"));
+    m_updateJiraAction->setToolTip(tr("Reescribe el título y la descripción del issue del gestor con los de QAflow, revisándolos antes"));
+    connect(m_updateJiraAction, &QAction::triggered, this, [this]() { openPublishDialog(true); });
     m_refreshJiraAction = action(tr("Actualizar estado"), "issueRefreshJira", &IssuesView::refreshJiraStatus);
     menu->addSeparator();
     m_unlinkJiraAction = action(tr("Desvincular"), "issueUnlinkJira", &IssuesView::unlinkJira);
@@ -2901,26 +2945,24 @@ void IssuesView::refreshJira(const Issue& issue) {
     // Sin el servicio (tests con un contexto mínimo) no hay gestor del que hablar.
     m_jiraChip->setVisible(m_publish != nullptr);
     if (!m_publish) {
-        m_jiraPending->setVisible(false);
         m_jiraUncertain->setVisible(false);
         return;
     }
     const IssuePublication& p = issue.publication;
     const bool published = issue.isPublished();
     const bool configured = m_publish->canPublish();
-    const bool pending = m_publish->needsUpdate(issue);
     m_publishAction->setVisible(!published);
     m_publishAction->setEnabled(configured && !m_publishing);
     m_linkJiraAction->setVisible(!published);
     m_linkJiraAction->setEnabled(configured && !m_publishing);
     m_openJiraAction->setVisible(published);
     m_openJiraAction->setEnabled(!p.url.isEmpty());
+    m_updateJiraAction->setVisible(published);
+    m_updateJiraAction->setEnabled(configured && !m_publishing);
     m_refreshJiraAction->setVisible(published);
     m_refreshJiraAction->setEnabled(!m_publishing);
     m_unlinkJiraAction->setVisible(published);
-    m_jiraPending->setVisible(pending);
     m_jiraUncertain->setVisible(!published && p.uncertain);
-    m_jiraPendingText->setText(tr("⚠ El título o la descripción cambiaron desde lo último que se publicó. En el gestor sigue lo anterior."));
     m_jiraUncertainText->setText(tr("⚠ El último envío se cortó sin respuesta (%1): puede haberse creado igualmente. Búscalo en %2 por la etiqueta %3 "
                                     "y vincúlalo; si no está, vuelve a publicar.")
                                      .arg(p.lastError, m_publish->destination(), issue.id));
@@ -2932,7 +2974,7 @@ void IssuesView::refreshJira(const Issue& issue) {
     QStringList lines;
     if (published) {
         text = p.status.isEmpty() ? p.key : QStringLiteral("%1 · %2").arg(p.key, p.status);
-        color = pending ? theme::Amber : (p.resolved ? theme::Green : theme::Blue);
+        color = p.resolved ? theme::Green : theme::Blue;
         const QString where = p.project.isEmpty() ? p.tracker : QStringLiteral("%1 · %2").arg(p.tracker, p.project);
         lines << QStringLiteral("%1 · %2").arg(p.key, where);
         if (!p.issueType.isEmpty()) lines << tr("Tipo: %1").arg(p.issueType);
@@ -3151,7 +3193,7 @@ void IssuesView::fillPlan(const Issue& issue, QVBoxLayout* into) {
     into->addWidget(list);
 }
 
-void IssuesView::fillResults(const Issue& issue, const QList<PlanRun>& cycles, QVBoxLayout* into) {
+void IssuesView::fillResults(const Issue& issue, const QList<PlanRun>& cycles, QVBoxLayout* into, bool past) {
     // Lo que se enseña son las ejecuciones de los planes del issue, no todas las de sus casos: un caso
     // puede estar en otros planes y esas ejecuciones no son resultados de este requerimiento.
     if (cycles.isEmpty()) {
@@ -3169,8 +3211,9 @@ void IssuesView::fillResults(const Issue& issue, const QList<PlanRun>& cycles, Q
         // y cómo salió (la barra y la cifra). Lo demás —ronda, fecha, si continúa otro, si está en
         // Zephyr— al pasar por encima.
         const Collapsible row = collapsible(QStringLiteral("cycle:") + cycle.id, into);
-        const bool ofThisRound = cycle.revision > 0 ? cycle.revision == currentRevision
-                                                    : (revisionStart.isValid() && cycle.startedAt >= revisionStart);
+        // De una ronda anterior se enseñan sólo sus ciclos: el punto no distinguiría nada.
+        const bool ofThisRound = !past && (cycle.revision > 0 ? cycle.revision == currentRevision
+                                                              : (revisionStart.isValid() && cycle.startedAt >= revisionStart));
         row.head->addWidget(dotOrSpace(ofThisRound, theme::Blue), 0, Qt::AlignVCenter);
         row.head->addWidget(rowTitle(cycle.name), 1);
         if (!cycle.environment.trimmed().isEmpty())
@@ -3192,7 +3235,7 @@ void IssuesView::fillResults(const Issue& issue, const QList<PlanRun>& cycles, Q
         if (cycle.isContinuation()) tip << tr("Continúa %1").arg(cycle.continuesCycleId);
         if (cycle.isPublished()) tip << tr("Publicado en Zephyr");
         row.header->setToolTip(tip.join(QLatin1Char('\n')));
-        if (const QStringList left = continuationOf(report); !left.isEmpty()) {
+        if (const QStringList left = past ? QStringList{} : continuationOf(report); !left.isEmpty()) {
             auto* proceed = rowIcon(icons::Glyph::Retry,
                                     tr("Volver a ejecutar los %1 caso(s) por terminar de este ciclo: fallados, bloqueados o sin ejecutar").arg(left.size()),
                                     theme::AmberSoft);

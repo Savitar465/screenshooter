@@ -25,6 +25,7 @@ class QLabel;
 class QLineEdit;
 class QMenu;
 class QPushButton;
+class QScrollArea;
 class QSplitter;
 class QStackedWidget;
 class QVBoxLayout;
@@ -65,7 +66,8 @@ class IssueListView;
 /// Al abrir un issue (doble clic, «Abrir el issue», uno nuevo o uno importado) se pasa a su **detalle**,
 /// en dos columnas: a la izquierda el trabajo —**la revisión**— y a la derecha un panel con el contexto:
 /// estado, prioridad, fases, el gestor y el origen, el requerimiento importado (con lo que cambió, si
-/// sigue en la bandeja y su ficha plegada) y el historial de rondas cerradas.
+/// sigue en la bandeja y su ficha plegada) y el historial de rondas cerradas. Cada ronda del historial
+/// se abre en esa misma columna del trabajo, para ver lo que salió de ella y terminar lo que le falte.
 ///
 /// La revisión es el corazón del issue, así que se enseña como lo que es: arriba cómo va la ronda (una
 /// barra con lo que salió de sus casos y sus cifras) y debajo sus pasos —preparar el plan, ejecutarlo,
@@ -74,7 +76,8 @@ class IssueListView;
 /// casos, los ciclos, los destinos); los demás se abren desde su pestaña. Los bugs van siempre a la vista.
 ///
 /// La representación en el gestor no es trabajo, es contexto: no tiene tarjeta, es un tag del panel
-/// —clave y estado— y de su menú cuelgan publicar, vincular, abrir, consultar el estado y desvincular.
+/// —clave y estado— y de su menú cuelgan publicar, vincular, abrir, actualizar, consultar el estado y
+/// desvincular.
 ///
 /// Lo que se prueba de un requerimiento es **su plan**, uno por issue: el issue no agrupa casos sueltos,
 /// sus casos son los de su plan y sus resultados, los de los ciclos de ese plan. Así lo que se ve aquí es
@@ -137,7 +140,8 @@ protected:
 
 private:
     /// Cómo va la revisión de un issue, lo que cuentan igual la tarjeta del tablero, su panel y los
-    /// pasos del detalle: el primero sin hacer (`nextStep`, de 1 a 7) es el que toca.
+    /// pasos del detalle: el primero sin hacer (`nextStep`, de 1 a 7) es el que toca. Del mismo modo se
+    /// cuenta una ronda anterior abierta desde el historial, que ya está cerrada y no tiene nada que continuar.
     struct RevisionSnapshot {
         IssueProgress progress;
         bool hasPlan = false;
@@ -166,7 +170,9 @@ private:
         bool done[6] = {};
         int nextStep = 1;
     };
-    RevisionSnapshot snapshotOf(const Issue& issue) const;
+    /// `revision` 0 es la ronda en curso (la abierta o, si ninguna lo está, la última); otro número, esa
+    /// ronda anterior.
+    RevisionSnapshot snapshotOf(const Issue& issue, int revision = 0) const;
     /// El resultado de una ronda tal y como se lee según su fase: «Aprobada en QA», «Conforme», «Observado».
     QString outcomeText(const Issue& issue, QaOutcome outcome, const QString& phase) const;
     /// Las fases del proyecto con cómo va el issue en cada una: «QA ✓ → PRE ●».
@@ -254,8 +260,9 @@ private:
     /// El plan del issue con sus casos, dentro del paso que manda prepararlo.
     void fillPlan(const Issue& issue, QVBoxLayout* into);
     /// Los resultados del issue —los ciclos de su plan, con lo que salió de cada caso—, dentro del
-    /// paso que manda ejecutarlo.
-    void fillResults(const Issue& issue, const QList<PlanRun>& cycles, QVBoxLayout* into);
+    /// paso que manda ejecutarlo. Los de una ronda anterior (`past`) se enseñan sin ofrecer continuarlos:
+    /// lo que quedó roto se continúa desde la ronda en curso.
+    void fillResults(const Issue& issue, const QList<PlanRun>& cycles, QVBoxLayout* into, bool past = false);
     /// Los bugs reportados desde los casos de su plan, del más reciente al primero.
     QList<IssueLink> bugsOf(const Issue& issue) const;
     /// Esos bugs con su clasificación, su estado y el paso del que salieron, dentro de su paso.
@@ -293,10 +300,10 @@ private:
     void askForProject(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt);
     /// Nombre del proyecto que trabaja ese sistema de GESREQ; vacío si ninguno lo tiene vinculado.
     QString projectNameForSystem(const QString& systemCode) const;
-    /// El menú del tag del gestor: publicar o vincular mientras no hay issue allí; abrirlo, consultar su
-    /// estado o desvincularlo cuando ya lo hay.
+    /// El menú del tag del gestor: publicar o vincular mientras no hay issue allí; abrirlo, reescribirlo,
+    /// consultar su estado o desvincularlo cuando ya lo hay.
     QMenu* buildJiraMenu();
-    /// El tag del gestor (clave y estado), lo que tenga pendiente y qué ofrece su menú.
+    /// El tag del gestor (clave y estado), si quedó sin confirmar un envío y qué ofrece su menú.
     void refreshJira(const Issue& issue);
     /// El issue importado nace ya en el gestor: al traerlo de GESREQ se crea allí su issue, para que los
     /// casos, los bugs y el resultado tengan dónde colgarse desde el principio. Si no se puede (el gestor
@@ -304,12 +311,21 @@ private:
     void publishImported(const QString& issueId);
     /// La tarjeta «Revisión»: los pasos del control de calidad (plan, ejecución, bugs, acta, cierre y
     /// publicación) con lo que lleva hecho cada uno y lo que cuelga de él, y las rondas ya cerradas.
+    ///
+    /// Enseña la ronda en curso o, si se eligió en el historial, una anterior (`m_viewedRevision`). De
+    /// ésa se ve lo que salió —sus ciclos, sus bugs, su acta y dónde llegó su resultado— y sólo se
+    /// ofrece lo que sigue siendo suyo: levantar o regenerar su acta y completar su publicación. Lo
+    /// demás (el plan, Zephyr, ejecutar, continuar, cerrar, abrir otra ronda) trabaja sobre la ronda en
+    /// curso, así que se hace desde ella.
     void refreshRevision(const Issue& issue);
+    /// Enseña en el detalle esa ronda del issue elegido (0 o la última: la ronda en curso).
+    void viewRevision(int revision);
     /// Abre el acta de la ronda (0 = la que está en curso), la genera y la guarda donde diga el usuario.
     void generateRecord(int revision = 0);
     /// Publica el resultado de una ronda (0 = la que está en curso): los planes con sus casos en Zephyr,
     /// el resultado y el acta en el gestor y el registro en GESREQ. Se ofrece cuando la ronda está
-    /// terminada, y desde el historial para acabar de publicar una anterior que se quedó a medias.
+    /// terminada, y desde una ronda anterior abierta del historial para acabar de publicarla si se quedó a
+    /// medias.
     void publishRevision(int revision = 0);
     /// Cierra la revisión en curso con el resultado que se confirme y sube sus resultados a Zephyr y al
     /// gestor (`RevisionPublishService::closeRevision`).
@@ -409,17 +425,19 @@ private:
     QPushButton* m_openRequirement;
     QLabel* m_detailInfo;
     QVBoxLayout* m_attachments;
-    QWidget* m_jiraPending;
-    QLabel* m_jiraPendingText;
     QWidget* m_jiraUncertain;
     QLabel* m_jiraUncertainText;
-    QPushButton* m_updateJiraButton;
     QAction* m_publishAction;
     QAction* m_linkJiraAction;
     QAction* m_openJiraAction;
+    QAction* m_updateJiraAction;
     QAction* m_refreshJiraAction;
     QAction* m_unlinkJiraAction;
     QWidget* m_revisionCard;
+    QScrollArea* m_detailScroll;
+    QWidget* m_pastBanner;      // «Estás viendo la revisión N»: con la vuelta a la ronda en curso
+    QLabel* m_pastBannerText;
+    int m_viewedRevision = 0;   // ronda anterior que se ve en el detalle; 0 = la ronda en curso
     QLabel* m_revisionHeader;
     QLabel* m_revisionProgress;
     QVBoxLayout* m_progressBar;   // la barra de resultados de la ronda, que se rehace en cada refresco
@@ -435,6 +453,7 @@ private:
     int m_stepChoice = -1;          // paso elegido a mano; -1 = el que toca
     int m_stepCurrent = -1;         // el que tocaba en el último refresco: si cambia, se vuelve a él
     QString m_stepIssue;            // issue del último refresco: otro issue empieza por el paso que toca
+    int m_stepRevision = 0;         // ronda vista en el último refresco: otra ronda también
     QSet<QString> m_expanded;       // filas plegables abiertas: «plan:PL-0001», «cycle:PR-0003»
     QWidget* m_bugsSection;
     QLabel* m_bugsHeader;

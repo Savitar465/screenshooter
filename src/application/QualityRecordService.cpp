@@ -72,10 +72,11 @@ QList<IssueLink> QualityRecordService::revisionBugs(const Issue& issue, int revi
     return out;
 }
 
-IssueProgress QualityRecordService::progressFor(const QString& issueId) const {
+IssueProgress QualityRecordService::progressFor(const QString& issueId, int revision) const {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) return {};
-    return issueProgress(caseIdsOf(*issue), m_cases.cases(), revisionRuns(*issue), m_bugs.issues(), revisionStart(*issue));
+    return issueProgress(caseIdsOf(*issue), m_cases.cases(), revisionRuns(*issue, revision), m_bugs.issues(),
+                         revisionStart(*issue, revision));
 }
 
 QList<PlanReport> QualityRecordService::cyclesFor(const QString& issueId, int revision) const {

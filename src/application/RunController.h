@@ -10,6 +10,7 @@
 #include <QStringList>
 #include <QTimer>
 #include <memory>
+#include <optional>
 
 namespace qaflow {
 
@@ -45,6 +46,14 @@ public:
     QStringList planCases() const;
     /// El caso está en la cola del ciclo (sin empezar o aparcado): se puede ir a él con `goToCase`.
     bool isQueued(const QString& caseId) const { return m_queue.contains(caseId); }
+    /// Última ejecución que el ciclo archivó de ese caso: la que cuenta en su informe. nullptr si el
+    /// caso todavía no tiene ninguna en el ciclo (o no hay ciclo).
+    std::optional<RunRecord> archivedRun(const QString& caseId) const;
+    /// La ejecución en pantalla es la revisión de una ya archivada (`reviewCase`).
+    bool isReviewing() const { return !m_run.reviewOf.isEmpty(); }
+    /// Revisión en la que todavía no se ha cambiado nada de lo archivado: ningún veredicto dado de
+    /// nuevo, ninguna nota distinta y ninguna evidencia nueva. Dejarla no archiva nada.
+    bool reviewUntouched() const;
     /// Estado con el que se dejó un caso del ciclo para ir a otro; nullptr si no se ha empezado.
     const RunState* parkedRun(const QString& caseId) const;
     bool canGoBack() const { return !m_run.caseId.isEmpty() && !m_run.paused && (m_run.finished || m_run.idx > 0); }
@@ -97,6 +106,14 @@ public:
     /// notas, cronómetros— sin archivarse, y vuelve a la cola: se retoma donde se dejó al volver a él.
     /// Falso si no hay ciclo o el caso no está en su cola (ya archivado, o no es del plan).
     bool goToCase(const QString& caseId);
+    /// Pone en pantalla, para revisarlo, un caso que el ciclo ya archivó (un superado mientras se
+    /// continúa lo roto, por ejemplo). Se abre en su primer paso con todo lo que se archivó heredado
+    /// —veredictos, notas y evidencias— y se recorre como cualquier ejecución. El caso que estaba en
+    /// pantalla se aparca, como con `goToCase`. Corregir algo (un veredicto, una nota, una evidencia)
+    /// la convierte en una ejecución nueva del ciclo, que al cerrarla sustituye a la archivada en el
+    /// informe; sin tocar nada, al dejarla el caso sigue como estaba.
+    /// Falso si no hay ciclo, el caso es el de pantalla, sigue en la cola o no tiene nada archivado.
+    bool reviewCase(const QString& caseId);
     /// Corrige (o pone) el veredicto de un paso desde la lista, sin moverse de sitio.
     void setResult(int index, StepResult result);
     /// Cierra la ejecución archivándola —con lo marcado hasta ahora si quedan pasos pendientes—.
@@ -116,6 +133,11 @@ signals:
 
 private:
     void begin(const QString& caseId);
+    /// Id para una ejecución que arranca: libre también entre las que siguen vivas (las aparcadas).
+    QString reserveRunId() const;
+    /// Deja el caso de pantalla para poner otro: se aparca en la cola tal cual, salvo una revisión sin
+    /// cambios, que no tiene nada que guardar y devuelve el caso a lo archivado.
+    void setAside();
     /// Pone en pantalla un caso de la cola: el aparcado tal como se dejó, o uno nuevo con `begin`.
     void enterCase(const QString& caseId);
     /// Deja el estado como lo dejó la ejecución que se retoma: lo anterior al paso roto se conserva

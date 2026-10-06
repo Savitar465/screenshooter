@@ -47,9 +47,10 @@ const RunRecord* RunHistoryStore::findRun(const QString& id) const {
 QList<Screenshot> RunHistoryStore::evidenceOf(const RunRecord& run) const {
     const TestCase* c = m_cases.find(run.caseId);
     const QList<Screenshot> own = c ? c->shotsOfRun(run.id) : QList<Screenshot>{};
-    QList<int> inherited;
+    if (run.continuesRunId.isEmpty()) return own;
+    // Lo que no se asignó a ningún paso (0) no se vuelve a probar al retomar: sigue siendo del caso.
+    QList<int> inherited{0};
     for (int i = 0; i < run.steps.size(); ++i) if (run.steps[i].inherited) inherited << i + 1;
-    if (run.continuesRunId.isEmpty() || inherited.isEmpty()) return own;
     // Primero lo heredado, que es de los pasos anteriores al que se retomó.
     return evidenceOfSteps(run.continuesRunId, inherited) + own;
 }
@@ -195,8 +196,16 @@ void RunHistoryStore::assignTestKeys(const QHash<QString, QString>& testKeyByRun
     if (changed) persist();
 }
 
-QString RunHistoryStore::reserveRunId() const {
-    return nextId(m_history.runs, QStringLiteral("R-"));
+QString RunHistoryStore::reserveRunId(const QStringList& held) const {
+    const QString prefix = QStringLiteral("R-");
+    QString id = nextId(m_history.runs, prefix);
+    int number = id.mid(prefix.size()).toInt();
+    for (const QString& other : held) {
+        bool ok = false;
+        const int n = other.mid(prefix.size()).toInt(&ok);
+        if (ok && other.startsWith(prefix) && n >= number) number = n + 1;
+    }
+    return prefix + QStringLiteral("%1").arg(number, 4, 10, QLatin1Char('0'));
 }
 
 QList<IssueLink> RunHistoryStore::bugsOfRun(const RunRecord& run) const {

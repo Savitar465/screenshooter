@@ -95,7 +95,7 @@ void RunController::begin(const QString& caseId) {
     m_run.caseId = caseId;
     // El id se pide ahora, no al archivar: los bugs que se reporten mientras corre la ejecución se
     // enlazan con ella, y para eso tiene que tener nombre desde el principio.
-    m_run.runId = m_history.reserveRunId();
+    m_run.runId = reserveRunId();
     m_run.startedAt = QDateTime::currentDateTime();
     m_run.results = QList<StepRecord>(totalSteps());
     m_run.finished = m_run.results.isEmpty();
@@ -109,6 +109,12 @@ void RunController::begin(const QString& caseId) {
         if (const TestCase* c = m_store.find(caseId)) resumeFrom(previous, *c);
     }
     m_store.select(caseId);
+}
+
+QString RunController::reserveRunId() const {
+    QStringList held;
+    for (const auto& p : m_parked) held << p.run.runId;
+    return m_history.reserveRunId(held);
 }
 
 void RunController::enterCase(const QString& caseId) {
@@ -308,18 +314,82 @@ void RunController::back() { goTo(m_run.finished ? m_run.idx : m_run.idx - 1); }
 
 void RunController::next() { goTo(m_run.idx + 1); }
 
-bool RunController::goToCase(const QString& caseId) {
-    if (m_planRunId.isEmpty() || m_run.caseId.isEmpty() || !m_queue.contains(caseId)) return false;
+void RunController::setAside() {
     holdStep();
+    if (reviewUntouched()) return;   // nada que guardar: el caso sigue como se archivó
     m_parked.insert(m_run.caseId, ParkedRun{m_run, m_continuesRunId});
     // El que se deja vuelve a la cola en su sitio del plan, para que «Siguiente caso» siga el orden.
     const QStringList order = planCases();
-    m_queue.removeAll(caseId);
     m_queue << m_run.caseId;
     std::stable_sort(m_queue.begin(), m_queue.end(), [&order](const QString& a, const QString& b) {
         return order.indexOf(a) < order.indexOf(b);
     });
+}
+
+bool RunController::goToCase(const QString& caseId) {
+    if (m_planRunId.isEmpty() || m_run.caseId.isEmpty() || !m_queue.contains(caseId)) return false;
+    m_queue.removeAll(caseId);
+    setAside();
     enterCase(caseId);
+    changed();
+    return true;
+}
+
+std::optional<RunRecord> RunController::archivedRun(const QString& caseId) const {
+    if (m_planRunId.isEmpty()) return std::nullopt;
+    // La que cuenta en el informe: la última del caso en el ciclo.
+    for (const auto& row : m_history.report(m_planRunId).rows)
+        if (row.caseId == caseId && row.executed) return row.run;
+    return std::nullopt;
+}
+
+bool RunController::reviewUntouched() const {
+    if (m_run.reviewOf.isEmpty()) return false;
+    const RunRecord* archived = m_history.findRun(m_run.reviewOf);
+    if (!archived) return false;
+    for (int i = 0; i < m_run.results.size(); ++i) {
+        const StepRecord& r = m_run.results[i];
+        if (r.marked && !r.inherited) return false;   // se le dio veredicto de nuevo
+        const QString before = i < archived->steps.size() ? archived->steps[i].note : QString();
+        const QString note = i == m_run.idx ? m_run.note : r.note;
+        if (note != before) return false;
+    }
+    // Lo que se captura revisándolo es evidencia nueva, todavía sin sellar en ninguna ejecución.
+    const TestCase* c = m_store.find(m_run.caseId);
+    return !c || c->shotsOfRun(QString()).isEmpty();
+}
+
+bool RunController::reviewCase(const QString& caseId) {
+    if (m_planRunId.isEmpty() || m_run.caseId.isEmpty() || caseId == m_run.caseId || m_queue.contains(caseId)) return false;
+    const TestCase* c = m_store.find(caseId);
+    const std::optional<RunRecord> archived = archivedRun(caseId);
+    if (!c || !archived) return false;
+    setAside();
+
+    m_run = RunState{};
+    m_run.caseId = caseId;
+    m_run.runId = reserveRunId();   // por si se reporta un bug mientras se revisa
+    m_run.reviewOf = archived->id;
+    m_run.startedAt = QDateTime::currentDateTime();
+    m_run.results = QList<StepRecord>(c->steps.size());
+    // Se continúa la archivada: sus pasos llegan heredados, con su nota y su evidencia, y lo que se
+    // vuelva a marcar pasa a ser de esta ejecución. Como al continuar un ciclo, sólo mientras el paso
+    // siga diciendo lo mismo: uno que hoy es otro queda pendiente.
+    m_continuesRunId = archived->id;
+    for (int i = 0; i < m_run.results.size() && i < archived->steps.size(); ++i) {
+        const RunRecordStep& step = archived->steps[i];
+        if (c->steps[i].action != step.action || c->steps[i].data != step.data || c->steps[i].expected != step.expected) break;
+        m_run.results[i].result = step.result;
+        m_run.results[i].note = step.note;
+        m_run.results[i].marked = true;
+        m_run.results[i].inherited = true;
+    }
+    // Se abre en el primer paso para recorrerlo, aunque esté todo marcado: es lo que se viene a mirar.
+    m_run.idx = 0;
+    m_run.note = m_run.results.isEmpty() ? QString() : m_run.results.first().note;
+    m_run.finished = m_run.results.isEmpty();
+    startStepClock();
+    m_store.select(caseId);
     changed();
     return true;
 }
@@ -336,6 +406,8 @@ void RunController::setResult(int index, StepResult result) {
 
 void RunController::commitRun(bool evenIfPending) {
     if (m_run.caseId.isEmpty()) return;
+    // Revisar sin cambiar nada no es otra ejecución: lo archivado se queda como estaba.
+    if (reviewUntouched()) return;
     const int last = m_run.lastMarkedIndex();
     // Terminada se archiva siempre (un caso sin pasos también); a medias, sólo si se marcó algo.
     if (!m_run.finished && !(evenIfPending && last >= 0)) return;

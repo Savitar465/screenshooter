@@ -2,6 +2,7 @@
 
 #include "core/models/IssueLink.h"
 #include "core/models/TestCase.h"
+#include "core/models/RunHistory.h"
 #include "core/models/TestRun.h"
 
 #include <QHash>
@@ -72,6 +73,8 @@ signals:
     void openUrlRequested(const QString& url);
     /// Abrir el parte de un bug para el paso `stepIndex` (0-based; -1 = el que decida la ejecución).
     void reportBugRequested(int stepIndex);
+    /// Escribir un caso nuevo para el plan del ciclo en curso (y que entre en él).
+    void newCaseRequested();
     /// El usuario pulsó "Cerrar ejecución": la ventana decide si sigue el plan, muestra el informe o vuelve.
     void finishRequested();
     void toast(const QString& message, const QString& color);
@@ -112,7 +115,7 @@ private:
     /// La pestaña «Casos»: los del ciclo en el orden del plan, con su estado; sólo existe en un ciclo.
     void refreshCases();
     /// Tarjeta de un caso en la pestaña «Casos». Las de los pendientes llevan a él con un clic.
-    QWidget* caseCard(const QString& caseId, const QHash<QString, Verdict>& archived);
+    QWidget* caseCard(const QString& caseId, const QHash<QString, RunRecord>& archived);
     /// Cambia de pestaña en el inspector: 0 = el paso, 1 = la lista de pasos, 2 = los bugs, 3 = los casos.
     void showTab(int index);
     /// Abre (o trae al frente) la ficha del bug en su propia ventana.
@@ -189,6 +192,7 @@ private:
     QPushButton* m_stepsTab;
     QPushButton* m_bugsTab;
     QPushButton* m_casesTab;
+    QPushButton* m_newCase = nullptr;   // «+ Nuevo caso», al pie de la pestaña Casos
     QStackedWidget* m_inspectorStack;
     QLayout* m_chipsLayout;
     QScrollArea* m_stepsScroll;

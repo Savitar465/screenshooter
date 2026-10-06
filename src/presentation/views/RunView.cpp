@@ -366,7 +366,7 @@ QWidget* RunView::buildCaseBar() {
         // Cerrarla a medias la archiva con lo que se llegó a marcar: se avisa antes.
         const RunState& r = m_run.state();
         const int pending = m_run.totalSteps() - r.markedCount();
-        if (m_run.isRunning() && pending > 0 &&
+        if (m_run.isRunning() && pending > 0 && !m_run.reviewUntouched() &&
             QMessageBox::question(this, tr("Cerrar la ejecución"),
                                   tr("Quedan %1 pasos sin marcar. Se archivará en el historial con los %2 que ya tienen veredicto; "
                                      "los demás quedan como N/A.").arg(pending).arg(r.markedCount())) != QMessageBox::Yes)
@@ -622,6 +622,14 @@ QWidget* RunView::buildInspector() {
     m_casesLayout->setSpacing(4);
     m_casesLayout->addStretch(1);
     cpv->addWidget(m_casesScroll, 1);
+    // Lo que falta probar se escribe aquí mismo: el caso nuevo va al plan y entra al ciclo en curso.
+    m_newCase = ui::button(tr("+ Nuevo caso"), "dashed");
+    m_newCase->setObjectName(QStringLiteral("runTabNewCase"));
+    m_newCase->setStyleSheet(QStringLiteral("padding:12px;font-size:12.5px;"));
+    m_newCase->setToolTip(tr("Escribe un caso nuevo: se añade al plan y entra al final del ciclo en curso"));
+    connect(m_newCase, &QPushButton::clicked, this, &RunView::newCaseRequested);
+    cpv->addSpacing(8);
+    cpv->addWidget(m_newCase);
     m_inspectorStack->addWidget(casesPage);
     showTab(0);
 
@@ -670,7 +678,13 @@ QWidget* RunView::buildStepPage() {
     nv->addWidget(ui::label(tr("OBSERVACIONES"), "eyebrow"));
     m_note = new TextArea(2);
     m_note->setPlaceholderText(tr("Observaciones de este paso (opcional)…"));
-    connect(m_note, &TextArea::edited, this, [this](const QString& t) { m_run.setNote(t); });
+    connect(m_note, &TextArea::edited, this, [this](const QString& t) {
+        // En una revisión, escribir la nota es corregirla: el aviso y el botón de cerrar lo dicen en
+        // cuanto deja de coincidir con lo archivado (o vuelve a coincidir).
+        const bool untouched = m_run.reviewUntouched();
+        m_run.setNote(t);
+        if (m_run.reviewUntouched() != untouched) refresh();
+    });
     nv->addWidget(m_note);
     dv->addWidget(m_noteBlock);
     dv->addStretch(1);
@@ -842,9 +856,19 @@ void RunView::refresh() {
         } else if (!parts.isEmpty()) {
             text = tr("Ciclo %1 · %2").arg(cycle->id, parts.join(QStringLiteral(" · ")));
         }
+        // Revisar un caso ya archivado pide saberlo antes que nada: lo que se toque lo corrige.
+        if (m_run.isReviewing())
+            text = m_run.reviewUntouched()
+                       ? tr("<b>REVISANDO %1</b> · lo archivado de %2 llega heredado paso a paso. Cambia un veredicto o una nota, "
+                            "o añade evidencia, para corregirlo; si no tocas nada, al seguir queda como estaba")
+                             .arg(r.reviewOf, c->id)
+                       : tr("<b>CORRIGIENDO %1</b> · al cerrar se archiva como una ejecución nueva del ciclo y sustituye a la "
+                            "anterior en su informe")
+                             .arg(r.reviewOf);
         m_continuationText->setText(text);
         m_continuationText->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;")
-                                              .arg(cycle->isContinuation() || cycle->wasContinued() ? theme::Amber : theme::Muted));
+                                              .arg(m_run.isReviewing() ? theme::Blue
+                                                   : cycle->isContinuation() || cycle->wasContinued() ? theme::Amber : theme::Muted));
         m_continuation->setVisible(!text.isEmpty() && !m_focusMode);
     }
 
@@ -879,7 +903,8 @@ void RunView::refresh() {
         m_note->setPlaceholderText(tr("Observaciones del paso %1…").arg(r.idx + 1));
         m_back->setEnabled(m_run.canGoBack());
         m_next->setEnabled(m_run.canGoNext());
-        m_finish->setText(tr("Cerrar ejecución"));
+        m_finish->setText(!m_run.isReviewing() ? tr("Cerrar ejecución")
+                          : m_run.reviewUntouched() ? tr("Terminar revisión") : tr("Guardar corrección"));
         m_focusCounter->setText(paused ? tr("EN PAUSA · PASO %1 / %2").arg(r.idx + 1).arg(total)
                                        : tr("PASO %1 / %2").arg(r.idx + 1).arg(total));
         m_focusAction->setFullText(c->steps[r.idx].action);
@@ -1111,7 +1136,7 @@ void RunView::refreshShots() {
         // cambia de paso, que reescribiría aquélla.
         const bool inherited = !shot.runId.isEmpty();
         card->setReadOnly(inherited);
-        if (inherited) card->setToolTip(tr("Heredada de %1: el paso no se ha vuelto a probar").arg(shot.runId));
+        if (inherited) card->setToolTip(tr("De %1, la ejecución que se retoma: se conserva mientras su paso no se vuelva a marcar").arg(shot.runId));
         if (shot.id == m_selectedShot) {
             selectedCard = card;
             position = i + 1;
@@ -1162,9 +1187,10 @@ void RunView::refreshShots() {
     // La etiqueta del paso lleva el color de su veredicto: de un vistazo, si es la prueba de un fallo.
     const RunState& r = m_run.state();
     const QString stepColorName = shot->step > 0 ? stepColor(shot->step - 1, r) : theme::Amber;
-    m_shotStep->setText(inheritedShot ? tr("PASO %1 · DE %2").arg(shot->step).arg(shot->runId)
+    m_shotStep->setText(inheritedShot ? (shot->step > 0 ? tr("PASO %1 · DE %2").arg(shot->step).arg(shot->runId)
+                                                        : tr("SIN PASO · DE %1").arg(shot->runId))
                         : shot->step > 0 ? tr("PASO %1").arg(shot->step) : tr("SIN PASO"));
-    m_shotStep->setToolTip(inheritedShot ? tr("Evidencia heredada de la ejecución que se retoma: el paso no se ha vuelto a probar") : QString());
+    m_shotStep->setToolTip(inheritedShot ? tr("Evidencia de la ejecución que se retoma: se conserva mientras su paso no se vuelva a marcar") : QString());
     m_shotStep->setStyleSheet(QStringLiteral("background:%1;color:%2;border:1px solid %3;border-radius:4px;padding:2px 8px;"
                                              "font-size:11px;font-weight:800;")
                                   .arg(theme::tint(stepColorName, 40), stepColorName == theme::Border ? theme::TextSoft : stepColorName,
@@ -1283,15 +1309,20 @@ void RunView::refreshCases() {
     ui::clearLayout(m_casesLayout);
     const QStringList cases = m_run.planCases();
     m_casesTab->setVisible(!cases.isEmpty());
+    // Sólo un ciclo de un plan del catálogo tiene dónde guardar el caso nuevo.
+    const PlanRun* cycle = m_run.planRunId().isEmpty() ? nullptr : m_history.findPlan(m_run.planRunId());
+    m_newCase->setVisible(cycle && !cycle->planId.isEmpty());
     if (cases.isEmpty()) {
         if (m_inspectorStack->currentIndex() == 3) showTab(0);
         return;
     }
-    // Lo que ya se archivó en este ciclo, con su veredicto: la última ejecución de cada caso.
-    QHash<QString, Verdict> archived;
-    for (const auto& run : m_history.runsForPlan(m_run.planRunId())) archived.insert(run.caseId, run.verdict);
+    // Lo que ya se archivó en este ciclo: la última ejecución de cada caso, con su veredicto.
+    QHash<QString, RunRecord> archived;
+    for (const auto& run : m_history.runsForPlan(m_run.planRunId())) archived.insert(run.caseId, run);
     int done = 0;
-    for (const auto& id : cases) if (archived.contains(id) && id != m_run.state().caseId && !m_run.isQueued(id)) ++done;
+    // El que se está revisando ya cuenta: está archivado, sólo se mira (o se corrige).
+    for (const auto& id : cases)
+        if (archived.contains(id) && (id != m_run.state().caseId || m_run.isReviewing()) && !m_run.isQueued(id)) ++done;
     m_casesTab->setText(tr("Casos · %1/%2").arg(done).arg(cases.size()));
 
     QWidget* currentCard = nullptr;
@@ -1310,7 +1341,7 @@ void RunView::refreshCases() {
     }
 }
 
-QWidget* RunView::caseCard(const QString& caseId, const QHash<QString, Verdict>& archived) {
+QWidget* RunView::caseCard(const QString& caseId, const QHash<QString, RunRecord>& archived) {
     const TestCase* c = m_cases.find(caseId);
     const bool current = caseId == m_run.state().caseId;
     const bool queued = m_run.isQueued(caseId);
@@ -1321,13 +1352,13 @@ QWidget* RunView::caseCard(const QString& caseId, const QHash<QString, Verdict>&
     QString state;
     QString color;
     if (current) {
-        state = tr("ACTIVO");
+        state = m_run.isReviewing() ? tr("REVISANDO") : tr("ACTIVO");
         color = theme::Blue;
     } else if (parked) {
         state = tr("EN PAUSA · %1/%2").arg(parked->markedCount()).arg(parked->results.size());
         color = theme::TextSoft;
     } else if (isArchived) {
-        const Verdict v = archived.value(caseId);
+        const Verdict v = archived.value(caseId).verdict;
         state = v == Verdict::Bloqueado ? tr("BLOQUEADO") : v == Verdict::Fallido ? tr("FALLIDO") : tr("SUPERADO");
         color = v == Verdict::Bloqueado ? theme::Amber : v == Verdict::Fallido ? theme::Red : theme::Green;
     } else {
@@ -1346,7 +1377,14 @@ QWidget* RunView::caseCard(const QString& caseId, const QHash<QString, Verdict>&
         card->setToolTip(parked ? tr("Volver a este caso, donde se dejó") : tr("Ir a este caso; el actual queda en pausa"));
         card->installEventFilter(this);
     } else if (isArchived) {
-        card->setToolTip(tr("Ya archivado en el historial de este ciclo"));
+        // Lo archivado también se abre aquí, para mirar qué se marcó, con qué notas y evidencias —lo que
+        // se quiere de los superados al continuar un ciclo— y corregirlo si hace falta.
+        card->setProperty("reviewCaseId", caseId);
+        card->setCursor(Qt::PointingHandCursor);
+        card->setAttribute(Qt::WA_Hover);
+        card->setToolTip(tr("Abrir su ejecución archivada (%1) para revisarla; el actual queda en pausa. "
+                            "Si no cambias nada, sigue como estaba").arg(archived.value(caseId).id));
+        card->installEventFilter(this);
     }
     auto* h = ui::hbox(card, 0, 0);
     auto* bar = ui::accentBar(current ? theme::Blue : isArchived ? color : parked ? theme::TextSoft : theme::Border);
@@ -1372,9 +1410,13 @@ QWidget* RunView::caseCard(const QString& caseId, const QHash<QString, Verdict>&
 
 QList<Screenshot> RunView::visibleShots(const TestCase& c) const {
     const RunState& r = m_run.state();
-    QList<int> inherited;
-    for (int i = 0; i < r.results.size(); ++i) if (r.results[i].marked && r.results[i].inherited) inherited << i + 1;
-    return m_history.evidenceOfSteps(m_run.continuesRunId(), inherited) + c.shotsOfRun(QString());
+    // De la ejecución que se retoma se ve lo de cada paso que ésta no ha vuelto a marcar —el heredado y
+    // el que está por repetir, con la captura de cuando se rompió— y lo que no era de ningún paso (0).
+    // Un paso marcado de nuevo se prueba con lo que se capture ahora.
+    QList<int> previous{0};
+    for (int i = 0; i < r.results.size(); ++i)
+        if (!r.results[i].marked || r.results[i].inherited) previous << i + 1;
+    return m_history.evidenceOfSteps(m_run.continuesRunId(), previous) + c.shotsOfRun(QString());
 }
 
 bool RunView::isInheritedShot(int shotId) const {
@@ -1417,6 +1459,14 @@ bool RunView::eventFilter(QObject* watched, QEvent* event) {
             // En diferido: la tarjeta pulsada se destruye al refrescar la lista.
             QTimer::singleShot(0, this, [this, id = caseId.toString()]() {
                 if (m_run.goToCase(id)) showTab(0);
+            });
+            return true;
+        }
+        const QVariant review = watched->property("reviewCaseId");
+        if (review.isValid()) {
+            // En diferido, como ir a un caso: la tarjeta pulsada se destruye al refrescar la lista.
+            QTimer::singleShot(0, this, [this, id = review.toString()]() {
+                if (m_run.reviewCase(id)) showTab(0);
             });
             return true;
         }

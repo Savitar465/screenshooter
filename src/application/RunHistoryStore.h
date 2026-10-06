@@ -39,8 +39,9 @@ public:
     /// y los bugs, contra el libro de `setBugs()`.
     PlanReport report(const QString& planRunId) const;
     /// Evidencias de una ejecución archivada: las suyas y, si retoma otra, las de los pasos que heredó
-    /// de ella (con el `runId` de la ejecución en que se tomaron). Son las que prueban sus veredictos:
-    /// un paso heredado no se volvió a probar, y su prueba sigue siendo la de entonces.
+    /// de ella y las que allí no se asignaron a ningún paso (con el `runId` de la ejecución en que se
+    /// tomaron). Son las que prueban sus veredictos: un paso heredado no se volvió a probar, y su prueba
+    /// sigue siendo la de entonces; lo que no era de ningún paso tampoco se repitió.
     QList<Screenshot> evidenceOf(const RunRecord& run) const;
     /// Evidencias de la ejecución `runId` asignadas a los pasos `steps` (1..N), incluidas las que ésta
     /// heredó a su vez. Es lo que trae una continuación de los pasos que no vuelve a probar.
@@ -79,8 +80,11 @@ public:
     int adoptLooseEvidence(const QString& runningCaseId = QString());
     /// Id que le tocará a la próxima ejecución que se archive. Se pide al arrancarla, no al
     /// cerrarla, para que lo que se reporte mientras corre (los bugs) pueda enlazarse con ella.
-    /// Mientras no se archive nada, dos llamadas devuelven el mismo id.
-    QString reserveRunId() const;
+    /// `held` son los ids ya reservados por las ejecuciones que siguen vivas (la de pantalla y las
+    /// aparcadas de un ciclo): el nuevo va detrás de todos ellos, porque dos ejecuciones con el mismo
+    /// id se quedarían con los bugs de la otra. Sin `held`, dos llamadas devuelven el mismo id mientras
+    /// no se archive nada.
+    QString reserveRunId(const QStringList& held = {}) const;
     /// Añade una ejecución terminada. Respeta el id reservado si trae uno libre; si no, le asigna el
     /// siguiente. Devuelve el registro guardado.
     RunRecord addRun(RunRecord record);

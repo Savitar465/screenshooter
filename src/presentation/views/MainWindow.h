@@ -140,6 +140,8 @@ private:
     void beginPlanRun(const QString& planId, const QString& environment, const QString& approve = QString());
     /// Continúa un ciclo terminado con sus casos fallados y bloqueados: comprueba que se puede,
     /// pregunta el ambiente y arranca la continuación.
+    /// «+ Nuevo caso» de la ejecución: lo escribe en una ventana y lo añade al plan del ciclo en curso.
+    void createCaseForRun();
     void continueCycleRun(const QString& planRunId);
     void beginContinuation(const QString& planRunId, const QString& environment, const QStringList& planCases = {});
     void runSelectedTarget();

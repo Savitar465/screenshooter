@@ -23,6 +23,7 @@ RunState runFromJson(const QJsonObject& run) {
     r.startedAt = QDateTime::fromString(run["startedAt"].toString(), Qt::ISODate);
     r.finished = run["finished"].toBool();
     r.paused = run["paused"].toBool();
+    r.reviewOf = run["reviewOf"].toString();
     r.stepElapsedSecs = run["stepElapsedSecs"].toInt();
     for (const auto& v : run["results"].toArray()) {
         const auto x = v.toObject();
@@ -41,7 +42,8 @@ QJsonObject runToJson(const RunState& run) {
     return QJsonObject{
         {"caseId", run.caseId}, {"runId", run.runId}, {"idx", run.idx}, {"note", run.note},
         {"startedAt", run.startedAt.isValid() ? run.startedAt.toString(Qt::ISODate) : QString()},
-        {"finished", run.finished}, {"paused", run.paused}, {"stepElapsedSecs", run.stepElapsedSecs}, {"results", results},
+        {"finished", run.finished}, {"paused", run.paused}, {"reviewOf", run.reviewOf}, {"stepElapsedSecs", run.stepElapsedSecs},
+        {"results", results},
     };
 }
 

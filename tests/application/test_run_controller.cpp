@@ -126,6 +126,47 @@ private slots:
         QCOMPARE(f.publish.requestFor(report, true).cycleId, QStringLiteral("77"));
     }
 
+    // Lo que se capturó sin asignar a ningún paso no se vuelve a probar al retomar el caso: la ejecución
+    // que lo continúa lo conserva, igual que lo de los pasos heredados.
+    void continuingACaseKeepsItsUnassignedEvidence() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-102")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        f.store.addShot(QStringLiteral("TC-102"), Screenshot{1, 0, QStringLiteral("a.png"), QStringLiteral("/tmp/qaflow-test/a.png"), {}});
+        f.store.addShot(QStringLiteral("TC-102"), Screenshot{2, 1, QStringLiteral("b.png"), QStringLiteral("/tmp/qaflow-test/b.png"), {}});
+        f.run.mark(StepResult::Fail);   // se rompe en el paso 1: nada que heredar
+        f.run.finish();
+
+        QVERIFY(f.run.continueCycle(cycle));
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        const RunRecord resumed = f.history.report(cycle).rows.first().run;
+        const QList<Screenshot> shots = f.history.evidenceOf(resumed);
+        QCOMPARE(shots.size(), 1);             // la sin paso; la del paso roto se sustituye al repetirlo
+        QCOMPARE(shots.first().step, 0);
+        QVERIFY(shots.first().runId != resumed.id);
+    }
+
+    // Las ejecuciones vivas de un ciclo (la de pantalla y las aparcadas) tienen cada una su id: los bugs
+    // se enlazan por él, y con uno compartido el bug de un caso aparecería en otro.
+    void liveRunsOfACycleNeverShareTheirId() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-104"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        const QString first = f.run.state().runId;
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-103")));
+        const QString second = f.run.state().runId;
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-107")));
+        const QString third = f.run.state().runId;
+        QVERIFY(first != second && second != third && first != third);
+
+        // Y cada una se archiva con el suyo, que es el que conocen sus bugs.
+        f.run.mark(StepResult::Pass);
+        f.run.finish();   // TC-107 → vuelve a TC-104
+        QCOMPARE(f.run.state().runId, first);
+        QVERIFY(f.history.findRun(third));
+        QCOMPARE(f.history.findRun(third)->caseId, QStringLiteral("TC-107"));
+    }
+
     void aCycleWithoutBrokenCasesIsNotContinued() {
         AppFixture f;
         f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Regresión"), QStringLiteral("PL-0001"));
@@ -549,6 +590,120 @@ private slots:
         QCOMPARE(runs[0].caseId, QStringLiteral("TC-103"));
         QCOMPARE(static_cast<int>(runs[0].verdict), static_cast<int>(Verdict::Fallido));
         QVERIFY(!f.run.parkedRun(QStringLiteral("TC-104")));
+    }
+
+    // ---- Revisar lo archivado ----------------------------------------------------------------
+
+    // Un ciclo continuado en TC-102 (roto) con TC-101 ya superado y archivado.
+    static QString continuedCycle(AppFixture& f) {
+        f.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-102")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);   // TC-101 (3 pasos)
+        f.run.setNote(QStringLiteral("todo bien"));
+        f.run.finish();
+        f.run.mark(StepResult::Fail);                                   // TC-102 se rompe en el paso 1
+        f.run.finish();
+        f.run.continueCycle(cycle);
+        return cycle;
+    }
+
+    // Un caso ya archivado se abre en pantalla con lo que se archivó heredado, y se recorre; si no se
+    // toca nada, dejarlo no archiva otra ejecución y se sigue con el que estaba.
+    void reviewingAnArchivedCaseWithoutChangesKeepsItAsItWas() {
+        AppFixture f;
+        const QString cycle = continuedCycle(f);
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-102"));
+        const QString archived = f.run.archivedRun(QStringLiteral("TC-101"))->id;
+        const int runs = f.history.runsForPlan(cycle).size();
+
+        QVERIFY(f.run.reviewCase(QStringLiteral("TC-101")));
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-101"));
+        QVERIFY(f.run.isReviewing());
+        QCOMPARE(f.run.state().reviewOf, archived);
+        QCOMPARE(f.run.continuesRunId(), archived);
+        QCOMPARE(f.run.state().idx, 0);
+        QVERIFY(!f.run.state().finished);   // se abre en su primer paso, para recorrerlo
+        QCOMPARE(f.run.state().markedCount(), 3);
+        for (const auto& step : f.run.state().results) QVERIFY(step.inherited);
+        QCOMPARE(f.run.state().results[2].note, QStringLiteral("todo bien"));
+        QVERIFY(f.run.reviewUntouched());
+        QVERIFY(f.run.parkedRun(QStringLiteral("TC-102")));   // el que estaba, en pausa
+        QVERIFY(f.run.isQueued(QStringLiteral("TC-102")));
+
+        f.run.next();
+        f.run.next();
+        QVERIFY(f.run.reviewUntouched());   // mirar no es corregir
+        QVERIFY(f.run.finish());
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-102"));
+        QCOMPARE(f.history.runsForPlan(cycle).size(), runs);
+        QCOMPARE(f.run.archivedRun(QStringLiteral("TC-101"))->id, archived);
+        QVERIFY(!f.run.isQueued(QStringLiteral("TC-101")));
+    }
+
+    // Corregir un veredicto lo convierte en una ejecución nueva del ciclo, que sustituye a la archivada
+    // en el informe y conserva heredado lo que no se tocó.
+    void correctingAReviewedCaseReplacesItInTheReport() {
+        AppFixture f;
+        const QString cycle = continuedCycle(f);
+        const QString archived = f.run.archivedRun(QStringLiteral("TC-101"))->id;
+        QVERIFY(f.run.reviewCase(QStringLiteral("TC-101")));
+        f.run.goTo(1);
+        f.run.mark(StepResult::Fail);
+        QVERIFY(!f.run.reviewUntouched());
+        QVERIFY(f.run.finish());
+
+        const std::optional<RunRecord> corrected = f.run.archivedRun(QStringLiteral("TC-101"));
+        QVERIFY(corrected && corrected->id != archived);
+        QCOMPARE(corrected->continuesRunId, archived);
+        QCOMPARE(static_cast<int>(corrected->verdict), static_cast<int>(Verdict::Fallido));
+        QVERIFY(corrected->steps[0].inherited);
+        QVERIFY(!corrected->steps[1].inherited);
+        // TC-101 ya cuenta como fallido en el informe, junto a TC-102, que sigue sin repetirse.
+        QCOMPARE(f.history.report(cycle).passed, 0);
+        QCOMPARE(f.history.report(cycle).failed, 2);
+    }
+
+    // Una nota distinta también es corregir: al dejar la revisión para ir a otro caso, se aparca como
+    // cualquier caso empezado en vez de descartarse.
+    void aReviewWithANewNoteIsParkedInsteadOfDiscarded() {
+        AppFixture f;
+        continuedCycle(f);
+        QVERIFY(f.run.reviewCase(QStringLiteral("TC-101")));
+        f.run.setNote(QStringLiteral("revisado otra vez"));
+        QVERIFY(!f.run.reviewUntouched());
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-102")));
+        QVERIFY(f.run.isQueued(QStringLiteral("TC-101")));
+        const RunState* parked = f.run.parkedRun(QStringLiteral("TC-101"));
+        QVERIFY(parked);
+        QVERIFY(!parked->reviewOf.isEmpty());
+    }
+
+    void onlyArchivedCasesOfTheCycleCanBeReviewed() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-101"));
+        QVERIFY(!f.run.reviewCase(QStringLiteral("TC-101")));   // un caso suelto no tiene ciclo
+
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-104")}, QStringLiteral("Regresión"));
+        QVERIFY(!f.run.reviewCase(QStringLiteral("TC-104")));   // en la cola, sin archivar
+        QVERIFY(!f.run.reviewCase(QStringLiteral("TC-103")));   // el de pantalla
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.finish());
+        QVERIFY(!f.run.reviewCase(QStringLiteral("TC-101")));   // no es del ciclo
+        QVERIFY(f.run.reviewCase(QStringLiteral("TC-103")));
+    }
+
+    void aReviewSurvivesRestart() {
+        AppFixture f;
+        continuedCycle(f);
+        QVERIFY(f.run.reviewCase(QStringLiteral("TC-101")));
+        const QString archived = f.run.state().reviewOf;
+        f.run.persistSessionNow();
+
+        RunController again(f.store, f.history, f.sessionRepo);
+        again.load();
+        QCOMPARE(again.state().caseId, QStringLiteral("TC-101"));
+        QCOMPARE(again.state().reviewOf, archived);
+        QVERIFY(again.reviewUntouched());
     }
 
     // ---- Pausa -----------------------------------------------------------------------------

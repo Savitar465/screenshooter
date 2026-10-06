@@ -37,6 +37,10 @@ struct RunState {
     bool finished = false;   // todos los pasos marcados y sin reabrir
     /// Ejecución en pausa: los cronómetros no corren y no se marca ni se cambia de paso hasta reanudarla.
     bool paused = false;
+    /// Ejecución archivada del ciclo que se está revisando (R-0007); vacío en una ejecución normal. Se
+    /// abre con lo que se archivó, heredado paso a paso: si no se cambia nada, al dejarla no se archiva
+    /// otra; si se cambia, la nueva sustituye a ésa en el informe del ciclo.
+    QString reviewOf;
 
     // Cronómetro del paso actual. `stepElapsedSecs` acumula lo transcurrido en visitas anteriores
     // (la ejecución sobrevive al cierre de la aplicación y se puede volver a un paso ya visto);

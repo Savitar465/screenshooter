@@ -37,8 +37,8 @@ public:
                          TestPublishService* publish = nullptr, QObject* parent = nullptr);
 
     /// Cómo va el control de calidad del issue: lo ejecutado de la revisión en curso y qué resultado
-    /// se propone.
-    IssueProgress progressFor(const QString& issueId) const;
+    /// se propone. Con `revision`, lo mismo de esa ronda (lo que salió de ella, si ya se cerró).
+    IssueProgress progressFor(const QString& issueId, int revision = 0) const;
 
     /// Todo lo que sigue habla de **una ronda**: `revision` es su número y 0 (lo habitual) significa la
     /// que está en curso —la abierta o, si ninguna lo está, la última—. Pasando el número se levanta el

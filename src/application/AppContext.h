@@ -19,6 +19,7 @@
 #include "application/SettingsStore.h"
 #include "application/TestCaseStore.h"
 #include "application/TestPublishService.h"
+#include "application/UpdateService.h"
 #include "core/services/IGlobalHotkey.h"
 
 #include <QString>
@@ -60,6 +61,8 @@ struct AppContext {
     AiService* ai = nullptr;
     /// Atajo global del sistema (puede ser nullptr en tests). Ajustes muestra su `status()`.
     IGlobalHotkey* hotkey = nullptr;
+    /// Búsqueda de versiones nuevas, una para toda la aplicación (nullptr en tests y si está desactivada).
+    UpdateService* updates = nullptr;
     /// Directorio de datos (cases.json, history.json…), para mostrarlo o abrirlo desde la UI.
     QString dataDir;
     /// Cómo se capturan las pantallas ("QScreen::grabWindow", "xdg-desktop-portal (Wayland)"), para Ajustes.

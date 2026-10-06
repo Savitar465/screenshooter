@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <QMimeDatabase>
 #include <QRandomGenerator>
+#include <QSaveFile>
 #include <QNetworkCookieJar>
 #include <QNetworkReply>
 
@@ -114,6 +115,48 @@ void HttpClient::finish(QNetworkReply* reply, Handler done) {
 }
 
 void HttpClient::get(const QNetworkRequest& req, Handler done) { finish(m_nam.get(req), std::move(done)); }
+
+QNetworkReply* HttpClient::downloadFile(const QNetworkRequest& req, const QString& path,
+                                        std::function<void(qint64, qint64)> progress, Handler done) {
+    QNetworkReply* reply = m_nam.get(req);
+    auto* file = new QSaveFile(path, reply);
+    const bool opened = file->open(QIODevice::WriteOnly);
+    auto* errorBody = new QByteArray;
+    // Sólo va al fichero el cuerpo de una respuesta buena; el de un error, a su mensaje.
+    connect(reply, &QNetworkReply::readyRead, reply, [reply, file, errorBody]() {
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (status >= 400) errorBody->append(reply->readAll());
+        else if (file->isOpen() && file->write(reply->readAll()) < 0) reply->abort();
+    });
+    if (progress) connect(reply, &QNetworkReply::downloadProgress, reply, progress);
+    connect(reply, &QNetworkReply::finished, this, [reply, file, errorBody, opened, path, done = std::move(done)]() {
+        reply->deleteLater();
+        Response r;
+        r.status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        r.body = *errorBody + reply->readAll();
+        delete errorBody;
+        r.ok = opened && reply->error() == QNetworkReply::NoError;
+        if (r.ok && !file->commit()) {
+            r.ok = false;
+            r.error = QCoreApplication::translate("infrastructure", "No se pudo guardar %1: %2").arg(path, file->errorString());
+        } else if (!r.ok) {
+            file->cancelWriting();
+            if (!opened) {
+                r.error = QCoreApplication::translate("infrastructure", "No se pudo guardar %1: %2").arg(path, file->errorString());
+            } else {
+                r.retryable = isNetworkFailure(reply->error()) || r.status >= 500;
+                r.json = QJsonDocument::fromJson(r.body);
+                const QString msg = messageFrom(r.json);
+                const QString base = msg.isEmpty() ? reply->errorString() : msg;
+                r.error = r.status ? QStringLiteral("HTTP %1 · %2").arg(r.status).arg(base) : base;
+                r.error += QStringLiteral(" (%1)").arg(endpointOf(reply));
+            }
+        }
+        done(r);
+    });
+    if (!opened) reply->abort();
+    return reply;
+}
 
 void HttpClient::postJson(const QNetworkRequest& req, const QJsonDocument& body, Handler done) {
     finish(m_nam.post(req, body.toJson(QJsonDocument::Compact)), std::move(done));

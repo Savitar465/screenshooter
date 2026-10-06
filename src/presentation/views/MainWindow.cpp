@@ -18,6 +18,7 @@
 #include "presentation/views/SettingsDialog.h"
 #include "presentation/views/Sidebar.h"
 #include "presentation/views/StatusStrip.h"
+#include "presentation/views/UpdateDialog.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlashOverlay.h"
 #include "presentation/widgets/BusyIndicator.h"
@@ -33,6 +34,7 @@
 #include <QSignalBlocker>
 #include <QInputDialog>
 #include <QLineEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QDesktopServices>
 #include <QDragEnterEvent>
@@ -687,6 +689,11 @@ void MainWindow::buildMenus() {
                                .arg(QApplication::applicationVersion(), m_ctx.dataDir, m_ctx.settings->secretBackend()));
     });
     about->setMenuRole(QAction::AboutRole);
+    if (m_ctx.updates) {
+        auto* check = help->addAction(tr("Buscar a&ctualizaciones…"), this, &MainWindow::checkForUpdates);
+        check->setObjectName(QStringLiteral("actCheckUpdates"));
+        check->setMenuRole(QAction::ApplicationSpecificRole);
+    }
     help->addAction(tr("Atajos de &teclado"), this, [this]() {
         QMessageBox::information(this, tr("Atajos de teclado"),
                                  tr("<table cellspacing='6'>"
@@ -948,6 +955,27 @@ void MainWindow::wireSignals() {
     connect(m_sidebar, &Sidebar::metricsRequested, this, &MainWindow::showMetrics);
     connect(m_status, &StatusStrip::navigate, this, &MainWindow::navigate);
     connect(m_status, &StatusStrip::metricsRequested, this, &MainWindow::showMetrics);
+    if (m_ctx.updates) {
+        auto refreshUpdate = [this]() {
+            const auto& available = m_ctx.updates->available();
+            if (!available) {
+                m_status->setUpdate(QString());
+                return;
+            }
+            const QString version = available->version.toString();
+            switch (m_ctx.updates->installState()) {
+                case UpdateService::InstallState::Downloading: m_status->setUpdate(tr("Descargando QAflow %1…").arg(version)); break;
+                case UpdateService::InstallState::Ready: m_status->setUpdate(tr("QAflow %1 lista para instalar").arg(version)); break;
+                case UpdateService::InstallState::Scheduled: m_status->setUpdate(tr("QAflow %1 se instala al cerrar").arg(version)); break;
+                default: m_status->setUpdate(tr("QAflow %1 disponible").arg(version)); break;
+            }
+        };
+        connect(m_ctx.updates, &UpdateService::changed, this, refreshUpdate);
+        connect(m_ctx.updates, &UpdateService::installChanged, this, refreshUpdate);
+        connect(m_ctx.updates, &UpdateService::updateAvailable, this, &MainWindow::announceUpdate);
+        connect(m_status, &StatusStrip::updateRequested, this, &MainWindow::showUpdate);
+        refreshUpdate();
+    }
 
     connect(m_ctx.cases, &TestCaseStore::selectionChanged, this, [this]() { updateActions(); selectContextTarget(); });
     connect(m_ctx.cases, &TestCaseStore::caseChanged, this, &MainWindow::updateActions);
@@ -1194,6 +1222,62 @@ void MainWindow::mousePressEvent(QMouseEvent* e) {
 }
 
 void MainWindow::showToast(const QString& message, const QString& color) { m_toast->show(message, color); }
+
+void MainWindow::announceUpdate(const UpdateRelease& release) {
+    if (isHidden()) return;   // la ventana de otro proyecto: avisa la del activo
+    const QString text = tr("QAflow %1 está disponible").arg(release.version.toString());
+    if (!window()->isVisible() && m_tray && m_tray->isVisible())
+        m_tray->showMessage(QStringLiteral("QAflow"), text + tr(". Abre QAflow para ver las novedades."), ui::appIcon(), 6000);
+    else
+        showToast(text + tr(" · ábrelo desde la barra inferior"), theme::Blue);
+}
+
+void MainWindow::checkForUpdates() {
+    if (!m_ctx.updates) return;
+    showToast(tr("Buscando actualizaciones…"), theme::Blue);
+    m_ctx.updates->checkNow([self = QPointer<MainWindow>(this)]() {
+        if (!self) return;   // la ventana se reconstruyó (idioma o tema) mientras se buscaba
+        UpdateService* updates = self->m_ctx.updates;
+        if (updates->state() == UpdateService::State::Failed) {
+            QMessageBox::warning(self, tr("Buscar actualizaciones"),
+                                 tr("No se pudo comprobar si hay versiones nuevas.\n\n%1").arg(updates->lastError()));
+        } else if (updates->available()) {
+            self->showUpdate();
+        } else {
+            QMessageBox::information(self, tr("Buscar actualizaciones"),
+                                     tr("Tienes la última versión de QAflow (%1).").arg(updates->currentVersion().toString()));
+        }
+    });
+}
+
+void MainWindow::showUpdate() {
+    if (!m_ctx.updates || !m_ctx.updates->available()) return;
+    const UpdateRelease release = *m_ctx.updates->available();
+    // Reiniciar perdería una grabación a medias o cortaría la ejecución: entonces sólo al cerrar.
+    QString blocker;
+    if (m_ctx.evidence->isRecording() || m_ctx.evidence->isCountingDown() || m_ctx.evidence->isBusy())
+        blocker = tr("Termina la grabación o la captura antes de reiniciar");
+    else if (!m_ctx.run->state().caseId.isEmpty())
+        blocker = tr("Hay una ejecución en curso: termínala o instala la versión al cerrar QAflow");
+    UpdateDialog dialog(*m_ctx.updates, release, blocker, this);
+    dialog.exec();
+    switch (dialog.choice()) {
+        case UpdateDialog::Choice::Download: QDesktopServices::openUrl(release.pageUrl); break;
+        case UpdateDialog::Choice::Skip: m_ctx.updates->skip(release.version); break;
+        case UpdateDialog::Choice::RestartNow:
+        case UpdateDialog::Choice::InstallOnExit: {
+            const bool restart = dialog.choice() == UpdateDialog::Choice::RestartNow;
+            if (!m_ctx.updates->install(restart)) {
+                QMessageBox::warning(this, tr("Actualizar QAflow"), m_ctx.updates->installError());
+                break;
+            }
+            if (restart) quitApplication();
+            else showToast(tr("QAflow %1 se instala al cerrar").arg(release.version.toString()), theme::Green);
+            break;
+        }
+        case UpdateDialog::Choice::Later: break;
+    }
+}
 
 void MainWindow::showMetrics() {
     historyView()->showMetrics();

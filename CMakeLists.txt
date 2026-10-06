@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
-project(qaflow VERSION 1.5.3 LANGUAGES CXX)
+# Versión de QAflow (SemVer: 1.6.0, 1.6.0-beta.1). Los builds del CI de un tag `v…` la toman del tag
+# (-DQAFLOW_VERSION=1.6.0-beta.1), así el binario publicado siempre dice la versión de su release; la de aquí
+# es la de los builds locales. `project()` sólo admite números, así que recibe la parte numérica.
+if (NOT QAFLOW_VERSION)
+    set(QAFLOW_VERSION "1.5.3")
+endif ()
+if (NOT QAFLOW_VERSION MATCHES "^([0-9]+\\.[0-9]+\\.[0-9]+)(-[0-9A-Za-z.-]+)?$")
+    message(FATAL_ERROR "QAFLOW_VERSION=\"${QAFLOW_VERSION}\" no es una versión SemVer (1.6.0 o 1.6.0-beta.1)")
+endif ()
+set(QAFLOW_VERSION_NUMBER "${CMAKE_MATCH_1}")
+project(qaflow VERSION ${QAFLOW_VERSION_NUMBER} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -78,6 +88,10 @@ add_library(qaflow_core STATIC
         src/core/services/IDocumentReader.h
         src/core/services/IAiClient.h
         src/core/services/IBugRepository.h
+        src/core/models/Update.h
+        src/core/models/Update.cpp
+        src/core/services/IUpdateSource.h
+        src/core/services/IUpdateInstaller.h
 )
 target_include_directories(qaflow_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(qaflow_core PUBLIC Qt6::Core PRIVATE qaflow_warnings)
@@ -125,6 +139,8 @@ add_library(qaflow_application STATIC
         src/application/QualityRecordService.cpp
         src/application/RevisionPublishService.h
         src/application/RevisionPublishService.cpp
+        src/application/UpdateService.h
+        src/application/UpdateService.cpp
 )
 target_link_libraries(qaflow_application PUBLIC qaflow_core Qt6::Gui PRIVATE qaflow_warnings)
 
@@ -197,6 +213,14 @@ add_library(qaflow_infrastructure STATIC
         src/infrastructure/requirements/GesreqParser.cpp
         src/infrastructure/requirements/GesreqClient.h
         src/infrastructure/requirements/GesreqClient.cpp
+        src/infrastructure/update/GitHubReleaseSource.h
+        src/infrastructure/update/GitHubReleaseSource.cpp
+        src/infrastructure/update/Ed25519.h
+        src/infrastructure/update/Ed25519.cpp
+        src/infrastructure/update/UpdateInstallers.h
+        src/infrastructure/update/UpdateInstallers.cpp
+        src/infrastructure/persistence/QSettingsUpdatePreferences.h
+        src/infrastructure/persistence/QSettingsUpdatePreferences.cpp
 )
 target_link_libraries(qaflow_infrastructure PUBLIC qaflow_core Qt6::Gui Qt6::Widgets Qt6::Network PRIVATE qaflow_warnings)
 # zlib descomprime los .docx y .odt de los adjuntos. Sin ella QAflow compila igual y esos formatos se
@@ -329,14 +353,30 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/WorkspaceWindow.cpp
         src/presentation/views/MainWindow.h
         src/presentation/views/MainWindow.cpp
+        src/presentation/views/UpdateDialog.h
+        src/presentation/views/UpdateDialog.cpp
 )
 target_link_libraries(qaflow_presentation PUBLIC qaflow_application Qt6::Widgets PRIVATE qaflow_warnings)
 
 # ---- Ejecutable (raíz de composición) ---------------------------------------
 qt_add_executable(qaflow main.cpp src/bootstrap/ProjectSession.cpp src/bootstrap/ProjectSession.h resources/resources.qrc)
 target_link_libraries(qaflow PRIVATE qaflow_presentation qaflow_infrastructure qaflow_warnings)
-target_compile_definitions(qaflow PRIVATE QAFLOW_VERSION="${PROJECT_VERSION}")
-set_target_properties(qaflow PROPERTIES WIN32_EXECUTABLE ON MACOSX_BUNDLE ON OUTPUT_NAME qaflow)
+target_compile_definitions(qaflow PRIVATE QAFLOW_VERSION="${QAFLOW_VERSION}")
+# Para los scripts de empaquetado (build-appimage.sh) y la comprobación del CI.
+file(WRITE "${CMAKE_BINARY_DIR}/qaflow-version.txt" "${QAFLOW_VERSION}\n")
+# Repositorio de GitHub de cuyas releases se leen las versiones nuevas. Vacío desactiva la búsqueda de
+# actualizaciones (para quien empaquete QAflow en una distribución, que las actualiza por su cuenta).
+set(QAFLOW_UPDATE_REPO "Savitar465/screenshooter" CACHE STRING "Repositorio de GitHub con las releases de QAflow (propietario/nombre)")
+target_compile_definitions(qaflow PRIVATE QAFLOW_UPDATE_REPO="${QAFLOW_UPDATE_REPO}")
+# Clave pública Ed25519 (base64) con la que se firman las sumas de cada release (la imprime
+# packaging/release/update-signing-key.sh). Sin ella QAflow sólo avisa de las versiones nuevas: no se
+# instala sola, porque no puede comprobar que el paquete sea el publicado.
+set(QAFLOW_UPDATE_PUBLIC_KEY "" CACHE STRING "Clave pública Ed25519 (base64) de las releases de QAflow")
+target_compile_definitions(qaflow PRIVATE QAFLOW_UPDATE_PUBLIC_KEY="${QAFLOW_UPDATE_PUBLIC_KEY}")
+set_target_properties(qaflow PROPERTIES WIN32_EXECUTABLE ON MACOSX_BUNDLE ON OUTPUT_NAME qaflow
+        # macOS sólo admite números en el Info.plist.
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${QAFLOW_VERSION_NUMBER}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${QAFLOW_VERSION_NUMBER}")
 
 # ---- Traducciones -----------------------------------------------------------
 # El código fuente está en español; resources/i18n/qaflow_en.ts es la traducción al inglés.

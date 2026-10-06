@@ -1423,6 +1423,38 @@
         <source>%1: no se pudo actualizar el paso %2 del Test · %3</source>
         <translation>%1: could not update step %2 of the Test · %3</translation>
     </message>
+    <message>
+        <source>GitHub respondió algo que no es una lista de versiones</source>
+        <translation>GitHub returned something that is not a list of versions</translation>
+    </message>
+    <message>
+        <source>No se puede escribir en %1: descarga la versión nueva a mano</source>
+        <translation>Cannot write to %1: download the new version manually</translation>
+    </message>
+    <message>
+        <source>No se pudo copiar la versión nueva a %1</source>
+        <translation>Could not copy the new version to %1</translation>
+    </message>
+    <message>
+        <source>No se pudo reemplazar %1: %2</source>
+        <translation>Could not replace %1: %2</translation>
+    </message>
+    <message>
+        <source>La versión nueva está instalada, pero QAflow no podrá reabrirse sola</source>
+        <translation>The new version is installed, but QAflow will not be able to reopen itself</translation>
+    </message>
+    <message>
+        <source>instalador de Windows</source>
+        <translation>Windows installer</translation>
+    </message>
+    <message>
+        <source>No se pudo preparar la instalación (PowerShell no arrancó)</source>
+        <translation>Could not prepare the installation (PowerShell did not start)</translation>
+    </message>
+    <message>
+        <source>No se pudo guardar %1: %2</source>
+        <translation>Could not save %1: %2</translation>
+    </message>
 </context>
 <context>
     <name>qaflow</name>
@@ -5986,6 +6018,70 @@ Create another one anyway?</translation>
         <source>Se añade al plan «%1» y entra al final del ciclo en curso.</source>
         <translation>It is added to plan “%1” and joins the end of the running cycle.</translation>
     </message>
+    <message>
+        <source>Buscar a&amp;ctualizaciones…</source>
+        <translation>Check for &amp;Updates…</translation>
+    </message>
+    <message>
+        <source>QAflow %1 está disponible</source>
+        <translation>QAflow %1 is available</translation>
+    </message>
+    <message>
+        <source>. Abre QAflow para ver las novedades.</source>
+        <translation>. Open QAflow to see what&apos;s new.</translation>
+    </message>
+    <message>
+        <source> · ábrelo desde la barra inferior</source>
+        <translation> · open it from the bottom bar</translation>
+    </message>
+    <message>
+        <source>Buscando actualizaciones…</source>
+        <translation>Checking for updates…</translation>
+    </message>
+    <message>
+        <source>Buscar actualizaciones</source>
+        <translation>Check for Updates</translation>
+    </message>
+    <message>
+        <source>No se pudo comprobar si hay versiones nuevas.
+
+%1</source>
+        <translation>Could not check for new versions.
+
+%1</translation>
+    </message>
+    <message>
+        <source>Tienes la última versión de QAflow (%1).</source>
+        <translation>You have the latest version of QAflow (%1).</translation>
+    </message>
+    <message>
+        <source>Descargando QAflow %1…</source>
+        <translation>Downloading QAflow %1…</translation>
+    </message>
+    <message>
+        <source>QAflow %1 lista para instalar</source>
+        <translation>QAflow %1 ready to install</translation>
+    </message>
+    <message>
+        <source>QAflow %1 se instala al cerrar</source>
+        <translation>QAflow %1 installs when you close it</translation>
+    </message>
+    <message>
+        <source>QAflow %1 disponible</source>
+        <translation>QAflow %1 available</translation>
+    </message>
+    <message>
+        <source>Termina la grabación o la captura antes de reiniciar</source>
+        <translation>Finish the recording or capture before restarting</translation>
+    </message>
+    <message>
+        <source>Hay una ejecución en curso: termínala o instala la versión al cerrar QAflow</source>
+        <translation>A run is in progress: finish it or install the version when QAflow closes</translation>
+    </message>
+    <message>
+        <source>Actualizar QAflow</source>
+        <translation>Update QAflow</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::MarkupEditorDialog</name>
@@ -8473,6 +8569,58 @@ Press “Capture” or drop a file on the window.</translation>
         <source>Fases del proyecto: %1</source>
         <translation>Project phases: %1</translation>
     </message>
+    <message>
+        <source>Buscar actualizaciones automáticamente</source>
+        <translation>Check for updates automatically</translation>
+    </message>
+    <message>
+        <source>Versiones estables</source>
+        <translation>Stable versions</translation>
+    </message>
+    <message>
+        <source>Estables y beta</source>
+        <translation>Stable and beta</translation>
+    </message>
+    <message>
+        <source>Las beta traen lo nuevo antes, pero pueden tener fallos</source>
+        <translation>Betas get new features first, but may have bugs</translation>
+    </message>
+    <message>
+        <source>Buscar ahora</source>
+        <translation>Check now</translation>
+    </message>
+    <message>
+        <source>Tienes la versión %1.</source>
+        <translation>You have version %1.</translation>
+    </message>
+    <message>
+        <source>Última búsqueda: %1.</source>
+        <translation>Last checked: %1.</translation>
+    </message>
+    <message>
+        <source>Todavía no se ha buscado.</source>
+        <translation>Not checked yet.</translation>
+    </message>
+    <message>
+        <source>Buscando actualizaciones…</source>
+        <translation>Checking for updates…</translation>
+    </message>
+    <message>
+        <source>No se pudo buscar: %1</source>
+        <translation>Could not check: %1</translation>
+    </message>
+    <message>
+        <source>QAflow %1 está disponible: ábrelo desde la barra inferior o «Ayuda → Buscar actualizaciones…».</source>
+        <translation>QAflow %1 is available: open it from the bottom bar or “Help → Check for Updates…”.</translation>
+    </message>
+    <message>
+        <source>Las versiones nuevas se descargan a mano.</source>
+        <translation>New versions are downloaded manually.</translation>
+    </message>
+    <message>
+        <source>Las versiones nuevas se instalan solas (%1).</source>
+        <translation>New versions install themselves (%1).</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ShotCard</name>
@@ -8642,6 +8790,10 @@ Press “Capture” or drop a file on the window.</translation>
         <source> · en pausa</source>
         <translation> · paused</translation>
     </message>
+    <message>
+        <source>Ver las novedades de la versión nueva</source>
+        <translation>See what&apos;s new in the new version</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::TestCaseStore</name>
@@ -8784,6 +8936,136 @@ Continues cycle %1: only its failed and blocked cases</translation>
     <message>
         <source>Termina al menos un ciclo de un plan para ver su evolución.</source>
         <translation>Finish at least one cycle of a plan to see its trend.</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::UpdateDialog</name>
+    <message>
+        <source>Actualización disponible</source>
+        <translation>Update available</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;QAflow %1&lt;/b&gt; está disponible. Tienes la %2.</source>
+        <translation>&lt;b&gt;QAflow %1&lt;/b&gt; is available. You have %2.</translation>
+    </message>
+    <message>
+        <source>Publicada el %1</source>
+        <translation>Released on %1</translation>
+    </message>
+    <message>
+        <source>NOVEDADES</source>
+        <translation>WHAT&apos;S NEW</translation>
+    </message>
+    <message>
+        <source>Esta versión no trae notas.</source>
+        <translation>This version has no release notes.</translation>
+    </message>
+    <message>
+        <source>Omitir esta versión</source>
+        <translation>Skip this version</translation>
+    </message>
+    <message>
+        <source>No volver a avisar de la %1; sí de las siguientes</source>
+        <translation>Don&apos;t notify about %1 again; newer versions will still be announced</translation>
+    </message>
+    <message>
+        <source>Recordar más tarde</source>
+        <translation>Remind me later</translation>
+    </message>
+    <message>
+        <source>Descargar</source>
+        <translation>Download</translation>
+    </message>
+    <message>
+        <source>Abrir la página de la versión, con los paquetes de cada sistema</source>
+        <translation>Open the release page, with the packages for each system</translation>
+    </message>
+    <message>
+        <source>Descargar a mano</source>
+        <translation>Download manually</translation>
+    </message>
+    <message>
+        <source>Cancelar</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>%1 de %2 MB</source>
+        <translation>%1 of %2 MB</translation>
+    </message>
+    <message>
+        <source>%1 MB</source>
+        <translation>%1 MB</translation>
+    </message>
+    <message>
+        <source>Descargada y comprobada.</source>
+        <translation>Downloaded and verified.</translation>
+    </message>
+    <message>
+        <source>Al cerrar QAflow</source>
+        <translation>When QAflow closes</translation>
+    </message>
+    <message>
+        <source>Seguir trabajando: la versión nueva se instala cuando cierres QAflow</source>
+        <translation>Keep working: the new version is installed when you close QAflow</translation>
+    </message>
+    <message>
+        <source>Reiniciar ahora</source>
+        <translation>Restart now</translation>
+    </message>
+    <message>
+        <source>Cerrar QAflow, instalar la versión nueva y volver a abrirla</source>
+        <translation>Close QAflow, install the new version and open it again</translation>
+    </message>
+    <message>
+        <source>La versión nueva se instala al cerrar QAflow.</source>
+        <translation>The new version is installed when QAflow closes.</translation>
+    </message>
+    <message>
+        <source>Cerrar</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <source>Descargando…</source>
+        <translation>Downloading…</translation>
+    </message>
+    <message>
+        <source>Reintentar</source>
+        <translation>Retry</translation>
+    </message>
+    <message>
+        <source>Actualizar</source>
+        <translation>Update</translation>
+    </message>
+    <message>
+        <source>Descargar la versión nueva, comprobar que es la publicada e instalarla (%1)</source>
+        <translation>Download the new version, verify it is the published one and install it (%1)</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::UpdateService</name>
+    <message>
+        <source>No hay de dónde buscar actualizaciones</source>
+        <translation>There is no source to check for updates</translation>
+    </message>
+    <message>
+        <source>No se pudo crear la carpeta de descargas %1</source>
+        <translation>Could not create the downloads folder %1</translation>
+    </message>
+    <message>
+        <source>La firma de la versión %1 no es válida: no se instala. Descárgala desde su página.</source>
+        <translation>The signature of version %1 is not valid: it will not be installed. Download it from its page.</translation>
+    </message>
+    <message>
+        <source>Las sumas de comprobación no incluyen %1</source>
+        <translation>The checksums do not include %1</translation>
+    </message>
+    <message>
+        <source>El paquete descargado no coincide con su suma de comprobación: no se instala</source>
+        <translation>The downloaded package does not match its checksum: it will not be installed</translation>
+    </message>
+    <message>
+        <source>No se pudo instalar la versión nueva</source>
+        <translation>Could not install the new version</translation>
     </message>
 </context>
 <context>

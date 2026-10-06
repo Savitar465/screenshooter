@@ -24,6 +24,7 @@ class QLabel;
 namespace qaflow {
 
 struct AppContext;
+struct UpdateRelease;
 class Sidebar;
 class StatusStrip;
 class CasesView;
@@ -93,6 +94,10 @@ public:
     /// Adjunta ficheros locales (rutas o URLs file://) al caso seleccionado; lo usan el arrastre a
     /// la ventana y el menú.
     void attachFiles(const QList<QUrl>& urls);
+    /// «Ayuda → Buscar actualizaciones…»: busca ya y dice qué encontró (versión nueva, al día o el error).
+    void checkForUpdates();
+    /// Abre el aviso de la versión nueva encontrada, si la hay, y hace lo que se elija en él.
+    void showUpdate();
 
 signals:
     void projectSwitchRequested(const QString& id);
@@ -164,6 +169,9 @@ private:
     IssuesView* issuesView();
     /// Abrir en el navegador un issue del gestor por su clave.
     void openTrackerIssue(const QString& key);
+    /// Una búsqueda automática encontró una versión nueva: se avisa sin interrumpir (en la bandeja si la
+    /// ventana está escondida).
+    void announceUpdate(const UpdateRelease& release);
     void wireCases();
     void wirePlan();
     void wireRun();

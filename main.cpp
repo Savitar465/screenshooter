@@ -9,8 +9,12 @@
 #include "infrastructure/hotkey/GlobalHotkey.h"
 #include "infrastructure/persistence/JsonIssueRepository.h"
 #include "infrastructure/persistence/JsonProjectRepository.h"
+#include "infrastructure/persistence/QSettingsUpdatePreferences.h"
 #include "infrastructure/requirements/GesreqClient.h"
 #include "infrastructure/secrets/SecretStores.h"
+#include "infrastructure/update/Ed25519.h"
+#include "infrastructure/update/GitHubReleaseSource.h"
+#include "infrastructure/update/UpdateInstallers.h"
 #include "presentation/DevSnapshot.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/views/WorkspaceWindow.h"
@@ -32,8 +36,15 @@
 
 namespace {
 
+// La versión la define CMake (QAFLOW_VERSION en CMakeLists.txt, o la del tag en el CI): no se repite aquí.
 #ifndef QAFLOW_VERSION
-#define QAFLOW_VERSION "1.5.3"
+#define QAFLOW_VERSION "0.0.0"
+#endif
+#ifndef QAFLOW_UPDATE_REPO
+#define QAFLOW_UPDATE_REPO ""
+#endif
+#ifndef QAFLOW_UPDATE_PUBLIC_KEY
+#define QAFLOW_UPDATE_PUBLIC_KEY ""
 #endif
 
 /// Idioma efectivo: el elegido o, con "sistema", el del entorno (español si el sistema es español).
@@ -97,6 +108,21 @@ int main(int argc, char* argv[]) {
     // Una sola sesión de GESREQ para todos los proyectos: la bandeja es del usuario, no del proyecto.
     auto requirementSource = std::make_shared<GesreqClient>();
     GlobalHotkey hotkey;
+    // Búsqueda de versiones nuevas en las releases de GitHub. No en las capturas de la documentación (sin
+    // red) ni si se compiló sin repositorio. Se declara antes que las sesiones, que la reciben.
+    std::unique_ptr<UpdateService> updates;
+    const QString updateRepo = QStringLiteral(QAFLOW_UPDATE_REPO);
+    if (const auto version = Version::parse(QStringLiteral(QAFLOW_VERSION)); version && !updateRepo.isEmpty() && !devsnapshot::requested())
+        updates = std::make_unique<UpdateService>(std::make_shared<GitHubReleaseSource>(updateRepo),
+                                                  std::make_shared<QSettingsUpdatePreferences>(), *version);
+    // Instalarse sola sólo donde se sabe cómo (AppImage, instalador de Windows) y con la clave con la que
+    // se comprueba que el paquete es el publicado; si no, se avisa y se descarga a mano.
+    if (updates) {
+        auto verifier = std::make_shared<Ed25519Verifier>(QByteArrayLiteral(QAFLOW_UPDATE_PUBLIC_KEY));
+        if (auto installer = detectUpdateInstaller(); installer && verifier->isValid())
+            updates->setInstaller(installer, verifier,
+                                  QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/updates"));
+    }
     Translators translators;
     // Los issues de todos los proyectos, para la vista general del tablero: de los abiertos se leen sus
     // stores; de los demás, su issues.json. Se declara antes que las sesiones, que se le enganchan.
@@ -216,6 +242,7 @@ int main(int argc, char* argv[]) {
         stored = std::make_unique<ProjectSession>(projects, id, secrets, requirementSource);
         auto* session = stored.get();
         session->ctx.hotkey = &hotkey;
+        session->ctx.updates = updates.get();
         session->ctx.issueDirectory = &issueDirectory;
         issueDirectory.attach(id, session->issues.get());
         QObject::connect(session->settings.get(), &SettingsStore::captureChanged, &app, [&, session]() { if (current == session) bindHotkeys(); });
@@ -304,5 +331,6 @@ int main(int argc, char* argv[]) {
     bindHotkeys();
     app.setQuitOnLastWindowClosed(!current->settings->app().closeToTray);
     if (devsnapshot::requested()) devsnapshot::run(*current->window, current->ctx);
+    if (updates) updates->start();
     return app.exec();
 }

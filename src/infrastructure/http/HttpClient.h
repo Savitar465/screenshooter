@@ -44,6 +44,11 @@ protected:
     void postFile(const QNetworkRequest& req, const QString& path, Handler done);
     /// POST de formulario (application/x-www-form-urlencoded), como el que envía un navegador.
     void postForm(const QNetworkRequest& req, const QList<QPair<QString, QString>>& fields, Handler done);
+    /// GET de un fichero directo a disco, sin cargarlo en memoria (paquetes de cientos de MB). `path` sólo
+    /// aparece si la descarga termina bien; un error deja el cuerpo de la respuesta en `Response::body`.
+    /// Devuelve la respuesta en curso, para poder cortarla con `abort()`.
+    QNetworkReply* downloadFile(const QNetworkRequest& req, const QString& path,
+                                std::function<void(qint64, qint64)> progress, Handler done);
     /// Olvida las cookies recibidas: la siguiente petición sale sin sesión.
     void clearCookies();
 

@@ -59,8 +59,20 @@ StatusStrip::StatusStrip(TestCaseStore& cases, PlanStore& plan, RunController& r
     connect(metricItem, &QPushButton::clicked, this, [this]() { emit metricsRequested(); });
     h->addWidget(metricItem);
 
+    // Versión nueva, abajo a la derecha como en los IDE de JetBrains. Sólo aparece si la hay.
+    QHBoxLayout* updateBody;
+    m_update = item(tr("Ver las novedades de la versión nueva"), &updateBody);
+    m_update->setObjectName(QStringLiteral("statusUpdate"));
+    updateBody->addWidget(ui::dot(theme::Blue, 7));
+    m_updateText = ui::label(QString(), "muted-sm");
+    m_updateText->setStyleSheet(QStringLiteral("font-size:12px;color:%1;").arg(theme::Text));
+    updateBody->addWidget(m_updateText);
+    connect(m_update, &QPushButton::clicked, this, &StatusStrip::updateRequested);
+    m_update->hide();
+    h->addWidget(m_update);
+
     // Las etiquetas no deben robar el clic a su bloque.
-    for (auto* item : {runItem, metricItem})
+    for (auto* item : {runItem, metricItem, m_update})
         for (auto* child : item->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
 
     connect(&m_cases, &TestCaseStore::casesChanged, this, &StatusStrip::refresh);
@@ -70,6 +82,11 @@ StatusStrip::StatusStrip(TestCaseStore& cases, PlanStore& plan, RunController& r
     connect(&m_run, &RunController::runChanged, this, &StatusStrip::refresh);
     connect(&m_history, &RunHistoryStore::historyChanged, this, &StatusStrip::refresh);
     refresh();
+}
+
+void StatusStrip::setUpdate(const QString& text) {
+    m_updateText->setText(text);
+    m_update->setVisible(!text.isEmpty());
 }
 
 QPushButton* StatusStrip::item(const QString& tooltip, QHBoxLayout** body) {

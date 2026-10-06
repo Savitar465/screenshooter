@@ -23,10 +23,16 @@ class StatusStrip : public QFrame {
 public:
     StatusStrip(TestCaseStore& cases, PlanStore& plan, RunController& run, RunHistoryStore& history, QWidget* parent = nullptr);
 
+    /// La versión nueva y en qué punto está su instalación ("QAflow 1.6.0 disponible"), en un bloque al
+    /// final de la barra; vacío lo oculta.
+    void setUpdate(const QString& text);
+
 signals:
     void navigate(Screen s);
     /// Abrir las métricas (tasa de éxito por suite y evolución entre ciclos) en el historial.
     void metricsRequested();
+    /// Ver la versión nueva disponible.
+    void updateRequested();
 
 private:
     void refresh();
@@ -44,6 +50,8 @@ private:
     QLabel* m_rateDetail;
     QLabel* m_trend;
     QProgressBar* m_runBar;
+    QPushButton* m_update;
+    QLabel* m_updateText;
 };
 
 } // namespace qaflow

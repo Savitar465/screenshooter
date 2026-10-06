@@ -78,6 +78,34 @@ Qt del sistema y lo declara como dependencia, así que hay que compilarlo con el
 `.github/workflows/ci.yml` compila y pasa los tests en Linux, Windows y macOS en cada push, genera los paquetes
 como artefactos y, en los tags `v*`, los adjunta a la release de GitHub.
 
+Para publicar una versión basta con el tag: la versión de la app y de los paquetes sale de él.
+
+```bash
+git tag v1.6.0 && git push origin v1.6.0              # release estable
+git tag v1.6.0-beta.1 && git push origin v1.6.0-beta.1  # prerelease: sólo la ofrece el canal beta
+```
+
+`set(QAFLOW_VERSION …)` en `CMakeLists.txt` es sólo la de los builds locales (también se puede pasar
+`-DQAFLOW_VERSION=…` al configurar). El CI rechaza un tag que no sea `vX.Y.Z` o `vX.Y.Z-pre`, y la release
+falla si algún paquete no salió con la versión del tag.
+
+### Actualizaciones
+
+QAflow busca versiones nuevas en las releases del repositorio `QAFLOW_UPDATE_REPO` (una vez al día; también
+en «Ayuda → Buscar actualizaciones…»). Instalada como AppImage o con el instalador de Windows, además se
+instala sola: descarga el paquete, comprueba la firma Ed25519 de `SHA256SUMS` y la suma del paquete, y lo
+instala al reiniciar o al cerrar. Con el `.deb`, el `.zip`, el `.tar.gz` o en macOS sólo avisa.
+
+Para firmar las releases hace falta un par de claves, una sola vez:
+
+```bash
+packaging/release/update-signing-key.sh     # genera la clave y dice qué hacer con cada mitad
+```
+
+La privada va al secreto `QAFLOW_UPDATE_SIGNING_KEY` del repositorio (con ella el job `release` firma
+`SHA256SUMS`) y la pública a `QAFLOW_UPDATE_PUBLIC_KEY` en `CMakeLists.txt`. Sin la pública compilada, QAflow
+sólo avisa de las versiones nuevas; sin el secreto, la release sale sin firma y nadie se actualiza solo.
+
 ## Atajos
 
 | Atajo                | Acción                              |

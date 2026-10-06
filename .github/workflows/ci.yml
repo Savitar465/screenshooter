@@ -15,7 +15,32 @@ env:
   QT_VERSION: '6.7.3'
 
 jobs:
+  # La versión de la app: en un tag vX.Y.Z[-pre], la del tag (todos los builds la reciben al configurar, así
+  # el binario y los paquetes dicen la versión de su release); en el resto de builds, vacía, y CMake usa la
+  # de CMakeLists.txt.
+  version:
+    name: Versión
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        name: Versión del tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::El tag $GITHUB_REF_NAME no es vX.Y.Z ni vX.Y.Z-pre (v1.6.0, v1.6.0-beta.1)"
+              exit 1
+            fi
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "Versión de la release: $version"
+          else
+            echo "No es un tag de versión: se usa la de CMakeLists.txt"
+          fi
+
   linux:
+    needs: version
     name: Linux (build, tests, AppImage, tar.gz)
     runs-on: ubuntu-22.04
     steps:
@@ -33,7 +58,7 @@ jobs:
           sudo apt-get install -y ninja-build libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 \
             libxcb-shape0 libxcb-xinerama0 libfuse2 file libx11-dev libxcb1-dev
       - name: Configurar
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQAFLOW_VERSION=${{ needs.version.outputs.version }}
       - name: Compilar
         run: cmake --build build
       - name: Tests
@@ -56,6 +81,7 @@ jobs:
           if-no-files-found: error
 
   linux-deb:
+    needs: version
     name: Linux (.deb con el Qt del sistema)
     runs-on: ubuntu-22.04
     container: debian:12
@@ -67,7 +93,7 @@ jobs:
             qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-qpa-plugins libgl-dev zlib1g-dev libx11-dev libxcb1-dev
       - uses: actions/checkout@v4
       - name: Configurar
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQAFLOW_VERSION=${{ needs.version.outputs.version }}
       - name: Compilar
         run: cmake --build build
       - name: Tests
@@ -87,6 +113,7 @@ jobs:
           if-no-files-found: error
 
   windows:
+    needs: version
     name: Windows (build, tests, instalador)
     runs-on: windows-2022
     steps:
@@ -99,7 +126,7 @@ jobs:
           cache: true
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Configurar
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQAFLOW_VERSION=${{ needs.version.outputs.version }}
       - name: Compilar
         run: cmake --build build
       - name: Tests
@@ -134,6 +161,7 @@ jobs:
           if-no-files-found: error
 
   macos:
+    needs: version
     name: macOS (build, tests, dmg)
     runs-on: macos-14
     steps:
@@ -144,7 +172,7 @@ jobs:
           version: ${{ env.QT_VERSION }}
           cache: true
       - name: Configurar
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQAFLOW_VERSION=${{ needs.version.outputs.version }}
       - name: Compilar
         run: cmake --build build
       - name: Tests
@@ -162,7 +190,7 @@ jobs:
   release:
     name: Publicar release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, linux-deb, windows, macos]
+    needs: [version, linux, linux-deb, windows, macos]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -170,6 +198,41 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      # Cada paquete lleva la versión en el nombre: si falta alguno, ese build no recibió la del tag.
+      - name: Comprobar la versión de los paquetes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          deb_version="${VERSION//-/\~}"   # dpkg escribe las versiones previas con "~"
+          for name in "QAflow-$VERSION-x86_64.AppImage" "qaflow-$VERSION-Linux-x86_64.tar.gz" "qaflow_${deb_version}_*.deb" \
+                      "qaflow-$VERSION-win64.exe" "qaflow-$VERSION-win64.zip" "qaflow-$VERSION-Darwin.dmg"; do
+            if ! find artifacts -type f -name "$name" | grep -q .; then
+              echo "::error::Falta $name: algún paquete no se compiló con la versión $VERSION del tag"
+              find artifacts -type f -not -name '*.png'
+              exit 1
+            fi
+          done
+      # Lo que comprueba QAflow antes de instalarse sola: la suma de cada paquete y la firma Ed25519 de esas
+      # sumas con la clave del secreto QAFLOW_UPDATE_SIGNING_KEY (packaging/release/update-signing-key.sh).
+      # Sin el secreto la release sale igual, sin firma: QAflow avisará de ella pero no se instalará sola.
+      - name: Sumas y firma para las actualizaciones
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.QAFLOW_UPDATE_SIGNING_KEY }}
+        run: |
+          mkdir -p artifacts/checksums
+          cd artifacts
+          find qaflow-linux qaflow-linux-deb qaflow-windows qaflow-macos -type f \
+               \( -name '*.deb' -o -name '*.tar.gz' -o -name '*.AppImage' -o -name '*.exe' -o -name '*.zip' -o -name '*.dmg' \) -print0 \
+            | sort -z | xargs -0 sha256sum | sed -E 's#^([0-9a-f]{64})  .*/#\1  #' > checksums/SHA256SUMS
+          cat checksums/SHA256SUMS
+          if [ -n "$UPDATE_SIGNING_KEY" ]; then
+            key="$RUNNER_TEMP/update-signing-key.pem"
+            printf '%s\n' "$UPDATE_SIGNING_KEY" > "$key"
+            openssl pkeyutl -sign -rawin -inkey "$key" -in checksums/SHA256SUMS -out checksums/SHA256SUMS.sig
+            rm -f "$key"
+          else
+            echo "::warning::Falta el secreto QAFLOW_UPDATE_SIGNING_KEY: la release sale sin firma y QAflow no se instalará sola"
+          fi
       - name: Adjuntar paquetes a la release
         uses: softprops/action-gh-release@v2
         with:
@@ -180,4 +243,8 @@ jobs:
             artifacts/qaflow-windows/**/*.exe
             artifacts/qaflow-windows/**/*.zip
             artifacts/qaflow-macos/**/*.dmg
+            artifacts/checksums/SHA256SUMS
+            artifacts/checksums/SHA256SUMS.sig
           generate_release_notes: true
+          # Una versión previa (v1.6.0-beta.1) sale como prerelease: sólo la ofrece el canal beta.
+          prerelease: ${{ contains(needs.version.outputs.version, '-') }}

@@ -13,7 +13,12 @@ BUILD_DIR="${1:-build}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 APPDIR="$ROOT/$BUILD_DIR/AppDir"
 TOOLS="$ROOT/$BUILD_DIR/appimage-tools"
-VERSION="$(grep -oP 'project\(qaflow VERSION \K[0-9.]+' "$ROOT/CMakeLists.txt")"
+# La versión con la que se compiló (la del tag en el CI), que CMake deja en el directorio de build.
+if [ ! -f "$ROOT/$BUILD_DIR/qaflow-version.txt" ]; then
+    echo "Falta $BUILD_DIR/qaflow-version.txt: configura y compila antes con CMake" >&2
+    exit 1
+fi
+VERSION="$(tr -d '[:space:]' < "$ROOT/$BUILD_DIR/qaflow-version.txt")"
 
 mkdir -p "$TOOLS"
 fetch() {

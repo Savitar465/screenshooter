@@ -27,7 +27,8 @@ endif ()
 set(CPACK_PACKAGE_NAME "qaflow")
 set(CPACK_PACKAGE_VENDOR "QAflow")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Casos de prueba, planes, ejecución manual con evidencias y reporte de bugs")
-set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+# La versión completa (con "-beta.1"), que es la que lleva el nombre de cada paquete.
+set(CPACK_PACKAGE_VERSION ${QAFLOW_VERSION})
 set(CPACK_PACKAGE_CONTACT "QAflow <qaflow@example.com>")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/savitar47/qaflow")
 set(CPACK_RESOURCE_FILE_README ${CMAKE_CURRENT_SOURCE_DIR}/README.md)
@@ -70,6 +71,8 @@ else ()
         message(WARNING "Qt6 no es el del sistema (${Qt6_DIR}): el .deb no declarará la dependencia de Qt. "
                         "Para distribuirlo, compilá con qt6-base-dev; para un paquete con Qt incluido, usá build-appimage.sh.")
     endif ()
+    # En dpkg una versión previa se escribe con "~" (1.6.0~beta.1 < 1.6.0); con "-" sería posterior.
+    string(REPLACE "-" "~" CPACK_DEBIAN_PACKAGE_VERSION "${QAFLOW_VERSION}")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 endif ()
 

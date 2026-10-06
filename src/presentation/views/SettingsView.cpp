@@ -5,6 +5,7 @@
 #include "application/BugReportService.h"
 #include "application/SettingsStore.h"
 #include "application/TestPublishService.h"
+#include "application/UpdateService.h"
 #include "core/models/Issue.h"   // defaultQaPhases, normalizedQaPhases
 #include "core/services/IGlobalHotkey.h"
 #include "presentation/theme/Theme.h"
@@ -20,6 +21,7 @@
 #include <QGuiApplication>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QPointer>
 #include <QPushButton>
 #include <QScreen>
@@ -98,7 +100,7 @@ QString hintFor(const TrackerSettings& t) {
 
 SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     : QWidget(parent), m_settings(*ctx.settings), m_bugs(*ctx.bugs), m_publish(ctx.publish), m_requirements(ctx.requirements), m_ai(ctx.ai),
-      m_projects(ctx.projects), m_projectId(ctx.projectId), m_hotkey(ctx.hotkey), m_captureBackend(ctx.captureBackend) {
+      m_projects(ctx.projects), m_projectId(ctx.projectId), m_hotkey(ctx.hotkey), m_updates(ctx.updates), m_captureBackend(ctx.captureBackend) {
     auto* root = ui::hbox(this, 0, 0);
     QWidget* content;
     QVBoxLayout* outer;
@@ -212,6 +214,37 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
         m_settings.updateApp([on](AppSettings& a) { a.closeToTray = on; });
         m_selfEdit = false;
     });
+    if (m_updates) {
+        // Actualizaciones: como en los IDE de JetBrains, se buscan solas una vez al día.
+        auto* urow = new QWidget;
+        auto* uh = ui::hbox(urow, 0, 10);
+        m_autoUpdate = new QCheckBox(tr("Buscar actualizaciones automáticamente"));
+        m_autoUpdate->setObjectName(QStringLiteral("settingsAutoUpdate"));
+        uh->addWidget(m_autoUpdate);
+        m_updateChannel = new QComboBox;
+        m_updateChannel->setObjectName(QStringLiteral("settingsUpdateChannel"));
+        m_updateChannel->addItem(tr("Versiones estables"), static_cast<int>(UpdateChannel::Stable));
+        m_updateChannel->addItem(tr("Estables y beta"), static_cast<int>(UpdateChannel::Beta));
+        m_updateChannel->setToolTip(tr("Las beta traen lo nuevo antes, pero pueden tener fallos"));
+        uh->addWidget(m_updateChannel);
+        uh->addStretch(1);
+        auto* checkNow = ui::button(tr("Buscar ahora"), "ghost");
+        checkNow->setObjectName(QStringLiteral("settingsCheckUpdates"));
+        uh->addWidget(checkNow);
+        gb->addWidget(urow);
+        m_updateStatus = ui::label(QString(), "muted-sm");
+        m_updateStatus->setObjectName(QStringLiteral("settingsUpdateStatus"));
+        m_updateStatus->setWordWrap(true);
+        gb->addWidget(m_updateStatus);
+        connect(m_autoUpdate, &QCheckBox::toggled, this, [this](bool on) {
+            if (!m_selfEdit) m_updates->setAutoCheck(on);
+        });
+        connect(m_updateChannel, &QComboBox::currentIndexChanged, this, [this](int) {
+            if (!m_selfEdit) m_updates->setChannel(static_cast<UpdateChannel>(m_updateChannel->currentData().toInt()));
+        });
+        connect(checkNow, &QPushButton::clicked, this, [this]() { m_updates->checkNow(); });
+        connect(m_updates, &UpdateService::changed, this, &SettingsView::refreshUpdates);
+    }
 
     // Gestor de incidencias
     m_badge = ui::button(QString(), "badge");
@@ -667,6 +700,7 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     if (m_projects) connect(m_projects, &ProjectStore::projectsChanged, this, &SettingsView::refreshProject);
     if (m_requirements) connect(m_requirements, &RequirementSourceService::systemsChanged, this, &SettingsView::refreshProject);
     refreshGeneral();
+    refreshUpdates();
     refreshTracker();
     refreshCapture();
     refreshRunShortcuts();
@@ -695,6 +729,44 @@ void SettingsView::refreshGeneral() {
     m_theme->setCurrentIndex(std::max(0, m_theme->findData(static_cast<int>(a.theme))));
     m_closeToTray->setChecked(a.closeToTray);
     m_selfEdit = false;
+}
+
+void SettingsView::refreshUpdates() {
+    if (!m_updates) return;
+    const UpdatePreferences& p = m_updates->preferences();
+    m_selfEdit = true;
+    m_autoUpdate->setChecked(p.autoCheck);
+    m_updateChannel->setCurrentIndex(std::max(0, m_updateChannel->findData(static_cast<int>(p.channel))));
+    m_selfEdit = false;
+
+    const QString kind = m_updates->installKind();
+    const QString current = tr("Tienes la versión %1.").arg(m_updates->currentVersion().toString()) + QLatin1Char(' ')
+                            + (kind.isEmpty() ? tr("Las versiones nuevas se descargan a mano.")
+                                              : tr("Las versiones nuevas se instalan solas (%1).").arg(kind));
+    const QString last = p.lastCheck.isValid()
+                             ? tr("Última búsqueda: %1.").arg(QLocale().toString(p.lastCheck.toLocalTime(), QLocale::ShortFormat))
+                             : tr("Todavía no se ha buscado.");
+    QString status;
+    QString color = theme::Muted;
+    switch (m_updates->state()) {
+        case UpdateService::State::Checking:
+            status = tr("Buscando actualizaciones…");
+            break;
+        case UpdateService::State::Failed:
+            status = tr("No se pudo buscar: %1").arg(m_updates->lastError());
+            color = theme::Amber;
+            break;
+        default:
+            if (const auto& available = m_updates->available()) {
+                status = tr("QAflow %1 está disponible: ábrelo desde la barra inferior o «Ayuda → Buscar actualizaciones…».")
+                             .arg(available->version.toString());
+                color = theme::Blue;
+            } else {
+                status = last;
+            }
+    }
+    m_updateStatus->setText(current + QLatin1Char(' ') + status);
+    m_updateStatus->setStyleSheet(QStringLiteral("color:%1;").arg(color));
 }
 
 void SettingsView::refreshTracker() {

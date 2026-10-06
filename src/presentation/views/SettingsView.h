@@ -21,6 +21,7 @@ class RequirementSourceService;
 class AiService;
 class ProjectStore;
 class IGlobalHotkey;
+class UpdateService;
 
 /// Pantalla "Ajustes": configuración del proyecto abierto (código Jira y sistema de GESREQ), preferencias
 /// generales (idioma, tema, bandeja), gestor de incidencias (Jira, GitHub, GitLab, Azure DevOps), conexión
@@ -38,6 +39,8 @@ signals:
 
 private:
     void refreshGeneral();
+    /// Búsqueda de actualizaciones: si es automática, el canal y qué dijo la última búsqueda.
+    void refreshUpdates();
     void refreshTracker();
     /// Campos de la configuración del proyecto: el código Jira sólo con Jira; el sistema de GESREQ, si hay catálogo.
     void refreshProject();
@@ -71,12 +74,16 @@ private:
     ProjectStore* m_projects;
     QString m_projectId;
     IGlobalHotkey* m_hotkey;
+    UpdateService* m_updates;
     QString m_captureBackend;
     bool m_selfEdit = false;
 
     QComboBox* m_language;
     QComboBox* m_theme;
     QCheckBox* m_closeToTray;
+    QCheckBox* m_autoUpdate = nullptr;
+    QComboBox* m_updateChannel = nullptr;
+    QLabel* m_updateStatus = nullptr;
     QPushButton* m_badge;
     QComboBox* m_kind;
     QLabel* m_kindHint;

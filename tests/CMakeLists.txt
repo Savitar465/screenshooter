@@ -32,6 +32,7 @@ qaflow_add_test(core test_ai_case_draft LIBS qaflow_core)
 qaflow_add_test(core test_metrics LIBS qaflow_core)
 qaflow_add_test(core test_issue LIBS qaflow_core)
 qaflow_add_test(core test_quality_record LIBS qaflow_core)
+qaflow_add_test(core test_update LIBS qaflow_core)
 
 # application: stores y controlador sobre repositorios en memoria
 qaflow_add_test(application test_test_case_store LIBS qaflow_application)
@@ -51,6 +52,7 @@ qaflow_add_test(application test_issue_directory LIBS qaflow_application)
 qaflow_add_test(application test_issue_publish_service LIBS qaflow_application)
 qaflow_add_test(application test_quality_record_service LIBS qaflow_application)
 qaflow_add_test(application test_revision_publish_service LIBS qaflow_application)
+qaflow_add_test(application test_update_service LIBS qaflow_application)
 
 # infrastructure: repositorios JSON en un directorio temporal, QSettings en un fichero temporal
 # y clientes REST contra un servidor HTTP falso en localhost
@@ -71,6 +73,9 @@ qaflow_add_test(infrastructure test_issue_repository LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_docx_writer LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_document_reader LIBS qaflow_infrastructure)
 qaflow_add_test(infrastructure test_ai_client LIBS qaflow_infrastructure)
+qaflow_add_test(infrastructure test_update_source LIBS qaflow_infrastructure)
+qaflow_add_test(infrastructure test_ed25519 LIBS qaflow_infrastructure)
+qaflow_add_test(infrastructure test_update_installers LIBS qaflow_infrastructure)
 target_compile_definitions(test_document_reader PRIVATE QAFLOW_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 
 # presentation: ventana completa sobre repositorios en memoria (plataforma offscreen)

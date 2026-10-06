@@ -3,6 +3,7 @@
 // Se ejecuta con la plataforma "offscreen".
 
 #include "presentation/widgets/AnnotationEditor.h"
+#include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/Thumbnail.h"
@@ -327,8 +328,11 @@ private slots:
         QVERIFY(!card.findChild<QComboBox*>());
         for (auto* b : card.findChildren<QPushButton*>())
             QVERIFY2(b->isHidden() || b->text() == QStringLiteral("✎"), qPrintable(b->text()));
+        // El paso va recortado al ancho de la tarjeta (cuánto cabe depende de la fuente del sistema): se
+        // comprueba el texto entero, que es también el del tooltip.
         bool stepShown = false;
-        for (auto* l : card.findChildren<QLabel*>()) stepShown = stepShown || l->text().contains(QStringLiteral("Paso 2 · Pagar con tarjeta"));
+        for (auto* l : card.findChildren<ElidedLabel*>())
+            stepShown = stepShown || l->fullText() == QStringLiteral("Paso 2 · Pagar con tarjeta");
         QVERIFY(stepShown);
         QSignalSpy annotate(&card, &ShotCard::annotateRequested);
         QTest::mouseClick(card.findChild<Thumbnail*>(), Qt::LeftButton);

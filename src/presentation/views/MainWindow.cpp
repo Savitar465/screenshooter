@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "application/AppContext.h"
+#include "application/RevisionPublishService.h"
 #include "core/models/BugReport.h"   // BugReport::environments
 #include "core/models/RunHistory.h"   // label(Verdict)
 #include "presentation/theme/Theme.h"
@@ -449,7 +450,18 @@ void MainWindow::beginPlanRun(const QString& planId, const QString& environment,
         return;
     }
     // Se pasa a la fase siguiente: la revisión abierta queda aprobada en la suya (comprobado al preguntar).
-    if (!approve.isEmpty()) m_ctx.issues->closeRevision(approve, QaOutcome::Conforme);
+    // Y, como al cerrarla a mano, sus resultados suben a lo planificado en Zephyr y en el gestor.
+    if (!approve.isEmpty()) {
+        if (m_ctx.revisionPublish)
+            m_ctx.revisionPublish->closeRevision(approve, QaOutcome::Conforme, [this](const RevisionPublishService::Result& r) {
+                QStringList problems;
+                for (const auto& step : r.steps)
+                    if (!step.ok) problems << QStringLiteral("%1 · %2").arg(RevisionPublishService::label(step.destination), step.message);
+                if (!problems.isEmpty()) showToast(tr("La revisión aprobada no se subió del todo:\n%1").arg(problems.join(QLatin1Char('\n'))), theme::Amber);
+            });
+        else
+            m_ctx.issues->closeRevision(approve, QaOutcome::Conforme);
+    }
     m_ctx.plan->setActive(planId);
     m_ctx.run->startSequence(ids, plan->name, planId, environment);
     navigateInto(Screen::Run);
@@ -465,8 +477,11 @@ void MainWindow::continueCycleRun(const QString& planRunId) {
         return;
     }
     const PlanReport report = m_ctx.history->report(planRunId);
-    if (!report.canContinue()) {
-        showToast(tr("Ese ciclo no dejó ningún caso fallado ni bloqueado que continuar"), theme::Amber);
+    // Con lo que tiene hoy su plan: lo que se le añadió después de arrancarlo también se continúa.
+    const QStringList planCases = m_ctx.plan->find(report.plan.planId) ? m_ctx.plan->orderedCaseIds(report.plan.planId) : QStringList{};
+    const QStringList left = report.toContinue(planCases);
+    if (!report.canContinue(planCases)) {
+        showToast(tr("A ese ciclo no le queda ningún caso por terminar"), theme::Amber);
         return;
     }
     CycleStartDialog::Setup setup = cycleSetup(report.plan.planId, report.plan.name);
@@ -479,27 +494,30 @@ void MainWindow::continueCycleRun(const QString& planRunId) {
         setup.blocked.clear();
         setup.notes.clear();
     }
-    setup.continuation = tr("Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o bloqueado(s), "
-                            "cada uno desde el paso que se rompió. Es el mismo ciclo: lo ya probado, sus capturas "
-                            "y sus bugs se conservan%3.")
+    const int broken = int(report.brokenCaseIds().size());
+    setup.continuation = tr("Continúa el ciclo %1: se ejecutan sus %2 caso(s) por terminar —%3 roto(s), desde el paso que "
+                            "se rompió, y %4 sin ejecutar o añadido(s) al plan después, enteros—. Es el mismo ciclo: lo "
+                            "ya probado, sus capturas y sus bugs se conservan%5.")
                              .arg(planRunId)
-                             .arg(report.brokenCaseIds().size())
+                             .arg(left.size())
+                             .arg(broken)
+                             .arg(left.size() - broken)
                              .arg(report.plan.isPublished() ? tr(", y al terminar se actualiza su ciclo de Zephyr") : QString());
     auto* dialog = new CycleStartDialog(setup, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    connect(dialog, &QDialog::accepted, this, [this, planRunId, dialog]() { beginContinuation(planRunId, dialog->environment()); });
+    connect(dialog, &QDialog::accepted, this, [this, planRunId, dialog, planCases]() { beginContinuation(planRunId, dialog->environment(), planCases); });
     dialog->open();
     updateActions();
 }
 
-void MainWindow::beginContinuation(const QString& planRunId, const QString& environment) {
+void MainWindow::beginContinuation(const QString& planRunId, const QString& environment, const QStringList& planCases) {
     // Como al arrancar: entre la pregunta y la respuesta puede haber empezado otra ejecución.
     if (!m_ctx.run->state().caseId.isEmpty()) {
         showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
         return;
     }
-    if (!m_ctx.run->continueCycle(planRunId, environment)) {
-        showToast(tr("No se pudo continuar el ciclo: sus casos fallados ya no están en el proyecto"), theme::Amber);
+    if (!m_ctx.run->continueCycle(planRunId, environment, planCases)) {
+        showToast(tr("No se pudo continuar el ciclo: sus casos por terminar ya no están en el proyecto"), theme::Amber);
         return;
     }
     if (const PlanRun* cycle = m_ctx.history->findPlan(m_ctx.run->planRunId()); cycle && !cycle->planId.isEmpty())
@@ -867,6 +885,17 @@ void MainWindow::reportBug(int stepIndex) {
 
 void MainWindow::wireIssues() {
     connect(m_issuesView, &IssuesView::toast, this, &MainWindow::showToast);
+    // El ciclo en curso siguió un cambio de su plan: se dice qué entró y qué salió.
+    connect(m_ctx.run, &RunController::planCasesChanged, this, [this](const QString&, const QStringList& added, const QStringList& removed) {
+        QStringList parts;
+        if (!added.isEmpty()) parts << tr("%1 entra(n) al ciclo en curso").arg(added.join(QStringLiteral(", ")));
+        if (!removed.isEmpty()) parts << tr("%1 sale(n) del ciclo en curso").arg(removed.join(QStringLiteral(", ")));
+        showToast(parts.join(QStringLiteral(" · ")), theme::Cyan);
+    });
+    // Lo que pasó en Zephyr al arrancar un ciclo del plan: avisa sin interrumpir la ejecución.
+    if (m_ctx.revisionPublish)
+        connect(m_ctx.revisionPublish, &RevisionPublishService::planCyclePrepared, this,
+                [this](const QString& message, bool ok) { showToast(message, ok ? theme::Cyan : theme::Amber); });
     // Issues: sus casos, planes y ejecuciones se abren en sus pantallas.
     connect(m_issuesView, &IssuesView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
     connect(m_issuesView, &IssuesView::openPlanRequested, this, [this](const QString& id) { m_ctx.plan->setActive(id); navigateInto(Screen::Plan); });

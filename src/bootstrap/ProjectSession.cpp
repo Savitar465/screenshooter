@@ -58,7 +58,7 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     ai = std::make_unique<AiService>(std::make_shared<AiClient>(), *settings);
     revisionPublish = std::make_unique<RevisionPublishService>(*issues, *history, *records, publish.get(), issuePublish.get(),
                                                                requirements.get());
-    // El issue sigue a sus pruebas: arrancar un ciclo de uno de sus planes lo pasa a «En pruebas» y
+    // El issue sigue a sus pruebas: arrancar un ciclo de su plan lo pasa a «En pruebas» y
     // abre su revisión (la primera, o la siguiente si la anterior ya se cerró).
     QObject::connect(run.get(), &RunController::planStarted, issues.get(),
                      [store = issues.get(), log = history.get()](const QString& planRunId, const QString& planId) {
@@ -68,6 +68,22 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
                          const PlanRun* cycle = log->findPlan(planRunId);
                          const IssueStore::RevisionRef started = store->notePlanStarted(planId, cycle ? cycle->environment : QString());
                          if (!started.isEmpty()) log->noteCycleRevision(planRunId, started.issueId, started.revision);
+                     });
+    // Y el plan sube a Zephyr al arrancarlo: el ciclo de su fase queda con todos sus casos, sin ejecutar,
+    // para que desde Zephyr se vea qué se va a probar. Después del de arriba: el ciclo ya sabe su issue.
+    QObject::connect(run.get(), &RunController::planStarted, revisionPublish.get(),
+                     [service = revisionPublish.get()](const QString& planRunId, const QString&) { service->prepareStartedCycle(planRunId); });
+    // El ciclo en curso sigue a su plan: lo que se le añade entra a la cola (y sube sin ejecutar al ciclo
+    // de su fase en Zephyr) y lo que se le quita sale, si todavía no se empezó.
+    auto followPlan = [runner = run.get(), log = history.get(), plans = plan.get()]() {
+        const PlanRun* cycle = runner->planRunId().isEmpty() ? nullptr : log->findPlan(runner->planRunId());
+        if (cycle && !cycle->planId.isEmpty() && plans->find(cycle->planId)) runner->syncPlanCases(plans->orderedCaseIds(cycle->planId));
+    };
+    QObject::connect(plan.get(), &PlanStore::planChanged, run.get(), followPlan);
+    QObject::connect(plan.get(), &PlanStore::plansChanged, run.get(), followPlan);
+    QObject::connect(run.get(), &RunController::planCasesChanged, revisionPublish.get(),
+                     [service = revisionPublish.get()](const QString& planRunId, const QStringList& added, const QStringList&) {
+                         if (!added.isEmpty()) service->prepareStartedCycle(planRunId);
                      });
     QObject::connect(settings.get(), &SettingsStore::saved, &projects, [&projects, source = settings.get()]() {
         emit projects.settingsChanged(source);
@@ -82,6 +98,8 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
     history->load();
     run->load();
     issues->load();
+    // Un plan por issue: los que tenían varios de antes se funden en el suyo al abrir el proyecto.
+    if (!issues->isReadOnly()) issues->mergeLegacyPlans(*plan, *history);
     history->adoptLooseEvidence(run->isRunning() ? run->state().caseId : QString());
     ctx.projects = &projects; ctx.projectId = id; ctx.dataDir = dir;
     ctx.cases = cases.get(); ctx.settings = settings.get(); ctx.history = history.get();

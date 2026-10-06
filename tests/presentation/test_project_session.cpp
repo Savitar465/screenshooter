@@ -209,6 +209,33 @@ private slots:
         QCOMPARE(b.issues->issues().first().requirement.connection, connection);
     }
 
+    // Añadir un caso al plan mientras su ciclo se ejecuta lo mete en la cola: el ciclo sigue a su plan.
+    void aCaseAddedToThePlanDuringItsCycleJoinsTheQueue() {
+        QTemporaryDir dir;
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir.path());
+        QCoreApplication::setOrganizationName(QStringLiteral("QAflowFollowTest"));
+        QCoreApplication::setApplicationName(QStringLiteral("QAflowFollowTest"));
+        ProjectStore projects(std::make_shared<JsonProjectRepository>(dir.path()));
+        QVERIFY(projects.load());
+        const QString id = projects.create(QStringLiteral("Tránsito"));
+        ProjectSession session(projects, id, std::make_shared<testing::MemorySecretStore>());
+
+        const QString first = session.cases->createCase();
+        const QString later = session.cases->createCase();
+        for (const auto& c : {first, later})
+            session.cases->updateCase(c, [](TestCase& t) { t.steps = {{QStringLiteral("Paso"), QStringLiteral("Resultado")}}; });
+        const QString planId = session.plan->createPlan(QStringLiteral("Regresión"));
+        session.plan->setActive(planId);
+        session.plan->toggle(first);
+        session.run->startSequence(session.plan->orderedCaseIds(planId), QStringLiteral("Regresión"), planId, QStringLiteral("QA"));
+        QVERIFY(!session.run->isQueued(later));
+
+        session.plan->toggle(later);   // como desde la pantalla del plan
+        QVERIFY(session.run->isQueued(later));
+        QVERIFY(session.history->findPlan(session.run->planRunId())->caseIds.contains(later));
+    }
+
     // La sesión ata cada ciclo a la revisión del issue que se está probando: al arrancarlo, el ciclo
     // queda anotado con el issue, con el número de la ronda que abre y con el ambiente elegido, que es
     // lo que después lo identifica en la pantalla del issue y en Zephyr.

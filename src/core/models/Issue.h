@@ -165,9 +165,12 @@ struct Issue {
     QString notes;                 // lo escrito en QAflow; lo extraído vive en `requirement`
     Priority priority = Priority::Media;
     IssueState state = IssueState::Pending;
-    /// Planes que prueban el requerimiento: el issue se organiza por planes, y sus casos son los de
-    /// éstos (`IssueStore::caseIdsOf`). No hay casos sueltos colgando del issue.
-    QStringList planIds;
+    /// El plan que prueba el requerimiento: uno por issue, y sus casos son los del issue
+    /// (`IssueStore::caseIdsOf`). No hay casos sueltos colgando del issue. Vacío = todavía sin plan.
+    QString planId;
+    /// Los demás planes que tenía de cuando un issue podía tener varios: al abrir el proyecto se funden
+    /// en `planId` (`IssueStore::mergeLegacyPlans`) y esto queda vacío.
+    QStringList mergedPlanIds;
     RequirementLink requirement;   // vacío en un issue creado a mano
     IssuePublication publication;  // vacío mientras no se publique ni se vincule
     /// Rondas de control de calidad, de la primera a la última. Vacío mientras no se haya empezado.

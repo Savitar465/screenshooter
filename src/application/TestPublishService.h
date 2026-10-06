@@ -53,6 +53,11 @@ public:
     /// Pone al día en Zephyr los Tests de esos casos del issue: crea los que faltan y a los que ya tienen
     /// les reescribe título, descripción y pasos con lo que dice hoy el caso.
     void syncTests(const QString& issueId, const QStringList& caseIds, std::function<void(const PublishResult&)> done);
+    /// Deja en el ciclo de Zephyr de esa fase del issue (lo crea si todavía no existe) todos esos casos
+    /// —los de su plan—, con su Test (creándolo si falta) y sin ejecutar. Lo que ya está en el ciclo no se
+    /// toca, así que no pisa resultados ya publicados. Es lo que se sube del plan antes de probarlo.
+    void preparePhaseCycle(const QString& issueId, const QString& phase, const QStringList& caseIds,
+                           std::function<void(const PublishResult&)> done);
 
     /// ¿Está configurada la publicación? (gestor Jira, conectado y Zephyr activado en Ajustes).
     bool enabled() const;

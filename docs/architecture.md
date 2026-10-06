@@ -313,8 +313,8 @@ así que están donde se llega desde ella.
 Un **ciclo** es una ejecución del plan: `RunController::startSequence()` abre un `PlanRun` en el
 historial con el `planId` del plan.
 
-**Cada ciclo dice de qué ronda es y dónde se probó.** Un issue prueba varios planes y vuelve a
-probarlos en cada revisión, así que el ciclo no se identifica por su plan y su fecha: el `PlanRun`
+**Cada ciclo dice de qué ronda es y dónde se probó.** Un issue vuelve a probar su plan en cada
+revisión, así que el ciclo no se identifica por su plan y su fecha: el `PlanRun`
 guarda además `issueId` y `revision` —el requerimiento cuyo control de calidad se está haciendo y la
 ronda que estaba abierta al arrancar— y `environment`, el ambiente en el que se prueba. El ambiente se
 pregunta al arrancar (`CycleStartDialog`, con el último usado en el proyecto ya propuesto y el issue y
@@ -404,9 +404,19 @@ corta la ejecución: un bloqueo se queda en su paso y se sigue navegando por el 
 ### Continuar un ciclo por lo que se rompió
 
 Un requerimiento se corrige y se vuelve a probar, y repetir el plan entero es tiempo tirado: lo que
-hay que volver a ver es **lo que falló o quedó bloqueado**. `RunController::continueCycle(planRunId)`
-pone en la cola sólo esos casos (`PlanReport::brokenCaseIds()`, en el orden del plan y sin los que ya
-no están en el catálogo).
+hay que volver a ver es **lo que falló o quedó bloqueado**, más lo que quedó sin hacer.
+`RunController::continueCycle(planRunId, ambiente, casosDelPlan)` pone en la cola lo que devuelve
+`PlanReport::toContinue(casosDelPlan)`, en el orden del plan y sin los que ya no están en el catálogo: los
+rotos (`brokenCaseIds()`, que se retoman en el paso que se rompió), los que el ciclo dejó sin ejecutar y
+los que se añadieron al plan después de arrancarlo (que pasan a ser del ciclo, `RunHistoryStore::
+setPlanCases`); lo que se quitó del plan sin llegar a ejecutarse no se continúa.
+
+**El ciclo en curso sigue a su plan.** Al cambiar el plan (`PlanStore::planChanged`/`plansChanged`),
+`ProjectSession` llama a `RunController::syncPlanCases` con lo que tiene ahora: los casos nuevos entran al
+ciclo y al final de su cola —y suben sin ejecutar al ciclo de la fase en Zephyr, `RevisionPublishService::
+prepareStartedCycle`—; los quitados salen si todavía no se empezaron, y el que está en pantalla, uno aparcado
+o uno ya ejecutado se quedan para no perder lo probado. `planCasesChanged` lo avisa en un toast, y la cola
+nueva va en la sesión guardada.
 
 **Se reabre el mismo ciclo** (`RunHistoryStore::reopenPlan`, que borra su fin y suma
 `PlanRun::continuations`): lo ya superado, sus
@@ -712,11 +722,39 @@ más reciente, para que quede el último. Si el ciclo de la fase se borró en Ze
 (`PublishResult::cycleMissing`, sin tocar nada) y `send` lo olvida y publica en uno nuevo.
 
 El Test de un caso del issue es `Issue::zephyr.tests[caso]` o, a falta de él, el que guardó su ejecución
-(ciclos publicados antes de esto, que así pasan a ser los del issue). Se pueden crear **antes de probar**:
-el paso 1 del issue ofrece «Crear Tests en Zephyr (N)…» (`RevisionPublishService::prepareTests` →
-`TestPublishService::createTests` → `ITestManagement::createTests`, que crea el Test y sus pasos sin ciclo
-ni ejecución) y los enlaza a su issue del gestor; si no, se crean al publicar el primer ciclo. Su descripción
-dice de qué requerimiento son (`PublishRequest::testContext`). Los ciclos **sueltos** (sin issue) siguen como
+(ciclos publicados antes de esto, que así pasan a ser los del issue). Su descripción dice de qué
+requerimiento son (`PublishRequest::testContext`).
+
+**El plan sube entero, antes de probarlo.** Un issue tiene **un plan** (`Issue::planId`), y lo que se sube
+a Zephyr es ese plan con todos sus casos, no sólo lo ejecutado:
+
+* **Al arrancar un ciclo del plan** (`RunController::planStarted` → `RevisionPublishService::
+  prepareStartedCycle`, conectado en `ProjectSession` después de anotar el issue y la ronda del ciclo), el
+  ciclo de su fase queda con **todos los casos del plan sin ejecutar** (`TestPublishService::
+  preparePhaseCycle`, con `PublishCase::executed` a false): el que no tiene Test lo estrena, el que no está
+  en el ciclo entra sin resultado y el que ya está **no se toca**, así que no pisa resultados publicados. El
+  aviso sale por `planCyclePrepared` (un toast) y un fallo no frena la ejecución.
+* **El botón del paso 1** («Subir a Zephyr (N)…» sin ningún Test; «Actualizar Zephyr…» con alguno) hace
+  `RevisionPublishService::uploadPlan`: con «Actualizar», reescribe antes los Tests que existen con lo que
+  dicen hoy sus casos (`syncTests`: título y descripción en Jira; los pasos se editan en su sitio para que
+  sigan valiendo los resultados por paso de antes); luego deja el plan en el ciclo de su fase
+  (`uploadPhase`: la de la ronda abierta, la de la última o la primera que toca), publica lo ya ejecutado
+  de la ronda por el mismo camino que el paso de Zephyr de la publicación y enlaza los Tests al issue del gestor.
+
+**El flujo de cada fase.** Al importar el requerimiento nacen su issue del gestor y su plan (uno creado a
+mano nace sólo con su plan). Se preparan los casos y, al ejecutar, el plan sube sin resultados al ciclo de la
+fase. Tras el control de calidad se genera el acta —en **cada** fase, también la que se aprueba antes de la
+última— y al **cerrar la revisión** sus resultados y bugs suben a Zephyr y el resultado con el acta al issue
+del gestor. La publicación queda para GESREQ (que sólo recibe las rondas observadas y el OK de la última
+fase) y, con ese OK, para cerrar el issue del gestor después de registrarlo. Aprobar QA al arrancar PRE
+(`MainWindow::beginPlanRun`) cierra la revisión por el mismo camino. PRE repite la serie.
+
+**Un plan por requerimiento.** Zephyr no tiene planes: los ciclos de una fase acaban todos en el mismo
+ciclo de Zephyr, así que varios planes por issue se aplastaban en uno y un caso repetido entre ellos se
+pisaba. El acta, el registro en GESREQ y el resultado ya eran uno por requerimiento. Los ficheros de antes
+con varios planes (`planIds`) se leen con el primero como plan y los demás en `Issue::mergedPlanIds`; al
+abrir el proyecto `IssueStore::mergeLegacyPlans` añade sus casos al plan (en su orden, sin repetir) y anota
+como del issue sus ciclos que todavía no lo decían, para que sus resultados sigan siendo suyos. Los ciclos **sueltos** (sin issue) siguen como
 se describe a continuación: ciclo propio y un Test por ejecución.
 
 **El nombre del ciclo dice de qué control de calidad es.** `TestPublishService::cycleName()` lo arma
@@ -963,12 +1001,12 @@ destaca; los hechos se marcan con un visto y se apagan.
 
 | Paso | Hecho cuando | Su acción | Lo que cuelga de él |
 |------|--------------|-----------|---------------------|
-| 1 · Preparar el plan de pruebas | el issue tiene un plan y el plan, casos | crear el plan o abrirlo, «+ Otro plan» y «Vincular plan…» | sus planes, cada uno con sus casos y lo que dio la última ejecución de cada uno |
-| 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | **«Ejecutar plan…»**, que arranca el ciclo desde aquí, «Continuar lo fallado…» si la ronda dejó casos rotos, y «Ir al plan» para componerlo antes | los ciclos de sus planes, el más reciente primero, con su veredicto, sus cifras, de qué ronda y ambiente son, si están en Zephyr y las ejecuciones de cada caso |
+| 1 · Preparar el plan de pruebas | el issue tiene un plan y el plan, casos | crear el plan (o, sin él, «Vincular plan…»), «Subir a Zephyr» / «Actualizar Zephyr» y «Generar casos con IA…» | su plan, con sus casos y lo que dio la última ejecución de cada uno |
+| 2 · Ejecutar el plan | algún caso se ejecutó en esta revisión | **«Ejecutar plan…»**, que arranca el ciclo desde aquí (y sube el plan al ciclo de su fase en Zephyr), «Continuar lo fallado…» si la ronda dejó casos rotos, y «Ir al plan» para componerlo antes | los ciclos de su plan, el más reciente primero, con su veredicto, sus cifras, de qué ronda y ambiente son, si están en Zephyr y las ejecuciones de cada caso |
 | 3 · Revisar los bugs reportados | no queda ninguno abierto, o la ronda ya se cerró (se cerró sabiéndolos: son lo que la deja observada) | **«Cerrar verificados (N)…»** cuando alguno ya pasó el reintento (ver «Cerrar los bugs verificados») | los bugs encontrados en los ciclos de sus planes (clasificación A–E, clave, de qué caso y paso salieron, estado y si son de la revisión en curso) |
 | 4 · Generar el acta (R-213) | la revisión tiene su .docx | generar (o regenerar) el acta, y abrir la que hay | — |
-| 5 · Cerrar la revisión | la revisión está cerrada con su resultado | cerrarla, eligiendo conforme u observado | — |
-| 6 · Publicar el resultado | no le falta ningún destino (lo dice `RevisionPublishService::stepsFor`) | «Publicar…», sólo con la revisión cerrada, o **«Completar publicación…»** si algo ya llegó | una fila por destino: ✓/— y qué se hizo o qué lo bloquea |
+| 5 · Cerrar la revisión | la revisión está cerrada con su resultado | cerrarla, eligiendo conforme u observado; **al cerrarla se suben solos** los resultados y bugs al ciclo de su fase en Zephyr y el resultado con el acta al issue del gestor (`RevisionPublishService::closeRevision`) | — |
+| 6 · Publicar el resultado | no le falta ningún destino (lo dice `RevisionPublishService::stepsFor`); a una fase aprobada antes de la última no le falta GESREQ | «Publicar…»: el registro en GESREQ y, con el Conforme final, el cierre del issue del gestor; lo que no salió al cerrar se completa aquí | una fila por destino: ✓/— y qué se hizo o qué lo bloquea |
 | 7 · Volver a probar (o «Probar en PRE») | — | abrir la ronda siguiente (un requerimiento observado vuelve a pruebas en su fase) y, al lado, **«Continuar lo fallado»**: repetir sólo lo que se rompió, que abre esa misma ronda y ejecuta en ella. Aprobada una fase que no es la última, **«▶ Empezar PRE…»** arranca el ciclo de la fase siguiente | — |
 
 En «Revisiones anteriores» cada ronda cerrada enseña **a dónde llegó su resultado** —un chip por destino

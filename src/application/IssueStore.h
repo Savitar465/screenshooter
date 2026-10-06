@@ -48,8 +48,15 @@ public:
     void updateIssue(const QString& id, const std::function<void(Issue&)>& mutate);
     /// Borra el issue; sus casos, planes y resultados no se tocan.
     void removeIssue(const QString& id);
-    void linkPlan(const QString& issueId, const QString& planId);
-    void unlinkPlan(const QString& issueId, const QString& planId);
+    /// Vincula el plan con el que se prueba el requerimiento. Un issue tiene un solo plan: si ya tiene
+    /// otro no se cambia (hay que desvincularlo antes) y devuelve false.
+    bool linkPlan(const QString& issueId, const QString& planId);
+    /// Quita el plan del issue; el plan y sus ciclos siguen en el proyecto.
+    void unlinkPlan(const QString& issueId);
+    /// Funde en su plan los demás que tenían los issues de cuando podían tener varios: sus casos se
+    /// añaden al plan del issue (en su orden, sin repetir) y sus ciclos ya ejecutados quedan anotados
+    /// como del issue, para que sus resultados sigan siendo suyos. Se llama al abrir el proyecto.
+    void mergeLegacyPlans(PlanStore& plans, RunHistoryStore& history);
 
     // ---- Flujo de la revisión ------------------------------------------------------------------
     /// El issue y la ronda a los que pertenece un ciclo de plan. Vacío = el ciclo no prueba ningún issue.
@@ -158,10 +165,10 @@ public:
     /// Da por revisados los cambios que trajo GESREQ.
     void acknowledgeChanges(const QString& issueId);
 
-    /// Casos que prueban el issue: los de sus planes, en el orden de éstos y sin repetir. El issue no
-    /// tiene casos sueltos: lo que se prueba de un requerimiento son sus planes.
+    /// Casos que prueban el issue: los de su plan, en su orden. El issue no tiene casos sueltos: lo que se
+    /// prueba de un requerimiento es su plan.
     static QStringList caseIdsOf(const Issue& issue, const PlanStore& plans);
-    /// Ciclos ejecutados de los planes del issue, el más reciente primero. Con `since`, sólo los que
+    /// Ciclos ejecutados del plan del issue (o que dicen ser suyos), el más reciente primero. Con `since`, sólo los que
     /// empezaron a partir de ese momento (los de la revisión en curso).
     static QList<PlanRun> cyclesOf(const Issue& issue, const RunHistoryStore& history, const QDateTime& since = QDateTime());
     /// Ciclos de una ronda concreta: los que se anotaron con ese número de revisión al arrancar y, para
@@ -170,7 +177,7 @@ public:
     static QList<PlanRun> cyclesOfRevision(const Issue& issue, const RunHistoryStore& history, int revision);
     /// Ejecuciones de los ciclos de esa ronda, la más reciente primero.
     static QList<RunRecord> runsOfRevision(const Issue& issue, const RunHistoryStore& history, int revision);
-    /// Ejecuciones de los ciclos de los planes del issue, la más reciente primero. Una ejecución
+    /// Ejecuciones de los ciclos del plan del issue, la más reciente primero. Una ejecución
     /// suelta del mismo caso, o dentro de un plan que no es del issue, no es un resultado suyo.
     static QList<RunRecord> runsOf(const Issue& issue, const RunHistoryStore& history, const QDateTime& since = QDateTime());
     /// Ejecuciones de esos ciclos, la más reciente primero.

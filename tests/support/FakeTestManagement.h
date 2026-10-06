@@ -39,7 +39,15 @@ public:
         if (!r.ok && r.error.isEmpty()) {
             r.ok = true;
             r.cycleId = request.cycleId.isEmpty() ? nextCycleId : request.cycleId;
-            r.executions = request.cases.size();
+            // Como Zephyr: el caso sin Test lo estrena, y el que no se ejecutó entra al ciclo sin resultado.
+            for (const auto& c : request.cases) {
+                if (c.testKey.isEmpty() && !r.createdTests.contains(c.caseId)) {
+                    r.createdTests.insert(c.caseId, testsToCreate.value(c.caseId, QStringLiteral("SHOP-%1").arg(c.caseId.section(QLatin1Char('-'), -1))));
+                    ++r.testsCreated;
+                }
+                if (c.executed) ++r.executions;
+                else ++r.added;
+            }
         }
         done(r);
     }

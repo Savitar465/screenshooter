@@ -141,7 +141,7 @@ private:
     /// Continúa un ciclo terminado con sus casos fallados y bloqueados: comprueba que se puede,
     /// pregunta el ambiente y arranca la continuación.
     void continueCycleRun(const QString& planRunId);
-    void beginContinuation(const QString& planRunId, const QString& environment);
+    void beginContinuation(const QString& planRunId, const QString& environment, const QStringList& planCases = {});
     void runSelectedTarget();
     /// Arranca un ciclo de ese plan y lleva a la ejecución; avisa si hay algo en curso que lo impida.
     void startPlanRun(const QString& planId);

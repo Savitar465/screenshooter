@@ -21,7 +21,7 @@ class TestPublishService;
 /// calidad de un requerimiento termina.
 ///
 /// Son cuatro pasos y cada uno es opcional:
-///  1. **Zephyr**: los ciclos de los planes del issue, con sus casos y sus evidencias (los ya
+///  1. **Zephyr**: los ciclos del plan del issue, con sus casos y sus evidencias (los ya
 ///     publicados se actualizan, no se duplican). De aquí salen los enlaces que llevan los otros dos.
 ///  2. **El gestor (Jira)**: un comentario en el issue con el resultado, los enlaces de Zephyr y el
 ///     acta adjunta. El issue ya está en el gestor desde que se importó el requerimiento, así que
@@ -93,20 +93,30 @@ public:
     bool canPrepareTests() const;
     /// De esos casos del issue, los que todavía no tienen Test en Zephyr.
     QStringList casesWithoutTest(const QString& issueId, const QStringList& caseIds) const;
-    struct TestsPrepared {
+
+    /// Lo que dejó en Zephyr subir el plan del issue.
+    struct PlanUploaded {
         bool ok = false;
-        int created = 0;          // Tests creados ahora
-        int updated = 0;          // Tests que ya existían, puestos al día con su caso
-        int linked = 0;           // enlaces nuevos al issue del gestor
-        QStringList problems;     // lo que no se pudo crear o enlazar, con su motivo
+        QString phase;            // fase cuyo ciclo se preparó
+        QString cycleName;        // «GREQ 2026997 · QA»
+        int created = 0;          // Tests creados
+        int updated = 0;          // Tests reescritos con lo que dicen hoy sus casos
+        int added = 0;            // casos que entraron al ciclo sin ejecutar
+        int cycles = 0;           // ciclos de plan ya ejecutados cuyos resultados se publicaron
+        QStringList problems;     // lo que no salió, con su motivo
         QString error;            // lo que impidió empezar
     };
-    /// Lo primero del control de calidad en Zephyr: crea los Tests que les faltan a esos casos del issue
-    /// (uno por caso, el que usarán todos sus ciclos) y los enlaza a su issue del gestor, para que desde
-    /// el requerimiento se vea con qué se va a probar. Nada se crea solo: lo pide quien prepara el plan.
-    /// Con `sync`, además pone al día los Tests que ya existen (título, descripción y pasos).
-    void prepareTests(const QString& issueId, const QStringList& caseIds, std::function<void(const TestsPrepared&)> done,
-                      bool sync = false);
+    /// La fase en la que se sube el plan del issue: la de la ronda abierta, la de la última si ya se
+    /// cerró, o la primera que le toca si todavía no empezó.
+    QString uploadPhase(const Issue& issue) const;
+    /// Sube a Zephyr el plan del issue entero: con `sync` reescribe antes sus Tests (título, descripción
+    /// y pasos); deja en el ciclo de su fase (`uploadPhase`) todos sus casos —los que todavía no se
+    /// ejecutaron, sin ejecutar— y publica los resultados de los ciclos ya ejecutados de la ronda, como
+    /// el paso de Zephyr de la publicación. Al final enlaza los Tests al issue del gestor.
+    void uploadPlan(const QString& issueId, bool sync, std::function<void(const PlanUploaded&)> done);
+    /// Arrancó un ciclo de plan: si es de un issue y Zephyr está activo, deja preparado el ciclo de su fase
+    /// con todos los casos del plan, sin resultados, y avisa con `planCyclePrepared`.
+    void prepareStartedCycle(const QString& planRunId);
 
     struct Options {
         bool zephyr = true;
@@ -136,9 +146,18 @@ public:
     /// `done` al final con todo lo que pasó.
     void publish(const QString& issueId, const Options& options, std::function<void(const Outcome&)> progress,
                  std::function<void(const Result&)> done);
+    /// Cierra la revisión en curso con su resultado y sube enseguida lo que se planificó en Zephyr y en el
+    /// gestor: los resultados de sus ciclos (con sus bugs) al ciclo de su fase y el resultado, el acta y los
+    /// enlaces al issue del gestor. GESREQ y el cierre del issue del gestor quedan para la publicación.
+    /// Sin nada configurado sólo cierra. `done` recibe lo que pasó en cada destino.
+    void closeRevision(const QString& issueId, QaOutcome outcome, std::function<void(const Result&)> done);
 
     /// Nombre para mostrar de un destino ("Zephyr", "el gestor", "GESREQ").
     static QString label(Destination destination);
+
+signals:
+    /// El ciclo de Zephyr de la fase quedó preparado (o no) al arrancar un ciclo del plan.
+    void planCyclePrepared(const QString& message, bool ok);
 
 private:
     struct Run;   // el estado de una publicación en curso (vive hasta que termina el último paso)

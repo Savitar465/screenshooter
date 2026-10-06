@@ -59,7 +59,7 @@ Issue* IssueStore::findMutable(const QString& id) {
 QList<Issue> IssueStore::issuesForPlan(const QString& planId) const {
     QList<Issue> out;
     for (const auto& i : m_issues)
-        if (i.planIds.contains(planId)) out << i;
+        if (!planId.isEmpty() && i.planId == planId) out << i;
     return out;
 }
 
@@ -121,20 +121,48 @@ void IssueStore::removeIssue(const QString& id) {
     emit selectionChanged(m_selectedId);
 }
 
-void IssueStore::linkPlan(const QString& issueId, const QString& planId) {
+bool IssueStore::linkPlan(const QString& issueId, const QString& planId) {
     const Issue* issue = find(issueId);
-    if (!issue || planId.isEmpty() || issue->planIds.contains(planId)) return;
+    if (!issue || planId.isEmpty()) return false;
+    if (issue->planId == planId) return true;
+    if (!issue->planId.isEmpty()) return false;
     updateIssue(issueId, [&planId](Issue& i) {
-        i.planIds << planId;
+        i.planId = planId;
         // Ya hay con qué probar: el issue deja de estar pendiente. Un estado más avanzado no se toca.
         if (i.state == IssueState::Pending) i.state = IssueState::Preparing;
     });
+    return true;
 }
 
-void IssueStore::unlinkPlan(const QString& issueId, const QString& planId) {
+void IssueStore::unlinkPlan(const QString& issueId) {
     const Issue* issue = find(issueId);
-    if (!issue || !issue->planIds.contains(planId)) return;
-    updateIssue(issueId, [&planId](Issue& i) { i.planIds.removeAll(planId); });
+    if (!issue || issue->planId.isEmpty()) return;
+    updateIssue(issueId, [](Issue& i) { i.planId.clear(); });
+}
+
+void IssueStore::mergeLegacyPlans(PlanStore& plans, RunHistoryStore& history) {
+    // Se junta antes lo que hay que tocar: fundir cambia los issues y el historial que se recorren.
+    QList<Issue> pending;
+    for (const auto& issue : m_issues)
+        if (!issue.mergedPlanIds.isEmpty()) pending << issue;
+    for (const auto& issue : pending) {
+        const QStringList all = QStringList{issue.planId} + issue.mergedPlanIds;
+        // El plan que se queda es el primero que todavía exista: uno borrado no tiene casos que aportar.
+        QString target = issue.planId;
+        for (const auto& id : all)
+            if (plans.find(id)) { target = id; break; }
+        for (const auto& id : all)
+            if (id != target && plans.find(target)) plans.addCases(target, plans.orderedCaseIds(id));
+        // Los ciclos de antes de que anotaran su issue sólo se le reconocían por el plan.
+        QList<PlanRun> orphan;
+        for (const auto& cycle : history.plans())
+            if (all.contains(cycle.planId) && cycle.issueId.trimmed().isEmpty()) orphan << cycle;
+        for (const auto& cycle : orphan) history.noteCycleRevision(cycle.id, issue.id, cycle.revision);
+        updateIssue(issue.id, [&target](Issue& i) {
+            i.planId = target;
+            i.mergedPlanIds.clear();
+        });
+    }
 }
 
 // ---- Flujo de la revisión ----------------------------------------------------------------------
@@ -246,7 +274,7 @@ IssueStore::RevisionRef IssueStore::nextCycleContext(const QString& planId) cons
     RevisionRef next;
     if (planId.isEmpty()) return next;
     for (const auto& issue : m_issues) {
-        if (!issue.planIds.contains(planId)) continue;
+        if (issue.planId != planId) continue;
         next.issueId = issue.id;
         if (const IssueRevision* open = issue.currentRevision()) {
             next.revision = open->number;
@@ -265,7 +293,7 @@ IssueStore::RevisionRef IssueStore::notePlanStarted(const QString& planId, const
     if (planId.isEmpty()) return started;
     QStringList changed;
     for (auto& issue : m_issues) {
-        if (!issue.planIds.contains(planId)) continue;
+        if (issue.planId != planId) continue;
         const bool wasTesting = issue.state == IssueState::Testing;
         const bool hadOpenRevision = issue.currentRevision() != nullptr;
         const QString chosen = validPhase(issue, phase);
@@ -483,11 +511,7 @@ void IssueStore::acknowledgeChanges(const QString& issueId) {
 }
 
 QStringList IssueStore::caseIdsOf(const Issue& issue, const PlanStore& plans) {
-    QStringList out;
-    for (const auto& planId : issue.planIds)
-        for (const auto& caseId : plans.orderedCaseIds(planId))
-            if (!out.contains(caseId)) out << caseId;
-    return out;
+    return issue.planId.isEmpty() ? QStringList{} : plans.orderedCaseIds(issue.planId);
 }
 
 namespace {
@@ -498,7 +522,7 @@ QList<PlanRun> cyclesWhere(const Issue& issue, const RunHistoryStore& history,
     for (const auto& cycle : history.plans()) {
         // El ciclo dice de qué issue es desde que se arranca; los anteriores a eso, y los de un plan
         // que prueba varios requerimientos, se reconocen por el plan.
-        if (!issue.planIds.contains(cycle.planId) && cycle.issueId != issue.id) continue;
+        if ((issue.planId.isEmpty() || cycle.planId != issue.planId) && cycle.issueId != issue.id) continue;
         if (keep && !keep(cycle)) continue;
         cycles << cycle;
     }

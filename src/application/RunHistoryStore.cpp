@@ -132,6 +132,16 @@ void RunHistoryStore::finishPlan(const QString& planRunId) {
     }
 }
 
+void RunHistoryStore::setPlanCases(const QString& planRunId, const QStringList& caseIds) {
+    for (auto& p : m_history.plans) {
+        if (p.id != planRunId) continue;
+        if (p.caseIds == caseIds) return;
+        p.caseIds = caseIds;
+        persist();
+        return;
+    }
+}
+
 bool RunHistoryStore::reopenPlan(const QString& planRunId, const QString& environment) {
     for (auto& p : m_history.plans) {
         if (p.id != planRunId) continue;

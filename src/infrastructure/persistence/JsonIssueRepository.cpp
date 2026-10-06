@@ -293,7 +293,7 @@ QMap<QString, QString> mapFromJson(const QJsonValue& value) {
 QJsonObject issueToJson(const Issue& i) {
     QJsonObject o{
         {"id", i.id}, {"title", i.title}, {"notes", i.notes}, {"priority", toString(i.priority)}, {"state", toString(i.state)},
-        {"planIds", QJsonArray::fromStringList(i.planIds)},
+        {"planId", i.planId},
         {"createdAt", iso(i.createdAt)}, {"updatedAt", iso(i.updatedAt)},
     };
     if (i.isImported()) o.insert(QStringLiteral("requirement"), requirementToJson(i.requirement));
@@ -304,6 +304,9 @@ QJsonObject issueToJson(const Issue& i) {
         o.insert(QStringLiteral("revisions"), revisions);
     }
     if (!i.phases.isEmpty()) o.insert(QStringLiteral("phases"), QJsonArray::fromStringList(i.phases));
+    // Los planes de antes que aún no se fundieron se guardan como entonces, para no perderlos.
+    if (!i.mergedPlanIds.isEmpty())
+        o.insert(QStringLiteral("planIds"), QJsonArray::fromStringList(QStringList{i.planId} + i.mergedPlanIds));
     if (!i.zephyr.isEmpty())
         o.insert(QStringLiteral("zephyr"), QJsonObject{
             {"tests", mapToJson(i.zephyr.tests)}, {"cycles", mapToJson(i.zephyr.cycles)}, {"cycleNames", mapToJson(i.zephyr.cycleNames)},
@@ -318,7 +321,14 @@ Issue issueFromJson(const QJsonObject& o) {
     i.notes = o["notes"].toString();
     i.priority = priorityFromString(o["priority"].toString());
     i.state = issueStateFromString(o["state"].toString());
-    i.planIds = strings(o["planIds"]);
+    // Un plan por issue. Los ficheros de antes guardaban una lista: el primero es el plan y los demás
+    // quedan para fundirse en él.
+    i.planId = o["planId"].toString();
+    QStringList legacy = strings(o["planIds"]);
+    if (i.planId.isEmpty() && !legacy.isEmpty()) i.planId = legacy.takeFirst();
+    legacy.removeAll(i.planId);
+    legacy.removeDuplicates();
+    i.mergedPlanIds = legacy;
     if (o.contains(QStringLiteral("publication"))) {
         i.publication = publicationFromJson(o["publication"].toObject());
     } else if (!o["jiraKey"].toString().isEmpty()) {

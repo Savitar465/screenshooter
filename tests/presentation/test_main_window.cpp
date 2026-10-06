@@ -1508,8 +1508,8 @@ private slots:
         QVERIFY(f.app.tracker->publishedIssues.first().description.contains(QStringLiteral("2025175")));
 
         // Y con su plan de pruebas listo, que es con lo que se prueba el requerimiento.
-        QCOMPARE(f.app.issues.find(id)->planIds.size(), 1);
-        const QString planId = f.app.issues.find(id)->planIds.first();
+        QVERIFY(!f.app.issues.find(id)->planId.isEmpty());
+        const QString planId = f.app.issues.find(id)->planId;
         QCOMPARE(f.app.plans.activeId(), planId);
         QVERIFY(f.app.plans.find(planId)->name.contains(id));
         f.app.plans.toggle(QStringLiteral("TC-104"));
@@ -2564,9 +2564,9 @@ private slots:
         QCOMPARE(f.app.issues.nextCycleContext(planId).phase, QStringLiteral("PRE"));
     }
 
-    // Con Zephyr activado, el paso 1 del issue crea los Tests de sus casos (uno por caso, el de todas sus
-    // fases) y los enlaza a su issue del gestor.
-    void theIssueCreatesTheZephyrTestsOfItsCases() {
+    // Con Zephyr activado, el paso 1 del issue sube su plan: un Test por caso (el de todas sus fases),
+    // enlazado a su issue del gestor, y el ciclo de la fase con todos los casos, sin ejecutar.
+    void theIssueUploadsItsPlanToZephyr() {
         WindowFixture f;
         f.app.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
         const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
@@ -2588,12 +2588,16 @@ private slots:
         auto* accept = f.window->findChild<QPushButton*>(QStringLiteral("issueCreateTestsAccept"));
         QVERIFY(accept);
         accept->click();
-        QCOMPARE(f.app.zephyr->testsRequested.size(), 1);
+        QCOMPARE(f.app.zephyr->published.size(), 1);   // el plan entero, en el ciclo de su fase
+        QCOMPARE(f.app.zephyr->published[0].cases.size(), cases);
+        QVERIFY(!f.app.zephyr->published[0].cases[0].executed);
         QCOMPARE(f.app.issues.find(issueId)->zephyr.tests.size(), cases);
         QCOMPARE(f.app.tracker->links.size(), cases);   // cada Test, enlazado al issue del requerimiento
-        QTRY_VERIFY(!createButton());                    // ya no falta ninguno
+        QTRY_VERIFY(!createButton());                    // ya subido: ahora se actualiza
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("issueSyncTests")));
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         auto* summary = f.window->findChild<QLabel*>(QStringLiteral("issueZephyrTests"));
-        QVERIFY(summary && summary->text().contains(QStringLiteral("tienen su Test")));
+        QVERIFY2(summary && summary->text().contains(QStringLiteral("tienen su Test")), summary ? qPrintable(summary->text()) : "sin resumen");
     }
 
     // Un bug cuyo paso pasó en un reintento sale como verificado en el paso 3 del issue, y desde ahí se
@@ -2868,7 +2872,7 @@ private slots:
         QCOMPARE(card()->childAt(quick->mapTo(card(), quick->rect().center())), quick);
         QCOMPARE(quick->text(), QStringLiteral("Crear plan"));
         quick->click();
-        QCOMPARE(f.app.issues.find(issueId)->planIds.size(), 1);
+        QVERIFY(!f.app.issues.find(issueId)->planId.isEmpty());
         QCOMPARE(f.window->currentScreen(), Screen::Plan);
 
         // El menú de la tarjeta cambia el estado de QA.

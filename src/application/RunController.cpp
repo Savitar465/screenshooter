@@ -3,6 +3,8 @@
 #include "application/RunHistoryStore.h"
 #include "application/TestCaseStore.h"
 
+#include <QSet>
+
 #include <algorithm>
 
 namespace qaflow {
@@ -176,27 +178,31 @@ void RunController::startSequence(const QStringList& caseIds, const QString& pla
     emit planStarted(m_planRunId, planId);
 }
 
-bool RunController::continueCycle(const QString& planRunId, const QString& environment) {
+bool RunController::continueCycle(const QString& planRunId, const QString& environment, const QStringList& planCases) {
     const PlanRun* cycle = m_history.findPlan(planRunId);
     if (!cycle || !cycle->isFinished()) return false;
     const PlanReport report = m_history.report(planRunId);
-    // Sólo lo que quedó roto, en el orden del plan y saltando los casos que ya no están en el catálogo.
+    // Lo roto (que se retoma en su paso), lo que quedó sin ejecutar y lo que el plan ganó después, en el
+    // orden del plan y saltando los casos que ya no están en el catálogo.
     QStringList caseIds;
+    for (const auto& id : report.toContinue(planCases))
+        if (m_store.find(id)) caseIds << id;
     QHash<QString, RunRecord> resume;
-    for (const auto& row : report.rows) {
-        if (!row.executed || !row.run.isBroken() || !m_store.find(row.caseId)) continue;
-        caseIds << row.caseId;
-        resume.insert(row.caseId, row.run);
-    }
+    for (const auto& row : report.rows)
+        if (row.executed && row.run.isBroken() && caseIds.contains(row.caseId)) resume.insert(row.caseId, row.run);
     if (caseIds.isEmpty()) return false;
     // Se copia antes de cerrar lo que estuviera en curso: cerrar escribe en el historial.
     const QString planId = cycle->planId;
+    QStringList composition = cycle->caseIds;
+    for (const auto& id : caseIds)
+        if (!composition.contains(id)) composition << id;
 
     commitRun(false);
     closePlan();
     // Continuar es seguir con el mismo ciclo: se reabre y sólo se ponen en cola sus casos rotos. El aviso
     // de arranque lo lleva a la ronda abierta del issue (o abre la siguiente si la suya ya se cerró).
     if (!m_history.reopenPlan(planRunId, environment)) return false;
+    m_history.setPlanCases(planRunId, composition);   // con lo que el plan ganó después de arrancarlo
     m_resume = resume;
     m_planRunId = planRunId;
     m_queue = caseIds.mid(1);
@@ -204,6 +210,41 @@ bool RunController::continueCycle(const QString& planRunId, const QString& envir
     changed();
     emit planStarted(m_planRunId, planId);
     return true;
+}
+
+RunController::PlanSync RunController::syncPlanCases(const QStringList& planCases) {
+    PlanSync sync;
+    const PlanRun* cycle = m_planRunId.isEmpty() ? nullptr : m_history.findPlan(m_planRunId);
+    if (!cycle) return sync;
+    const QStringList before = cycle->caseIds;
+    // Lo que ya se tocó en el ciclo no sale: lo ejecutado, el caso en pantalla y los aparcados.
+    QSet<QString> touched;
+    for (const auto& run : m_history.runsForPlan(m_planRunId)) touched.insert(run.caseId);
+    touched.insert(m_run.caseId);
+    for (auto it = m_parked.cbegin(); it != m_parked.cend(); ++it) touched.insert(it.key());
+
+    for (const auto& id : planCases)
+        if (!before.contains(id) && m_store.find(id)) sync.added << id;
+    for (const auto& id : before)
+        if (!planCases.contains(id) && !touched.contains(id)) sync.removed << id;
+    if (sync.isEmpty()) return sync;
+
+    // El orden es el del plan; lo que ya no está en él pero se queda (porque se tocó) va detrás.
+    QStringList composition;
+    for (const auto& id : planCases)
+        if ((before.contains(id) || sync.added.contains(id)) && !sync.removed.contains(id)) composition << id;
+    for (const auto& id : before)
+        if (!composition.contains(id) && !sync.removed.contains(id)) composition << id;
+    const QString planRunId = m_planRunId;
+    m_history.setPlanCases(planRunId, composition);
+    for (const auto& id : sync.removed) m_queue.removeAll(id);
+    m_queue << sync.added;
+    std::stable_sort(m_queue.begin(), m_queue.end(), [&composition](const QString& a, const QString& b) {
+        return composition.indexOf(a) < composition.indexOf(b);
+    });
+    changed();
+    emit planCasesChanged(planRunId, sync.added, sync.removed);
+    return sync;
 }
 
 void RunController::restart() {

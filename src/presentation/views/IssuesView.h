@@ -4,6 +4,7 @@
 #include "core/models/Issue.h"
 #include "core/models/IssueLink.h"
 #include "core/models/IssueProgress.h"
+#include "core/models/PlanReport.h"
 #include "core/models/RunHistory.h"
 
 #include <QMessageBox>
@@ -75,9 +76,9 @@ class IssueListView;
 /// La representación en el gestor no es trabajo, es contexto: no tiene tarjeta, es un tag del panel
 /// —clave y estado— y de su menú cuelgan publicar, vincular, abrir, consultar el estado y desvincular.
 ///
-/// Lo que se prueba de un requerimiento son **planes**: el issue no agrupa casos sueltos, sus casos son
-/// los de sus planes y sus resultados, los de los ciclos de esos planes. Así lo que se ve aquí es sólo
-/// del issue, y no cualquier ejecución de un caso que además se use en otro sitio.
+/// Lo que se prueba de un requerimiento es **su plan**, uno por issue: el issue no agrupa casos sueltos,
+/// sus casos son los de su plan y sus resultados, los de los ciclos de ese plan. Así lo que se ve aquí es
+/// sólo del issue, y no cualquier ejecución de un caso que además se use en otro sitio.
 class IssuesView : public QWidget {
     Q_OBJECT
 public:
@@ -250,12 +251,12 @@ private:
     Collapsible collapsible(const QString& key, QVBoxLayout* into);
     /// Abre o cierra la fila plegable de esa cabecera.
     void toggleSection(QObject* header);
-    /// Los planes del issue con sus casos, dentro del paso que manda prepararlos.
-    void fillPlans(const Issue& issue, QVBoxLayout* into);
-    /// Los resultados del issue —los ciclos de sus planes, con lo que salió de cada caso—, dentro del
+    /// El plan del issue con sus casos, dentro del paso que manda prepararlo.
+    void fillPlan(const Issue& issue, QVBoxLayout* into);
+    /// Los resultados del issue —los ciclos de su plan, con lo que salió de cada caso—, dentro del
     /// paso que manda ejecutarlo.
     void fillResults(const Issue& issue, const QList<PlanRun>& cycles, QVBoxLayout* into);
-    /// Los bugs reportados desde los casos de sus planes, del más reciente al primero.
+    /// Los bugs reportados desde los casos de su plan, del más reciente al primero.
     QList<IssueLink> bugsOf(const Issue& issue) const;
     /// Esos bugs con su clasificación, su estado y el paso del que salieron, dentro de su paso.
     void fillBugs(const Issue& issue, const QList<IssueLink>& bugs, const QStringList& verified, QVBoxLayout* into);
@@ -263,20 +264,22 @@ private:
     void closeVerifiedBugs(const QStringList& keys);
     /// Menú para elegir en qué fases se prueba el issue elegido (sólo QA, sólo PRE…).
     void choosePhases(QWidget* anchor);
-    /// Pregunta y crea en Zephyr los Tests que les faltan a esos casos del issue, y los enlaza a su issue.
-    /// Con `sync`, en vez de crear sólo los que faltan, pone al día en Zephyr los Tests de esos casos.
-    void prepareTests(const QStringList& caseIds, bool sync = false);
+    /// Pregunta y sube a Zephyr el plan del issue entero (`RevisionPublishService::uploadPlan`); con
+    /// `sync`, reescribiendo antes sus Tests.
+    void uploadPlan(bool sync);
     /// Aplica un cambio al issue seleccionado sin que el refresco pise lo que se está escribiendo.
     void editSelected(const std::function<void(Issue&)>& mutate);
     void createPlan();
-    /// Arranca un ciclo del plan del issue sin salir de esta pantalla; si tiene varios planes que se
-    /// puedan ejecutar, pregunta cuál (menú anclado a `anchor`).
-    void runPlan(QWidget* anchor);
-    /// Planes del issue que se pueden ejecutar ahora: existen, no están archivados y tienen casos.
-    QStringList runnablePlans(const Issue& issue) const;
+    /// Arranca un ciclo del plan del issue sin salir de esta pantalla (lo coordina quien ejecuta).
+    void runPlan();
+    /// El plan del issue si se puede ejecutar ahora (existe, no está archivado y tiene casos); vacío si no.
+    QString runnablePlan(const Issue& issue) const;
     /// Ciclo de la revisión en curso que se puede continuar (el más reciente que dejó casos rotos);
     /// vacío si no hay ninguno.
     QString continuableCycle(const Issue& issue, int revision) const;
+    /// Lo que repetiría continuar ese ciclo, con lo que tiene hoy su plan (`PlanReport::toContinue`);
+    /// vacío si el ciclo no terminó o no le queda nada.
+    QStringList continuationOf(const PlanReport& report) const;
     /// Deja listo el plan con el que se prueba el requerimiento recién importado, si no tiene ninguno.
     QString ensurePlan(const QString& issueId);
     void pickPlan();
@@ -308,8 +311,11 @@ private:
     /// el resultado y el acta en el gestor y el registro en GESREQ. Se ofrece cuando la ronda está
     /// terminada, y desde el historial para acabar de publicar una anterior que se quedó a medias.
     void publishRevision(int revision = 0);
-    /// Cierra la revisión en curso con el resultado que se confirme.
+    /// Cierra la revisión en curso con el resultado que se confirme y sube sus resultados a Zephyr y al
+    /// gestor (`RevisionPublishService::closeRevision`).
     void closeRevision();
+    /// Lo que le falta por publicar a esa ronda, para decirlo: «GESREQ y el gestor».
+    QString pendingText(const Issue& issue, int revision) const;
     /// Abre la ronda siguiente de pruebas del requerimiento.
     void openRevision();
     /// Crear la representación en el gestor, revisándola antes; con `update`, reescribir la ya publicada.

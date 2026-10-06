@@ -130,6 +130,62 @@ void TestPublishService::prepareTests(const QString& issueId, const QStringList&
     else m_zephyr->createTests(m_settings.tracker(), req, std::move(finished));
 }
 
+void TestPublishService::preparePhaseCycle(const QString& issueId, const QString& phase, const QStringList& caseIds,
+                                           std::function<void(const PublishResult&)> done) {
+    const Issue* issue = m_issues ? m_issues->find(issueId) : nullptr;
+    PublishResult refused;
+    if (!enabled()) refused.error = tr("Activa Zephyr en Ajustes para publicar los ciclos");
+    else if (!issue) refused.error = tr("El issue ya no existe");
+    else if (phase.trimmed().isEmpty()) refused.error = tr("No se sabe en qué fase se prueba el issue");
+    if (!refused.error.isEmpty()) { done(refused); return; }
+
+    PublishRequest req;
+    req.cycleId = issue->zephyr.cycleOf(phase);
+    const QString stored = issue->zephyr.cycleNameOf(phase);
+    req.cycleName = stored.isEmpty() ? phaseCycleName(*issue, phase) : stored;
+    req.testContext = testContextOf(*issue);
+    req.versionName = m_settings.tracker().zephyrVersion;
+    req.environment = phase.trimmed();
+    req.startedAt = QDateTime::currentDateTime();
+    req.description = issue->isImported() ? tr("Plan de pruebas del requerimiento GREQ %1 · %2")
+                                                .arg(issue->requirement.data.id, elideTitle(issue->title, 80))
+                                          : tr("Plan de pruebas de %1 · %2").arg(issue->id, elideTitle(issue->title, 80));
+    req.description += tr("\nAmbiente: %1").arg(req.environment);
+    for (const auto& caseId : caseIds) {
+        const TestCase* c = m_cases.find(caseId);
+        if (!c) continue;
+        PublishCase pc;
+        pc.caseId = caseId;
+        pc.executed = false;
+        pc.testKey = issue->zephyr.tests.value(caseId).trimmed();
+        pc.title = c->title;
+        pc.preconditions = c->preconditions;
+        pc.design = c->steps;
+        req.cases.append(pc);
+    }
+    if (req.cases.isEmpty()) {
+        PublishResult nothing;
+        nothing.error = tr("El plan del issue no tiene casos que subir");
+        done(nothing);
+        return;
+    }
+    m_zephyr->publish(m_settings.tracker(), req, [this, issueId, phase, caseIds, req, done = std::move(done)](const PublishResult& r) mutable {
+        // El ciclo de la fase se borró en Zephyr: se olvida y se crea otro (una vez: sin ciclo guardado,
+        // la siguiente petición ya lo crea).
+        if (r.cycleMissing && !req.cycleId.isEmpty()) {
+            m_issues->forgetZephyrCycle(issueId, phase);
+            preparePhaseCycle(issueId, phase, caseIds, std::move(done));
+            return;
+        }
+        QHash<QString, QString> tests;
+        for (const auto& c : req.cases) if (!c.testKey.isEmpty()) tests.insert(c.caseId, c.testKey);
+        for (auto it = r.createdTests.constBegin(); it != r.createdTests.constEnd(); ++it) tests.insert(it.key(), it.value());
+        m_issues->noteZephyrTests(issueId, tests);
+        if (r.ok) m_issues->noteZephyrCycle(issueId, phase, r.cycleId, req.cycleName);
+        done(r);
+    });
+}
+
 int TestPublishService::continuationDepth(const PlanRun& plan) const {
     int depth = 0;
     QString id = plan.continuesCycleId;

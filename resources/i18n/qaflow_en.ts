@@ -706,10 +706,6 @@
         <translation>General findings: %1</translation>
     </message>
     <message>
-        <source>sin casos en sus planes</source>
-        <translation>no cases in its plans</translation>
-    </message>
-    <message>
         <source>%1 %2 — sin ejecutar</source>
         <translation>%1 %2 — not run</translation>
     </message>
@@ -856,6 +852,10 @@
     <message>
         <source>Esta herramienta no actualiza Tests</source>
         <translation>This tool does not update Tests</translation>
+    </message>
+    <message>
+        <source>sin casos en su plan</source>
+        <translation>no cases in its plan</translation>
     </message>
 </context>
 <context>
@@ -3457,10 +3457,6 @@
         <translation>Continue cycle…</translation>
     </message>
     <message>
-        <source>Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s), cada uno desde el paso que se rompió, en la misma revisión</source>
-        <translation>Runs the %1 failed or blocked case(s) again, each from the step that broke, in the same revision</translation>
-    </message>
-    <message>
         <source>Datos: %1</source>
         <translation>Data: %1</translation>
     </message>
@@ -3487,6 +3483,10 @@
     <message>
         <source>Publica estas ejecuciones en el ciclo «%1» de Zephyr, el de su fase</source>
         <translation>Publishes these executions in the Zephyr cycle “%1”, the one of their phase</translation>
+    </message>
+    <message>
+        <source>Vuelve a ejecutar los %1 caso(s) por terminar —los rotos desde el paso que se rompió y los que no se ejecutaron, enteros—, en el mismo ciclo</source>
+        <translation>Runs again the %1 case(s) left to finish —the broken ones from the step that broke and the ones not run, in full— in the same cycle</translation>
     </message>
 </context>
 <context>
@@ -3900,10 +3900,6 @@
         <translation>%1 (archived)</translation>
     </message>
     <message>
-        <source>Ya no existe en los planes del proyecto</source>
-        <translation>No longer exists among the project plans</translation>
-    </message>
-    <message>
         <source>%1 casos</source>
         <translation>%1 cases</translation>
     </message>
@@ -4164,10 +4160,6 @@ Create another one anyway?</translation>
         <translation> · %1 run(s)</translation>
     </message>
     <message>
-        <source>Sin planes: los resultados del issue son los de los ciclos de sus planes.</source>
-        <translation>No plans: the issue results are those of its plan cycles.</translation>
-    </message>
-    <message>
         <source>Todavía no se ha ejecutado ningún plan del issue.</source>
         <translation>No plan of the issue has been run yet.</translation>
     </message>
@@ -4190,10 +4182,6 @@ Create another one anyway?</translation>
     <message>
         <source>%1 no se pudo crear en el gestor · %2 · publícalo desde la tarjeta del issue</source>
         <translation>%1 could not be created in the tracker · %2 · publish it from the issue card</translation>
-    </message>
-    <message>
-        <source>Crea otro plan para este requerimiento y lo abre para componerlo</source>
-        <translation>Creates another plan for this requirement and opens it to compose it</translation>
     </message>
     <message>
         <source>REVISIÓN %1 · %2</source>
@@ -4304,10 +4292,6 @@ Create another one anyway?</translation>
         <translation>Run</translation>
     </message>
     <message>
-        <source>Arrancar un ciclo de este plan</source>
-        <translation>Start a cycle of this plan</translation>
-    </message>
-    <message>
         <source>El issue todavía no tiene plan: créalo antes de probar</source>
         <translation>The issue has no plan yet: create it before testing</translation>
     </message>
@@ -4318,18 +4302,6 @@ Create another one anyway?</translation>
     <message>
         <source>Continuar lo fallado…</source>
         <translation>Continue what failed…</translation>
-    </message>
-    <message>
-        <source>Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo</source>
-        <translation>Run the %1 failed or blocked case(s) of this cycle again</translation>
-    </message>
-    <message>
-        <source>Enlaza al issue un plan que ya existe en el proyecto</source>
-        <translation>Link a plan that already exists in the project to the issue</translation>
-    </message>
-    <message>
-        <source>%1 ejecución(es) de sus planes</source>
-        <translation>%1 run(s) of its plans</translation>
     </message>
     <message>
         <source>Revisar los bugs reportados</source>
@@ -4601,10 +4573,6 @@ Create another one anyway?</translation>
         <translation>Revision %1 closed as %2: the record is drawn up from what was tested, and the result is published with it</translation>
     </message>
     <message>
-        <source>Revisión %1 cerrada como %2: los ciclos a Zephyr, el resultado y el acta al gestor y el registro en GESREQ</source>
-        <translation>Revision %1 closed as %2: the cycles to Zephyr, the result and the record to the tracker and the registration in GESREQ</translation>
-    </message>
-    <message>
         <source>%1 sigue en «Fallido / bloqueado»: su revisión se cerró como observada. Vuelve a probarlo para sacarlo.</source>
         <translation>%1 stays in «Failed / blocked»: its revision was closed as observed. Test it again to move it out.</translation>
     </message>
@@ -4617,16 +4585,8 @@ Create another one anyway?</translation>
         <translation> · </translation>
     </message>
     <message>
-        <source>Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) del ciclo %2 en la revisión %3, cada uno desde el paso que se rompió</source>
-        <translation>Runs again the %1 failed or blocked case(s) of cycle %2 in revision %3, each from the step that broke</translation>
-    </message>
-    <message>
         <source>Continuar lo fallado (%1)…</source>
         <translation>Continue what failed (%1)…</translation>
-    </message>
-    <message>
-        <source>Abre la revisión %1 y vuelve a ejecutar en ella los %2 caso(s) fallado(s) o bloqueado(s) del ciclo %3, cada uno desde el paso que se rompió</source>
-        <translation>Opens revision %1 and runs in it the %2 failed or blocked case(s) of cycle %3, each from the step that broke</translation>
     </message>
     <message>
         <source>Todos los proyectos</source>
@@ -4937,45 +4897,8 @@ Create another one anyway?</translation>
         <translation>Choose the phases this requirement is tested in</translation>
     </message>
     <message>
-        <source>Zephyr: los %1 caso(s) tienen su Test</source>
-        <translation>Zephyr: all %1 case(s) have their Test</translation>
-    </message>
-    <message>
-        <source>Zephyr: %1 de %2 caso(s) con Test</source>
-        <translation>Zephyr: %1 of %2 case(s) with a Test</translation>
-    </message>
-    <message>
-        <source>Crea en Zephyr un Test por caso (el que usarán los ciclos de QA y de PRE) y los enlaza al issue</source>
-        <translation>Creates one Test per case in Zephyr (used by the QA and PRE cycles) and links them to the issue</translation>
-    </message>
-    <message>
         <source>El requerimiento tiene que probarse al menos en una fase</source>
         <translation>The requirement has to be tested in at least one phase</translation>
-    </message>
-    <message numerus="yes">
-        <source>¿Crear en Zephyr %n Test(s), uno por caso, y enlazarlos al issue del requerimiento?</source>
-        <translation>
-            <numerusform>Create %n Test in Zephyr, one per case, and link it to the requirement issue?</numerusform>
-            <numerusform>Create %n Tests in Zephyr, one per case, and link them to the requirement issue?</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>No se crearon los Tests · %1</source>
-        <translation>The Tests were not created · %1</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n Test(s) creado(s) en Zephyr</source>
-        <translation>
-            <numerusform>%n Test created in Zephyr</numerusform>
-            <numerusform>%n Tests created in Zephyr</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <source> · %n enlace(s) al issue</source>
-        <translation>
-            <numerusform> · %n link to the issue</numerusform>
-            <numerusform> · %n links to the issue</numerusform>
-        </translation>
     </message>
     <message>
         <source>revisión %1 cerrada</source>
@@ -5078,10 +5001,6 @@ Create another one anyway?</translation>
         <translation>More ▾</translation>
     </message>
     <message>
-        <source>Otro plan</source>
-        <translation>Another plan</translation>
-    </message>
-    <message>
         <source>Generar casos con IA…</source>
         <translation>Generate cases with AI…</translation>
     </message>
@@ -5124,10 +5043,6 @@ Create another one anyway?</translation>
     <message>
         <source>Aprueba %1 y pasa a %2, u observada</source>
         <translation>Approves %1 and moves to %2, or observed</translation>
-    </message>
-    <message>
-        <source>Zephyr, el gestor y GESREQ</source>
-        <translation>Zephyr, the tracker and GESREQ</translation>
     </message>
     <message>
         <source>Repetir</source>
@@ -5194,61 +5109,179 @@ Create another one anyway?</translation>
         <translation>View the run in the history</translation>
     </message>
     <message>
-        <source>Zephyr: sin Tests todavía</source>
-        <translation>Zephyr: no Tests yet</translation>
-    </message>
-    <message>
-        <source>Publicar en Zephyr (%1)…</source>
-        <translation>Publish to Zephyr (%1)…</translation>
-    </message>
-    <message>
         <source>Actualizar Zephyr…</source>
         <translation>Update Zephyr…</translation>
-    </message>
-    <message>
-        <source>Reescribe en Zephyr el título, la descripción y los pasos de los Tests con lo que tienen hoy los casos</source>
-        <translation>Rewrites the title, description and steps of the Tests in Zephyr with what the cases have today</translation>
-    </message>
-    <message>
-        <source>Reescribe en Zephyr los Tests que ya existen con lo que tienen hoy los casos y crea los %1 que faltan</source>
-        <translation>Rewrites the existing Tests in Zephyr with what the cases have today and creates the %1 missing ones</translation>
-    </message>
-    <message numerus="yes">
-        <source>¿Actualizar en Zephyr los Tests de %n caso(s)? Se reescriben su título, su descripción y sus pasos con lo que tienen hoy en QAflow.</source>
-        <translation>
-            <numerusform>Update the Tests of %n case in Zephyr? Their title, description and steps are rewritten with what they have today in QAflow.</numerusform>
-            <numerusform>Update the Tests of %n cases in Zephyr? Their title, description and steps are rewritten with what they have today in QAflow.</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <source>Los %n que faltan se crean.</source>
-        <translation>
-            <numerusform>The %n missing one is created.</numerusform>
-            <numerusform>The %n missing ones are created.</numerusform>
-        </translation>
     </message>
     <message>
         <source>Actualizar Zephyr</source>
         <translation>Update Zephyr</translation>
     </message>
     <message>
-        <source>Publicar en Zephyr</source>
-        <translation>Publish to Zephyr</translation>
-    </message>
-    <message>
         <source>Actualizar</source>
         <translation>Update</translation>
     </message>
     <message>
-        <source>No se actualizó Zephyr · %1</source>
-        <translation>Zephyr was not updated · %1</translation>
+        <source>Zephyr: sin subir todavía</source>
+        <translation>Zephyr: not uploaded yet</translation>
+    </message>
+    <message>
+        <source>Zephyr: %1 de %2 caso(s) con Test · sin ciclo de %3</source>
+        <translation>Zephyr: %1 of %2 case(s) with a Test · no %3 cycle</translation>
+    </message>
+    <message>
+        <source>Zephyr: los %1 caso(s) tienen su Test · ciclo «%2»</source>
+        <translation>Zephyr: all %1 case(s) have their Test · cycle “%2”</translation>
+    </message>
+    <message>
+        <source>Zephyr: %1 de %2 caso(s) con Test · ciclo «%3»</source>
+        <translation>Zephyr: %1 of %2 case(s) with a Test · cycle “%3”</translation>
+    </message>
+    <message>
+        <source>Subir a Zephyr (%1)…</source>
+        <translation>Upload to Zephyr (%1)…</translation>
+    </message>
+    <message>
+        <source>Crea un Test por caso, deja el plan en el ciclo de %1 y publica lo ya ejecutado</source>
+        <translation>Creates a Test per case, puts the plan in the %1 cycle and publishes what was already run</translation>
+    </message>
+    <message>
+        <source>Reescribe los Tests con lo que tienen hoy los casos, crea los que falten, deja el plan en el ciclo de %1 y publica lo ya ejecutado</source>
+        <translation>Rewrites the Tests with what the cases have today, creates the missing ones, puts the plan in the %1 cycle and publishes what was already run</translation>
+    </message>
+    <message>
+        <source>Usa como plan del requerimiento uno que ya existe en el proyecto</source>
+        <translation>Uses an existing plan of the project as the requirement plan</translation>
+    </message>
+    <message>
+        <source>%1 ejecución(es) de su plan</source>
+        <translation>%1 run(s) of its plan</translation>
+    </message>
+    <message>
+        <source>Los Tests que ya existen se reescriben con lo que tienen hoy sus casos, y se crean los que falten.</source>
+        <translation>Existing Tests are rewritten with what their cases have today, and missing ones are created.</translation>
+    </message>
+    <message>
+        <source>Se crea un Test por caso y se enlaza al issue del requerimiento.</source>
+        <translation>A Test is created per case and linked to the requirement issue.</translation>
     </message>
     <message numerus="yes">
-        <source>%n Test(s) actualizado(s) en Zephyr</source>
+        <source>El ciclo de %1 en Zephyr queda con los %n caso(s) del plan; los que no se han ejecutado, sin ejecutar.</source>
         <translation>
-            <numerusform>%n Test updated in Zephyr</numerusform>
-            <numerusform>%n Tests updated in Zephyr</numerusform>
+            <numerusform>The %1 cycle in Zephyr gets the plan&apos;s %n case; if not run yet, unexecuted.</numerusform>
+            <numerusform>The %1 cycle in Zephyr gets the plan&apos;s %n cases; those not run yet, unexecuted.</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Lo ya ejecutado en la revisión se publica con su resultado.</source>
+        <translation>What was already run in the revision is published with its result.</translation>
+    </message>
+    <message>
+        <source>Subir a Zephyr</source>
+        <translation>Upload to Zephyr</translation>
+    </message>
+    <message>
+        <source>¿Actualizar en Zephyr el plan de %1?</source>
+        <translation>Update the plan of %1 in Zephyr?</translation>
+    </message>
+    <message>
+        <source>¿Subir a Zephyr el plan de %1?</source>
+        <translation>Upload the plan of %1 to Zephyr?</translation>
+    </message>
+    <message>
+        <source>Subir</source>
+        <translation>Upload</translation>
+    </message>
+    <message>
+        <source>No se subió el plan a Zephyr · %1</source>
+        <translation>The plan was not uploaded to Zephyr · %1</translation>
+    </message>
+    <message>
+        <source>Plan en «%1»</source>
+        <translation>Plan in “%1”</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n Test(s) creado(s)</source>
+        <translation>
+            <numerusform>%n Test created</numerusform>
+            <numerusform>%n Tests created</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n Test(s) actualizado(s)</source>
+        <translation>
+            <numerusform>%n Test updated</numerusform>
+            <numerusform>%n Tests updated</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n caso(s) añadidos sin ejecutar</source>
+        <translation>
+            <numerusform>%n case added unexecuted</numerusform>
+            <numerusform>%n cases added unexecuted</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n ciclo(s) con resultados</source>
+        <translation>
+            <numerusform>%n cycle with results</numerusform>
+            <numerusform>%n cycles with results</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>El plan %1 ya no existe en el proyecto: crea otro.</source>
+        <translation>Plan %1 no longer exists in the project: create another one.</translation>
+    </message>
+    <message>
+        <source> · Test %1</source>
+        <translation> · Test %1</translation>
+    </message>
+    <message>
+        <source>Sin plan: los resultados del issue son los de los ciclos de su plan.</source>
+        <translation>No plan: the issue results are those of its plan cycles.</translation>
+    </message>
+    <message>
+        <source>%1 ya tiene plan: desvincúlalo antes de vincular otro</source>
+        <translation>%1 already has a plan: unlink it before linking another</translation>
+    </message>
+    <message>
+        <source>Revisión %1 cerrada como %2: falta %3</source>
+        <translation>Revision %1 closed as %2: %3 missing</translation>
+    </message>
+    <message>
+        <source>Falta %1</source>
+        <translation>%1 missing</translation>
+    </message>
+    <message>
+        <source>El registro en GESREQ; Zephyr y el gestor reciben el resultado al cerrar la revisión</source>
+        <translation>The GESREQ registration; Zephyr and the tracker get the result when the revision is closed</translation>
+    </message>
+    <message>
+        <source>Al cerrarla, los resultados y los bugs se suben al ciclo de %1 en Zephyr y el resultado y el acta, al issue del gestor.</source>
+        <translation>On closing, results and bugs are uploaded to the %1 cycle in Zephyr, and the result and the record to the tracker issue.</translation>
+    </message>
+    <message>
+        <source>Todavía no hay acta: el resultado irá al gestor sin ella.</source>
+        <translation>There is no record yet: the result will go to the tracker without it.</translation>
+    </message>
+    <message>
+        <source>Lo que no salió se completa desde «Publicar»</source>
+        <translation>Whatever failed can be completed from “Publish”</translation>
+    </message>
+    <message>
+        <source>nada</source>
+        <translation>nothing</translation>
+    </message>
+    <message>
+        <source>Vuelve a ejecutar los %1 caso(s) por terminar del ciclo %2 en la revisión %3: los rotos desde el paso que se rompió y los que no se ejecutaron (o se añadieron al plan después), enteros</source>
+        <translation>Runs again the %1 case(s) left to finish in cycle %2 in revision %3: the broken ones from the step that broke and the ones not run (or added to the plan later), in full</translation>
+    </message>
+    <message>
+        <source>Abre la revisión %1 y vuelve a ejecutar en ella los %2 caso(s) por terminar del ciclo %3: los rotos desde el paso que se rompió y los que no se ejecutaron, enteros</source>
+        <translation>Opens revision %1 and runs in it the %2 case(s) left to finish in cycle %3: the broken ones from the step that broke and the ones not run, in full</translation>
+    </message>
+    <message>
+        <source>Volver a ejecutar los %1 caso(s) por terminar de este ciclo: fallados, bloqueados o sin ejecutar</source>
+        <translation>Run again the %1 case(s) left to finish in this cycle: failed, blocked or not run</translation>
     </message>
 </context>
 <context>
@@ -5745,14 +5778,6 @@ Create another one anyway?</translation>
         <translation>GREQ %1</translation>
     </message>
     <message>
-        <source>Ese ciclo no dejó ningún caso fallado ni bloqueado que continuar</source>
-        <translation>That cycle left no failed or blocked case to continue</translation>
-    </message>
-    <message>
-        <source>No se pudo continuar el ciclo: sus casos fallados ya no están en el proyecto</source>
-        <translation>The cycle could not be continued: its failed cases are no longer in the project</translation>
-    </message>
-    <message>
         <source>Abriendo…</source>
         <translation>Opening…</translation>
     </message>
@@ -5809,12 +5834,34 @@ Create another one anyway?</translation>
         <translation>On start, revision %1 is closed as “Passed in %2” and the cycle opens revision %3 in %4. Nothing is registered in GESREQ and nothing is closed in the tracker.</translation>
     </message>
     <message>
-        <source>Continúa el ciclo %1: se vuelven a ejecutar sus %2 caso(s) fallado(s) o bloqueado(s), cada uno desde el paso que se rompió. Es el mismo ciclo: lo ya probado, sus capturas y sus bugs se conservan%3.</source>
-        <translation>Continues cycle %1: its %2 failed or blocked case(s) are run again, each one from the step that broke. It is the same cycle: what was already tested, its screenshots and its bugs are kept%3.</translation>
-    </message>
-    <message>
         <source>, y al terminar se actualiza su ciclo de Zephyr</source>
         <translation>, and when it finishes its Zephyr cycle is updated</translation>
+    </message>
+    <message>
+        <source>La revisión aprobada no se subió del todo:
+%1</source>
+        <translation>The approved revision was not fully uploaded:
+%1</translation>
+    </message>
+    <message>
+        <source>A ese ciclo no le queda ningún caso por terminar</source>
+        <translation>That cycle has no cases left to finish</translation>
+    </message>
+    <message>
+        <source>Continúa el ciclo %1: se ejecutan sus %2 caso(s) por terminar —%3 roto(s), desde el paso que se rompió, y %4 sin ejecutar o añadido(s) al plan después, enteros—. Es el mismo ciclo: lo ya probado, sus capturas y sus bugs se conservan%5.</source>
+        <translation>Continues cycle %1: its %2 case(s) left to finish are run —%3 broken, from the step that broke, and %4 not run or added to the plan later, in full—. It is the same cycle: what was tested, its screenshots and its bugs are kept%5.</translation>
+    </message>
+    <message>
+        <source>No se pudo continuar el ciclo: sus casos por terminar ya no están en el proyecto</source>
+        <translation>The cycle could not be continued: its cases left to finish are no longer in the project</translation>
+    </message>
+    <message>
+        <source>%1 entra(n) al ciclo en curso</source>
+        <translation>%1 joins the running cycle</translation>
+    </message>
+    <message>
+        <source>%1 sale(n) del ciclo en curso</source>
+        <translation>%1 leaves the running cycle</translation>
     </message>
 </context>
 <context>
@@ -6374,10 +6421,6 @@ Create another one anyway?</translation>
         <translation>Continue</translation>
     </message>
     <message>
-        <source>Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo</source>
-        <translation>Run the %1 failed or blocked case(s) of this cycle again</translation>
-    </message>
-    <message>
         <source>%1 +%2</source>
         <translation>%1 +%2</translation>
     </message>
@@ -6428,6 +6471,10 @@ Create another one anyway?</translation>
     <message>
         <source>%1 · abrir en el gestor</source>
         <translation>%1 · open in the tracker</translation>
+    </message>
+    <message>
+        <source>Volver a ejecutar los %1 caso(s) por terminar de este ciclo: fallados, bloqueados, sin ejecutar o añadidos al plan después</source>
+        <translation>Run again the %1 case(s) left to finish in this cycle: failed, blocked, not run or added to the plan later</translation>
     </message>
 </context>
 <context>
@@ -6911,10 +6958,6 @@ Create another one anyway?</translation>
         <translation>GESREQ</translation>
     </message>
     <message>
-        <source>Zephyr · %1 ciclo(s) de los planes del issue</source>
-        <translation>Zephyr · %1 cycle(s) of the issue plans</translation>
-    </message>
-    <message>
         <source>Activa Zephyr en Ajustes para publicar los ciclos</source>
         <translation>Enable Zephyr in Settings to publish the cycles</translation>
     </message>
@@ -7119,8 +7162,35 @@ Create another one anyway?</translation>
         <translation>Zephyr · cycle “%1”</translation>
     </message>
     <message>
-        <source>Activa Zephyr en Ajustes para crear los Tests</source>
-        <translation>Enable Zephyr in Settings to create the Tests</translation>
+        <source>Zephyr · %1 ciclo(s) del plan del issue</source>
+        <translation>Zephyr · %1 cycle(s) of the issue plan</translation>
+    </message>
+    <message>
+        <source>Activa Zephyr en Ajustes para subir el plan</source>
+        <translation>Enable Zephyr in Settings to upload the plan</translation>
+    </message>
+    <message>
+        <source>El issue ya no existe</source>
+        <translation>The issue no longer exists</translation>
+    </message>
+    <message>
+        <source>El plan del issue no tiene casos que subir</source>
+        <translation>The issue plan has no cases to upload</translation>
+    </message>
+    <message>
+        <source>No se pudo preparar en Zephyr el ciclo de %1 · %2</source>
+        <translation>Could not prepare the %1 cycle in Zephyr · %2</translation>
+    </message>
+    <message numerus="yes">
+        <source>Zephyr · %n caso(s) del plan añadidos a «%1»</source>
+        <translation>
+            <numerusform>Zephyr · %n plan case added to “%1”</numerusform>
+            <numerusform>Zephyr · %n plan cases added to “%1”</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Zephyr · el plan ya estaba en «%1»</source>
+        <translation>Zephyr · the plan was already in “%1”</translation>
     </message>
 </context>
 <context>
@@ -8510,6 +8580,22 @@ Continues cycle %1: only its failed and blocked cases</translation>
     <message>
         <source>El issue ya no existe</source>
         <translation>The issue no longer exists</translation>
+    </message>
+    <message>
+        <source>No se sabe en qué fase se prueba el issue</source>
+        <translation>Unknown phase for testing the issue</translation>
+    </message>
+    <message>
+        <source>Plan de pruebas del requerimiento GREQ %1 · %2</source>
+        <translation>Test plan of requirement GREQ %1 · %2</translation>
+    </message>
+    <message>
+        <source>Plan de pruebas de %1 · %2</source>
+        <translation>Test plan of %1 · %2</translation>
+    </message>
+    <message>
+        <source>El plan del issue no tiene casos que subir</source>
+        <translation>The issue plan has no cases to upload</translation>
     </message>
 </context>
 <context>

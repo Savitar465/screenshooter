@@ -38,6 +38,9 @@ struct PublishCase {
     QString title;
     QString preconditions;           // precondiciones del caso, para la descripción del Test
     QList<TestStep> design;          // pasos del caso (acción y resultado esperado) con los que se crea el Test
+    /// false = el caso todavía no se ha ejecutado: se añade al ciclo sin ejecutar y, si ya está en él,
+    /// no se toca (no se pisa un resultado que ya tenga). Es como se sube el plan antes de probarlo.
+    bool executed = true;
     Verdict verdict = Verdict::Superado;
     QList<RunRecordStep> steps;      // los pasos tal y como se ejecutaron
     QList<PublishAttachment> attachments;
@@ -73,7 +76,8 @@ struct PublishRequest {
 struct PublishResult {
     bool ok = false;
     QString cycleId;
-    int executions = 0;      // casos publicados
+    int executions = 0;      // casos publicados con su resultado
+    int added = 0;           // casos añadidos al ciclo sin ejecutar (`PublishCase::executed` a false)
     int steps = 0;           // pasos con veredicto
     int attachments = 0;     // evidencias subidas
     int testsCreated = 0;    // Tests creados en Jira a partir de casos de QAflow

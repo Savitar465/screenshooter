@@ -586,6 +586,8 @@ void ZephyrClient::executeCase(const std::shared_ptr<Job>& job, const QString& i
     findExecution(job, issueId, [this, job, issueId](const QString& executionId) {
         // Sin ejecución en el ciclo: se quedó fuera la vez anterior (o su Test se acaba de crear).
         if (executionId.isEmpty()) { createExecution(job, issueId); return; }
+        // Un caso sin ejecutar que ya está en el ciclo no se toca: puede tener ya su resultado.
+        if (!job->current().executed) { ++job->index; nextCase(job); return; }
         job->executionId = executionId;
         markExecution(job, issueId);
     });
@@ -641,6 +643,13 @@ void ZephyrClient::createExecution(const std::shared_ptr<Job>& job, const QStrin
         job->executionId = created.keys().isEmpty() ? QString() : created.keys().first();
         if (job->executionId.isEmpty()) {
             job->skip(QCoreApplication::translate("infrastructure", "%1: Zephyr no devolvió el id de la ejecución").arg(c.caseId));
+            ++job->index;
+            nextCase(job);
+            return;
+        }
+        // Añadido sin ejecutar: queda en el ciclo, pendiente, hasta que se publique su resultado.
+        if (!c.executed) {
+            ++job->result.added;
             ++job->index;
             nextCase(job);
             return;

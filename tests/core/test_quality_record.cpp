@@ -15,7 +15,7 @@ Issue importedIssue() {
     Issue issue;
     issue.id = QStringLiteral("IS-0001");
     issue.title = QStringLiteral("Integración de nuevos servicios");
-    issue.planIds = {QStringLiteral("PL-1")};
+    issue.planId = QStringLiteral("PL-1");
     issue.requirement.connection = QStringLiteral("http://gesreq.test/greq");
     issue.requirement.data.id = QStringLiteral("2026997");
     issue.requirement.data.system = QStringLiteral("SUMA2-INGRESO");

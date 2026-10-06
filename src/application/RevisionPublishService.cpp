@@ -154,7 +154,7 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
     // Los ciclos de plan de una fase van al ciclo de Zephyr de esa fase: se nombra ése.
     zephyr.target = !cycles.isEmpty() && m_zephyr && m_zephyr->sharesPhaseCycle(cycles.first())
                         ? tr("Zephyr · ciclo «%1»").arg(m_zephyr->cycleName(cycles.first()))
-                        : tr("Zephyr · %1 ciclo(s) de los planes del issue").arg(cycles.size());
+                        : tr("Zephyr · %1 ciclo(s) del plan del issue").arg(cycles.size());
     zephyr.done = !cycles.isEmpty() && published == cycles.size();
     zephyr.available = m_zephyr && m_zephyr->enabled() && executed > 0;
     if (!m_zephyr || !m_zephyr->enabled()) zephyr.blocked = tr("Activa Zephyr en Ajustes para publicar los ciclos");
@@ -265,46 +265,144 @@ void RevisionPublishService::publish(const QString& issueId, const Options& opti
     runZephyr(run);
 }
 
+QString RevisionPublishService::uploadPhase(const Issue& issue) const {
+    const QStringList phases = m_issues.phasesOf(issue);
+    if (const IssueRevision* last = issue.revision(0)) return phaseOf(*last, phases);
+    return nextPhase(issue, phases);
+}
+
+void RevisionPublishService::uploadPlan(const QString& issueId, bool sync, std::function<void(const PlanUploaded&)> done) {
+    const Issue* issue = m_issues.find(issueId);
+    PlanUploaded refused;
+    if (!canPrepareTests()) refused.error = tr("Activa Zephyr en Ajustes para subir el plan");
+    else if (!issue) refused.error = tr("El issue ya no existe");
+    if (!refused.error.isEmpty()) { done(refused); return; }
+    const QStringList caseIds = m_records.caseIdsOf(*issue);
+    if (caseIds.isEmpty()) {
+        refused.error = tr("El plan del issue no tiene casos que subir");
+        done(refused);
+        return;
+    }
+    auto out = std::make_shared<PlanUploaded>();
+    out->phase = uploadPhase(*issue);
+
+    // 4 · Los Tests, enlazados al issue del requerimiento: desde él se ve con qué se prueba.
+    auto link = [this, issueId, out, done]() {
+        out->ok = out->error.isEmpty() && out->problems.isEmpty();
+        const Issue* issue = m_issues.find(issueId);
+        if (!issue || !m_tracker || !m_tracker->canLinkIssues(*issue) || issue->zephyr.tests.isEmpty()) { done(*out); return; }
+        m_tracker->linkToIssue(issueId, issue->zephyr.tests.values(), [out, done](const IssuePublishService::LinkResult& links) {
+            out->problems += links.failed;
+            done(*out);
+        });
+    };
+    // 3 · Los resultados de lo ya ejecutado en la ronda, por el mismo camino que la publicación.
+    auto results = [this, issueId, out, link]() {
+        int executed = 0;
+        for (const auto& cycle : cyclesFor(issueId, 0)) executed += cycle.executed;
+        if (executed == 0) { link(); return; }
+        Options zephyrOnly;
+        zephyrOnly.tracker = zephyrOnly.requirement = zephyrOnly.close = false;
+        publish(issueId, zephyrOnly, {}, [this, issueId, out, link](const Result& r) {
+            for (const auto& step : r.steps) {
+                if (step.destination != Destination::Zephyr) continue;
+                if (!step.ok) out->problems << step.message;
+            }
+            int published = 0;
+            for (const auto& cycle : cyclesFor(issueId, 0)) published += cycle.plan.isPublished() ? 1 : 0;
+            out->cycles = published;
+            link();
+        });
+    };
+    // 2 · El ciclo de la fase con todos los casos del plan; lo que ya esté en él no se toca.
+    auto cycle = [this, issueId, caseIds, out, results, done]() {
+        m_zephyr->preparePhaseCycle(issueId, out->phase, caseIds, [this, issueId, out, results, done](const PublishResult& r) {
+            if (const Issue* now = m_issues.find(issueId)) out->cycleName = now->zephyr.cycleNameOf(out->phase);
+            out->created += r.testsCreated;
+            out->added = r.added;
+            out->problems += r.skipped;
+            out->problems += r.warnings;
+            if (!r.ok) {
+                out->error = r.error;
+                done(*out);
+                return;
+            }
+            results();
+        });
+    };
+    // 1 · Con `sync`, los Tests que ya existen se reescriben antes con lo que dicen hoy sus casos.
+    if (!sync) { cycle(); return; }
+    m_zephyr->syncTests(issueId, caseIds, [out, cycle, done](const PublishResult& r) {
+        out->created += r.testsCreated;
+        out->updated = r.testsUpdated;
+        out->problems += r.skipped;
+        if (!r.ok) {
+            out->error = r.error;
+            done(*out);
+            return;
+        }
+        cycle();
+    });
+}
+
+void RevisionPublishService::closeRevision(const QString& issueId, QaOutcome outcome, std::function<void(const Result&)> done) {
+    const Issue* issue = m_issues.find(issueId);
+    const IssueRevision* open = issue ? issue->currentRevision() : nullptr;
+    if (!open) { done(Result{}); return; }
+    const int number = open->number;
+    m_issues.closeRevision(issueId, outcome);
+    issue = m_issues.find(issueId);
+    const IssueRevision* round = issue ? issue->revision(number) : nullptr;
+    if (!round) { done(Result{}); return; }
+
+    // Lo planificado en Zephyr y en el gestor recibe ya su resultado; GESREQ, en la publicación.
+    Options options;
+    options.revision = number;
+    options.outcome = outcome;
+    options.requirement = false;
+    options.close = false;
+    int executed = 0;
+    for (const auto& cycle : cyclesFor(issueId, number)) executed += cycle.executed;
+    options.zephyr = m_zephyr && m_zephyr->enabled() && executed > 0;
+    options.tracker = m_tracker && m_tracker->canPublishResult(*issue);
+    if (!options.zephyr && !options.tracker) {
+        Result nothing;
+        nothing.ok = true;
+        done(nothing);
+        return;
+    }
+    options.comment = m_records.summaryFor(issueId, round->record, outcome, round->planRunId, number);
+    options.documentPath = round->documentPath;
+    publish(issueId, options, {}, std::move(done));
+}
+
+void RevisionPublishService::prepareStartedCycle(const QString& planRunId) {
+    const PlanRun* run = m_history.findPlan(planRunId);
+    const Issue* issue = run && !run->issueId.isEmpty() ? m_issues.find(run->issueId) : nullptr;
+    if (!issue || !canPrepareTests()) return;
+    const QStringList caseIds = m_records.caseIdsOf(*issue);
+    if (caseIds.isEmpty()) return;
+    // La fase es la del ciclo que arrancó: su ambiente o, si no lo dijo, la de su ronda.
+    const QString phase = m_zephyr->phaseOf(m_history.report(planRunId));
+    m_zephyr->preparePhaseCycle(issue->id, phase, caseIds, [this, issueId = issue->id, phase](const PublishResult& r) {
+        const Issue* issue = m_issues.find(issueId);
+        const QString cycle = issue ? issue->zephyr.cycleNameOf(phase) : phase;
+        if (!r.ok) {
+            emit planCyclePrepared(tr("No se pudo preparar en Zephyr el ciclo de %1 · %2").arg(phase, r.error), false);
+            return;
+        }
+        const QStringList problems = r.skipped + r.warnings;
+        QString message = r.added > 0 ? tr("Zephyr · %n caso(s) del plan añadidos a «%1»", nullptr, r.added).arg(cycle)
+                                      : tr("Zephyr · el plan ya estaba en «%1»").arg(cycle);
+        if (!problems.isEmpty()) message += QStringLiteral("\n") + problems.join(QLatin1Char('\n'));
+        emit planCyclePrepared(message, problems.isEmpty());
+    });
+}
+
 bool RevisionPublishService::canPrepareTests() const { return m_zephyr && m_zephyr->enabled(); }
 
 QStringList RevisionPublishService::casesWithoutTest(const QString& issueId, const QStringList& caseIds) const {
     return m_zephyr ? m_zephyr->casesWithoutTest(issueId, caseIds) : caseIds;
-}
-
-void RevisionPublishService::prepareTests(const QString& issueId, const QStringList& caseIds,
-                                          std::function<void(const TestsPrepared&)> done, bool sync) {
-    if (!canPrepareTests()) {
-        TestsPrepared refused;
-        refused.error = tr("Activa Zephyr en Ajustes para crear los Tests");
-        done(refused);
-        return;
-    }
-    auto prepared = [this, issueId, done](const PublishResult& r) {
-        TestsPrepared out;
-        out.created = r.testsCreated;
-        out.updated = r.testsUpdated;
-        out.problems = r.skipped + r.warnings;
-        if (!r.ok) {
-            out.error = r.error;
-            done(out);
-            return;
-        }
-        const Issue* issue = m_issues.find(issueId);
-        // Enlazados al issue del requerimiento, se ven desde él (enlazar dos veces no duplica nada).
-        if (!issue || !m_tracker || !m_tracker->canLinkIssues(*issue) || issue->zephyr.tests.isEmpty()) {
-            out.ok = true;
-            done(out);
-            return;
-        }
-        m_tracker->linkToIssue(issueId, issue->zephyr.tests.values(), [out, done](const IssuePublishService::LinkResult& links) mutable {
-            out.ok = true;
-            out.linked = links.linked;
-            out.problems += links.failed;
-            done(out);
-        });
-    };
-    if (sync) m_zephyr->syncTests(issueId, caseIds, prepared);
-    else m_zephyr->createTests(issueId, caseIds, prepared);
 }
 
 void RevisionPublishService::finish(const std::shared_ptr<Run>& run, const Outcome& outcome) {

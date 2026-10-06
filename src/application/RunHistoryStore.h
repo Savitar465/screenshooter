@@ -56,6 +56,9 @@ public:
     /// lo que se rompió. Su ambiente no cambia; `environment` sólo se anota si no tenía ninguno.
     /// Falso si no existe o no había terminado.
     bool reopenPlan(const QString& planRunId, const QString& environment = QString());
+    /// Cambia los casos del ciclo (`PlanRun::caseIds`): el ciclo en curso sigue a su plan cuando se le
+    /// añaden o se le quitan casos, y una continuación añade los que el plan ganó después.
+    void setPlanCases(const QString& planRunId, const QStringList& caseIds);
     /// Anota de qué control de calidad es el ciclo: el issue del requerimiento y la revisión que
     /// estaba abierta al arrancarlo. Lo llama quien coordina el arranque, en cuanto el issue abre su
     /// ronda; sin issue (ciclo suelto) no hay nada que anotar.

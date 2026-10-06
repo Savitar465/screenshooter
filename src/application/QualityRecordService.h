@@ -75,7 +75,7 @@ public:
     QString summaryFor(const QString& issueId, const QualityRecord& record, QaOutcome outcome,
                        const QString& planRunId = QString(), int revision = 0) const;
 
-    /// Casos que prueban el issue: los de sus planes.
+    /// Casos que prueban el issue: los de su plan.
     QStringList caseIdsOf(const Issue& issue) const;
     /// Ejecuciones de la ronda, la más reciente primero.
     QList<RunRecord> revisionRuns(const Issue& issue, int revision = 0) const;

@@ -20,6 +20,18 @@ QStringList PlanReport::brokenCaseIds() const {
     return out;
 }
 
+QStringList PlanReport::toContinue(const QStringList& planCases) const {
+    QStringList out;
+    for (const auto& row : rows) {
+        if (row.executed ? !row.run.isBroken() : (!planCases.isEmpty() && !planCases.contains(row.caseId))) continue;
+        out << row.caseId;
+    }
+    // Lo que el plan tiene ahora y el ciclo no tenía al arrancar, en el orden del plan.
+    for (const auto& caseId : planCases)
+        if (!plan.caseIds.contains(caseId) && !out.contains(caseId)) out << caseId;
+    return out;
+}
+
 QList<IssueLink> PlanReport::bugs() const {
     QList<IssueLink> out;
     for (const auto& row : rows) out += row.bugs;

@@ -34,7 +34,7 @@ struct Finished {
     QString planRunId;
 };
 
-Finished finishedRevision(AppFixture& f, bool publishedInTracker = true) {
+Finished finishedRevision(AppFixture& f, bool publishedInTracker = true, bool close = true) {
     f.settings.updateRequirementSource([](RequirementSourceSettings& r) {
         r.url = kConnection;
         r.user = QStringLiteral("jmaidana");
@@ -71,7 +71,7 @@ Finished finishedRevision(AppFixture& f, bool publishedInTracker = true) {
     run.finishedAt = run.startedAt.addSecs(300);
     f.history.addRun(run);
     f.history.finishPlan(planRunId);
-    f.issues.closeRevision(id, QaOutcome::Observado);
+    if (close) f.issues.closeRevision(id, QaOutcome::Observado);
     return {id, planId, planRunId};
 }
 
@@ -254,21 +254,92 @@ private slots:
         QCOMPARE(f.issues.find(done.issueId)->zephyr.cycleOf(QStringLiteral("QA")), QStringLiteral("77"));
     }
 
-    // Los Tests del requerimiento se crean antes de probarlo y se enlazan a su issue del gestor.
-    void theTestsOfTheRequirementAreCreatedAndLinkedToItsIssue() {
+    // Subir el plan: el ciclo de su fase queda con todos sus casos (los de antes, sin ejecutar), lo ya
+    // ejecutado de la ronda se publica con su resultado y los Tests se enlazan al issue del gestor.
+    void uploadingThePlanLeavesEveryCaseInThePhaseCycleAndPublishesTheResults() {
         AppFixture f;
         const Finished done = finishedRevision(f);
+        f.plans.setActive(done.planId);
+        f.plans.toggle(QStringLiteral("TC-102"));   // un caso que todavía no se ejecutó
         QVERIFY(f.revisionPublish.canPrepareTests());
-        const QStringList cases{QStringLiteral("TC-101")};
-        QCOMPARE(f.revisionPublish.casesWithoutTest(done.issueId, cases), cases);
-        RevisionPublishService::TestsPrepared out;
-        f.revisionPublish.prepareTests(done.issueId, cases, [&out](const RevisionPublishService::TestsPrepared& r) { out = r; });
-        QVERIFY2(out.ok, qPrintable(out.error));
-        QCOMPARE(out.created, 1);
-        QCOMPARE(out.linked, 1);
-        const QList<QPair<QString, QString>> expected{{QStringLiteral("SHOP-101"), QStringLiteral("SHOP-12")}};
-        QCOMPARE(f.tracker->links, expected);
-        QVERIFY(f.revisionPublish.casesWithoutTest(done.issueId, cases).isEmpty());
+        QCOMPARE(f.revisionPublish.uploadPhase(*f.issues.find(done.issueId)), QStringLiteral("QA"));
+
+        RevisionPublishService::PlanUploaded out;
+        f.revisionPublish.uploadPlan(done.issueId, false, [&out](const RevisionPublishService::PlanUploaded& r) { out = r; });
+        QVERIFY2(out.ok, qPrintable(out.error + out.problems.join(QLatin1Char('\n'))));
+        QCOMPARE(out.phase, QStringLiteral("QA"));
+        QCOMPARE(out.cycleName, QStringLiteral("GREQ 2026997 · QA"));
+        QCOMPARE(out.created, 2);
+        QCOMPARE(out.added, 2);
+        QCOMPARE(out.cycles, 1);
+        // Primero el plan entero, sin ejecutar, en el ciclo de la fase; después, el ciclo ejecutado en él.
+        QCOMPARE(f.zephyr->published.size(), 2);
+        QCOMPARE(f.zephyr->published[0].cycleName, QStringLiteral("GREQ 2026997 · QA"));
+        QCOMPARE(f.zephyr->published[0].cases.size(), 2);
+        QVERIFY(!f.zephyr->published[0].cases[0].executed);
+        QCOMPARE(f.zephyr->published[1].cycleId, QStringLiteral("77"));
+        QVERIFY(f.zephyr->published[1].cases[0].executed);
+        QCOMPARE(f.zephyr->published[1].cases[0].testKey, QStringLiteral("SHOP-101"));   // el Test ya creado
+        QVERIFY(f.revisionPublish.casesWithoutTest(done.issueId, {QStringLiteral("TC-101"), QStringLiteral("TC-102")}).isEmpty());
+        QVERIFY(f.tracker->links.contains({QStringLiteral("SHOP-101"), QStringLiteral("SHOP-12")}));
+    }
+
+    // Arrancar un ciclo del plan deja preparado el ciclo de su fase en Zephyr, y lo avisa.
+    void startingACycleUploadsThePlanToItsPhaseCycle() {
+        AppFixture f;
+        const Finished done = finishedRevision(f);
+        QSignalSpy prepared(&f.revisionPublish, &RevisionPublishService::planCyclePrepared);
+        f.revisionPublish.prepareStartedCycle(done.planRunId);
+        QCOMPARE(prepared.count(), 1);
+        QVERIFY(prepared.first().at(1).toBool());
+        QCOMPARE(f.zephyr->published.size(), 1);
+        QCOMPARE(f.zephyr->published[0].cycleName, QStringLiteral("GREQ 2026997 · QA"));
+        QVERIFY(!f.zephyr->published[0].cases[0].executed);
+        QCOMPARE(f.issues.find(done.issueId)->zephyr.cycleOf(QStringLiteral("QA")), QStringLiteral("77"));
+
+        // Sin Zephyr no se intenta nada.
+        f.settings.updateTracker([](TrackerSettings& t) { t.zephyr = false; });
+        f.revisionPublish.prepareStartedCycle(done.planRunId);
+        QCOMPARE(prepared.count(), 1);
+    }
+
+    // Cerrar la revisión sube ya lo planificado: los resultados al ciclo de la fase en Zephyr y el
+    // resultado con el acta al issue del gestor. GESREQ y el cierre del issue quedan para la publicación.
+    void closingTheRevisionUploadsTheResultsToZephyrAndTheTracker() {
+        AppFixture f;
+        const Finished open = finishedRevision(f, true, false);
+        f.issues.updateIssue(open.issueId, [](Issue& i) { i.revisions.last().documentPath = QStringLiteral("/tmp/acta.docx"); });
+
+        RevisionPublishService::Result result;
+        bool done = false;
+        f.revisionPublish.closeRevision(open.issueId, QaOutcome::Observado, [&](const RevisionPublishService::Result& r) { result = r; done = true; });
+        QVERIFY(done);
+        const Issue* issue = f.issues.find(open.issueId);
+        QVERIFY(!issue->currentRevision());
+        QVERIFY(issue->lastOutcome() == QaOutcome::Observado);
+        QVERIFY(result.ok);
+        QList<Destination> order;
+        for (const auto& step : result.steps) order << step.destination;
+        QCOMPARE(order, QList<Destination>({Destination::Zephyr, Destination::Tracker}));
+        QCOMPARE(f.zephyr->published.size(), 1);
+        QVERIFY(f.zephyr->published[0].cases[0].executed);
+        QCOMPARE(f.tracker->commentedKeys, QStringList{QStringLiteral("SHOP-12")});
+        QVERIFY(f.requirementSource->registrations.isEmpty());   // GESREQ, en la publicación
+        QVERIFY(f.tracker->closed.isEmpty());
+        // Y lo que le queda a la publicación es sólo GESREQ.
+        QCOMPARE(f.revisionPublish.pendingFor(open.issueId, 1), QList<Destination>{Destination::Requirement});
+    }
+
+    // Sin Zephyr ni gestor, cerrar sólo cierra.
+    void closingWithNothingConfiguredOnlyCloses() {
+        AppFixture f;
+        const Finished open = finishedRevision(f, false, false);
+        f.settings.updateTracker([](TrackerSettings& t) { t.zephyr = false; });
+        RevisionPublishService::Result result;
+        f.revisionPublish.closeRevision(open.issueId, QaOutcome::Conforme, [&result](const RevisionPublishService::Result& r) { result = r; });
+        QVERIFY(result.ok && result.steps.isEmpty());
+        QVERIFY(!f.issues.find(open.issueId)->currentRevision());
+        QVERIFY(f.zephyr->published.isEmpty());
     }
 
     void publishingSendsTheCycleTheCommentAndTheRegistrationInOrder() {

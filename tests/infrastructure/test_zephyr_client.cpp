@@ -771,6 +771,47 @@ private slots:
         QVERIFY(removed);
     }
 
+    // El plan se sube antes de probarlo: el caso que no está en el ciclo entra sin ejecutar, y el que ya
+    // está no se toca (puede tener ya su resultado). Ningún veredicto se fija.
+    void casesNotRunYetEnterTheCycleWithoutTouchingTheOnesAlreadyThere() {
+        FakeHttpServer server;
+        routeProject(server);
+        routeZephyr(server, "/rest/zapi/latest");
+        routeMyself(server, "es_ES");
+        server.route("PUT", "/rest/api/2/issue/SHOP-77/assignee", [](const HttpRequest&) { return HttpResponse::json(204, ""); });
+        server.route("GET", "/rest/zapi/latest/cycle/77", [](const HttpRequest&) { return HttpResponse::json(200, "{\"id\":77}"); });
+        // SHOP-42 (id 10600) ya tiene su ejecución en el ciclo 77; el Test nuevo (10700) no.
+        server.route("GET", "/rest/zapi/latest/execution", [](const HttpRequest& r) {
+            if (r.path.contains("issueId=10600")) return HttpResponse::json(200, "{\"executions\":[{\"id\":600,\"cycleId\":77}]}");
+            return HttpResponse::json(200, "{\"executions\":[]}");
+        });
+
+        PublishCase known = caseOf(QStringLiteral("TC-104"), QStringLiteral("SHOP-42"), Verdict::Superado, {});
+        known.executed = false;
+        PublishCase fresh = caseOf(QStringLiteral("TC-103"), QString(), Verdict::Superado, {});
+        fresh.executed = false;
+        fresh.design = {TestStep{QStringLiteral("Abrir carrito"), {}, QStringLiteral("Se abre")}};
+        PublishRequest request = requestOf({known, fresh});
+        request.cycleId = QStringLiteral("77");
+
+        ZephyrClient client;
+        PublishResult out;
+        bool done = false;
+        client.publish(settingsFor(server.baseUrl()), request, [&](const PublishResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY2(out.ok, qPrintable(out.error));
+        QCOMPARE(out.added, 1);
+        QCOMPARE(out.executions, 0);
+        QCOMPARE(out.createdTests.value(QStringLiteral("TC-103")), QStringLiteral("SHOP-77"));
+        int created = 0;
+        for (const auto& r : server.requests) {
+            QVERIFY2(!r.path.contains("/execute"), r.path.constData());      // ningún veredicto
+            QVERIFY2(!r.path.contains("/stepResult"), r.path.constData());
+            if (r.method == "POST" && r.path == "/rest/zapi/latest/execution") ++created;
+        }
+        QCOMPARE(created, 1);   // sólo el que no estaba
+    }
+
     void unknownVersionStopsThePublicationBeforeCreatingAnything() {
         FakeHttpServer server;
         routeProject(server);

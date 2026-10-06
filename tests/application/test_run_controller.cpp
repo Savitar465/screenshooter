@@ -136,6 +136,89 @@ private slots:
         QVERIFY(!f.run.continueCycle(QStringLiteral("PR-9999")));   // y un ciclo que no existe, tampoco
     }
 
+    // Continuar también ejecuta lo que el ciclo dejó sin ejecutar y lo que se añadió al plan después
+    // de arrancarlo; lo que ya no está en el plan y no se llegó a ejecutar, no.
+    void continuingACycleAlsoRunsWhatWasNotRunAndWhatThePlanGained() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107"), QStringLiteral("TC-105")},
+                            QStringLiteral("Regresión"), QStringLiteral("PL-0001"));
+        const QString cycle = f.run.planRunId();
+        f.run.mark(StepResult::Pass);   // TC-103 superado
+        f.run.finish();
+        f.run.abandon();                // TC-107 y TC-105 sin ejecutar
+        const PlanReport report = f.history.report(cycle);
+        QCOMPARE(report.toContinue(), (QStringList{QStringLiteral("TC-107"), QStringLiteral("TC-105")}));
+        // El plan de hoy ya no tiene TC-105 y ganó TC-106.
+        const QStringList plan{QStringLiteral("TC-103"), QStringLiteral("TC-107"), QStringLiteral("TC-106")};
+        QCOMPARE(report.toContinue(plan), (QStringList{QStringLiteral("TC-107"), QStringLiteral("TC-106")}));
+
+        QVERIFY(f.run.continueCycle(cycle, QString(), plan));
+        QCOMPARE(f.run.planRunId(), cycle);
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-107"));
+        QVERIFY(f.run.isQueued(QStringLiteral("TC-106")));
+        QVERIFY(!f.run.isQueued(QStringLiteral("TC-105")));
+        QVERIFY(f.history.findPlan(cycle)->caseIds.contains(QStringLiteral("TC-106")));   // ya es del ciclo
+        QVERIFY(f.run.continuesRunId().isEmpty());   // sin ejecutar: se prueba entero, no se retoma
+    }
+
+    // ---- El ciclo en curso sigue a su plan ------------------------------------------------------
+
+    // Un caso añadido al plan mientras se ejecuta entra al ciclo, al final de la cola; uno quitado sale
+    // si todavía no se empezó, y el que está en pantalla o ya se ejecutó se queda.
+    void theRunningCycleFollowsTheChangesOfItsPlan() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107"), QStringLiteral("TC-105")},
+                            QStringLiteral("Regresión"), QStringLiteral("PL-0001"));
+        const QString cycle = f.run.planRunId();
+        f.run.mark(StepResult::Pass);
+        f.run.finish();   // TC-103 ejecutado; en pantalla, TC-107
+        QSignalSpy changed(&f.run, &RunController::planCasesChanged);
+
+        // Sin TC-103 (ejecutado), sin TC-107 (en pantalla), sin TC-105 (sin empezar) y con TC-106 nuevo.
+        const RunController::PlanSync sync = f.run.syncPlanCases({QStringLiteral("TC-106")});
+        QCOMPARE(sync.added, QStringList{QStringLiteral("TC-106")});
+        QCOMPARE(sync.removed, QStringList{QStringLiteral("TC-105")});
+        QCOMPARE(changed.count(), 1);
+        QVERIFY(f.run.isQueued(QStringLiteral("TC-106")));
+        QVERIFY(!f.run.isQueued(QStringLiteral("TC-105")));
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-107"));
+        QCOMPARE(f.history.findPlan(cycle)->caseIds,
+                 (QStringList{QStringLiteral("TC-106"), QStringLiteral("TC-103"), QStringLiteral("TC-107")}));
+
+        // Lo mismo otra vez no cambia nada.
+        QVERIFY(f.run.syncPlanCases({QStringLiteral("TC-106")}).isEmpty());
+        QCOMPARE(changed.count(), 1);
+
+        // Y el añadido se ejecuta en el mismo ciclo.
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.finish());
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-106"));
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+        QVERIFY(!f.run.finish());
+        QCOMPARE(f.history.report(cycle).executed, 3);
+    }
+
+    // La cola que ganó el ciclo sobrevive al cierre de la aplicación.
+    void aCaseAddedToTheRunningCycleSurvivesRestart() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Regresión"), QStringLiteral("PL-0001"));
+        f.run.syncPlanCases({QStringLiteral("TC-103"), QStringLiteral("TC-107")});
+        f.run.persistSessionNow();
+
+        RunController again(f.store, f.history, f.sessionRepo);
+        again.load();
+        QVERIFY(again.isQueued(QStringLiteral("TC-107")));
+        QCOMPARE(again.planCases(), (QStringList{QStringLiteral("TC-103"), QStringLiteral("TC-107")}));
+    }
+
+    // Sin ciclo en curso no hay nada que seguir.
+    void withoutACycleThereIsNothingToFollow() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-103"));
+        QVERIFY(f.run.syncPlanCases({QStringLiteral("TC-107")}).isEmpty());
+        QVERIFY(!f.run.isQueued(QStringLiteral("TC-107")));
+    }
+
     // Si el caso cambió desde aquella ejecución, lo de antes no se da por bueno: se prueba entero.
     void anEditedCaseIsNotResumedFromTheOldResults() {
         AppFixture f;

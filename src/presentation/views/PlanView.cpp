@@ -128,7 +128,7 @@ void PlanView::refreshList() {
     QHash<QString, QStringList> issuesByPlan;
     if (m_issues) {
         for (const auto& issue : m_issues->issues())
-            for (const auto& planId : issue.planIds) issuesByPlan[planId] << issue.id;
+            if (!issue.planId.isEmpty()) issuesByPlan[issue.planId] << issue.id;
     }
     int shown = 0;
     for (const auto& p : m_plans.plans()) {
@@ -462,12 +462,14 @@ void PlanView::refreshCycles() {
         connect(report, &QPushButton::clicked, this, [this, id = r.plan.id]() { emit cycleReportRequested(id); });
         th->addWidget(report);
         // Lo que quedó roto se vuelve a probar sin repetir el plan entero.
-        if (r.canContinue()) {
+        const QStringList planCases = m_plans.find(r.plan.planId) ? m_plans.orderedCaseIds(r.plan.planId) : QStringList{};
+        if (r.canContinue(planCases)) {
             auto* proceed = ui::button(tr("Continuar"), "outline");
             proceed->setObjectName(QStringLiteral("cycleContinue-%1").arg(r.plan.id));
             proceed->setStyleSheet(QStringLiteral("padding:3px 8px;font-size:11.5px;border-radius:7px;"));
-            proceed->setToolTip(tr("Volver a ejecutar los %1 caso(s) fallado(s) o bloqueado(s) de este ciclo")
-                                    .arg(r.brokenCaseIds().size()));
+            proceed->setToolTip(tr("Volver a ejecutar los %1 caso(s) por terminar de este ciclo: fallados, bloqueados, sin "
+                                   "ejecutar o añadidos al plan después")
+                                    .arg(r.toContinue(planCases).size()));
             connect(proceed, &QPushButton::clicked, this, [this, id = r.plan.id]() { emit continueCycleRequested(id); });
             th->addWidget(proceed);
         }

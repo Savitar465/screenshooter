@@ -366,9 +366,9 @@ void HistoryView::renderPlan(const PlanReport& report) {
     if (report.canContinue()) {
         auto* continueBtn = ui::button(tr("Continuar ciclo…"), "primary");
         continueBtn->setObjectName(QStringLiteral("continueCycle"));
-        continueBtn->setToolTip(tr("Vuelve a ejecutar los %1 caso(s) fallado(s) o bloqueado(s), cada uno desde el paso "
-                                   "que se rompió, en la misma revisión")
-                                    .arg(report.brokenCaseIds().size()));
+        continueBtn->setToolTip(tr("Vuelve a ejecutar los %1 caso(s) por terminar —los rotos desde el paso que se rompió y "
+                                   "los que no se ejecutaron, enteros—, en el mismo ciclo")
+                                    .arg(report.toContinue().size()));
         connect(continueBtn, &QPushButton::clicked, this, [this, id = plan.id]() { emit continueCycleRequested(id); });
         ah->addWidget(continueBtn);
     }

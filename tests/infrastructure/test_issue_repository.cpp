@@ -19,7 +19,7 @@ Issue fullIssue() {
     i.notes = QStringLiteral("Usar el usuario de calidad");
     i.priority = Priority::Alta;
     i.state = IssueState::Preparing;
-    i.planIds = {QStringLiteral("PL-0002"), QStringLiteral("PL-0003")};
+    i.planId = QStringLiteral("PL-0002");
     i.publication.tracker = QStringLiteral("Jira");
     i.publication.baseUrl = QStringLiteral("https://jira.example.test");
     i.publication.project = QStringLiteral("QA");
@@ -132,7 +132,8 @@ private slots:
         QCOMPARE(i.notes, expected.notes);
         QVERIFY(i.priority == Priority::Alta);
         QVERIFY(i.state == IssueState::Preparing);
-        QCOMPARE(i.planIds, expected.planIds);
+        QCOMPARE(i.planId, expected.planId);
+        QVERIFY(i.mergedPlanIds.isEmpty());
         QCOMPARE(i.publication.key, expected.publication.key);
         QCOMPARE(i.publication.url, expected.publication.url);
         QCOMPARE(i.publication.tracker, QStringLiteral("Jira"));
@@ -214,6 +215,28 @@ private slots:
         QVERIFY(i.revisions.last().jira.isEmpty());
         QVERIFY(i.revisions.last().gesreq.isEmpty());
         QVERIFY(loaded->at(1).revisions.isEmpty());
+    }
+
+    // Un issue tiene un plan. Los ficheros de cuando podía tener varios se leen con el primero como plan
+    // y los demás aparte, para fundirlos; mientras no se fundan, se vuelven a guardar como estaban.
+    void severalPlansOfBeforeAreReadAsOnePlanAndTheRestToMerge() {
+        QTemporaryDir dir;
+        const QString path = QDir(dir.path()).filePath(QStringLiteral("issues.json"));
+        {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("{\"version\":1,\"issues\":[{\"id\":\"IS-0001\",\"title\":\"A\",\"planIds\":[\"PL-0002\",\"PL-0003\",\"PL-0002\"]}]}");
+        }
+        JsonIssueRepository repo(dir.path());
+        auto loaded = repo.loadIssues();
+        QVERIFY(loaded.has_value() && loaded->size() == 1);
+        QCOMPARE(loaded->first().planId, QStringLiteral("PL-0002"));
+        QCOMPARE(loaded->first().mergedPlanIds, QStringList{QStringLiteral("PL-0003")});
+
+        QVERIFY(repo.saveIssues(*loaded));
+        loaded = repo.loadIssues();
+        QCOMPARE(loaded->first().planId, QStringLiteral("PL-0002"));
+        QCOMPARE(loaded->first().mergedPlanIds, QStringList{QStringLiteral("PL-0003")});
     }
 
     void withoutAFileThereAreNoIssuesYet() {

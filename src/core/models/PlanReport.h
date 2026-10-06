@@ -51,8 +51,13 @@ struct PlanReport {
     /// Casos que quedaron rotos: los ejecutados con veredicto fallado o bloqueado, en el orden del
     /// plan. Son los que repite una continuación del ciclo.
     QStringList brokenCaseIds() const;
-    /// El ciclo se puede continuar: terminó y dejó algún caso roto.
-    bool canContinue() const { return plan.isFinished() && !brokenCaseIds().isEmpty(); }
+    /// Lo que repite una continuación del ciclo, en el orden del plan: los casos rotos (que se retoman en
+    /// el paso que se rompió), los que el ciclo dejó sin ejecutar y, con `planCases` —lo que tiene hoy su
+    /// plan—, los que se añadieron al plan después de arrancarlo. Con `planCases`, lo que ya no está en el
+    /// plan y no llegó a ejecutarse no se continúa.
+    QStringList toContinue(const QStringList& planCases = {}) const;
+    /// El ciclo se puede continuar: terminó y le queda algo de `toContinue`.
+    bool canContinue(const QStringList& planCases = {}) const { return plan.isFinished() && !toContinue(planCases).isEmpty(); }
 
     /// Los bugs del ciclo, caso por caso y en el orden del plan.
     QList<IssueLink> bugs() const;

@@ -63,7 +63,19 @@ public:
     /// ahí, y lo repetido sustituye a lo roto. El ambiente es el suyo (`environment` sólo se anota si no
     /// tenía). Si la ronda del issue ya se cerró, `planStarted` lo lleva a la siguiente.
     /// Falso si el ciclo no existe, no terminó, no dejó nada roto o ninguno de sus casos sigue estando.
-    bool continueCycle(const QString& planRunId, const QString& environment = QString());
+    /// Con `planCases` (lo que tiene hoy su plan) continúa además lo que el ciclo dejó sin ejecutar y lo
+    /// que se añadió al plan después de arrancarlo (`PlanReport::toContinue`).
+    bool continueCycle(const QString& planRunId, const QString& environment = QString(), const QStringList& planCases = {});
+    /// Lo que cambió en el ciclo en curso al seguir a su plan.
+    struct PlanSync {
+        QStringList added;     // casos nuevos, al final de la cola
+        QStringList removed;   // casos quitados del plan que todavía no se habían empezado
+        bool isEmpty() const { return added.isEmpty() && removed.isEmpty(); }
+    };
+    /// El plan del ciclo en curso cambió: `planCases` es lo que tiene ahora. Los casos nuevos entran al
+    /// ciclo y a su cola; los quitados salen si todavía no se empezaron —el que está en pantalla, uno
+    /// aparcado o uno ya ejecutado se quedan, para no perder lo probado—. Emite `planCasesChanged`.
+    PlanSync syncPlanCases(const QStringList& planCases);
     void restart();
     /// Pone en pausa la ejecución en curso: el tiempo que pase hasta reanudarla no cuenta para el paso ni
     /// para la ejecución. Sólo una ejecución activa (no terminada) se pausa. Sobrevive al cierre.
@@ -98,6 +110,8 @@ signals:
     void planStarted(const QString& planRunId, const QString& planId);
     /// Se terminó (o se abandonó) la ejecución de un plan; el informe ya está en el historial.
     void planCompleted(const QString& planRunId);
+    /// El ciclo en curso siguió un cambio de su plan (`syncPlanCases`).
+    void planCasesChanged(const QString& planRunId, const QStringList& added, const QStringList& removed);
     void saveFailed(const QString& what);
 
 private:

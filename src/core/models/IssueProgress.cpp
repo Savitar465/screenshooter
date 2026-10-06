@@ -69,7 +69,7 @@ IssueProgress issueProgress(const QStringList& caseIds, const QList<TestCase>& c
     }
 
     // El singular y el plural van escritos uno a uno para que se puedan traducir por separado.
-    if (p.cases == 0) p.blockers << QCoreApplication::translate("core", "sin casos en sus planes");
+    if (p.cases == 0) p.blockers << QCoreApplication::translate("core", "sin casos en su plan");
     if (p.notRun() == 1) p.blockers << QCoreApplication::translate("core", "%1 caso sin ejecutar").arg(p.notRun());
     else if (p.notRun() > 1) p.blockers << QCoreApplication::translate("core", "%1 casos sin ejecutar").arg(p.notRun());
     if (p.failed == 1) p.blockers << QCoreApplication::translate("core", "%1 caso fallido").arg(p.failed);

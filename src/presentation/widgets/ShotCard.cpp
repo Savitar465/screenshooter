@@ -44,7 +44,8 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
     });
     auto* annotate = ui::button(QStringLiteral("✎"), "icon-move");
     annotate->setToolTip(tr("Anotar (flechas, rectángulos, texto, difuminado)"));
-    annotate->setVisible(editable);
+    // Sólo ocultar: setVisible(true) en un widget aún sin padre lo abre como ventana suelta.
+    if (!editable) annotate->hide();
     connect(annotate, &QPushButton::clicked, this, [this, id]() { emit annotateRequested(id); });
 
     if (layout == Layout::Compact || layout == Layout::Film) {

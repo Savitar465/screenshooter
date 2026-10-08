@@ -1,7 +1,10 @@
 #pragma once
 
 #include <QList>
+#include <QSplitter>
 #include <QWidget>
+
+#include <functional>
 
 class QBoxLayout;
 class QFrame;
@@ -60,5 +63,33 @@ private:
     int m_breakpoint;
     bool m_stacked = false;
 };
+
+/// Lista lateral a la izquierda y panel principal a la derecha, separados por un borde que se
+/// arrastra (manteniendo el clic) para ensanchar o estrechar la lista. El ancho elegido se recuerda en
+/// `settingsKey`. La lista nunca pasa de la mitad del ancho disponible, así que el panel principal
+/// conserva sitio aunque la ventana se estreche.
+class SideSplitter : public QSplitter {
+    Q_OBJECT
+public:
+    SideSplitter(const QString& objectName, QString settingsKey, int defaultSideWidth, QWidget* parent = nullptr);
+    /// Pone los dos paneles y les da el ancho recordado. Se llama una vez, con los paneles ya construidos.
+    void setPanes(QWidget* side, QWidget* main);
+
+protected:
+    void resizeEvent(QResizeEvent* e) override;
+
+private:
+    /// Devuelve la lista a la mitad del ancho si se pasó (al arrastrar o al estrecharse la ventana).
+    void keepSideWithinHalf();
+
+    QString m_settingsKey;
+    int m_defaultSideWidth;
+};
+
+/// Avisa con `narrow == true` cuando el ancho de `w` baja de `breakpoint`, y con `false` cuando vuelve
+/// a llegar; también una vez al principio, con el ancho que tenga entonces. Sirve para recolocar
+/// partes de un panel según su propio ancho —no el de la ventana—, que cambia también al arrastrar
+/// el borde de un `SideSplitter`.
+void onBreakpoint(QWidget* w, int breakpoint, std::function<void(bool narrow)> changed);
 
 } // namespace qaflow

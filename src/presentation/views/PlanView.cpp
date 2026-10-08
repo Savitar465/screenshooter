@@ -5,8 +5,10 @@
 #include "application/TestCaseStore.h"
 #include "application/TestPublishService.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/ProgressCells.h"
+#include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/Ui.h"
 #include "presentation/widgets/ZephyrPublishFlow.h"
 
@@ -60,14 +62,16 @@ constexpr int kCasesPerPage = 10;
 
 PlanView::PlanView(TestCaseStore& cases, PlanStore& plans, TestPublishService* publish, IssueStore* issues, QWidget* parent)
     : QWidget(parent), m_cases(cases), m_plans(plans), m_publish(publish), m_issues(issues) {
-    auto* root = ui::hbox(this, 0, 0);
-    buildListPane(root);
-    buildEditor(root);
+    // La lista se ensancha o se estrecha arrastrando su borde; el ancho se recuerda.
+    auto* split = new SideSplitter(QStringLiteral("plansSplit"), QStringLiteral("plans/listWidth"), 280);
+    ui::hbox(this, 0, 0)->addWidget(split);
+    auto* list = buildListPane();
+    split->setPanes(list, buildEditor());
 
     connect(&m_plans, &PlanStore::plansChanged, this, [this]() { refreshList(); refreshEditor(); });
     connect(&m_plans, &PlanStore::planChanged, this, [this]() { refreshList(); refreshEditor(); });
-    connect(&m_cases, &TestCaseStore::suitesChanged, this, &PlanView::refreshRows);
-    connect(&m_cases, &TestCaseStore::caseChanged, this, &PlanView::refreshRows);
+    connect(&m_cases, &TestCaseStore::suitesChanged, this, &PlanView::refreshRowsIfVisible);
+    connect(&m_cases, &TestCaseStore::caseChanged, this, &PlanView::refreshRowsIfVisible);
     // Vincular o desvincular un plan se hace desde la pantalla de issues: las etiquetas de aquí lo siguen.
     if (m_issues) connect(m_issues, &IssueStore::issuesChanged, this, [this]() { refreshList(); refreshIssueTags(); });
     refreshList();
@@ -81,10 +85,11 @@ void PlanView::refresh() {
 
 // ---- Lista de planes -----------------------------------------------------------------------
 
-void PlanView::buildListPane(QHBoxLayout* root) {
+QWidget* PlanView::buildListPane() {
     auto* pane = ui::card("list-pane");
-    pane->setMinimumWidth(250);
-    pane->setMaximumWidth(300);
+    pane->setObjectName(QStringLiteral("plansList"));
+    pane->setMinimumWidth(230);
+    pane->setMaximumWidth(560);
     pane->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     auto* v = ui::vbox(pane, 0, 0);
 
@@ -109,7 +114,7 @@ void PlanView::buildListPane(QHBoxLayout* root) {
     m_listLayout->setContentsMargins(10, 0, 10, 16);
     m_listLayout->setSpacing(4);
     v->addWidget(sa, 1);
-    root->addWidget(pane);
+    return pane;
 }
 
 void PlanView::refreshList() {
@@ -172,16 +177,19 @@ void PlanView::refreshList() {
 
 // ---- Editor del plan activo ----------------------------------------------------------------
 
-void PlanView::buildEditor(QHBoxLayout* root) {
+QWidget* PlanView::buildEditor() {
     QWidget* content;
     QVBoxLayout* outer;
     auto* sa = ui::scrollArea(&content, &outer);
+    sa->setObjectName(QStringLiteral("planEditorScroll"));
+    sa->setMinimumWidth(400);
+    // El plan se adapta al ancho; si algo aun así no cabe, se desplaza en vez de cortarse.
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     outer->setContentsMargins(32, 28, 32, 28);
     m_editor = new QWidget;
     m_editor->setMaximumWidth(900);
     auto* v = ui::vbox(m_editor, 0, 18);
     outer->addWidget(m_editor, 0, Qt::AlignTop);
-    root->addWidget(sa, 1);
 
     // Cabecera
     auto* head = new QWidget;
@@ -238,6 +246,12 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     sh->addWidget(stat(tr("Estimado"), m_time, m_basis));
     hh->addWidget(stats, 0, Qt::AlignTop);
     v->addWidget(head);
+    // Si el editor es estrecho, las cifras del plan bajan debajo del nombre en vez de apretarlo.
+    // Se mira el ancho visible y no el del editor: éste no baja de lo que pide su contenido.
+    onBreakpoint(sa->viewport(), 780, [hh, stats](bool narrow) {
+        hh->setDirection(narrow ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
+        hh->setAlignment(stats, narrow ? Qt::AlignLeft : Qt::AlignTop);
+    });
 
     // Ciclo actual
     m_cycleCard = ui::card("card");
@@ -250,12 +264,14 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     auto* ctop = new QWidget;
     auto* cth = ui::hbox(ctop, 0, 10);
     m_cycleTitle = ui::label(QString(), "eyebrow");
+    m_cycleTitle->setWordWrap(true);   // en un editor estrecho salta de línea en vez de ensancharlo
     cth->addWidget(m_cycleTitle, 1);
     m_cycleReport = ui::button(tr("Ver informe"), "outline");
     m_cycleReport->setStyleSheet(QStringLiteral("padding:5px 10px;font-size:12px;border-radius:8px;"));
     cth->addWidget(m_cycleReport);
     cv->addWidget(ctop);
     m_cycleSummary = new QLabel;
+    m_cycleSummary->setWordWrap(true);
     cv->addWidget(m_cycleSummary);
     m_cycleCells = new ProgressCells;
     cv->addWidget(m_cycleCells);
@@ -303,10 +319,16 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     });
     searchLayout->addWidget(m_suiteFilter);
     v->addWidget(searchRow);
+    // Estrecho: el filtro de suite baja debajo de la búsqueda y ocupa todo el ancho.
+    onBreakpoint(sa->viewport(), 620, [this, searchLayout](bool narrow) {
+        searchLayout->setDirection(narrow ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
+        m_suiteFilter->setMaximumWidth(narrow ? QWIDGETSIZE_MAX : 260);
+    });
 
     // Acciones rápidas
+    // Saltan de línea cuando no caben en una.
     auto* quick = new QWidget;
-    auto* qh = ui::hbox(quick, 0, 8);
+    auto* qh = new FlowLayout(quick, 0, 8, 8);
     auto* newCase = ui::button(tr("+ Nuevo caso"), "chip-lg");
     newCase->setObjectName(QStringLiteral("planNewCase"));
     newCase->setToolTip(tr("Crea un caso, lo añade a este plan y lo abre para escribir sus pasos"));
@@ -324,7 +346,6 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     qh->addWidget(none);
     qh->addWidget(high);
     qh->addWidget(sort);
-    qh->addStretch(1);
     v->addWidget(quick);
 
     // Casos en el plan (ordenados) y disponibles
@@ -340,6 +361,12 @@ void PlanView::buildEditor(QHBoxLayout* root) {
     m_available = ui::vbox(available, 0, 6);
     v->addWidget(available);
     v->addWidget(buildCasePager(m_availablePager, QStringLiteral("available")));
+    onBreakpoint(sa->viewport(), 680, [this, outer](bool narrow) {
+        outer->setContentsMargins(narrow ? 16 : 32, 28, narrow ? 16 : 32, 28);
+        m_narrowRows = narrow;
+        if (m_available) refreshRows();   // durante la construcción aún no hay filas que rehacer
+    });
+    return sa;
 }
 
 void PlanView::refreshEditor() {
@@ -697,7 +724,18 @@ void PlanView::refreshCasePager(CasePager& pager, int count) {
     pager.next->setEnabled(pager.page + 1 < pages);
 }
 
+void PlanView::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (m_rowsStale) refreshRows();
+}
+
+void PlanView::refreshRowsIfVisible() {
+    if (isVisible()) refreshRows();
+    else m_rowsStale = true;
+}
+
 void PlanView::refreshRows() {
+    m_rowsStale = false;
     const TestPlan* p = m_plans.active();
     if (!p) return;
     const QStringList ordered = m_plans.orderedCaseIds();
@@ -745,13 +783,15 @@ void PlanView::refreshRows() {
         auto* id = ui::label(c->id, "mono-muted");
         id->setFixedWidth(54);
         g->addWidget(id);
-        auto* title = new QLabel(c->title.isEmpty() ? tr("(sin título)") : c->title);
-        title->setWordWrap(true);
+        // Hasta dos líneas; lo que no cabe se recorta con «…» y el título entero queda en el tooltip.
+        auto* title = new ElidedLabel(c->title.isEmpty() ? tr("(sin título)") : c->title);
+        title->setMaxLines(2);
         title->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;"));
         g->addWidget(title, 1);
         auto* suite = ui::label(c->suite, "muted-sm");
         suite->setFixedWidth(96);
         g->addWidget(suite);
+        suite->setVisible(!m_narrowRows);
         const auto pill = theme::priorityPill(toString(c->priority));
         auto* prio = ui::pill(label(c->priority), pill.bg, pill.fg);
         prio->setFixedWidth(54);
@@ -759,6 +799,7 @@ void PlanView::refreshRows() {
         auto* steps = ui::label(tr("%1 pasos").arg(c->steps.size()), "muted-sm");
         steps->setFixedWidth(52);
         g->addWidget(steps);
+        steps->setVisible(!m_narrowRows);
         auto* up = ui::button(QStringLiteral("▲"), "icon-move");
         up->setEnabled(i > 0);
         up->setToolTip(tr("Ejecutar antes"));
@@ -802,12 +843,14 @@ void PlanView::refreshRows() {
         auto* id = ui::label(c.id, "mono-muted");
         id->setFixedWidth(54);
         g->addWidget(id);
-        auto* title = new QLabel(c.title.isEmpty() ? tr("(sin título)") : c.title);
+        // Una línea: lo que no cabe se recorta con «…» y el título entero queda en el tooltip.
+        auto* title = new ElidedLabel(c.title.isEmpty() ? tr("(sin título)") : c.title);
         title->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;color:%1;").arg(theme::Text));
         g->addWidget(title, 1);
         auto* suite = ui::label(c.suite, "muted-sm");
         suite->setFixedWidth(96);
         g->addWidget(suite);
+        suite->setVisible(!m_narrowRows);
         const auto pill = theme::priorityPill(toString(c.priority));
         auto* prio = ui::pill(label(c.priority), pill.bg, pill.fg);
         prio->setFixedWidth(54);
@@ -815,6 +858,7 @@ void PlanView::refreshRows() {
         auto* steps = ui::label(tr("%1 pasos").arg(c.steps.size()), "muted-sm");
         steps->setFixedWidth(52);
         g->addWidget(steps);
+        steps->setVisible(!m_narrowRows);
         for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
         connect(row, &QPushButton::clicked, this, [this, cid = c.id]() { m_plans.toggle(cid); });
         m_available->addWidget(row);

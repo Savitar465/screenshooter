@@ -872,7 +872,7 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     nextLabel->setObjectName(QStringLiteral("issueCardNext-%1").arg(issue.id));
     ih->addWidget(nextLabel, 1);
     if (issue.isPublished()) ih->addWidget(ui::label(issue.publication.key, "mono-muted"));
-    idle->setVisible(!active);
+    if (active) idle->hide();
     bs->addWidget(idle, 1);
     v->addWidget(bottom);
 
@@ -899,7 +899,7 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
         showCardMenu(id, more->mapToGlobal(QPoint(0, more->height())));
     });
     ah->addWidget(more);
-    actions->setVisible(active);
+    if (!active) actions->hide();
     bs->addWidget(actions, 1);
 
     // El resto no atiende al ratón: el clic, el doble clic y el arrastre son de la tarjeta. Los botones sí,
@@ -3108,7 +3108,7 @@ IssuesView::Collapsible IssuesView::collapsible(const QString& key, QVBoxLayout*
     auto* body = new QWidget;
     c.body = ui::vbox(body, 0, 2);
     c.body->setContentsMargins(30, 2, 0, 6);
-    body->setVisible(open);
+    if (!open) body->hide();
     c.header->setProperty("toggleKey", key);
     c.header->setProperty("toggleBody", QVariant::fromValue<QObject*>(body));
     c.header->setProperty("toggleChevron", QVariant::fromValue<QObject*>(chevron));

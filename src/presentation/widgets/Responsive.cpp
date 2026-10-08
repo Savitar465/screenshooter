@@ -6,6 +6,7 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QResizeEvent>
+#include <QSettings>
 
 #include <algorithm>
 
@@ -90,6 +91,80 @@ void AdaptiveSplit::resizeEvent(QResizeEvent* e) {
     QWidget::resizeEvent(e);
     const bool stacked = e->size().width() < m_breakpoint;
     if (stacked != m_stacked) setStacked(stacked);
+}
+
+// ---- SideSplitter --------------------------------------------------------------------------
+
+SideSplitter::SideSplitter(const QString& objectName, QString settingsKey, int defaultSideWidth, QWidget* parent)
+    : QSplitter(Qt::Horizontal, parent), m_settingsKey(std::move(settingsKey)), m_defaultSideWidth(defaultSideWidth) {
+    setObjectName(objectName);
+    setChildrenCollapsible(false);
+    setHandleWidth(5);
+    // El borde no se ve hasta que se pasa por encima: entonces se resalta para invitar a arrastrarlo.
+    setStyleSheet(QStringLiteral("QSplitter#%1::handle{background:transparent;}"
+                                 "QSplitter#%1::handle:hover{background:%2;}")
+                      .arg(objectName, theme::tint(theme::Blue, 70)));
+    connect(this, &QSplitter::splitterMoved, this, [this]() {
+        keepSideWithinHalf();
+        if (count() > 0) QSettings().setValue(m_settingsKey, widget(0)->width());
+    });
+}
+
+void SideSplitter::setPanes(QWidget* side, QWidget* main) {
+    addWidget(side);
+    addWidget(main);
+    setStretchFactor(0, 0);
+    setStretchFactor(1, 1);
+    const int sideWidth = QSettings().value(m_settingsKey, m_defaultSideWidth).toInt();
+    setSizes({sideWidth, 4 * sideWidth});
+}
+
+void SideSplitter::keepSideWithinHalf() {
+    // Se ajustan los tamaños y no el máximo de la lista: QSplitter no se entera bien de un máximo que
+    // cambia sobre la marcha y deja un hueco entre la lista y el panel.
+    const QList<int> s = sizes();
+    if (s.size() != 2 || width() <= 0) return;
+    const int limit = std::max(widget(0)->minimumWidth(), width() / 2);
+    if (s[0] > limit) setSizes({limit, s[0] + s[1] - limit});
+}
+
+void SideSplitter::resizeEvent(QResizeEvent* e) {
+    QSplitter::resizeEvent(e);
+    keepSideWithinHalf();
+}
+
+// ---- onBreakpoint --------------------------------------------------------------------------
+
+namespace {
+class BreakpointWatcher : public QObject {
+public:
+    BreakpointWatcher(QWidget* w, int breakpoint, std::function<void(bool)> changed)
+        : QObject(w), m_breakpoint(breakpoint), m_changed(std::move(changed)) {
+        w->installEventFilter(this);
+        m_narrow = w->width() < m_breakpoint;
+        m_changed(m_narrow);
+    }
+
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::Resize) {
+            const bool narrow = static_cast<QResizeEvent*>(event)->size().width() < m_breakpoint;
+            if (narrow != m_narrow) {
+                m_narrow = narrow;
+                m_changed(narrow);
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    int m_breakpoint;
+    std::function<void(bool)> m_changed;
+    bool m_narrow = false;
+};
+} // namespace
+
+void onBreakpoint(QWidget* w, int breakpoint, std::function<void(bool narrow)> changed) {
+    new BreakpointWatcher(w, breakpoint, std::move(changed));
 }
 
 } // namespace qaflow

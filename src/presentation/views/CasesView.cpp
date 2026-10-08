@@ -7,12 +7,13 @@
 #include "application/TestCaseStore.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/EvidenceActions.h"
-#include "presentation/widgets/FlowLayout.h"
+#include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/TextArea.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QComboBox>
+#include <QCompleter>
 #include <QDir>
 #include <QFileDialog>
 #include <QGridLayout>
@@ -23,7 +24,9 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QStandardPaths>
+#include <QTimer>
 
 namespace qaflow {
 
@@ -68,27 +71,36 @@ QPushButton* smallButton(const QString& text, const char* role, const QString& t
 CasesView::CasesView(TestCaseStore& store, RunController& run, RunHistoryStore& history, CaseTransferService& transfer,
                      EvidenceService& evidence, QWidget* parent)
     : QWidget(parent), m_store(store), m_run(run), m_history(history), m_transfer(transfer), m_evidence(evidence) {
-    auto* root = ui::hbox(this, 0, 0);
-    buildListPane(root);
-    buildEditor(root);
+    // La lista se ensancha o se estrecha arrastrando su borde; el ancho se recuerda.
+    auto* split = new SideSplitter(QStringLiteral("casesSplit"), QStringLiteral("cases/listWidth"), 290);
+    ui::hbox(this, 0, 0)->addWidget(split);
+    auto* list = buildListPane();
+    split->setPanes(list, buildEditor());
 
-    connect(&m_store, &TestCaseStore::suitesChanged, this, &CasesView::refreshFilters);
-    connect(&m_store, &TestCaseStore::casesChanged, this, [this]() { refreshFilters(); refreshList(); });
+    // Al escribir en el editor cada tecla cambia el caso; la lista se rehace una vez al parar.
+    m_listRefresh = new QTimer(this);
+    m_listRefresh->setSingleShot(true);
+    m_listRefresh->setInterval(250);
+    connect(m_listRefresh, &QTimer::timeout, this, &CasesView::refreshList);
+
+    connect(&m_store, &TestCaseStore::suitesChanged, this, &CasesView::refreshSuites);
+    connect(&m_store, &TestCaseStore::casesChanged, this, [this]() { refreshSuites(); refreshList(); });
     connect(&m_store, &TestCaseStore::selectionChanged, this, [this](const QString&) { refreshList(); loadEditor(); });
     connect(&m_store, &TestCaseStore::caseChanged, this, &CasesView::onCaseChanged);
     connect(&m_run, &RunController::runChanged, this, &CasesView::refreshList);
     connect(&m_history, &RunHistoryStore::historyChanged, this, &CasesView::refreshHistory);
-    refreshFilters();
+    refreshSuites();
     refreshList();
     loadEditor();
 }
 
 // ---- Lista ---------------------------------------------------------------------------------
 
-void CasesView::buildListPane(QHBoxLayout* root) {
+QWidget* CasesView::buildListPane() {
     auto* pane = ui::card("list-pane");
-    pane->setMinimumWidth(260);
-    pane->setMaximumWidth(320);
+    pane->setObjectName(QStringLiteral("casesList"));
+    pane->setMinimumWidth(240);
+    pane->setMaximumWidth(560);
     pane->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     auto* v = ui::vbox(pane, 0, 0);
 
@@ -121,9 +133,34 @@ void CasesView::buildListPane(QHBoxLayout* root) {
     connect(m_search, &QLineEdit::textChanged, this, [this](const QString& t) { m_filter.text = t; refreshList(); });
     hv->addWidget(m_search);
 
-    auto* filters = new QWidget;
-    m_filterRow = new FlowLayout(filters, 0, 6, 6);
-    hv->addWidget(filters);
+    // Suite: desplegable con búsqueda en vez de una fila de botones, que con muchas suites no cabe.
+    m_suiteFilter = new QComboBox;
+    m_suiteFilter->setObjectName(QStringLiteral("caseSuiteFilter"));
+    m_suiteFilter->setAccessibleName(tr("Filtrar por suite"));
+    m_suiteFilter->setToolTip(tr("Filtrar por suite: escribe para buscarla"));
+    m_suiteFilter->setEditable(true);
+    m_suiteFilter->setInsertPolicy(QComboBox::NoInsert);
+    m_suiteFilter->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    m_suiteFilter->setMaxVisibleItems(15);
+    m_suiteFilter->completer()->setFilterMode(Qt::MatchContains);
+    m_suiteFilter->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+    m_suiteFilter->completer()->setCompletionMode(QCompleter::PopupCompletion);
+    m_suiteFilter->lineEdit()->setPlaceholderText(tr("Buscar suite…"));
+    connect(m_suiteFilter, &QComboBox::currentIndexChanged, this, [this](int i) {
+        if (i < 0) return;
+        m_filter.suite = m_suiteFilter->itemData(i).toString();
+        refreshList();
+    });
+    // Lo escrito que no es ninguna suite no filtra: se vuelve a la elegida (vacío = todas).
+    connect(m_suiteFilter->lineEdit(), &QLineEdit::editingFinished, this, [this]() {
+        const QString typed = m_suiteFilter->currentText().trimmed();
+        const int match = typed.isEmpty() ? 0 : m_suiteFilter->findText(typed, Qt::MatchFixedString);
+        const int current = m_filter.suite.isEmpty() ? 0 : m_suiteFilter->findData(m_filter.suite);
+        const int target = match >= 0 ? match : current;
+        if (target != m_suiteFilter->currentIndex()) m_suiteFilter->setCurrentIndex(target);
+        else m_suiteFilter->setEditText(m_suiteFilter->itemText(target));
+    });
+    hv->addWidget(m_suiteFilter);
 
     // Filtros por estado, prioridad y última ejecución
     auto* combos = new QWidget;
@@ -164,21 +201,20 @@ void CasesView::buildListPane(QHBoxLayout* root) {
     m_listLayout->setContentsMargins(10, 0, 10, 16);
     m_listLayout->setSpacing(4);
     v->addWidget(sa, 1);
-    root->addWidget(pane);
+    return pane;
 }
 
-void CasesView::refreshFilters() {
-    ui::clearLayout(m_filterRow);
+void CasesView::refreshSuites() {
     const QStringList suites = m_store.suites();
+    if (suites == m_knownSuites && m_suiteFilter->count() > 0) return;
+    m_knownSuites = suites;
     if (!suites.contains(m_filter.suite)) m_filter.suite.clear();
-    QStringList chips{tr("Todas")};
-    chips << suites;
-    for (const auto& s : chips) {
-        const QString value = s == tr("Todas") ? QString() : s;
-        auto* b = ui::button(s, "chip");
-        ui::setFlag(b, "active", value == m_filter.suite);
-        connect(b, &QPushButton::clicked, this, [this, value]() { m_filter.suite = value; refreshFilters(); refreshList(); });
-        m_filterRow->addWidget(b);
+    {
+        const QSignalBlocker block(m_suiteFilter);
+        m_suiteFilter->clear();
+        m_suiteFilter->addItem(tr("Todas las suites"), QString());
+        for (const auto& s : suites) m_suiteFilter->addItem(s, s);
+        m_suiteFilter->setCurrentIndex(m_filter.suite.isEmpty() ? 0 : std::max(0, m_suiteFilter->findData(m_filter.suite)));
     }
     if (m_suiteBox) {
         const QString cur = m_suiteBox->currentText();
@@ -192,6 +228,7 @@ void CasesView::refreshFilters() {
 }
 
 void CasesView::refreshList() {
+    m_listRefresh->stop();
     ui::clearLayout(m_listLayout);
     const QString runningId = m_run.isRunning() ? m_run.state().caseId : QString();
     int shown = 0;
@@ -266,10 +303,14 @@ void CasesView::refreshList() {
 
 // ---- Editor --------------------------------------------------------------------------------
 
-void CasesView::buildEditor(QHBoxLayout* root) {
+QWidget* CasesView::buildEditor() {
     QWidget* content;
     QVBoxLayout* outer;
     auto* sa = ui::scrollArea(&content, &outer);
+    sa->setObjectName(QStringLiteral("caseEditorScroll"));
+    sa->setMinimumWidth(380);
+    // El editor se adapta al ancho; si algo aun así no cabe, se desplaza en vez de cortarse.
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     outer->setContentsMargins(24, 28, 24, 28);
     m_editor = new QWidget;
     m_editor->setMaximumWidth(860);
@@ -312,16 +353,24 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     clone->setObjectName(QStringLiteral("cloneCase"));
     clone->setToolTip(tr("Crear una copia de este caso con sus pasos, en Borrador y sin ejecuciones (Ctrl+D)"));
     connect(clone, &QPushButton::clicked, this, &CasesView::duplicateSelected);
-    hh->addWidget(clone, 0, Qt::AlignTop);
-    hh->addWidget(save, 0, Qt::AlignTop);
-    hh->addWidget(more, 0, Qt::AlignTop);
+    auto* actions = new QWidget;
+    auto* ah = ui::hbox(actions, 0, 12);
+    ah->addWidget(clone);
+    ah->addWidget(save);
+    ah->addWidget(more);
+    hh->addWidget(actions, 0, Qt::AlignTop);
     v->addWidget(head);
+    // Si el editor es estrecho, las acciones bajan debajo del título en vez de comérselo.
+    onBreakpoint(sa->viewport(), 600, [hh, actions](bool narrow) {
+        hh->setDirection(narrow ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
+        hh->setAlignment(actions, narrow ? Qt::AlignLeft : Qt::AlignTop);
+    });
 
     // Metadatos
     auto* meta = new QWidget;
-    auto* mg = new QGridLayout(meta);
-    mg->setContentsMargins(0, 0, 0, 0);
-    mg->setSpacing(6);
+    m_metaGrid = new QGridLayout(meta);
+    m_metaGrid->setContentsMargins(0, 0, 0, 0);
+    m_metaGrid->setSpacing(6);
     auto* suiteRow = new QWidget;
     auto* srh = ui::hbox(suiteRow, 0, 4);
     m_suiteBox = new QComboBox;
@@ -346,10 +395,8 @@ void CasesView::buildEditor(QHBoxLayout* root) {
         const auto st = static_cast<CaseStatus>(m_statusBox->currentData().toInt());
         edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.status = st; }); });
     });
-    mg->addWidget(fieldCell(tr("Suite"), suiteRow), 0, 0);
-    mg->addWidget(fieldCell(tr("Prioridad"), m_priorityBox), 0, 1);
-    mg->addWidget(fieldCell(tr("Estado"), m_statusBox), 0, 2);
-    mg->addWidget(fieldCell(tr("Última ejecución"), m_lastRun), 0, 3);
+    m_metaCells << fieldCell(tr("Suite"), suiteRow) << fieldCell(tr("Prioridad"), m_priorityBox)
+                << fieldCell(tr("Estado"), m_statusBox) << fieldCell(tr("Última ejecución"), m_lastRun);
 
     m_component = new QLineEdit;
     m_component->setPlaceholderText(tr("p. ej. Carrito"));
@@ -358,11 +405,9 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_tags->setPlaceholderText(tr("regresión, smoke…"));
     m_tags->setToolTip(tr("Etiquetas separadas por comas"));
     connect(m_tags, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.tags = parseTags(t); }); }); });
-    mg->addWidget(fieldCell(tr("Componente"), m_component), 1, 0);
     // Ni la historia de Jira ni el Test de Zephyr se enseñan aquí: el requerimiento es del issue y
     // lo que se enlaza son las ejecuciones, que se ven en el historial. El caso sólo lo guarda.
-    mg->addWidget(fieldCell(tr("Etiquetas"), m_tags), 1, 1, 1, 3);
-    for (int i = 0; i < 4; ++i) mg->setColumnStretch(i, 1);
+    m_metaCells << fieldCell(tr("Componente"), m_component) << fieldCell(tr("Etiquetas"), m_tags);
     v->addWidget(meta);
 
     // Precondiciones
@@ -388,7 +433,7 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     connect(addStep, &QPushButton::clicked, this, [this]() { m_store.addStep(m_store.selectedId()); });
     sh->addWidget(addStep);
     sv->addWidget(stepsHead);
-    auto* cols = new QWidget;
+    auto* cols = m_stepColumns = new QWidget;
     auto* cg = new QGridLayout(cols);
     cg->setContentsMargins(4, 0, 4, 0);
     cg->setHorizontalSpacing(8);
@@ -425,8 +470,31 @@ void CasesView::buildEditor(QHBoxLayout* root) {
     m_historyLayout = ui::vbox(histList, 0, 6);
     hv2->addWidget(histList);
     v->addWidget(histBlock);
+    // Se mira el ancho visible y no el del editor: éste no baja de lo que pide su contenido.
+    onBreakpoint(sa->viewport(), 680, [this, outer](bool narrow) {
+        outer->setContentsMargins(narrow ? 14 : 24, 28, narrow ? 14 : 24, 28);
+        setNarrow(narrow);
+    });
+    return sa;
+}
 
-    root->addWidget(sa, 1);
+void CasesView::setNarrow(bool narrow) {
+    m_narrow = narrow;
+    placeMeta();
+    m_stepColumns->setVisible(!narrow);
+    if (m_stepsLayout) refreshSteps();   // durante la construcción aún no hay pasos que rehacer
+}
+
+void CasesView::placeMeta() {
+    // Ancho: suite · prioridad · estado · última ejecución, y debajo componente · etiquetas (que ocupa
+    // el resto). Estrecho: de dos en dos, para que ningún desplegable quede aplastado.
+    for (auto* cell : m_metaCells) m_metaGrid->removeWidget(cell);
+    const int columns = m_narrow ? 2 : 4;
+    for (int i = 0; i < 4; ++i) m_metaGrid->addWidget(m_metaCells[i], i / columns, i % columns);
+    const int last = 4 / columns;
+    m_metaGrid->addWidget(m_metaCells[4], last, 0);
+    m_metaGrid->addWidget(m_metaCells[5], last, 1, 1, columns - 1);
+    for (int i = 0; i < 4; ++i) m_metaGrid->setColumnStretch(i, i < columns ? 1 : 0);
 }
 
 void CasesView::edit(const std::function<void()>& mutation) {
@@ -473,26 +541,24 @@ void CasesView::refreshSteps() {
         auto* num = ui::label(QStringLiteral("%1").arg(i + 1, 2, 10, QLatin1Char('0')), "mono-muted");
         num->setAlignment(Qt::AlignCenter);
         num->setFixedWidth(28);
-        g->addWidget(num, 0, 0);
         auto* action = new TextArea(2);
         action->setPlaceholderText(tr("Qué hace el tester…"));
         action->setTextSilently(c->steps[i].action);
         action->enableMarkupEditor(tr("Paso %1 · Acción").arg(i + 1));
         connect(action, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.action = t; }); }); });
-        g->addWidget(action, 0, 1);
         auto* data = new TextArea(2);
         data->setPlaceholderText(tr("Con qué datos…"));
         data->setToolTip(tr("Datos de la prueba: usuario, importe, archivo… Es el campo «data» del paso de Zephyr."));
         data->setTextSilently(c->steps[i].data);
         data->enableMarkupEditor(tr("Paso %1 · Datos de la prueba").arg(i + 1));
         connect(data, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.data = t; }); }); });
-        g->addWidget(data, 0, 2);
         auto* expected = new TextArea(2);
         expected->setPlaceholderText(tr("Qué debe ocurrir…"));
         expected->setTextSilently(c->steps[i].expected);
         expected->enableMarkupEditor(tr("Paso %1 · Resultado esperado").arg(i + 1));
         connect(expected, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.expected = t; }); }); });
-        g->addWidget(expected, 0, 3);
+        const std::pair<QString, TextArea*> fields[] = {
+            {tr("ACCIÓN"), action}, {tr("DATOS DE LA PRUEBA"), data}, {tr("RESULTADO ESPERADO"), expected}};
 
         // Reordenar / insertar / eliminar
         auto* tools = new QWidget;
@@ -523,10 +589,24 @@ void CasesView::refreshSteps() {
         tg->addWidget(remove, 0, 2);
         tg->addWidget(insert, 1, 0);
         tg->addWidget(cloneStep, 1, 1);
-        g->addWidget(tools, 0, 4, Qt::AlignTop);
-        g->setColumnStretch(1, 1);
-        g->setColumnStretch(2, 1);
-        g->setColumnStretch(3, 1);
+        if (m_narrow) {
+            // Estrecho: los tres campos uno debajo de otro, cada uno con su título (no hay columnas).
+            g->setVerticalSpacing(4);
+            for (int f = 0; f < 3; ++f) {
+                g->addWidget(ui::label(fields[f].first, "eyebrow"), 2 * f, 1);
+                g->addWidget(fields[f].second, 2 * f + 1, 1);
+            }
+            g->addWidget(num, 0, 0, 6, 1, Qt::AlignTop);
+            g->addWidget(tools, 0, 2, 6, 1, Qt::AlignTop);
+            g->setColumnStretch(1, 1);
+        } else {
+            g->addWidget(num, 0, 0);
+            for (int f = 0; f < 3; ++f) {
+                g->addWidget(fields[f].second, 0, f + 1);
+                g->setColumnStretch(f + 1, 1);
+            }
+            g->addWidget(tools, 0, 4, Qt::AlignTop);
+        }
         m_stepsLayout->addWidget(row);
     }
 }
@@ -569,8 +649,9 @@ void CasesView::refreshHistory() {
 }
 
 void CasesView::onCaseChanged(const QString& id) {
-    refreshFilters();
-    refreshList();
+    refreshSuites();
+    if (m_selfEdit) m_listRefresh->start();
+    else refreshList();
     if (id != m_store.selectedId()) return;
     if (m_selfEdit) {
         // Edición desde este mismo editor: no reconstruir campos con foco; sólo derivados.

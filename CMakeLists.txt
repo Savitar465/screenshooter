@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 # (-DQAFLOW_VERSION=1.6.0-beta.1), así el binario publicado siempre dice la versión de su release; la de aquí
 # es la de los builds locales. `project()` sólo admite números, así que recibe la parte numérica.
 if (NOT QAFLOW_VERSION)
-    set(QAFLOW_VERSION "1.5.3")
+    set(QAFLOW_VERSION "2.0.0")
 endif ()
 if (NOT QAFLOW_VERSION MATCHES "^([0-9]+\\.[0-9]+\\.[0-9]+)(-[0-9A-Za-z.-]+)?$")
     message(FATAL_ERROR "QAFLOW_VERSION=\"${QAFLOW_VERSION}\" no es una versión SemVer (1.6.0 o 1.6.0-beta.1)")

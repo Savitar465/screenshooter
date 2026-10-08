@@ -18,6 +18,7 @@ class QActionGroup;
 class QSystemTrayIcon;
 class QMenu;
 class QComboBox;
+class QTimer;
 class QPushButton;
 class QLabel;
 
@@ -215,6 +216,7 @@ private:
     QWidget* m_navbar = nullptr;           // se esconde en el modo foco de la ejecución
     QPushButton* m_navBack = nullptr;
     QComboBox* m_runTarget = nullptr;
+    QTimer* m_actionsRefresh = nullptr;   // agrupa las ediciones de un caso tecla a tecla (ver updateActions)
     QPushButton* m_navRun = nullptr;
     QPushButton* m_navStop = nullptr;
     QPushButton* m_navFinish = nullptr;

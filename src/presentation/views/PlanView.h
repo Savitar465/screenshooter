@@ -8,7 +8,6 @@ class QComboBox;
 class QLineEdit;
 class QLayout;
 class QVBoxLayout;
-class QHBoxLayout;
 class QPushButton;
 class QFrame;
 
@@ -57,9 +56,12 @@ signals:
     void openRunRequested(const QString& runId);
     void toast(const QString& message, const QString& color);
 
+protected:
+    void showEvent(QShowEvent* event) override;
+
 private:
-    void buildListPane(QHBoxLayout* root);
-    void buildEditor(QHBoxLayout* root);
+    QWidget* buildListPane();
+    QWidget* buildEditor();
     void refreshList();
     void refreshEditor();
     /// Etiquetas de los issues que prueba el plan abierto; la sección se esconde si no prueba ninguno.
@@ -81,6 +83,9 @@ private:
     QWidget* buildCasePager(CasePager& pager, const QString& name);
     void refreshCasePager(CasePager& pager, int count);
     void refreshRows();
+    /// Los cambios en los casos llegan tecla a tecla mientras se editan en otra pantalla: oculta, la
+    /// lista sólo se marca para rehacerla al volver.
+    void refreshRowsIfVisible();
     void newPlan();
     /// Crea un caso, lo añade al plan abierto y lo abre para escribir sus pasos.
     void newCaseInPlan();
@@ -95,6 +100,8 @@ private:
     bool m_selfEdit = false;
     bool m_showArchived = false;
     bool m_allCycles = false;   // la sección de historial muestra todos los ciclos o sólo los últimos
+    bool m_rowsStale = false;   // hubo cambios en los casos mientras la pantalla estaba oculta
+    bool m_narrowRows = false;  // editor estrecho: las filas de casos esconden la suite y los pasos
     /// Ciclos (`PlanRun::id`) con sus resultados por caso desplegados. Se guarda aparte porque las
     /// tarjetas se rehacen enteras en cada refresco.
     QSet<QString> m_openResults;

@@ -10,9 +10,9 @@ class QLineEdit;
 class QComboBox;
 class QVBoxLayout;
 class QGridLayout;
-class QHBoxLayout;
 class QPushButton;
 class QLayout;
+class QTimer;
 
 namespace qaflow {
 
@@ -44,9 +44,14 @@ signals:
     void toast(const QString& message, const QString& color);
 
 private:
-    void buildListPane(QHBoxLayout* root);
-    void buildEditor(QHBoxLayout* root);
-    void refreshFilters();
+    QWidget* buildListPane();
+    QWidget* buildEditor();
+    /// Recoloca el editor según su ancho: estrecho, los metadatos van de dos en dos y los campos de
+    /// cada paso uno debajo de otro en vez de en columnas.
+    void setNarrow(bool narrow);
+    void placeMeta();
+    /// Rehace los desplegables de suites sólo si ha cambiado la lista de suites.
+    void refreshSuites();
     void refreshList();
     void loadEditor();
     void refreshSteps();
@@ -63,15 +68,18 @@ private:
     EvidenceService& m_evidence;
     CaseFilter m_filter;
     bool m_selfEdit = false;
+    bool m_narrow = false;   // editor estrecho (ver setNarrow)
 
     // lista
     QLineEdit* m_search = nullptr;
-    QLayout* m_filterRow = nullptr;
+    QComboBox* m_suiteFilter = nullptr;   // con búsqueda: puede haber muchas suites
+    QStringList m_knownSuites;            // las que hay en los desplegables
     QComboBox* m_statusFilter = nullptr;
     QComboBox* m_priorityFilter = nullptr;
     QComboBox* m_outcomeFilter = nullptr;
     QLabel* m_listCount = nullptr;
     QVBoxLayout* m_listLayout = nullptr;
+    QTimer* m_listRefresh = nullptr;   // agrupa los refrescos de la lista mientras se escribe en el editor
     // editor
     QWidget* m_editor = nullptr;
     QLabel* m_idLabel = nullptr;
@@ -80,10 +88,13 @@ private:
     QComboBox* m_priorityBox = nullptr;
     QComboBox* m_statusBox = nullptr;
     QLabel* m_lastRun = nullptr;
+    QGridLayout* m_metaGrid = nullptr;
+    QList<QWidget*> m_metaCells;   // suite, prioridad, estado, última ejecución, componente, etiquetas
     QLineEdit* m_component = nullptr;
     QLineEdit* m_tags = nullptr;
     TextArea* m_pre = nullptr;
     QLabel* m_stepsHeader = nullptr;
+    QWidget* m_stepColumns = nullptr;   // títulos de las columnas de los pasos; se esconden si van apilados
     QVBoxLayout* m_stepsLayout = nullptr;
     QLabel* m_historyHeader = nullptr;
     QVBoxLayout* m_historyLayout = nullptr;

@@ -978,7 +978,13 @@ void MainWindow::wireSignals() {
     }
 
     connect(m_ctx.cases, &TestCaseStore::selectionChanged, this, [this]() { updateActions(); selectContextTarget(); });
-    connect(m_ctx.cases, &TestCaseStore::caseChanged, this, &MainWindow::updateActions);
+    // Editar un caso lo cambia tecla a tecla y updateActions rehace el selector con todos los casos:
+    // se espera a que se pare de escribir.
+    m_actionsRefresh = new QTimer(this);
+    m_actionsRefresh->setSingleShot(true);
+    m_actionsRefresh->setInterval(250);
+    connect(m_actionsRefresh, &QTimer::timeout, this, &MainWindow::updateActions);
+    connect(m_ctx.cases, &TestCaseStore::caseChanged, m_actionsRefresh, qOverload<>(&QTimer::start));
     connect(m_ctx.plan, &PlanStore::planChanged, this, [this]() { updateActions(); if (m_current == Screen::Plan) selectContextTarget(); });
     connect(m_ctx.plan, &PlanStore::plansChanged, this, &MainWindow::updateActions);
     if (m_ctx.projects) {

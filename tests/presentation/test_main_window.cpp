@@ -43,6 +43,7 @@
 #include <QFileInfo>
 #include <QFrame>
 #include <QScrollArea>
+#include <QSettings>
 #include <QScrollBar>
 #include <QSplitter>
 #include <QLabel>
@@ -388,6 +389,52 @@ private slots:
         QTRY_COMPARE(f.visibleCaseRows(), 1);                  // las filas nuevas se muestran al procesar eventos
         search->clear();
         QTRY_COMPARE(f.visibleCaseRows(), 7);
+    }
+
+    void suiteFilterIsSearchable() {
+        WindowFixture f;
+        f.window->navigate(Screen::Casos);
+        auto* suites = f.window->findChild<QComboBox*>(QStringLiteral("caseSuiteFilter"));
+        QVERIFY(suites);
+        QVERIFY(suites->isEditable());
+        QCOMPARE(suites->currentIndex(), 0);   // todas
+        QTRY_COMPARE(f.visibleCaseRows(), 7);
+        // Escribir parte del nombre y confirmar filtra por esa suite.
+        suites->lineEdit()->selectAll();
+        QTest::keyClicks(suites->lineEdit(), QStringLiteral("checkout"));
+        QTest::keyClick(suites->lineEdit(), Qt::Key_Return);
+        QCOMPARE(suites->currentText(), QStringLiteral("Checkout"));
+        QTRY_COMPARE(f.visibleCaseRows(), 2);
+        // Lo que no es ninguna suite no filtra: se vuelve a la elegida.
+        suites->lineEdit()->selectAll();
+        QTest::keyClicks(suites->lineEdit(), QStringLiteral("zzz"));
+        emit suites->lineEdit()->editingFinished();
+        QCOMPARE(suites->currentText(), QStringLiteral("Checkout"));
+        QTRY_COMPARE(f.visibleCaseRows(), 2);
+        // Vaciarlo vuelve a todas.
+        suites->lineEdit()->clear();
+        emit suites->lineEdit()->editingFinished();
+        QCOMPARE(suites->currentIndex(), 0);
+        QTRY_COMPARE(f.visibleCaseRows(), 7);
+    }
+
+    void editingAStepDoesNotRebuildTheCaseListOnEveryKey() {
+        WindowFixture f;
+        f.window->navigate(Screen::Casos);
+        auto* list = f.window->findChild<QWidget*>(QStringLiteral("casesList"));
+        QVERIFY(list);
+        QTRY_COMPARE(f.visibleCaseRows(), 7);
+        const auto rowsBefore = list->findChildren<QPushButton*>();
+        auto* editor = f.window->findChild<QWidget*>(QStringLiteral("caseEditorScroll"));
+        QVERIFY(editor);
+        auto* step = editor->findChildren<TextArea*>().value(1);   // la acción del primer paso (0 = precondiciones)
+        QVERIFY(step);
+        step->setFocus();
+        QTest::keyClicks(step, QStringLiteral("abc"));
+        QVERIFY(f.app.store.selected()->steps[0].action.contains(QStringLiteral("abc")));
+        // Mientras se escribe la lista no se rehace: son los mismos botones.
+        QCOMPARE(list->findChildren<QPushButton*>(), rowsBefore);
+        QVERIFY(step->hasFocus());
     }
 
     void runScreenAcceptsVerdictKeys() {
@@ -1430,6 +1477,53 @@ private slots:
         cases = history->findChild<AdaptiveSplit*>(QStringLiteral("planCasesSplit"));
         QVERIFY(cases);
         QTRY_VERIFY(!cases->isStacked());
+    }
+
+    // En casos y en planes la lista se ensancha arrastrando su borde (manteniendo el clic), el ancho
+    // se recuerda, y el panel de la derecha se adapta: con la lista al máximo nada se sale por la derecha.
+    void casesAndPlansListsResizeByDraggingAndTheEditorAdapts() {
+        // Los anchos se recuerdan entre sesiones: se parte del de por defecto.
+        const QString keys[] = {QStringLiteral("cases/listWidth"), QStringLiteral("plans/listWidth")};
+        for (const auto& key : keys) QSettings().remove(key);
+        auto cleanup = qScopeGuard([&]() { for (const auto& key : keys) QSettings().remove(key); });
+        WindowFixture f;
+        f.window->resize(400, 700);   // se queda en su mínimo
+        const std::pair<Screen, const char*> screens[] = {{Screen::Casos, "casesSplit"}, {Screen::Plan, "plansSplit"}};
+        for (const auto& [screen, name] : screens) {
+            f.window->navigate(screen);
+            auto* split = f.window->findChild<SideSplitter*>(QString::fromLatin1(name));
+            QVERIFY2(split, name);
+            QTRY_VERIFY(split->isVisible() && split->width() > 0);
+            QWidget* list = split->widget(0);
+            const int before = list->width();
+
+            // Arrastrar el borde 120 px a la derecha ensancha la lista y guarda su ancho.
+            QSplitterHandle* handle = split->handle(1);
+            const QPoint grip(handle->width() / 2, handle->height() / 2);
+            QTest::mousePress(handle, Qt::LeftButton, {}, grip);
+            QMouseEvent move(QEvent::MouseMove, QPointF(grip + QPoint(120, 0)), handle->mapToGlobal(QPointF(grip + QPoint(120, 0))),
+                             Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(handle, &move);
+            QTest::mouseRelease(handle, Qt::LeftButton, {}, grip + QPoint(120, 0));
+            QTRY_VERIFY2(list->width() > before, qPrintable(QStringLiteral("%1 <= %2").arg(list->width()).arg(before)));
+            QCOMPARE(QSettings().value(keys[screen == Screen::Casos ? 0 : 1]).toInt(), list->width());
+
+            // Arrastrada hasta el fondo, la lista no pasa de la mitad, el panel empieza justo tras el
+            // borde (sin hueco) y el editor sigue cabiendo en su sitio.
+            QTest::mousePress(handle, Qt::LeftButton, {}, grip);
+            QMouseEvent far(QEvent::MouseMove, QPointF(grip + QPoint(2000, 0)), handle->mapToGlobal(QPointF(grip + QPoint(2000, 0))),
+                            Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(handle, &far);
+            QTest::mouseRelease(handle, Qt::LeftButton, {}, grip + QPoint(2000, 0));
+            QTRY_VERIFY(list->width() > 320);   // más ancha de lo que permitía antes
+            QVERIFY(list->width() <= split->width() / 2);
+            QCOMPARE(split->sizes().first(), list->width());
+            QCOMPARE(split->handle(1)->x(), list->geometry().right() + 1);
+            auto* editor = qobject_cast<QScrollArea*>(split->widget(1));
+            QVERIFY(editor);
+            QTRY_VERIFY2(editor->widget()->width() <= editor->viewport()->width(),
+                         qPrintable(QStringLiteral("%1: %2 > %3").arg(QString::fromLatin1(name)).arg(editor->widget()->width()).arg(editor->viewport()->width())));
+        }
     }
 
     void thePlanReportOffersDeletingEveryCycleButTheOneInProgress() {
@@ -2701,9 +2795,9 @@ private slots:
                                                       QStringLiteral("PRE"));
         f.app.history.noteCycleRevision(cycle, issueId, 1);
         f.app.issues.setIssuePhases(issueId, {QStringLiteral("QA"), QStringLiteral("PRE")});
-        QTRY_VERIFY((menu = openMenu()));
-        auto* pre = menu->findChild<QAction*>(QStringLiteral("issuePhase-PRE"));
-        QVERIFY(pre && !pre->isEnabled());
+        // La tarjeta se rehace al cambiar el issue: hasta entonces el menú es el de antes.
+        QAction* pre = nullptr;
+        QTRY_VERIFY((menu = openMenu()) && (pre = menu->findChild<QAction*>(QStringLiteral("issuePhase-PRE"))) && !pre->isEnabled());
         QVERIFY2(pre->text().contains(QStringLiteral("ciclos")), qPrintable(pre->text()));
         menu->close();
     }
@@ -3087,7 +3181,8 @@ private slots:
         // Sin plan, lo siguiente es crearlo, y el botón de la tarjeta elegida lo hace.
         auto* quick = f.window->findChild<QPushButton*>(QStringLiteral("issueCardAction-") + issueId);
         QVERIFY(quick);
-        QCOMPARE(card()->childAt(quick->mapTo(card(), quick->rect().center())), quick);
+        // El layout de la tarjeta recién hecha se aplica en diferido.
+        QTRY_COMPARE(card()->childAt(quick->mapTo(card(), quick->rect().center())), quick);
         QCOMPARE(quick->text(), QStringLiteral("Crear plan"));
         quick->click();
         QVERIFY(!f.app.issues.find(issueId)->planId.isEmpty());

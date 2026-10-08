@@ -35,7 +35,6 @@
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSettings>
-#include <QSplitter>
 #include <QStandardPaths>
 
 #include <algorithm>
@@ -120,25 +119,11 @@ struct Entry {
 HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish,
                          EvidenceService* evidence, RunController* run, QWidget* parent)
     : QWidget(parent), m_cases(cases), m_history(history), m_publish(publish), m_evidence(evidence), m_run(run) {
-    auto* outer = ui::hbox(this, 0, 0);
     // La lista se ensancha o se estrecha arrastrando su borde; el ancho se recuerda.
-    auto* root = new QSplitter(Qt::Horizontal);
-    root->setObjectName(QStringLiteral("historySplit"));
-    root->setChildrenCollapsible(false);
-    root->setHandleWidth(5);
-    root->setStyleSheet(QStringLiteral("QSplitter#historySplit::handle{background:transparent;}"
-                                       "QSplitter#historySplit::handle:hover{background:%1;}")
-                            .arg(theme::tint(theme::Blue, 70)));
-    outer->addWidget(root);
-    buildListPane(root);
-    buildDetailPane(root);
-    root->setStretchFactor(0, 0);
-    root->setStretchFactor(1, 1);
-    const int listWidth = QSettings().value(QStringLiteral("history/listWidth"), 290).toInt();
-    root->setSizes({listWidth, 4 * listWidth});
-    connect(root, &QSplitter::splitterMoved, this, [root]() {
-        QSettings().setValue(QStringLiteral("history/listWidth"), root->widget(0)->width());
-    });
+    auto* split = new SideSplitter(QStringLiteral("historySplit"), QStringLiteral("history/listWidth"), 290);
+    ui::hbox(this, 0, 0)->addWidget(split);
+    auto* list = buildListPane();
+    split->setPanes(list, buildDetailPane());
 
     connect(&m_history, &RunHistoryStore::historyChanged, this, [this]() { refreshList(); refreshDetail(); });
     refreshFilters();
@@ -146,7 +131,7 @@ HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPub
     refreshDetail();
 }
 
-void HistoryView::buildListPane(QSplitter* root) {
+QWidget* HistoryView::buildListPane() {
     auto* pane = ui::card("list-pane");
     pane->setObjectName(QStringLiteral("historyList"));
     pane->setMinimumWidth(220);
@@ -175,10 +160,10 @@ void HistoryView::buildListPane(QSplitter* root) {
     m_listLayout->setContentsMargins(10, 0, 10, 16);
     m_listLayout->setSpacing(4);
     v->addWidget(sa, 1);
-    root->addWidget(pane);
+    return pane;
 }
 
-void HistoryView::buildDetailPane(QSplitter* root) {
+QWidget* HistoryView::buildDetailPane() {
     QWidget* content;
     QVBoxLayout* outer;
     auto* sa = ui::scrollArea(&content, &outer);
@@ -190,7 +175,7 @@ void HistoryView::buildDetailPane(QSplitter* root) {
     page->setMaximumWidth(1180);
     m_detailLayout = ui::vbox(page, 0, 18);
     outer->addWidget(page, 0, Qt::AlignTop);
-    root->addWidget(sa);
+    return sa;
 }
 
 void HistoryView::refreshFilters() {

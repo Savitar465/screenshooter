@@ -46,7 +46,7 @@ JiraPublishDialog::JiraPublishDialog(Mode mode, const QString& destination, cons
     m_issueType->lineEdit()->setPlaceholderText(QStringLiteral("Tarea"));
     auto* typeField = field(tr("Tipo de incidencia"), m_issueType);
     // El tipo sólo se elige al crear: cambiarlo después es cosa del gestor.
-    typeField->setVisible(mode == Mode::Create);
+    if (mode != Mode::Create) typeField->hide();
     v->addWidget(typeField);
 
     m_description = new TextArea(12);

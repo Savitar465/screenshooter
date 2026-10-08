@@ -12,7 +12,6 @@ class QLineEdit;
 class QLayout;
 class QVBoxLayout;
 class QHBoxLayout;
-class QSplitter;
 
 namespace qaflow {
 
@@ -63,8 +62,8 @@ signals:
 private:
     enum class Mode { All, Plans, Runs, Metrics };
 
-    void buildListPane(QSplitter* root);
-    void buildDetailPane(QSplitter* root);
+    QWidget* buildListPane();
+    QWidget* buildDetailPane();
     void refreshFilters();
     void refreshList();
     void refreshDetail();

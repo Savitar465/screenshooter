@@ -618,7 +618,10 @@ void CasesView::refreshHistory() {
     const auto runs = m_history.runsForCase(c->id);
     m_historyHeader->setText(tr("ÚLTIMAS EJECUCIONES · %1").arg(runs.size()));
     if (runs.isEmpty()) {
-        m_historyLayout->addWidget(ui::label(tr("Este caso todavía no se ha ejecutado."), "muted-sm"));
+        // Que parta en líneas: si no, su ancho entero es el mínimo del editor y lo saca por la derecha.
+        auto* none = ui::label(tr("Este caso todavía no se ha ejecutado."), "muted-sm");
+        none->setWordWrap(true);
+        m_historyLayout->addWidget(none);
         return;
     }
     constexpr int kMax = 5;

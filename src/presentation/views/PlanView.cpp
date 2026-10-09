@@ -197,6 +197,7 @@ QWidget* PlanView::buildEditor() {
     auto* titleBlock = new QWidget;
     auto* tv = ui::vbox(titleBlock, 0, 0);
     m_eyebrow = ui::label(QString(), "eyebrow");
+    m_eyebrow->setWordWrap(true);   // en un editor estrecho parte en líneas en vez de ensancharlo
     tv->addWidget(m_eyebrow);
     auto* nameRow = new QWidget;
     auto* nh = ui::hbox(nameRow, 0, 10);
@@ -241,6 +242,7 @@ QWidget* PlanView::buildEditor() {
     m_time->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Amber));
     m_basis = ui::label(QString(), "muted-sm");
     m_basis->setStyleSheet(QStringLiteral("font-size:10.5px;"));
+    m_basis->setWordWrap(true);   // «3 min por paso · sin historial» no debe ensanchar el editor
     sh->addWidget(stat(tr("Casos"), m_count));
     sh->addWidget(stat(tr("Pasos"), m_steps));
     sh->addWidget(stat(tr("Estimado"), m_time, m_basis));
@@ -350,6 +352,7 @@ QWidget* PlanView::buildEditor() {
 
     // Casos en el plan (ordenados) y disponibles
     m_inPlanHeader = ui::label(QString(), "eyebrow");
+    m_inPlanHeader->setWordWrap(true);
     v->addWidget(m_inPlanHeader);
     auto* inPlan = new QWidget;
     m_inPlan = ui::vbox(inPlan, 0, 6);

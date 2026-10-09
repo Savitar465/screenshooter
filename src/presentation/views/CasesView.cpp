@@ -428,6 +428,7 @@ QWidget* CasesView::buildEditor() {
     auto* stepsHead = new QWidget;
     auto* sh = ui::hbox(stepsHead, 0, 8);
     m_stepsHeader = ui::label(QString(), "eyebrow");
+    m_stepsHeader->setWordWrap(true);   // en un editor estrecho parte en líneas en vez de ensancharlo
     sh->addWidget(m_stepsHeader, 1);
     auto* addStep = ui::button(tr("+ Añadir paso"), "dashed");
     connect(addStep, &QPushButton::clicked, this, [this]() { m_store.addStep(m_store.selectedId()); });
@@ -461,6 +462,7 @@ QWidget* CasesView::buildEditor() {
     auto* histHead = new QWidget;
     auto* hhh = ui::hbox(histHead, 0, 8);
     m_historyHeader = ui::label(QString(), "eyebrow");
+    m_historyHeader->setWordWrap(true);
     hhh->addWidget(m_historyHeader, 1);
     auto* all = smallButton(tr("Ver historial"), "outline");
     connect(all, &QPushButton::clicked, this, [this]() { if (!m_store.selectedId().isEmpty()) emit historyRequested(m_store.selectedId()); });

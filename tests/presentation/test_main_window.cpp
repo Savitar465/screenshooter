@@ -200,6 +200,13 @@ private slots:
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_settingsDir.path());
         QCoreApplication::setOrganizationName(QStringLiteral("QAflowMainWindowTest"));
         QCoreApplication::setApplicationName(QStringLiteral("QAflowMainWindowTest"));
+        // En el CI de Windows el texto sale casi el doble de ancho que en Linux. QAFLOW_TEST_FONT_STRETCH=195
+        // lo imita aquí, para ver sin pasar por el CI lo que allí se sale por la derecha.
+        if (const int stretch = qEnvironmentVariableIntValue("QAFLOW_TEST_FONT_STRETCH"); stretch > 0) {
+            QFont font = QApplication::font();
+            font.setStretch(stretch);
+            QApplication::setFont(font);
+        }
     }
 
     void opensOnCasesAndSidebarNavigates() {

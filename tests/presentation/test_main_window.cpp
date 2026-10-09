@@ -75,6 +75,25 @@ public:
     }
 };
 
+/// Explica por qué el contenido de `area` no cabe en su ancho visible: medidas del área y los
+/// descendientes visibles que más ancho mínimo piden (los que pueden estar empujando).
+QString overflowReport(QScrollArea* area) {
+    QWidget* content = area->widget();
+    QString out = QStringLiteral("%1 > %2 (min %3, vbar %4, hbar %5)")
+                      .arg(content->width()).arg(area->viewport()->width()).arg(content->minimumSizeHint().width())
+                      .arg(area->verticalScrollBar()->isVisible()).arg(area->horizontalScrollBar()->isVisible());
+    QList<QWidget*> wide;
+    for (auto* w : content->findChildren<QWidget*>())
+        if (w->isVisible() && w->minimumSizeHint().width() > area->viewport()->width() / 2) wide << w;
+    std::sort(wide.begin(), wide.end(), [](QWidget* a, QWidget* b) { return a->minimumSizeHint().width() > b->minimumSizeHint().width(); });
+    for (auto* w : wide.mid(0, 8)) {
+        const auto* label = qobject_cast<QLabel*>(w);
+        out += QStringLiteral("\n  %1#%2 min=%3 %4").arg(QString::fromLatin1(w->metaObject()->className()), w->objectName())
+                   .arg(w->minimumSizeHint().width()).arg(label ? label->text().left(60) : QString());
+    }
+    return out;
+}
+
 /// Fixture de aplicación + servicios que la ventana necesita + la ventana ya mostrada.
 struct WindowFixture {
     AppFixture app;
@@ -1534,7 +1553,7 @@ private slots:
             auto* editor = qobject_cast<QScrollArea*>(split->widget(1));
             QVERIFY(editor);
             QTRY_VERIFY2(editor->widget()->width() <= editor->viewport()->width(),
-                         qPrintable(QStringLiteral("%1: %2 > %3").arg(QString::fromLatin1(name)).arg(editor->widget()->width()).arg(editor->viewport()->width())));
+                         qPrintable(QStringLiteral("%1: %2").arg(QString::fromLatin1(name), overflowReport(editor))));
         }
     }
 

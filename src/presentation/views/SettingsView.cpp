@@ -173,10 +173,10 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     connect(m_phases, &QLineEdit::editingFinished, this, &SettingsView::commitPhases);
     v->addWidget(m_projectSection);
 
-    // General: idioma, tema y bandeja
+    // General: idioma, tema, tamaño de la interfaz y bandeja
     QVBoxLayout* gb;
     auto* general = section(theme::Violet, QStringLiteral("General"),
-                            tr("El idioma y el tema se aplican al instante."), nullptr, &gb);
+                            tr("El idioma y el tema se aplican al instante; el tamaño, al reiniciar QAflow."), nullptr, &gb);
     auto* grow = new QWidget;
     auto* gg = new QGridLayout(grow);
     gg->setContentsMargins(0, 0, 0, 0);
@@ -190,11 +190,22 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     m_theme->addItem(tr("Oscuro"), static_cast<int>(AppTheme::Dark));
     m_theme->addItem(tr("Claro"), static_cast<int>(AppTheme::Light));
     m_theme->addItem(tr("Como el sistema"), static_cast<int>(AppTheme::System));
+    // Texto, márgenes e iconos crecen juntos (QT_SCALE_FACTOR): los tamaños de letra están en píxeles
+    // por todas las vistas y escalar sólo la letra descuadraría los anchos fijos.
+    m_uiScale = new QComboBox;
+    m_uiScale->setObjectName(QStringLiteral("settingsUiScale"));
+    for (int v : kUiScales) m_uiScale->addItem(QStringLiteral("%1 %").arg(v), v);
     gg->addWidget(field(tr("Idioma"), m_language), 0, 0);
     gg->addWidget(field(tr("Tema"), m_theme), 0, 1);
+    gg->setVerticalSpacing(10);
+    gg->addWidget(field(tr("Tamaño de la interfaz"), m_uiScale), 1, 0);
     gg->setColumnStretch(0, 1);
     gg->setColumnStretch(1, 1);
     gb->addWidget(grow);
+    m_uiScaleNote = ui::label(tr("Reinicia QAflow para aplicar el nuevo tamaño."), "warn");
+    m_uiScaleNote->setWordWrap(true);
+    m_uiScaleNote->hide();
+    gb->addWidget(m_uiScaleNote);
     m_closeToTray = new QCheckBox(tr("Al cerrar la ventana, seguir en la bandeja del sistema"));
     gb->addWidget(m_closeToTray);
     v->addWidget(general);
@@ -207,6 +218,11 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
         if (m_selfEdit) return;
         const auto t = static_cast<AppTheme>(m_theme->currentData().toInt());
         m_settings.updateApp([t](AppSettings& a) { a.theme = t; });
+    });
+    connect(m_uiScale, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (m_selfEdit) return;
+        const int v = m_uiScale->currentData().toInt();
+        m_settings.updateApp([v](AppSettings& a) { a.uiScale = v; });
     });
     connect(m_closeToTray, &QCheckBox::toggled, this, [this](bool on) {
         if (m_selfEdit) return;
@@ -727,6 +743,10 @@ void SettingsView::refreshGeneral() {
     m_selfEdit = true;
     m_language->setCurrentIndex(std::max(0, m_language->findData(static_cast<int>(a.language))));
     m_theme->setCurrentIndex(std::max(0, m_theme->findData(static_cast<int>(a.theme))));
+    m_uiScale->setCurrentIndex(std::max(0, m_uiScale->findData(a.uiScale)));
+    // La escala con la que arrancó el proceso (main.cpp) no cambia hasta reiniciar.
+    const QVariant applied = qApp->property("qaflowUiScale");
+    m_uiScaleNote->setVisible(a.uiScale != (applied.isValid() ? applied.toInt() : 100));
     m_closeToTray->setChecked(a.closeToTray);
     m_selfEdit = false;
 }

@@ -4,6 +4,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace qaflow {
 
@@ -176,6 +177,13 @@ AppLanguage appLanguageFromString(const QString& s) {
     if (s.startsWith(QStringLiteral("es"), Qt::CaseInsensitive)) return AppLanguage::Spanish;
     if (s.startsWith(QStringLiteral("en"), Qt::CaseInsensitive)) return AppLanguage::English;
     return AppLanguage::System;
+}
+
+int clampUiScale(int percent) {
+    int best = 100;
+    for (int v : kUiScales)
+        if (std::abs(v - percent) < std::abs(best - percent)) best = v;
+    return best;
 }
 
 AppTheme appThemeFromString(const QString& s) {

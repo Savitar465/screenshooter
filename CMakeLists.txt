@@ -371,7 +371,7 @@ target_compile_definitions(qaflow PRIVATE QAFLOW_UPDATE_REPO="${QAFLOW_UPDATE_RE
 # Clave pública Ed25519 (base64) con la que se firman las sumas de cada release (la imprime
 # packaging/release/update-signing-key.sh). Sin ella QAflow sólo avisa de las versiones nuevas: no se
 # instala sola, porque no puede comprobar que el paquete sea el publicado.
-set(QAFLOW_UPDATE_PUBLIC_KEY "" CACHE STRING "Clave pública Ed25519 (base64) de las releases de QAflow")
+set(QAFLOW_UPDATE_PUBLIC_KEY "Mugw24yqqZTHkj4St0xzmDfCtHQzoIThSMCsxCHtDWQ=" CACHE STRING "Clave pública Ed25519 (base64) de las releases de QAflow")
 target_compile_definitions(qaflow PRIVATE QAFLOW_UPDATE_PUBLIC_KEY="${QAFLOW_UPDATE_PUBLIC_KEY}")
 set_target_properties(qaflow PROPERTIES WIN32_EXECUTABLE ON MACOSX_BUNDLE ON OUTPUT_NAME qaflow
         # macOS sólo admite números en el Info.plist.

@@ -100,7 +100,12 @@ struct AppSettings {
     AppLanguage language = AppLanguage::System;
     AppTheme theme = AppTheme::Dark;
     bool closeToTray = false;   // al cerrar la ventana, seguir en la bandeja del sistema
+    int uiScale = 100;          // tamaño de la interfaz, en %; se aplica al arrancar (QT_SCALE_FACTOR)
 };
+
+/// Tamaños de la interfaz que se ofrecen, en %. Un valor fuera de la lista se lleva al más cercano.
+inline constexpr int kUiScales[] = {100, 110, 125, 150, 175};
+int clampUiScale(int percent);
 
 /// Atajos globales de la ejecución: avanzar al paso siguiente dando su veredicto y volver al
 /// anterior sin traer QAflow al frente, para no interrumpir la prueba entre captura y captura.

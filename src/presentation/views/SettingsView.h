@@ -80,6 +80,8 @@ private:
 
     QComboBox* m_language;
     QComboBox* m_theme;
+    QComboBox* m_uiScale;
+    QLabel* m_uiScaleNote;
     QCheckBox* m_closeToTray;
     QCheckBox* m_autoUpdate = nullptr;
     QComboBox* m_updateChannel = nullptr;

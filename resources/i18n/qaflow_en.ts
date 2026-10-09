@@ -8338,8 +8338,16 @@ Press “Capture” or drop a file on the window.</translation>
         <translation>Jira project code</translation>
     </message>
     <message>
-        <source>El idioma y el tema se aplican al instante.</source>
-        <translation>Language and theme changes apply immediately.</translation>
+        <source>El idioma y el tema se aplican al instante; el tamaño, al reiniciar QAflow.</source>
+        <translation>Language and theme changes apply immediately; size changes apply after restarting QAflow.</translation>
+    </message>
+    <message>
+        <source>Tamaño de la interfaz</source>
+        <translation>Interface size</translation>
+    </message>
+    <message>
+        <source>Reinicia QAflow para aplicar el nuevo tamaño.</source>
+        <translation>Restart QAflow to apply the new size.</translation>
     </message>
     <message>
         <source>Conexión general con el gestor</source>

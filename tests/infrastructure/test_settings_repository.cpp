@@ -170,13 +170,18 @@ private slots:
         QCOMPARE(static_cast<int>(repo.loadApp().theme), static_cast<int>(AppTheme::Dark));   // valores por defecto
         QCOMPARE(static_cast<int>(repo.loadApp().language), static_cast<int>(AppLanguage::System));
         AppSettings a;
-        a.language = AppLanguage::English; a.theme = AppTheme::Light; a.closeToTray = true;
+        QCOMPARE(repo.loadApp().uiScale, 100);
+        a.language = AppLanguage::English; a.theme = AppTheme::Light; a.closeToTray = true; a.uiScale = 125;
         repo.saveApp(a);
         const AppSettings la = repo.loadApp();
         QCOMPARE(static_cast<int>(la.language), static_cast<int>(AppLanguage::English));
         QCOMPARE(static_cast<int>(la.theme), static_cast<int>(AppTheme::Light));
         QVERIFY(la.closeToTray);
+        QCOMPARE(la.uiScale, 125);
         QCOMPARE(QSettings().value(QStringLiteral("app/theme")).toString(), QStringLiteral("light"));
+        // Una escala editada a mano se lleva a la más cercana de las que se ofrecen.
+        QSettings().setValue(QStringLiteral("app/uiScale"), 133);
+        QCOMPARE(repo.loadApp().uiScale, 125);
     }
 
     // La conexión con GESREQ es general (grupo "gesreq", la misma para cualquier proyecto) y la contraseña

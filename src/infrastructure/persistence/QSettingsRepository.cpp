@@ -163,6 +163,7 @@ AppSettings QSettingsRepository::loadApp() {
     a.language = appLanguageFromString(s.value(QStringLiteral("language"), toString(a.language)).toString());
     a.theme = appThemeFromString(s.value(QStringLiteral("theme"), toString(a.theme)).toString());
     a.closeToTray = s.value(QStringLiteral("closeToTray"), a.closeToTray).toBool();
+    a.uiScale = clampUiScale(s.value(QStringLiteral("uiScale"), a.uiScale).toInt());
     return a;
 }
 
@@ -172,6 +173,7 @@ void QSettingsRepository::saveApp(const AppSettings& a) {
     s.setValue(QStringLiteral("language"), toString(a.language));
     s.setValue(QStringLiteral("theme"), toString(a.theme));
     s.setValue(QStringLiteral("closeToTray"), a.closeToTray);
+    s.setValue(QStringLiteral("uiScale"), a.uiScale);
 }
 
 RunShortcuts QSettingsRepository::loadRunShortcuts() {

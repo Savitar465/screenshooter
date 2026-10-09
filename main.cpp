@@ -24,6 +24,7 @@
 #include <QFont>
 #include <QLibraryInfo>
 #include <QLocale>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QStyleFactory>
 #include <QTimer>
@@ -79,10 +80,22 @@ void applyTheme(QApplication& app, qaflow::AppTheme theme) {
     app.setStyleSheet(qaflow::theme::stylesheet());
 }
 
+/// Tamaño de la interfaz (Ajustes › General), en %. Qt sólo admite fijarlo antes de crear la aplicación,
+/// así que se lee directamente de QSettings y se aplica con QT_SCALE_FACTOR; cambiarlo pide reiniciar.
+/// Si el entorno ya trae QT_SCALE_FACTOR, o son las capturas de la documentación, se respeta tal cual.
+int applyUiScale() {
+    if (qEnvironmentVariableIsSet("QT_SCALE_FACTOR") || qaflow::devsnapshot::requested()) return 100;
+    const int percent = qaflow::clampUiScale(QSettings(QStringLiteral("QAflow"), QStringLiteral("QAflow")).value(QStringLiteral("app/uiScale"), 100).toInt());
+    if (percent != 100) qputenv("QT_SCALE_FACTOR", QByteArray::number(percent / 100.0));
+    return percent;
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
+    const int uiScale = applyUiScale();
     QApplication app(argc, argv);
+    app.setProperty("qaflowUiScale", uiScale);
     QApplication::setApplicationName(QStringLiteral("QAflow"));
     QApplication::setOrganizationName(QStringLiteral("QAflow"));
     QApplication::setApplicationVersion(QStringLiteral(QAFLOW_VERSION));

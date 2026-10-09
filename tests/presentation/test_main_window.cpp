@@ -170,7 +170,19 @@ struct WindowFixture {
 
 class MainWindowTest : public QObject {
     Q_OBJECT
+    QTemporaryDir m_settingsDir;
+
 private slots:
+    // Los ajustes van a un INI temporal: sin organización QSettings no escribe en el registro de
+    // Windows (status() == AccessError), y así tampoco se tocan los ajustes reales del usuario.
+    void initTestCase() {
+        QVERIFY(m_settingsDir.isValid());
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_settingsDir.path());
+        QCoreApplication::setOrganizationName(QStringLiteral("QAflowMainWindowTest"));
+        QCoreApplication::setApplicationName(QStringLiteral("QAflowMainWindowTest"));
+    }
+
     void opensOnCasesAndSidebarNavigates() {
         WindowFixture f;
         QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Casos));

@@ -10,6 +10,7 @@
 #include "core/services/IGlobalHotkey.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/ChoiceDialog.h"
+#include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QCoreApplication>
@@ -542,11 +543,8 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     QVBoxLayout* cb;
     auto* cap = section(theme::Cyan, tr("Capturas de pantalla y grabaciones"),
                         tr("Se guardan localmente y se adjuntan al paso activo de la ejecución. Los ficheros existentes (logs, vídeos) se adjuntan con «Adjuntar archivo» o arrastrándolos a la ventana."), nullptr, &cb);
-    auto* crow = new QWidget;
-    auto* cg = new QGridLayout(crow);
-    cg->setContentsMargins(0, 0, 0, 0);
-    cg->setHorizontalSpacing(12);
-    cg->setVerticalSpacing(12);
+    // Cuatro columnas si caben; en una ventana estrecha (la interfaz aumentada) bajan de fila.
+    auto* crow = new AutoGrid(150, 4, 12);
     m_shortcut = new QLineEdit;
     m_shortcut->setProperty("role", QStringLiteral("mono"));
     m_shortcut->setToolTip(tr("Atajo de captura. Con «atajo global» funciona aunque QAflow no tenga el foco"));
@@ -559,6 +557,10 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     for (auto m : {CaptureMode::FullScreen, CaptureMode::ActiveWindow, CaptureMode::Region}) m_mode->addItem(label(m), static_cast<int>(m));
     m_mode->setToolTip(tr("Las grabaciones usan «Pantalla completa» o, en los demás modos, una región elegida con el ratón"));
     m_screen = new QComboBox;
+    // Los nombres de los monitores son largos («Pantalla 1 · HDMI-2 (1920×1080) · principal»): no
+    // ensanchan la columna, se recortan y la lista desplegada los muestra enteros.
+    m_screen->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    m_screen->setMinimumContentsLength(10);
     m_screen->setToolTip(tr("Con varios monitores: qué pantalla se captura y se graba. "
                             "Si QAflow está en otra pantalla no se oculta al capturar"));
     m_delay = new QComboBox;
@@ -571,15 +573,14 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     m_gifMaxSecs->setRange(5, 120);
     m_gifMaxSecs->setSuffix(tr(" s"));
     m_gifMaxSecs->setToolTip(tr("La grabación se detiene sola al llegar a esta duración"));
-    cg->addWidget(field(tr("Atajo de captura"), m_shortcut), 0, 0);
-    cg->addWidget(field(tr("Formato"), m_format), 0, 1);
-    cg->addWidget(field(tr("Modo"), m_mode), 0, 2);
-    cg->addWidget(field(tr("Retardo"), m_delay), 0, 3);
-    cg->addWidget(field(tr("Atajo de grabación"), m_recordShortcut), 1, 0);
-    cg->addWidget(field(tr("GIF · fotogramas"), m_gifFps), 1, 1);
-    cg->addWidget(field(tr("GIF · duración máxima"), m_gifMaxSecs), 1, 2);
-    cg->addWidget(field(tr("Pantalla"), m_screen), 1, 3);
-    for (int i = 0; i < 4; ++i) cg->setColumnStretch(i, 1);
+    crow->addWidget(field(tr("Atajo de captura"), m_shortcut));
+    crow->addWidget(field(tr("Formato"), m_format));
+    crow->addWidget(field(tr("Modo"), m_mode));
+    crow->addWidget(field(tr("Retardo"), m_delay));
+    crow->addWidget(field(tr("Atajo de grabación"), m_recordShortcut));
+    crow->addWidget(field(tr("GIF · fotogramas"), m_gifFps));
+    crow->addWidget(field(tr("GIF · duración máxima"), m_gifMaxSecs));
+    crow->addWidget(field(tr("Pantalla"), m_screen));
     cb->addWidget(crow);
     m_globalShortcut = new QCheckBox(tr("Atajos globales: capturar y avanzar de paso aunque QAflow no tenga el foco"));
     cb->addWidget(m_globalShortcut);

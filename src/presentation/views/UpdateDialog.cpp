@@ -19,7 +19,8 @@ UpdateDialog::UpdateDialog(UpdateService& updates, const UpdateRelease& release,
     setModal(true);
     setMinimumWidth(560);
 
-    auto* v = ui::vbox(this, 18, 12);
+    QVBoxLayout* footer;
+    auto* v = ui::scrollingBody(this, 18, 12, &footer);
     auto* intro = ui::label(tr("<b>QAflow %1</b> está disponible. Tienes la %2.")
                                 .arg(release.version.toString(), updates.currentVersion().toString()));
     intro->setWordWrap(true);
@@ -44,7 +45,7 @@ UpdateDialog::UpdateDialog(UpdateService& updates, const UpdateRelease& release,
     v->addWidget(m_error);
 
     m_footer = new QStackedWidget;
-    v->addWidget(m_footer);
+    footer->addWidget(m_footer);
 
     // Ofrecer la versión: omitirla, dejarla para luego o ir a por ella.
     m_offerPage = new QWidget;

@@ -156,7 +156,8 @@ AiCaseGenerationDialog::AiCaseGenerationDialog(const ai::GenerationRequest& requ
     connect(m_source, &QPlainTextEdit::textChanged, this, updateSize);
     connect(m_instructions, &QPlainTextEdit::textChanged, this, updateSize);
     updateSize();
-    m_tabs->addTab(promptPage, tr("1 · Prompt"));
+    // Cada pestaña se desplaza si el diálogo no cabe a su tamaño (la interfaz aumentada en una pantalla chica).
+    m_tabs->addTab(ui::scrollable(promptPage), tr("1 · Prompt"));
 
     // ---- 2 · La respuesta: se interpreta y se revisa caso a caso.
     auto* responsePage = new QWidget;
@@ -193,7 +194,7 @@ AiCaseGenerationDialog::AiCaseGenerationDialog(const ai::GenerationRequest& requ
     split->setStretchFactor(0, 2);
     split->setStretchFactor(1, 3);
     rv->addWidget(split, 1);
-    m_tabs->addTab(responsePage, tr("2 · Respuesta"));
+    m_tabs->addTab(ui::scrollable(responsePage), tr("2 · Respuesta"));
 
     auto* buttons = new QWidget;
     auto* h = ui::hbox(buttons, 0, 8);

@@ -94,6 +94,9 @@ void WorkspaceWindow::showProject(MainWindow* project) {
     if (auto* previous = currentProject(); previous && previous != project) previous->setProjectActive(false);
     if (m_projects->indexOf(project) < 0) {
         project->setParent(m_projects, Qt::Widget);
+        // Dentro del armazón manda el mínimo de éste, que ScreenFit recorta a la pantalla; el del
+        // proyecto como ventana suelta lo dejaría más grande que ella.
+        project->setMinimumSize(0, 0);
         m_projects->addWidget(project);
         connect(project, &QWidget::windowTitleChanged, this, [this, project](const QString& title) {
             if (currentProject() == project) setWindowTitle(title);

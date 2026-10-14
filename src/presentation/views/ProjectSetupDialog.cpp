@@ -40,7 +40,8 @@ ProjectSetupDialog::ProjectSetupDialog(ProjectStore& projects, const QString& sy
     setWindowIcon(ui::appIcon());
     setMinimumWidth(520);
 
-    auto* v = ui::vbox(this, 18, 12);
+    QVBoxLayout* footer;
+    auto* v = ui::scrollingBody(this, 18, 12, &footer);
     v->addWidget(ui::label(system.isEmpty() ? tr("Nuevo proyecto")
                                             : tr("Ningún proyecto trabaja los requerimientos de %1").arg(system), "h2"));
     auto* subtitle = ui::label(system.isEmpty()
@@ -107,7 +108,7 @@ ProjectSetupDialog::ProjectSetupDialog(ProjectStore& projects, const QString& sy
     accept->setDefault(true);
     bh->addWidget(cancel);
     bh->addWidget(accept);
-    v->addWidget(buttons);
+    footer->addWidget(buttons);
     connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
     connect(accept, &QPushButton::clicked, this, &ProjectSetupDialog::accept);
 

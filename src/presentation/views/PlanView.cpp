@@ -243,16 +243,20 @@ QWidget* PlanView::buildEditor() {
     m_basis = ui::label(QString(), "muted-sm");
     m_basis->setStyleSheet(QStringLiteral("font-size:10.5px;"));
     m_basis->setWordWrap(true);   // «3 min por paso · sin historial» no debe ensanchar el editor
-    sh->addWidget(stat(tr("Casos"), m_count));
-    sh->addWidget(stat(tr("Pasos"), m_steps));
-    sh->addWidget(stat(tr("Estimado"), m_time, m_basis));
+    // Arriba: si la nota de «Estimado» ocupa dos líneas, las otras cifras no se descuelgan.
+    sh->addWidget(stat(tr("Casos"), m_count), 0, Qt::AlignTop);
+    sh->addWidget(stat(tr("Pasos"), m_steps), 0, Qt::AlignTop);
+    sh->addWidget(stat(tr("Estimado"), m_time, m_basis), 0, Qt::AlignTop);
+    sh->addStretch(1);
     hh->addWidget(stats, 0, Qt::AlignTop);
     v->addWidget(head);
     // Si el editor es estrecho, las cifras del plan bajan debajo del nombre en vez de apretarlo.
     // Se mira el ancho visible y no el del editor: éste no baja de lo que pide su contenido.
     onBreakpoint(sa->viewport(), 780, [hh, stats](bool narrow) {
         hh->setDirection(narrow ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
-        hh->setAlignment(stats, narrow ? Qt::AlignLeft : Qt::AlignTop);
+        // Apiladas ocupan todo el ancho: alineadas a la izquierda, la nota de «Estimado» se partiría en
+        // más líneas de las que el layout les reservó y se cortaría por abajo.
+        hh->setAlignment(stats, narrow ? Qt::Alignment() : Qt::AlignTop);
     });
 
     // Ciclo actual

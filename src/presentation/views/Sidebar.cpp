@@ -12,6 +12,8 @@
 #include <QApplication>
 #include <QLabel>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QVBoxLayout>
 
 namespace qaflow {
 
@@ -26,8 +28,14 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunH
     : QFrame(parent), m_cases(cases), m_plan(plan), m_run(run), m_history(history), m_bugs(bugs), m_issues(issues) {
     ui::setRole(this, "rail");
     setFixedWidth(kRailWidth);
-    auto* v = ui::vbox(this, 0, 4);
-    v->setContentsMargins(9, 14, 9, 14);
+    // Los iconos se desplazan si la ventana es más baja que el rail (tamaño de la interfaz grande en un
+    // portátil): si no, su alto fijaría el mínimo de la ventana por encima de la pantalla.
+    QVBoxLayout* v;
+    auto* scroll = ui::scrollArea(nullptr, &v);
+    scroll->setObjectName(QStringLiteral("railScroll"));
+    ui::vbox(this, 0, 0)->addWidget(scroll);
+    v->setContentsMargins(0, 14, 0, 14);
+    v->setSpacing(4);
 
     // Marca
     auto* logo = new QLabel(QStringLiteral("QA"));
@@ -36,28 +44,28 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunH
     logo->setToolTip(tr("QAflow %1 · Equipo Calidad").arg(QApplication::applicationVersion()));
     logo->setStyleSheet(QStringLiteral("background:%1;border:1px solid %2;border-radius:10px;color:%3;font-weight:800;font-size:13px;")
                             .arg(theme::tint(theme::Green, 46), theme::tint(theme::Green, 115), theme::Green));
-    v->addWidget(logo);
+    v->addWidget(logo, 0, Qt::AlignHCenter);
     v->addSpacing(10);
 
     // Los issues, primero: son el punto de entrada para organizar las pruebas de cada requerimiento.
-    v->addWidget(navButton(Screen::Issues, icons::Glyph::Issues, theme::Cyan, tr("Issues"), QStringLiteral("Ctrl+6")));
-    v->addWidget(navButton(Screen::Casos, icons::Glyph::Cases, theme::Violet, tr("Casos de prueba"), QStringLiteral("Ctrl+1")));
-    v->addWidget(navButton(Screen::Plan, icons::Glyph::Plan, theme::Amber, tr("Plan de pruebas"), QStringLiteral("Ctrl+2")));
-    v->addWidget(navButton(Screen::Run, icons::Glyph::Run, theme::Green, tr("Ejecución"), QStringLiteral("Ctrl+3")));
-    v->addWidget(navButton(Screen::Historial, icons::Glyph::History, theme::Blue, tr("Historial"), QStringLiteral("Ctrl+4")));
-    v->addWidget(navButton(Screen::Bug, icons::Glyph::Bug, theme::Red, tr("Bugs"), QStringLiteral("Ctrl+5")));
+    v->addWidget(navButton(Screen::Issues, icons::Glyph::Issues, theme::Cyan, tr("Issues"), QStringLiteral("Ctrl+6")), 0, Qt::AlignHCenter);
+    v->addWidget(navButton(Screen::Casos, icons::Glyph::Cases, theme::Violet, tr("Casos de prueba"), QStringLiteral("Ctrl+1")), 0, Qt::AlignHCenter);
+    v->addWidget(navButton(Screen::Plan, icons::Glyph::Plan, theme::Amber, tr("Plan de pruebas"), QStringLiteral("Ctrl+2")), 0, Qt::AlignHCenter);
+    v->addWidget(navButton(Screen::Run, icons::Glyph::Run, theme::Green, tr("Ejecución"), QStringLiteral("Ctrl+3")), 0, Qt::AlignHCenter);
+    v->addWidget(navButton(Screen::Historial, icons::Glyph::History, theme::Blue, tr("Historial"), QStringLiteral("Ctrl+4")), 0, Qt::AlignHCenter);
+    v->addWidget(navButton(Screen::Bug, icons::Glyph::Bug, theme::Red, tr("Bugs"), QStringLiteral("Ctrl+5")), 0, Qt::AlignHCenter);
     v->addStretch(1);
 
     // Al pie, como los paneles secundarios de un IDE: las métricas del historial.
     auto* separator = new QFrame;
-    separator->setFixedHeight(1);
+    separator->setFixedSize(kButtonSize, 1);
     separator->setStyleSheet(QStringLiteral("background:%1;").arg(theme::Border));
-    v->addWidget(separator);
+    v->addWidget(separator, 0, Qt::AlignHCenter);
     v->addSpacing(6);
     auto* metrics = railButton(icons::Glyph::Metrics, theme::Cyan, tr("Métricas · tasa de éxito por suite y evolución entre ciclos"));
     metrics->setObjectName(QStringLiteral("metricButton"));
     connect(metrics, &QPushButton::clicked, this, [this]() { emit metricsRequested(); });
-    v->addWidget(metrics);
+    v->addWidget(metrics, 0, Qt::AlignHCenter);
 
     connect(&m_cases, &TestCaseStore::casesChanged, this, &Sidebar::refresh);
     connect(&m_cases, &TestCaseStore::caseChanged, this, &Sidebar::refresh);

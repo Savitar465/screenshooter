@@ -18,15 +18,14 @@
 #include "presentation/DevSnapshot.h"
 #include "presentation/theme/Theme.h"
 #include "presentation/views/WorkspaceWindow.h"
+#include "presentation/widgets/ScreenFit.h"
 #include "presentation/widgets/WheelGuard.h"
 
 #include <QApplication>
-#include <QFont>
 #include <QLibraryInfo>
 #include <QLocale>
 #include <QSettings>
 #include <QStandardPaths>
-#include <QStyleFactory>
 #include <QTimer>
 #include <QTranslator>
 
@@ -99,13 +98,12 @@ int main(int argc, char* argv[]) {
     QApplication::setApplicationName(QStringLiteral("QAflow"));
     QApplication::setOrganizationName(QStringLiteral("QAflow"));
     QApplication::setApplicationVersion(QStringLiteral(QAFLOW_VERSION));
-    app.setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
-    QFont f = app.font();
-    f.setFamilies({QStringLiteral("Segoe UI"), QStringLiteral("Inter"), QStringLiteral("Noto Sans"), QStringLiteral("DejaVu Sans"), QStringLiteral("sans-serif")});
-    f.setPixelSize(13);
-    app.setFont(f);
+    qaflow::theme::applyBaseLook();
     // La rueda desplaza la pantalla; no cambia combos ni spin boxes al pasar por encima.
     qaflow::WheelGuard::install();
+    // Ninguna ventana más grande que la pantalla (sobre todo con el tamaño de la interfaz aumentado). En
+    // las capturas de la documentación, sólo si se pide: su pantalla virtual es más chica que un monitor.
+    if (!qaflow::devsnapshot::requested() || qEnvironmentVariableIsSet("QAFLOW_SNAPSHOT_FIT")) qaflow::ScreenFit::install();
 
     using namespace qaflow;
 

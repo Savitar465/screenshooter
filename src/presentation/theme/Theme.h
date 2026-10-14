@@ -29,6 +29,10 @@ void apply(const Palette& p);
 const Palette& current();
 bool isDark();
 
+/// Estilo (Fusion) y letra de toda la aplicación, iguales en todas las plataformas. Los tests de
+/// la ventana lo usan también: con la letra del escritorio miden algo distinto de lo que se ve.
+void applyBaseLook();
+
 /// app.qss con los tokens sustituidos por la paleta activa.
 QString stylesheet();
 /// "rgba(r,g,b,alpha)" a partir de un color de la paleta (alpha 0-255).

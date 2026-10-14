@@ -10,6 +10,7 @@
 #include "application/BugReportService.h"
 #include "application/CaseTransferService.h"
 #include "application/EvidenceService.h"
+#include "presentation/theme/Theme.h"
 #include "presentation/views/BugDetailWindow.h"
 #include "presentation/views/BugCloseDialog.h"
 #include "presentation/views/BugDialog.h"
@@ -33,6 +34,13 @@
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/Responsive.h"
+#include "presentation/widgets/ScreenFit.h"
+#include "presentation/widgets/MarkupEditorDialog.h"
+#include "presentation/views/AiCaseGenerationDialog.h"
+#include "presentation/views/QualityRecordDialog.h"
+#include "presentation/views/SettingsDialog.h"
+#include "presentation/views/UpdateDialog.h"
+#include "application/UpdateService.h"
 #include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/Thumbnail.h"
 #include "presentation/widgets/Toast.h"
@@ -47,6 +55,7 @@
 #include <QScrollBar>
 #include <QSplitter>
 #include <QLabel>
+#include <QLayout>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
@@ -90,6 +99,83 @@ QString overflowReport(QScrollArea* area) {
         const auto* label = qobject_cast<QLabel*>(w);
         out += QStringLiteral("\n  %1#%2 min=%3 %4").arg(QString::fromLatin1(w->metaObject()->className()), w->objectName())
                    .arg(w->minimumSizeHint().width()).arg(label ? label->text().left(60) : QString());
+    }
+    return out;
+}
+
+/// Encoge su ventana a `area` al llegar el Show, como el filtro de ScreenFit pero con una pantalla
+/// simulada: con el tamaño que le da show() y antes de que exista la ventana nativa (con un gestor de
+/// ventanas real, encoger una ya mapeada llega tarde y vuelve a su tamaño de antes).
+class FitOnShow : public QObject {
+public:
+    FitOnShow(const QRect& area, QWidget* window) : QObject(window), m_area(area) {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::Show && watched == parent()) ScreenFit::fit(static_cast<QWidget*>(watched), m_area);
+        return false;
+    }
+
+private:
+    QRect m_area;
+};
+
+/// Si `layout` (o uno de sus layouts anidados) coloca `w`.
+bool laysOut(QLayout* layout, QWidget* w) {
+    if (!layout) return false;
+    for (int i = 0; i < layout->count(); ++i) {
+        QLayoutItem* item = layout->itemAt(i);
+        if (item->widget() == w || laysOut(item->layout(), w)) return true;
+    }
+    return false;
+}
+
+/// Widgets visibles que su layout deja cortados: más bajos (o más estrechos) que su mínimo, o asomando
+/// por debajo (o por la derecha) de su contenedor. Dentro de un scroll el contenido mide al menos su
+/// mínimo y se desplaza, así que no sale aquí; tampoco lo que flota encima de otro widget sin layout
+/// (avisos, flechas del visor).
+QStringList clippedWidgets(QWidget* root, Qt::Orientations directions = Qt::Vertical) {
+    QStringList out;
+    const auto effectiveMinimum = [](const QWidget* w, Qt::Orientation o) {
+        const bool vertical = o == Qt::Vertical;
+        const QSizePolicy::Policy policy = vertical ? w->sizePolicy().verticalPolicy() : w->sizePolicy().horizontalPolicy();
+        if (policy == QSizePolicy::Ignored) return 0;
+        const int explicitMin = vertical ? w->minimumHeight() : w->minimumWidth();
+        const int hint = vertical ? w->minimumSizeHint().height() : w->minimumSizeHint().width();
+        return std::min(explicitMin > 0 ? explicitMin : hint, vertical ? w->maximumHeight() : w->maximumWidth());
+    };
+    for (QWidget* w : root->findChildren<QWidget*>()) {
+        QWidget* p = w->parentWidget();
+        if (!w->isVisible() || w->isWindow() || !p || !laysOut(p->layout(), w)) continue;
+        if (qobject_cast<QAbstractScrollArea*>(p->parentWidget()) && p->objectName() == QLatin1String("qt_scrollarea_viewport")) continue;
+        QStringList problems;
+        if (directions & Qt::Vertical) {
+            const int below = w->geometry().bottom() - p->contentsRect().bottom();
+            // Un texto que se parte en líneas necesita el alto de todas; otro contenedor con alto según el
+            // ancho da el preferido, no el mínimo, y sólo cuenta si asoma.
+            const auto* wrapped = qobject_cast<QLabel*>(w);
+            const int missing = wrapped && wrapped->wordWrap() ? std::min(w->heightForWidth(w->width()), w->maximumHeight()) - w->height()
+                              : w->hasHeightForWidth() ? 0 : effectiveMinimum(w, Qt::Vertical) - w->height();
+            if (below > 1) problems << QStringLiteral("asoma %1 px por abajo").arg(below);
+            if (missing > 1) problems << QStringLiteral("le faltan %1 px de alto").arg(missing);
+        }
+        if (directions & Qt::Horizontal) {
+            // Un scroll sin barra horizontal recorta por la derecha lo que no le cabe a lo ancho.
+            if (auto* area = qobject_cast<QScrollArea*>(w); area && area->widget() && area->horizontalScrollBarPolicy() == Qt::ScrollBarAlwaysOff
+                && area->widget()->width() > area->viewport()->width() + 1)
+                problems << QStringLiteral("no cabe a lo ancho: ") + overflowReport(area);
+            const int right = w->geometry().right() - p->contentsRect().right();
+            const int missing = effectiveMinimum(w, Qt::Horizontal) - w->width();
+            if (right > 1) problems << QStringLiteral("asoma %1 px por la derecha").arg(right);
+            if (missing > 1) problems << QStringLiteral("le faltan %1 px de ancho").arg(missing);
+        }
+        if (problems.isEmpty()) continue;
+        QStringList path;
+        for (QWidget* q = w; q && q != root && path.size() < 6; q = q->parentWidget())
+            path.prepend(QString::fromLatin1(q->metaObject()->className()).remove(QStringLiteral("qaflow::")) + QLatin1Char('#') + q->objectName());
+        const auto* label = qobject_cast<QLabel*>(w) ? qobject_cast<QLabel*>(w) : w->findChild<QLabel*>();
+        out << QStringLiteral("%1: %2 «%3»").arg(path.join(QLatin1Char('/')), problems.join(QStringLiteral(", ")),
+                                                label ? label->text().left(40) : QString());
     }
     return out;
 }
@@ -200,6 +286,8 @@ private slots:
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_settingsDir.path());
         QCoreApplication::setOrganizationName(QStringLiteral("QAflowMainWindowTest"));
         QCoreApplication::setApplicationName(QStringLiteral("QAflowMainWindowTest"));
+        // La letra de la aplicación, no la del escritorio (en uno con Cantarell 11 todo sale más alto).
+        theme::applyBaseLook();
         // En el CI de Windows el texto sale casi el doble de ancho que en Linux. QAFLOW_TEST_FONT_STRETCH=195
         // lo imita aquí, para ver sin pasar por el CI lo que allí se sale por la derecha.
         if (const int stretch = qEnvironmentVariableIntValue("QAFLOW_TEST_FONT_STRETCH"); stretch > 0) {
@@ -2814,6 +2902,9 @@ private slots:
         f.window->navigate(Screen::Issues);
 
         auto openMenu = [&f]() -> QMenu* {
+            // Cada intento abre un menú nuevo: el del intento anterior (con un gestor de ventanas real
+            // sigue abierto) se cierra antes, o findChild lo devolvería a él, con las fases de antes.
+            for (auto* stale : f.window->findChildren<QMenu*>(QStringLiteral("issuePhasesMenu"))) delete stale;
             QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
             auto* phases = f.window->findChild<QPushButton*>(QStringLiteral("issuePhasesButton"));
             if (!phases) return nullptr;
@@ -3415,6 +3506,119 @@ private slots:
         QCOMPARE(f.app.tracker->closed, QStringList{QStringLiteral("SHOP-77")});
         QVERIFY(f.app.bugLedger.findIssue(QStringLiteral("SHOP-77"))->resolved);
         QTRY_VERIFY(!closeBug->isVisible());   // cerrado, ya no se ofrece
+    }
+
+    // Con el tamaño de la interfaz al 150 % un portátil de 1366×768 deja unos 900×470 px lógicos: ninguna
+    // pantalla obliga a la ventana a ser más alta ni corta su contenido por abajo, lo que no cabe se desplaza.
+    void everyScreenScrollsInsteadOfCuttingInASmallWindow() {
+        WindowFixture f;
+        ExternalRequirement requirement;
+        requirement.id = QStringLiteral("2026997");
+        requirement.systemCode = QStringLiteral("SUMA2");
+        requirement.system = QStringLiteral("SUMA2-INGRESO");
+        requirement.summary = QStringLiteral("Integración de nuevos servicios");
+        requirement.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+        f.app.issues.importRequirements({requirement}, QStringLiteral("http://gesreq.test:7401/greq"));
+        const QString issue = f.app.issues.issues().first().id;
+        f.app.run.start(QStringLiteral("TC-103"));
+        f.window->setMinimumSize(0, 0);   // el que pone ScreenFit con una pantalla así
+        const std::pair<const char*, std::function<void()>> states[] = {
+            {"casos", [&] { f.window->navigate(Screen::Casos); }},
+            {"plan", [&] { f.window->navigate(Screen::Plan); }},
+            {"ejecución", [&] { f.window->navigate(Screen::Run); }},
+            {"ejecución en foco", [&] { f.window->findChild<RunView*>()->setFocusMode(true); }},
+            {"historial", [&] { f.window->navigate(Screen::Historial); }},
+            {"métricas", [&] { f.window->showMetrics(); }},
+            {"bugs", [&] { f.window->navigate(Screen::Bug); }},
+            {"issues", [&] { f.window->navigate(Screen::Issues); }},
+            {"issue", [&] { f.window->openIssue(issue); }},
+        };
+        for (const QSize size : {QSize(1100, 560), QSize(900, 470), QSize(780, 400)}) {
+            f.window->resize(size);
+            for (const auto& [name, show] : states) {
+                show();
+                for (int pass = 0; pass < 8; ++pass) QApplication::processEvents();
+                const QString where = QStringLiteral("%1 a %2×%3").arg(QString::fromUtf8(name)).arg(size.width()).arg(size.height());
+                if (size.width() >= 900)
+                    QVERIFY2(f.window->width() == size.width(),
+                             qPrintable(QStringLiteral("%1: la ventana no estrecha de %2").arg(where).arg(f.window->width())));
+                QVERIFY2(f.window->height() == size.height(),
+                         qPrintable(QStringLiteral("%1: la ventana no baja de %2").arg(where).arg(f.window->height())));
+                const QStringList clipped = clippedWidgets(f.window.get());
+                QVERIFY2(clipped.isEmpty(), qPrintable(where + QStringLiteral(":\n  ") + clipped.join(QStringLiteral("\n  "))));
+            }
+        }
+    }
+
+    // Ningún diálogo sale más grande que la pantalla (aquí, la de un portátil de 1366×768 con la interfaz
+    // aumentada) ni corta su contenido: el formulario se desplaza y los botones siguen a la vista.
+    void everyDialogFitsASmallScreenAndScrollsItsContent() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        f.ctx.projects = &projects;
+        ExternalRequirement requirement;
+        requirement.id = QStringLiteral("2026997");
+        requirement.systemCode = QStringLiteral("SUMA2");
+        requirement.summary = QStringLiteral("Integración de nuevos servicios");
+        requirement.states = {QStringLiteral("CONTROL CALIDAD ASIGNADO")};
+        f.app.issues.importRequirements({requirement}, QStringLiteral("http://gesreq.test:7401/greq"));
+        const QString issue = f.app.issues.issues().first().id;
+        IssueLink bug;
+        bug.key = QStringLiteral("SHOP-12");
+        bug.title = QStringLiteral("[Checkout] El cupón no descuenta");
+        bug.tracker = QStringLiteral("Jira");
+        bug.severity = QStringLiteral("Mayor");
+        bug.status = QStringLiteral("To Do");
+        CycleStartDialog::Setup cycle;
+        cycle.planName = QStringLiteral("Regresión");
+        cycle.context = QStringLiteral("GREQ 2026997 · revisión 1");
+        cycle.phases = true;
+        cycle.environments = {QStringLiteral("QA"), QStringLiteral("PRE"), QStringLiteral("PROD")};
+        ai::GenerationRequest generation;
+        generation.requirementId = QStringLiteral("2026997");
+        generation.source = QStringLiteral("Alcance original");
+
+        QWidget* parent = f.window.get();
+        UpdateService updates(nullptr, nullptr, *Version::parse(QStringLiteral("1.4.0")));
+        UpdateRelease release;
+        release.version = *Version::parse(QStringLiteral("1.5.0"));
+        release.notes = QStringLiteral("- Ventanas que caben en pantallas pequeñas\n- Scroll en las pantallas");
+        release.publishedAt = QDateTime::currentDateTime();
+        const std::pair<const char*, std::function<QDialog*()>> dialogs[] = {
+            {"actualización", [&]() -> QDialog* { return new UpdateDialog(updates, release, QString(), parent); }},
+            {"ajustes", [&]() -> QDialog* { return new SettingsDialog(f.ctx, parent); }},
+            {"bug", [&]() -> QDialog* { auto* d = new BugDialog(f.app.store, f.app.settings, f.app.bugs, f.evidence, parent); d->loadDraft(); return d; }},
+            {"ficha del bug", [&]() -> QDialog* { return new BugDetailWindow(bug, QStringLiteral("Login"), QStringLiteral("Pulsar Entrar"), parent); }},
+            {"cerrar bug", [&]() -> QDialog* { return new BugCloseDialog(bug.key, true, parent); }},
+            {"nuevo caso", [&]() -> QDialog* { return new CaseCreateDialog({QStringLiteral("Auth")}, QStringLiteral("Se añade al plan"), parent); }},
+            {"ciclo", [&]() -> QDialog* { return new CycleStartDialog(cycle, parent); }},
+            {"jira", [&]() -> QDialog* { return new JiraPublishDialog(JiraPublishDialog::Mode::Create, QStringLiteral("Jira · SHOP"), {}, {QStringLiteral("Bug")}, parent); }},
+            {"revisión", [&]() -> QDialog* { return new RevisionPublishDialog(f.app.revisionPublish, issue, QaOutcome::Conforme, QString(), QString(), 0, parent); }},
+            {"proyecto", [&]() -> QDialog* { return new ProjectSetupDialog(projects, QStringLiteral("SUMA2"), true, nullptr, nullptr, parent); }},
+            {"acta", [&]() -> QDialog* { return new QualityRecordDialog(QualityRecord{}, QaOutcome::Conforme, {}, {}, {}, {}, parent); }},
+            {"casos con IA", [&]() -> QDialog* { return new AiCaseGenerationDialog(generation, QStringLiteral("al plan PL-0001"), {}, {}, parent); }},
+            {"formato", [&]() -> QDialog* { return new MarkupEditorDialog(QStringLiteral("Paso 1"), QStringLiteral("pulsar Aceptar"), parent); }},
+            {"elegir", [&]() -> QDialog* {
+                const ChoiceDialog::Loader loader = [](const ChoiceDialog::Loaded& done) {
+                    done({Choice{QStringLiteral("SUMA2"), QStringLiteral("INGRESO"), QString()}}, QString());
+                };
+                return new ChoiceDialog(QStringLiteral("Sistema de GESREQ"), QStringLiteral("Consultando…"), loader, QString(), parent);
+            }},
+        };
+        // Lo que queda en 1366×768 al 150 % y al 175 %, sin la barra del escritorio ni el marco de la ventana.
+        for (const QRect screen : {QRect(0, 0, 894, 440), QRect(0, 0, 764, 390)})
+        for (const auto& [name, make] : dialogs) {
+            std::unique_ptr<QDialog> dialog(make());
+            dialog->installEventFilter(new FitOnShow(screen, dialog.get()));
+            dialog->show();
+            for (int pass = 0; pass < 8; ++pass) QApplication::processEvents();
+            const QString where = QStringLiteral("%1 en %2×%3").arg(QString::fromUtf8(name)).arg(screen.width()).arg(screen.height());
+            QVERIFY2(dialog->width() <= screen.width() && dialog->height() <= screen.height(),
+                     qPrintable(QStringLiteral("%1: %2×%3").arg(where).arg(dialog->width()).arg(dialog->height())));
+            const QStringList clipped = clippedWidgets(dialog.get(), Qt::Vertical | Qt::Horizontal);
+            QVERIFY2(clipped.isEmpty(), qPrintable(where + QStringLiteral(":\n  ") + clipped.join(QStringLiteral("\n  "))));
+        }
     }
 
     void finishingAPlanCycleWithoutAnIssueStillOpensItsReport() {

@@ -29,7 +29,8 @@ JiraPublishDialog::JiraPublishDialog(Mode mode, const QString& destination, cons
     setWindowIcon(ui::appIcon());
     setMinimumSize(640, 520);
 
-    auto* v = ui::vbox(this, 18, 10);
+    QVBoxLayout* footer;
+    auto* v = ui::scrollingBody(this, 18, 10, &footer);
     v->addWidget(ui::label(mode == Mode::Create ? tr("Crear el issue en %1").arg(destination) : tr("Actualizar el issue en %1").arg(destination), "h2"));
 
     m_summary = new QLineEdit(draft.summary);
@@ -74,7 +75,7 @@ JiraPublishDialog::JiraPublishDialog(Mode mode, const QString& destination, cons
     connect(accept, &QPushButton::clicked, this, &JiraPublishDialog::accept);
     h->addWidget(cancel);
     h->addWidget(accept);
-    v->addWidget(buttons);
+    footer->addWidget(buttons);
 }
 
 IssueDraft JiraPublishDialog::draft() const {

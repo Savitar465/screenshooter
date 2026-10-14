@@ -9,7 +9,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QScrollArea>
 
 #include <algorithm>
 
@@ -31,7 +30,10 @@ CaseCreateDialog::CaseCreateDialog(const QStringList& suites, const QString& con
     setModal(true);
     resize(760, 640);
 
-    auto* v = ui::vbox(this, 18, 12);
+    // Todo el formulario se desplaza junto (con muchos pasos, o con la interfaz aumentada en una
+    // pantalla chica); el aviso y los botones quedan debajo, siempre a la vista.
+    QVBoxLayout* footer;
+    auto* v = ui::scrollingBody(this, 18, 12, &footer);
     if (!context.isEmpty()) {
         auto* intro = ui::label(context, "muted-sm");
         intro->setWordWrap(true);
@@ -64,33 +66,28 @@ CaseCreateDialog::CaseCreateDialog(const QStringList& suites, const QString& con
     m_preconditions->enableMarkupEditor(tr("Precondiciones"));
     v->addWidget(field(tr("Precondiciones"), m_preconditions));
 
-    // Los pasos, en una rejilla que crece hacia abajo con su propio scroll.
+    // Los pasos, en una rejilla que crece hacia abajo.
     auto* stepsHead = new QWidget;
     auto* sh = ui::hbox(stepsHead, 0, 8);
     m_stepsHeader = ui::label(QString(), "eyebrow");
     sh->addWidget(m_stepsHeader, 1);
     v->addWidget(stepsHead);
-    QWidget* stepsContent;
-    QVBoxLayout* stepsLayout;
-    auto* scroll = ui::scrollArea(&stepsContent, &stepsLayout);
-    stepsLayout->setSpacing(12);
     auto* grid = new QWidget;
     m_stepsGrid = new QGridLayout(grid);
     m_stepsGrid->setContentsMargins(0, 0, 0, 0);
     m_stepsGrid->setHorizontalSpacing(8);
     m_stepsGrid->setVerticalSpacing(8);
-    stepsLayout->addWidget(grid);
+    v->addWidget(grid);
     auto* add = ui::button(tr("+ Añadir paso"), "dashed");
     add->setObjectName(QStringLiteral("caseCreateAddStep"));
     connect(add, &QPushButton::clicked, this, &CaseCreateDialog::addStep);
-    stepsLayout->addWidget(add);
-    stepsLayout->addStretch(1);
-    v->addWidget(scroll, 1);
+    v->addWidget(add);
+    v->addStretch(1);
 
     m_problem = ui::label(QString(), "muted-sm");
     m_problem->setObjectName(QStringLiteral("caseCreateProblem"));
     m_problem->setStyleSheet(QStringLiteral("color:%1;").arg(theme::AmberSoft));
-    v->addWidget(m_problem);
+    footer->addWidget(m_problem);
 
     auto* actions = new QWidget;
     auto* ah = ui::hbox(actions, 0, 10);
@@ -102,7 +99,7 @@ CaseCreateDialog::CaseCreateDialog(const QStringList& suites, const QString& con
     m_accept->setObjectName(QStringLiteral("caseCreateAccept"));
     connect(m_accept, &QPushButton::clicked, this, &QDialog::accept);
     ah->addWidget(m_accept);
-    v->addWidget(actions);
+    footer->addWidget(actions);
 
     rebuildSteps({TestStep{}});
     m_title->setFocus();

@@ -29,6 +29,14 @@ QHBoxLayout* hbox(QWidget* parent, int margin = 0, int spacing = 0);
 
 /// QScrollArea vertical con un contenedor interno y su layout listo para usar.
 QScrollArea* scrollArea(QWidget** content, QVBoxLayout** layout, QWidget* parent = nullptr);
+/// Mete un widget ya construido en un scroll vertical: mientras cabe pide el tamaño entero de su
+/// contenido, y si no (una ventana baja o el tamaño de la interfaz aumentado) se desplaza en vez de
+/// cortarse por abajo. A lo ancho no se desplaza salvo que se active su barra horizontal.
+QScrollArea* scrollable(QWidget* content, QWidget* parent = nullptr);
+/// Monta un diálogo en dos partes: devuelve el layout del formulario, dentro de un `scrollable`, y en
+/// `footer` el de debajo, para los botones, que quedan siempre a la vista. `margin` y `spacing` son los
+/// que tendría el layout del diálogo entero.
+QVBoxLayout* scrollingBody(QWidget* dialog, int margin, int spacing, QVBoxLayout** footer);
 
 void clearLayout(QLayout* layout);
 QString elide(const QString& s, int max);

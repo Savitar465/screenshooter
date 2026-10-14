@@ -135,6 +135,7 @@ MarkupEditorDialog::MarkupEditorDialog(const QString& title, const QString& text
     v->addWidget(split, 1);
 
     auto* hint = ui::label(tr("*negrita*  _cursiva_  +subrayado+  -tachado-  {{mono}}  ||cabecera||  |celda|  * viñeta  # número  [texto|https://…]"), "muted-sm");
+    hint->setWordWrap(true);
     hint->setTextInteractionFlags(Qt::TextSelectableByMouse);
     v->addWidget(hint);
 

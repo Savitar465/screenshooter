@@ -305,6 +305,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/widgets/ChoiceDialog.cpp
         src/presentation/widgets/WheelGuard.h
         src/presentation/widgets/WheelGuard.cpp
+        src/presentation/widgets/ScreenFit.h
+        src/presentation/widgets/ScreenFit.cpp
         src/presentation/views/Sidebar.h
         src/presentation/views/Sidebar.cpp
         src/presentation/views/StatusStrip.h

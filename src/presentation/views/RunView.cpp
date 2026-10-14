@@ -140,7 +140,13 @@ RunView::RunView(TestCaseStore& cases, RunController& run, RunHistoryStore& hist
                  EvidenceService& evidence, BugStore& bugs, QWidget* parent)
     : QWidget(parent), m_cases(cases), m_run(run), m_history(history), m_settings(settings), m_evidence(evidence), m_bugs(bugs) {
     auto* root = ui::hbox(this, 0, 0);
-    root->addWidget(buildStage(), 1);
+    // El visor, la tira de capturas y la barra del caso no caben en una ventana baja: se desplazan. En
+    // una estrecha (el tamaño de la interfaz al 150 % en un portátil), también a lo ancho, antes que
+    // obligar a la ventana a salirse de la pantalla.
+    auto* stage = ui::scrollable(buildStage());
+    stage->setObjectName(QStringLiteral("runStageScroll"));
+    stage->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    root->addWidget(stage, 1);
     root->addWidget(buildInspector());
 
     // Atajos de teclado (sólo mientras esta vista es visible y el foco no está en un campo de texto)
@@ -588,8 +594,9 @@ QWidget* RunView::buildInspector() {
     // Pestaña «Bugs»: los partes que han salido de este caso, por paso. La ficha de cada uno se abre
     // en su propia ventana, para mirarla sin perder la prueba de vista.
     auto* bugsPage = new QWidget;
-    auto* bv = ui::vbox(bugsPage, 0, 10);
-    bv->setContentsMargins(14, 12, 14, 10);
+    // Mismos márgenes que «Casos»: con la ventana baja, la pestaña más alta fija el alto mínimo del inspector.
+    auto* bv = ui::vbox(bugsPage, 0, 8);
+    bv->setContentsMargins(10, 10, 10, 8);
     QWidget* bugsList;
     QVBoxLayout* bugsLayout;
     auto* bugsScroll = ui::scrollArea(&bugsList, &bugsLayout);

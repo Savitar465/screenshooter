@@ -125,6 +125,28 @@ la paleta y **reconstruye la ventana** (diferido con `QTimer::singleShot(0)` por
 un widget de la ventana anterior), conservando geometría y pantalla. Así ninguna vista necesita
 implementar retraducción dinámica.
 
+### Tamaño de la interfaz y pantallas pequeñas
+
+El tamaño de la interfaz (Ajustes › General) se aplica con `QT_SCALE_FACTOR` al arrancar, así que
+todo lo que mide en píxeles lógicos crece junto: al 150 % un portátil de 1366×768 deja unos 900×490 px
+lógicos. Para que nada se salga de la pantalla:
+
+- **`ScreenFit`** (`widgets/ScreenFit`), un filtro de toda la aplicación instalado en `main.cpp`,
+  recorta al mostrarse el mínimo y el tamaño de cada diálogo o ventana principal (también los de Qt:
+  mensajes, ficheros…) al hueco útil de su pantalla, sin barras del escritorio ni marco, y la mete
+  dentro. El `MainWindow` de cada proyecto deja su mínimo al entrar en el armazón (`WorkspaceWindow`),
+  que es la ventana que se recorta.
+- **Lo que deja de caber se desplaza.** Los diálogos con formulario se montan con
+  `ui::scrollingBody()`: el formulario en un scroll vertical y los botones debajo, siempre a la vista.
+  `ui::scrollable()` mete un widget ya hecho en un scroll que, mientras cabe, pide el tamaño entero de
+  su contenido (un diálogo se abre como siempre y sólo se desplaza si no le dejan crecer). En las
+  pantallas se desplazan el rail de iconos, el visor de la ejecución (también a lo ancho) y las
+  pestañas del diálogo de casos con IA; el resto ya tenía su scroll.
+- `MainWindowTest::everyScreenScrollsInsteadOfCuttingInASmallWindow` y
+  `everyDialogFitsASmallScreenAndScrollsItsContent` lo comprueban: ninguna pantalla impide a la ventana
+  bajar a 900×470 (ni a 780×400) y ningún diálogo pasa de lo que deja 1366×768 al 150 % y al 175 %, sin
+  widgets cortados por su layout (`clippedWidgets`).
+
 ## Navegación: rail y barra de estado
 
 La navegación imita a los IDE de JetBrains: `Sidebar` es un **rail** de 60 px con un icono por
@@ -1483,6 +1505,11 @@ datos, unos ajustes y una carpeta de capturas aislados (`$QAFLOW_SNAPSHOT_DIR/da
 dibujadas al vuelo.
 `QAFLOW_SNAPSHOT_LANG=es|en` y `QAFLOW_SNAPSHOT_THEME=dark|light` eligen idioma y tema; sin
 `LANG` se usa el del sistema. Útil para revisar el diseño sin interacción; CI lo ejecuta como humo.
+`ScreenFit` no actúa en este modo (la pantalla virtual es más chica que un monitor) salvo con
+`QAFLOW_SNAPSHOT_FIT=1`; junto con `QT_SCALE_FACTOR=1.5` y una pantalla virtual de portátil
+(`QT_QPA_PLATFORM="offscreen:configfile=pantalla.json"`, con `{"screens":[{"name":"laptop","x":0,"y":0,
+"width":1366,"height":768,"logicalDpi":96,"logicalBaseDpi":96,"dpr":1}]}`) enseña cómo queda la
+interfaz aumentada.
 
 ## Empaquetado
 

@@ -35,7 +35,8 @@ BugDetailWindow::BugDetailWindow(const IssueLink& bug, const QString& caseTitle,
     setModal(false);
     setMinimumWidth(480);
 
-    auto* v = ui::vbox(this, 18, 12);
+    QVBoxLayout* footer;
+    auto* v = ui::scrollingBody(this, 18, 12, &footer);
     m_pills = new QWidget;
     ui::hbox(m_pills, 0, 6);
     v->addWidget(m_pills);
@@ -78,7 +79,7 @@ BugDetailWindow::BugDetailWindow(const IssueLink& bug, const QString& caseTitle,
     open->setEnabled(!m_bug.url.trimmed().isEmpty());
     connect(open, &QPushButton::clicked, this, [this]() { emit openUrlRequested(m_bug.url); });
     bh->addWidget(open);
-    v->addWidget(buttons);
+    footer->addWidget(buttons);
 
     refresh();
 }

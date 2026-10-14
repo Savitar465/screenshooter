@@ -64,7 +64,8 @@ RevisionPublishDialog::RevisionPublishDialog(RevisionPublishService& service, co
     setWindowIcon(ui::appIcon());
     setMinimumSize(660, 640);
 
-    auto* v = ui::vbox(this, 18, 10);
+    QVBoxLayout* footer;
+    auto* v = ui::scrollingBody(this, 18, 10, &footer);
     v->addWidget(ui::label(heading, "h2"));
     auto* intro = ui::label(tr("Las pruebas van a Zephyr como ciclos con sus casos; el resultado y el acta, al issue del gestor; "
                                "y el control de calidad queda registrado en el requerimiento de GESREQ."),
@@ -130,7 +131,7 @@ RevisionPublishDialog::RevisionPublishDialog(RevisionPublishService& service, co
     connect(m_publish, &QPushButton::clicked, this, &RevisionPublishDialog::start);
     h->addWidget(m_close);
     h->addWidget(m_publish);
-    v->addWidget(buttons);
+    footer->addWidget(buttons);
 }
 
 void RevisionPublishDialog::buildSteps(QVBoxLayout* v) {

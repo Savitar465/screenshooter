@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
+#include <QScrollBar>
 #include <QStyle>
 
 namespace qaflow::ui {
@@ -83,6 +84,33 @@ QVBoxLayout* vbox(QWidget* parent, int margin, int spacing) {
     return l;
 }
 
+namespace {
+
+/// Scroll que, mientras cabe, pide el tamaño entero de su contenido (QScrollArea lo recorta a unas
+/// pocas líneas): un diálogo se abre con su tamaño de siempre y sólo se desplaza si la pantalla no le
+/// deja crecer tanto.
+class ScrollBody : public QScrollArea {
+public:
+    using QScrollArea::QScrollArea;
+
+    QSize sizeHint() const override {
+        const QWidget* w = widget();
+        if (!w) return QScrollArea::sizeHint();
+        const int frame = 2 * frameWidth();
+        return w->sizeHint().expandedTo(w->minimumSizeHint()) + QSize(frame, frame);
+    }
+
+    QSize minimumSizeHint() const override {
+        const QWidget* w = widget();
+        if (!w || horizontalScrollBarPolicy() != Qt::ScrollBarAlwaysOff) return QScrollArea::minimumSizeHint();
+        // A lo ancho no se desplaza: el contenido cabe entero, también con la barra vertical a la vista.
+        const int width = w->minimumSizeHint().width() + verticalScrollBar()->sizeHint().width() + 2 * frameWidth();
+        return {width, QScrollArea::minimumSizeHint().height()};
+    }
+};
+
+} // namespace
+
 QHBoxLayout* hbox(QWidget* parent, int margin, int spacing) {
     auto* l = new QHBoxLayout(parent);
     l->setContentsMargins(margin, margin, margin, margin);
@@ -101,6 +129,31 @@ QScrollArea* scrollArea(QWidget** content, QVBoxLayout** layout, QWidget* parent
     if (content) *content = w;
     if (layout) *layout = l;
     return sa;
+}
+
+QScrollArea* scrollable(QWidget* content, QWidget* parent) {
+    auto* sa = new ScrollBody(parent);
+    sa->setWidgetResizable(true);
+    sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sa->setFrameShape(QFrame::NoFrame);
+    sa->setWidget(content);
+    return sa;
+}
+
+QVBoxLayout* scrollingBody(QWidget* dialog, int margin, int spacing, QVBoxLayout** footer) {
+    auto* outer = vbox(dialog, 0, 0);
+    auto* content = new QWidget;
+    auto* body = vbox(content, margin, spacing);
+    body->setContentsMargins(margin, margin, margin, spacing);
+    auto* sa = scrollable(content);
+    sa->setObjectName(QStringLiteral("dialogBody"));
+    outer->addWidget(sa, 1);
+    auto* foot = new QVBoxLayout;
+    foot->setContentsMargins(margin, 0, margin, margin);
+    foot->setSpacing(spacing);
+    outer->addLayout(foot);
+    if (footer) *footer = foot;
+    return body;
 }
 
 void clearLayout(QLayout* layout) {

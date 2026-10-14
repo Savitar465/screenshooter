@@ -192,7 +192,7 @@ QWidget* MainWindow::buildNavbar() {
     m_projects = new QComboBox;
     m_projects->setObjectName(QStringLiteral("projectSelector"));
     m_projects->setAccessibleName(tr("Proyecto activo"));
-    m_projects->setMinimumWidth(180);
+    m_projects->setMinimumWidth(140);
     m_projects->setMaximumWidth(260);
     m_projects->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     h->addWidget(m_projects);
@@ -253,7 +253,7 @@ QWidget* MainWindow::buildNavbar() {
     m_runTarget = new QComboBox;
     m_runTarget->setObjectName(QStringLiteral("runTargetSelector"));
     m_runTarget->setAccessibleName(tr("Caso o plan a ejecutar"));
-    m_runTarget->setMinimumWidth(230);
+    m_runTarget->setMinimumWidth(170);
     m_runTarget->setMaximumWidth(380);
     m_runTarget->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     m_runTarget->setEditable(true);

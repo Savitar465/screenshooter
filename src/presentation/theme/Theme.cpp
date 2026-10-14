@@ -1,9 +1,12 @@
 #include "Theme.h"
 
+#include <QApplication>
 #include <QFile>
+#include <QFont>
 #include <QGuiApplication>
 #include <QPalette>
 #include <QRegularExpression>
+#include <QStyleFactory>
 #include <QStyleHints>
 
 namespace qaflow::theme {
@@ -102,6 +105,14 @@ bool isDark() { return current().bg == darkPalette().bg; }
 QString tint(const QString& color, int alpha) {
     const QColor c(color);
     return QStringLiteral("rgba(%1,%2,%3,%4)").arg(c.red()).arg(c.green()).arg(c.blue()).arg(alpha);
+}
+
+void applyBaseLook() {
+    QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    QFont f = QApplication::font();
+    f.setFamilies({QStringLiteral("Segoe UI"), QStringLiteral("Inter"), QStringLiteral("Noto Sans"), QStringLiteral("DejaVu Sans"), QStringLiteral("sans-serif")});
+    f.setPixelSize(13);
+    QApplication::setFont(f);
 }
 
 QString stylesheet() {

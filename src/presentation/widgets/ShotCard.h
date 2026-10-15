@@ -35,6 +35,9 @@ public:
     /// Evidencia de una ejecución ya archivada: se mira, se anota y se copia, pero no se reordena,
     /// ni se borra, ni se cambia de paso — eso reescribiría una ejecución que ya pasó.
     void setReadOnly(bool on);
+    /// Tarjeta de archivo (`Layout::Archive`) que sí se puede quitar: la evidencia es de la ejecución
+    /// que se está viendo (no heredada de otra). Enseña la × y «Eliminar» en el menú contextual.
+    void setRemovable(bool on);
 
 signals:
     void stepChanged(int shotId, int step);
@@ -56,6 +59,8 @@ private:
     QWidget* m_stepCombo = nullptr;          // se deshabilita en sólo lectura
     QList<QWidget*> m_editors;               // reordenar y borrar: se ocultan en sólo lectura
     bool m_readOnly = false;
+    bool m_removable = false;
+    QWidget* m_archiveRemove = nullptr;      // la × de la tarjeta de archivo (oculta salvo `setRemovable`)
 };
 
 } // namespace qaflow

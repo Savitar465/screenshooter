@@ -75,6 +75,18 @@ public:
     /// Con `planCases` (lo que tiene hoy su plan) continúa además lo que el ciclo dejó sin ejecutar y lo
     /// que se añadió al plan después de arrancarlo (`PlanReport::toContinue`).
     bool continueCycle(const QString& planRunId, const QString& environment = QString(), const QStringList& planCases = {});
+    /// Ejecuta en un ciclo terminado **los casos elegidos**, en ese orden: uno que el ciclo no tenía (se
+    /// añade al ciclo, no a su plan), uno que no llegó a ejecutarse o uno ya probado. Como al continuar,
+    /// se reabre el mismo ciclo —lo demás, con sus evidencias y sus bugs, sigue ahí— y lo que se ejecute
+    /// ahora sustituye en el informe a lo que el caso tenía. Cada caso arranca según cómo quedó: el roto,
+    /// retomado en el paso que se rompió; el superado, en revisión (`reviewCase`: llega con todo lo
+    /// archivado y, si no se cambia nada, se queda como estaba); el resto, entero.
+    /// Falso si el ciclo no existe o no terminó, o si ninguno de los casos está en el proyecto.
+    bool runInCycle(const QString& planRunId, const QStringList& caseIds, const QString& environment = QString());
+    /// Trae al ciclo terminado ejecuciones ya hechas fuera de él (`RunHistoryStore::importRun`), con sus
+    /// evidencias y sus bugs, sin reabrirlo. Los ids nuevos no chocan con los de las ejecuciones vivas.
+    /// Devuelve las ejecuciones creadas (vacío si el ciclo no terminó o no se pudo traer ninguna).
+    QList<RunRecord> importIntoCycle(const QString& planRunId, const QStringList& runIds);
     /// Lo que cambió en el ciclo en curso al seguir a su plan.
     struct PlanSync {
         QStringList added;     // casos nuevos, al final de la cola
@@ -144,6 +156,9 @@ private:
     /// marcado y la ejecución empieza en ese paso. Si el caso se editó desde entonces, sólo se hereda
     /// el tramo cuyos pasos siguen siendo los mismos.
     void resumeFrom(const RunRecord& previous, const TestCase& c);
+    /// Abre en revisión la ejecución archivada: sus pasos llegan heredados, con su nota y su evidencia,
+    /// mientras el caso siga diciendo lo mismo; empieza en el primer paso.
+    void reviewFrom(const RunRecord& archived, const TestCase& c);
     /// Vuelca al registro del paso en pantalla su nota y lo que lleva corriendo su cronómetro.
     void holdStep();
     /// Arranca el cronómetro del paso en pantalla, salvo en pausa (entonces se queda parado).
@@ -167,6 +182,8 @@ private:
     QString m_planRunId;
     /// Ejecuciones que retoman los casos de una continuación, por caso. Se consumen al arrancar cada uno.
     QHash<QString, RunRecord> m_resume;
+    /// Ejecuciones archivadas que se abren en revisión al llegar a su caso (`runInCycle`). Se consumen igual.
+    QHash<QString, RunRecord> m_review;
     /// Ejecución que retoma la que está en curso; se archiva con ella.
     QString m_continuesRunId;
     /// Casos del ciclo que se empezaron y se dejaron para ir a otro, por caso. Siguen en la cola.

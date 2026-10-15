@@ -114,6 +114,7 @@ private slots:
         r.planRunId = QStringLiteral("PR-0001"); r.startedAt = QDateTime(QDate(2026, 3, 1), QTime(10, 0)); r.finishedAt = r.startedAt.addSecs(90);
         r.verdict = Verdict::Bloqueado; r.plannedSteps = 3; r.durationSecs = 90; r.testKey = QStringLiteral("SHOP-42");
         r.continuesRunId = QStringLiteral("R-0000");
+        r.imported = true;
         r.steps = {RunRecordStep{QStringLiteral("a"), QStringLiteral("d"), QStringLiteral("e"), StepResult::Pass, QString(), 30},
                    RunRecordStep{QStringLiteral("b"), {}, QStringLiteral("f"), StepResult::Block, QStringLiteral("caído"), 60}};
         h.runs << r;
@@ -150,6 +151,7 @@ private slots:
         QCOMPARE(loaded->plans[0].continuesCycleId, QStringLiteral("PR-0000"));
         QVERIFY(loaded->plans[0].isContinuation());
         QCOMPARE(loaded->runs[0].continuesRunId, QStringLiteral("R-0000"));
+        QVERIFY(loaded->runs[0].imported);
     }
 
     void sessionIsSavedAndCleared() {

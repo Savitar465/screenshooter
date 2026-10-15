@@ -223,6 +223,74 @@ private slots:
         QCOMPARE(f.selected().shots.first().step, 2);
     }
 
+    // ---- Evidencias de una ejecución archivada (desde el historial) -----------------------
+
+    // Completar la evidencia de algo ya probado: llega sellada con esa ejecución y en el paso elegido,
+    // sin ejecución en curso, y la que esté corriendo no se la queda.
+    void attachingToAnArchivedRunSealsItWithThatRunAndStep() {
+        Fixture f;
+        const QString caseId = f.selected().id;
+        while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        const QString runId = f.app.history.runsForCase(caseId).first().id;
+        QVERIFY(!f.app.run.isRunning());
+
+        const QString log = f.writeFile(QStringLiteral("server.log"), "boom");
+        QSignalSpy attached(&f.evidence, &EvidenceService::attached);
+        QCOMPARE(f.evidence.attachFilesToRun(caseId, runId, 2, {log}), 1);
+        QCOMPARE(attached.count(), 1);
+        const Screenshot shot = f.selected().shots.last();
+        QCOMPARE(shot.runId, runId);
+        QCOMPARE(shot.step, 2);
+        QVERIFY(shot.path != log);
+        QVERIFY(QFile::exists(shot.path));
+        QVERIFY(QFile::exists(log));   // el original no se toca
+        QCOMPARE(f.app.history.evidenceOf(*f.app.history.findRun(runId)).size(), 1);
+
+        // Un paso que el caso no tiene va a la ejecución entera; sin ficheros o sin ejecución, nada.
+        QCOMPARE(f.evidence.attachFilesToRun(caseId, runId, 99, {log}), 1);
+        QCOMPARE(f.selected().shots.last().step, 0);
+        QCOMPARE(f.evidence.attachFilesToRun(caseId, runId, 1, {}), 0);
+        QCOMPARE(f.evidence.attachFilesToRun(caseId, QString(), 1, {log}), 0);
+        QCOMPARE(f.evidence.attachFilesToRun(QStringLiteral("TC-NOPE"), runId, 1, {log}), 0);
+
+        // Si después se ejecuta el caso otra vez, lo añadido sigue siendo de la ejecución archivada.
+        f.app.run.start(caseId);
+        while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        QCOMPARE(f.selected().shotsOfRun(runId).size(), 2);
+    }
+
+    // Sólo se quita la evidencia que se tomó en esa ejecución, y se puede deshacer hasta confirmarlo.
+    void removingFromAnArchivedRunOnlyTouchesItsOwnEvidence() {
+        Fixture f;
+        const QString caseId = f.selected().id;
+        f.evidence.captureForSelectedCase();
+        while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        const QString runId = f.app.history.runsForCase(caseId).first().id;
+        const Screenshot own = f.selected().shots.first();
+        QCOMPARE(own.runId, runId);
+        // Una de otra ejecución (la que una continuación heredaría) no es de ésta.
+        const int other = f.app.store.nextShotSequence();
+        f.app.store.addShot(caseId, Screenshot{other, 1, QStringLiteral("old.png"), f.writeFile(QStringLiteral("old.png"), "x"), QStringLiteral("R-0999")});
+
+        QVERIFY(!f.evidence.removeFromRun(caseId, runId, other));
+        QVERIFY(!f.evidence.removeFromRun(caseId, runId, 12345));
+        QCOMPARE(f.selected().shots.size(), 2);
+
+        QVERIFY(f.evidence.removeFromRun(caseId, runId, own.id));
+        QVERIFY(f.selected().shotsOfRun(runId).isEmpty());
+        QVERIFY(QFile::exists(own.path));   // aún se puede deshacer
+        QVERIFY(f.app.store.undo());
+        QCOMPARE(f.selected().shotsOfRun(runId).size(), 1);
+
+        QVERIFY(f.evidence.removeFromRun(caseId, runId, own.id));
+        f.app.store.commitUndo();
+        QVERIFY(!QFile::exists(own.path));
+        QCOMPARE(f.selected().shots.size(), 1);   // la de la otra ejecución sigue
+    }
+
     void releasedFilesAreDeletedFromDisk() {
         Fixture f;
         f.evidence.captureForSelectedCase();

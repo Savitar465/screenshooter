@@ -7,7 +7,9 @@
 #include "core/services/IRunHistoryRepository.h"
 
 #include <QObject>
+#include <QSet>
 #include <memory>
+#include <optional>
 
 namespace qaflow {
 
@@ -46,6 +48,11 @@ public:
     /// Evidencias de la ejecución `runId` asignadas a los pasos `steps` (1..N), incluidas las que ésta
     /// heredó a su vez. Es lo que trae una continuación de los pasos que no vuelve a probar.
     QList<Screenshot> evidenceOfSteps(const QString& runId, const QList<int>& steps) const;
+    /// Quita la evidencia `shotId` de la ejecución `runId`. Si otra ejecución la sigue teniendo (la que
+    /// la tomó, o una que la hereda o la trajo), sólo se desvincula de ésta y las demás la conservan,
+    /// aunque se quite de la original. Si ya no la tiene nadie, se borra del caso (se puede deshacer y
+    /// el fichero se libera al confirmarse). Falso si la ejecución no la tenía.
+    bool removeEvidence(const QString& runId, int shotId);
 
     /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos). `environment` es el
     /// ambiente en el que se va a probar ("QA", "Staging"…), que acompaña al ciclo hasta Zephyr.
@@ -95,6 +102,23 @@ public:
     QList<IssueLink> bugsOfRun(const RunRecord& run) const;
     /// Los de `bugsOfRun` de la ejecución archivada `runId`; ninguno si no existe.
     QList<IssueLink> bugsOfRun(const QString& runId) const;
+    /// Trae al ciclo `planRunId` una ejecución hecha fuera de él (en otro ciclo o suelta), sin volver a
+    /// ejecutarla: se archiva en el ciclo una ejecución que la retoma entera (`RunRecord::imported`), así
+    /// que su veredicto, sus evidencias y sus bugs son los de la original, que no cambia. Si el caso no
+    /// era del ciclo, se le añade; si lo era, la traída pasa a ser la que cuenta en el informe. `held`
+    /// son los ids reservados por las ejecuciones vivas (`reserveRunId`). Devuelve la ejecución creada;
+    /// nullopt si el ciclo o la original no existen, la original ya es de este ciclo o ya se trajo.
+    std::optional<RunRecord> importRun(const QString& planRunId, const QString& sourceRunId, const QStringList& held = {});
+    /// Ejecuciones de fuera de `runIds` que dependen de alguna de ellas: la retoman (una continuación o
+    /// una traída a otro ciclo) y se quedarían sin sus pasos heredados, sus evidencias o sus bugs.
+    QList<RunRecord> dependentsOf(const QStringList& runIds) const;
+    /// Por qué no se puede quitar un caso de un ciclo (`removeCaseFromCycle`); vacío si se puede.
+    QString cannotRemoveCase(const QString& planRunId, const QString& caseId) const;
+    /// Quita un caso de un ciclo terminado: sale de su composición y se borran sus ejecuciones en él
+    /// con las evidencias que se tomaron en ellas (los ficheros se liberan a través de TestCaseStore). Los
+    /// bugs se quedan en el libro. Si era la última ejecución del caso, su «última ejecución» vuelve a
+    /// ser la más reciente que quede. Definitivo. Falso si `cannotRemoveCase` da un motivo.
+    bool removeCaseFromCycle(const QString& planRunId, const QString& caseId);
     /// Elimina un ciclo de plan con sus ejecuciones y las evidencias de éstas (los ficheros se
     /// liberan a través de TestCaseStore). Si a algún caso se le borró su última ejecución, su
     /// «última ejecución» vuelve a ser la más reciente que quede. Definitivo: no se puede deshacer.
@@ -110,6 +134,12 @@ signals:
 
 private:
     void persist();
+    /// Vuelve a calcular la «última ejecución» de esos casos con lo que queda en el historial.
+    void refreshLastRun(const QStringList& caseIds);
+    /// La ejecución es traída de fuera, o retoma (directa o indirectamente) una traída.
+    bool reachesImport(const RunRecord& run) const;
+    /// Evidencias que conservan las ejecuciones que no están en `runIds`: no se liberan al borrar éstas.
+    QSet<int> pinnedOutside(const QStringList& runIds) const;
 
     std::shared_ptr<IRunHistoryRepository> m_repo;
     TestCaseStore& m_cases;

@@ -48,6 +48,8 @@
 #include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QFrame>
 #include <QScrollArea>
@@ -55,6 +57,7 @@
 #include <QScrollBar>
 #include <QSplitter>
 #include <QLabel>
+#include <QTimer>
 #include <QLayout>
 #include <QLineEdit>
 #include <QListWidget>
@@ -439,16 +442,48 @@ private slots:
         QCOMPARE(f.window->currentScreen(), Screen::Historial);
         auto* history = f.window->findChild<HistoryView*>();
         QVERIFY(history);
-        auto visibleThumb = [&]() {
-            for (auto* t : f.window->findChildren<Thumbnail*>()) if (t->isVisible()) return true;
+        auto visibleEvidence = [&]() {
+            for (auto* l : history->findChildren<QWidget*>(QStringLiteral("evidenceLine"))) if (l->isVisible()) return true;
             return false;
         };
-        QTRY_VERIFY(visibleThumb());
+        QTRY_VERIFY(visibleEvidence());
     }
 
-    // La evidencia de una ejecución se ve en su ficha del historial; un clic en una captura abre
-    // directamente el editor de anotaciones.
-    void clickingAThumbnailOpensTheAnnotationEditor() {
+    // En Casos, cada ejecución cuenta las evidencias que el historial le da: quitada de la original,
+    // ésta deja de contarla y la traída a un ciclo la sigue teniendo.
+    void theCaseRunsCountOnlyTheEvidenceTheyStillHave() {
+        WindowFixture f;
+        const QString id = f.app.store.selectedId();
+        f.app.run.startSequence({QStringLiteral("TC-101") == id ? QStringLiteral("TC-103") : QStringLiteral("TC-101")}, QStringLiteral("Regresión"));
+        const QString cycle = f.app.run.planRunId();
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        f.app.run.start(id);
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
+        while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        const QString original = f.app.history.runsForCase(id).first().id;
+        const auto imported = f.app.history.importRun(cycle, original);
+        QVERIFY(imported);
+        const int shotId = f.app.store.find(id)->shots.first().id;
+        QVERIFY(f.app.history.removeEvidence(original, shotId));
+
+        f.window->navigate(Screen::Casos);
+        auto rowText = [&](const QString& runId) {
+            QString text;
+            if (auto* row = f.window->findChild<QPushButton*>(QStringLiteral("caseRun-%1").arg(runId)))
+                for (auto* l : row->findChildren<QLabel*>()) text += l->text() + QLatin1Char(' ');
+            return text;
+        };
+        QTRY_VERIFY(!rowText(imported->id).isEmpty());
+        QVERIFY(!rowText(original).contains(QStringLiteral("evidencia")));
+        QVERIFY(rowText(imported->id).contains(QStringLiteral("1 evidencia")));
+    }
+
+    // La evidencia de una ejecución se ve en su ficha del historial como una lista, sin miniaturas; un
+    // clic en una abre el visor, y desde él se anota (Ctrl+E abre el editor de anotaciones).
+    void clickingAnEvidenceInTheHistoryOpensTheViewer() {
         WindowFixture f;
         const QString id = f.app.store.selectedId();
         f.app.run.start(id);
@@ -462,12 +497,12 @@ private slots:
         auto* history = f.window->findChild<HistoryView*>();
         QVERIFY(history);
         history->showRun(f.app.history.runsForCase(id).first().id);
-        // Reportar bug también crea tarjetas (ocultas): hay que esperar a la miniatura visible.
-        auto visibleThumb = [&]() -> Thumbnail* {
-            for (auto* t : f.window->findChildren<Thumbnail*>()) if (t->isVisible()) return t;
-            return nullptr;
-        };
-        QTRY_VERIFY(visibleThumb() != nullptr);
+        QVERIFY(history->findChildren<Thumbnail*>().isEmpty());
+        auto* row = history->findChild<QPushButton*>(QStringLiteral("evidenceRow"));
+        QVERIFY(row);
+        row->click();
+        auto* viewer = history->findChild<ImageViewer*>(QStringLiteral("runEvidenceViewer"));
+        QVERIFY(viewer);
         // El editor es modal (exec): se cierra desde el bucle de eventos que abre.
         bool opened = false;
         QTimer::singleShot(0, [&opened]() {
@@ -475,9 +510,270 @@ private slots:
             opened = editor != nullptr;
             if (editor) editor->reject();
         });
-        QTest::mouseClick(visibleThumb(), Qt::LeftButton);
+        QTest::keyClick(viewer, Qt::Key_E, Qt::ControlModifier);
         QVERIFY(opened);
-        QVERIFY(f.window->findChild<ImageViewer*>() == nullptr);
+        viewer->close();
+    }
+
+    // En el historial, la evidencia de una ejecución ya archivada se completa: «Adjuntar…» elige el
+    // paso y la × quita la que se tomó en ella (con «Deshacer»); la vista se repinta sola.
+    void archivedRunEvidenceCanBeAddedAndRemovedFromTheHistory() {
+        WindowFixture f;
+        const QString id = f.app.store.selectedId();
+        f.app.run.start(id);
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
+        while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        const RunRecord run = f.app.history.runsForCase(id).first();
+
+        f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        history->showRun(run.id);
+        auto* attach = history->findChild<QPushButton*>(QStringLiteral("attachRunEvidence"));
+        QVERIFY(attach);
+        QVERIFY(attach->menu());
+        QCOMPARE(attach->menu()->actions().size(), run.steps.size() + 2);   // sin paso, separador y un paso por cada uno
+
+        // Lo que llega por el servicio aparece en la ficha sin tener que volver a abrirla.
+        const QString log = QDir(f.captures.path()).filePath(QStringLiteral("extra.log"));
+        { QFile file(log); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("log"); }
+        QCOMPARE(f.evidence.attachFilesToRun(id, run.id, 1, {log}), 1);
+        // Sin miniaturas: una línea por evidencia, con su paso y su fichero.
+        auto visibleCards = [&]() {
+            QList<QWidget*> out;
+            for (auto* c : history->findChildren<QWidget*>(QStringLiteral("evidenceLine"))) if (c->isVisible()) out << c;
+            return out;
+        };
+        QTRY_COMPARE(visibleCards().size(), 2);
+        QVERIFY(history->findChildren<ShotCard*>().isEmpty());
+        QVERIFY(history->findChild<QPushButton*>(QStringLiteral("viewRunEvidence")));
+
+        auto* card = visibleCards().first();
+        auto* remove = card->findChild<QPushButton*>(QStringLiteral("removeShot"));
+        QVERIFY(remove);
+        QVERIFY(remove->isVisible());
+        const int shotId = card->property("shotId").toInt();
+        remove->click();
+        QTRY_COMPARE(visibleCards().size(), 1);
+        QVERIFY(std::none_of(f.app.store.find(id)->shots.cbegin(), f.app.store.find(id)->shots.cend(),
+                             [shotId](const Screenshot& s) { return s.id == shotId; }));
+        QVERIFY(f.app.store.canUndo());
+        QVERIFY(f.app.store.undo());
+        QTRY_COMPARE(visibleCards().size(), 2);
+    }
+
+    // «Ver evidencias» abre el visor con las de esa ejecución: el caso en la cabecera, el paso de cada
+    // una al lado y una línea de la lista lo abre en la suya.
+    void historyEvidenceOpensInTheViewer() {
+        WindowFixture f;
+        const QString id = f.app.store.selectedId();
+        f.app.run.start(id);
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 1);
+        f.app.run.mark(StepResult::Pass);
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(id)->shots.size(), 2);
+        while (f.app.run.isRunning()) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        const RunRecord run = f.app.history.runsForCase(id).first();
+
+        f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        history->showRun(run.id);
+        auto* view = history->findChild<QPushButton*>(QStringLiteral("viewRunEvidence"));
+        QVERIFY(view);
+        view->click();
+        auto* viewer = history->findChild<ImageViewer*>(QStringLiteral("runEvidenceViewer"));
+        QVERIFY(viewer);
+        QCOMPARE(viewer->currentIndex(), 0);
+        auto* counter = viewer->findChild<QLabel*>(QStringLiteral("viewerCounter"));
+        QVERIFY(counter);
+        QCOMPARE(counter->text(), QStringLiteral("1 de 2"));
+        auto* step = viewer->findChild<QLabel*>(QStringLiteral("viewerStep"));
+        QVERIFY(step);
+        QVERIFY(step->text().startsWith(QStringLiteral("PASO 1")));
+        QTest::keyClick(viewer, Qt::Key_Right);
+        QCOMPARE(viewer->currentIndex(), 1);
+        QVERIFY(step->text().startsWith(QStringLiteral("PASO 2")));
+        viewer->close();
+        QTRY_VERIFY(history->findChild<ImageViewer*>() == nullptr);
+
+        // Pulsar una línea abre el visor en esa evidencia.
+        const QList<QPushButton*> rows = history->findChildren<QPushButton*>(QStringLiteral("evidenceRow"));
+        QCOMPARE(rows.size(), 2);
+        rows.last()->click();
+        viewer = history->findChild<ImageViewer*>(QStringLiteral("runEvidenceViewer"));
+        QVERIFY(viewer);
+        QCOMPARE(viewer->currentIndex(), 1);
+
+        // Supr la quita de la ejecución y el visor sigue con la que queda; sin ninguna, se cierra.
+        counter = viewer->findChild<QLabel*>(QStringLiteral("viewerCounter"));
+        auto* removeBtn = viewer->findChild<QPushButton*>(QStringLiteral("viewerRemove"));
+        QVERIFY(removeBtn && !removeBtn->isHidden());
+        const int second = viewer->current().id;
+        QTest::keyClick(viewer, Qt::Key_Delete);
+        QTRY_COMPARE(f.app.history.evidenceOf(*f.app.history.findRun(run.id)).size(), 1);
+        QVERIFY(f.app.history.evidenceOf(*f.app.history.findRun(run.id)).first().id != second);
+        QTRY_COMPARE(counter->text(), QStringLiteral("1 de 1"));
+        QCOMPARE(viewer->currentIndex(), 0);
+        QPointer<ImageViewer> guard(viewer);
+        QTest::keyClick(viewer, Qt::Key_Delete);
+        QTRY_VERIFY(f.app.history.evidenceOf(*f.app.history.findRun(run.id)).isEmpty());
+        QTRY_VERIFY(!guard || !guard->isVisible());
+    }
+
+    // En el informe de un ciclo, lo añadido aparece en el caso abierto y en el recuento de su fila.
+    void evidenceAddedToACycleRunShowsInThePlanReport() {
+        WindowFixture f;
+        const QString planRunId = f.app.history.startPlan(QStringLiteral("Regresión"), {QStringLiteral("TC-101")});
+        RunRecord rec;
+        rec.caseId = QStringLiteral("TC-101");
+        rec.planRunId = planRunId;
+        rec.verdict = Verdict::Superado;
+        rec.startedAt = QDateTime::currentDateTime().addSecs(-60);
+        rec.finishedAt = QDateTime::currentDateTime();
+        rec.plannedSteps = 1;
+        rec.steps = {RunRecordStep{QStringLiteral("Entrar"), {}, QStringLiteral("Entra"), StepResult::Pass, {}, 30}};
+        const RunRecord saved = f.app.history.addRun(rec);
+        f.app.history.finishPlan(planRunId);
+
+        f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        history->showPlan(planRunId);
+        QTRY_VERIFY(history->findChild<QPushButton*>(QStringLiteral("attachRunEvidence")));
+        auto rowText = [&]() {
+            QString text;
+            if (auto* row = history->findChild<QPushButton*>(QStringLiteral("planCase-TC-101")))
+                for (auto* l : row->findChildren<QLabel*>()) text += l->text() + QLatin1Char(' ');
+            return text;
+        };
+        QVERIFY(!rowText().contains(QStringLiteral("evid.")));
+
+        const QString log = QDir(f.captures.path()).filePath(QStringLiteral("cycle.log"));
+        { QFile file(log); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("log"); }
+        QCOMPARE(f.evidence.attachFilesToRun(QStringLiteral("TC-101"), saved.id, 1, {log}), 1);
+        QTRY_VERIFY(rowText().contains(QStringLiteral("1 evid.")));
+        auto anyVisibleCard = [&]() {
+            const QList<QWidget*> lines = history->findChildren<QWidget*>(QStringLiteral("evidenceLine"));
+            return std::any_of(lines.cbegin(), lines.cend(), [](QWidget* c) { return c->isVisible(); });
+        };
+        QTRY_VERIFY(anyVisibleCard());
+    }
+
+    // Desde el informe de un ciclo terminado, un caso se vuelve a ejecutar en él (con el ambiente del
+    // ciclo) y uno que no tenía se añade con «Añadir caso al ciclo…».
+    void aFinishedCycleRunsSingleCasesFromItsReport() {
+        WindowFixture f;
+        f.app.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Regresión"), QString(), QStringLiteral("QA"));
+        const QString cycle = f.app.run.planRunId();
+        while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+        f.app.run.finish();
+        QVERIFY(f.app.history.findPlan(cycle)->isFinished());
+
+        f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        history->showPlan(cycle);
+        auto* again = history->findChild<QPushButton*>(QStringLiteral("runCaseInCycle"));
+        QVERIFY(again);
+        QCOMPARE(again->text(), QStringLiteral("Revisar en este ciclo"));   // superado: se revisa
+        again->click();
+        QVERIFY(f.answerCycleDialog());
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+        QCOMPARE(f.app.run.planRunId(), cycle);
+        QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-101"));
+        QVERIFY(f.app.run.isReviewing());
+        f.app.run.abandon();   // sin tocar nada: el ciclo se cierra como estaba
+        QVERIFY(f.app.history.findPlan(cycle)->isFinished());
+
+        // Añadir uno que el ciclo no tiene: se elige en el selector y se ejecuta entero.
+        f.window->navigate(Screen::Historial);
+        history->showPlan(cycle);
+        auto* add = history->findChild<QAction*>(QStringLiteral("addCaseToCycle"));
+        QVERIFY(add);
+        add->trigger();
+        ChoiceDialog* picker = nullptr;
+        QTRY_VERIFY((picker = f.window->findChild<ChoiceDialog*>(QStringLiteral("addCaseToCycleDialog"))) != nullptr);
+        auto* list = picker->findChild<QListWidget*>();
+        QVERIFY(list);
+        QTRY_VERIFY(list->count() > 0);
+        for (int i = 0; i < list->count(); ++i) QVERIFY(!list->item(i)->text().contains(QStringLiteral("TC-101")));
+        emit picker->chosen(QStringLiteral("TC-104"));
+        picker->reject();
+        QVERIFY(f.answerCycleDialog());
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+        QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-104"));
+        QVERIFY(!f.app.run.isReviewing());
+        QVERIFY(f.app.history.findPlan(cycle)->caseIds.contains(QStringLiteral("TC-104")));
+        QCOMPARE(f.app.history.findPlan(cycle)->environment, QStringLiteral("QA"));
+    }
+
+    // Desde el informe de un ciclo terminado se trae una ejecución hecha fuera (con su nota de
+    // procedencia) y se quita un caso, previa confirmación.
+    void aFinishedCycleImportsRunsAndRemovesCasesFromItsReport() {
+        WindowFixture f;
+        f.app.run.start(QStringLiteral("TC-103"));   // suelta
+        f.app.run.mark(StepResult::Fail);
+        f.app.run.finish();
+        const QString loose = f.app.history.runsForCase(QStringLiteral("TC-103")).first().id;
+        f.app.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        const QString cycle = f.app.run.planRunId();
+        for (int i = 0; i < 2; ++i) {
+            while (!f.app.run.state().finished) f.app.run.mark(StepResult::Pass);
+            f.app.run.finish();
+        }
+        QVERIFY(f.app.history.findPlan(cycle)->isFinished());
+
+        f.window->navigate(Screen::Historial);
+        auto* history = f.window->findChild<HistoryView*>();
+        QVERIFY(history);
+        history->showPlan(cycle);
+        auto* bring = history->findChild<QAction*>(QStringLiteral("importRunToCycle"));
+        QVERIFY(bring);
+        bring->trigger();
+        ChoiceDialog* picker = nullptr;
+        QTRY_VERIFY((picker = f.window->findChild<ChoiceDialog*>(QStringLiteral("importRunDialog"))) != nullptr);
+        emit picker->chosen(loose);
+        picker->reject();
+        QTRY_VERIFY(f.toastText().contains(loose));
+        QVERIFY(f.app.history.findPlan(cycle)->caseIds.contains(QStringLiteral("TC-103")));
+        QVERIFY(f.app.history.findPlan(cycle)->isFinished());
+        auto visibleNote = [&]() -> QLabel* {
+            for (auto* l : history->findChildren<QLabel*>(QStringLiteral("importedRunNote"))) if (l->isVisible()) return l;
+            return nullptr;
+        };
+        QTRY_VERIFY(visibleNote() != nullptr);   // se enseña el caso traído, con su procedencia
+        QVERIFY(visibleNote()->text().contains(loose));
+
+        // Se quita el caso traído: aviso, confirmación y el ciclo vuelve a tener dos casos.
+        QPushButton* remove = nullptr;
+        for (auto* b : history->findChildren<QPushButton*>(QStringLiteral("removeCaseFromCycle")))
+            if (b->isVisible()) remove = b;
+        QVERIFY(remove);
+        QVERIFY(remove->isEnabled());
+        // El aviso se abre desde el bucle de eventos (la acción va encolada): se contesta en cuanto aparece.
+        bool asked = false;
+        QTimer answer;
+        answer.setInterval(20);
+        QObject::connect(&answer, &QTimer::timeout, [&]() {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            auto* yes = box ? box->findChild<QPushButton*>(QStringLiteral("confirmRemoveCase")) : nullptr;
+            if (!yes) return;
+            asked = true;
+            answer.stop();
+            yes->click();
+        });
+        answer.start();
+        remove->click();
+        QTRY_VERIFY(asked);
+        QTRY_VERIFY(!f.app.history.findPlan(cycle)->caseIds.contains(QStringLiteral("TC-103")));
+        QVERIFY(f.app.history.findRun(loose));   // la original sigue
+        QCOMPARE(f.app.history.findPlan(cycle)->caseIds.size(), 2);
+        QTRY_VERIFY(f.toastText().contains(QStringLiteral("quitado")));
     }
 
     void captureCountdownShowsAToastAndCanBeCancelled() {
@@ -579,6 +875,38 @@ private slots:
         QCOMPARE(f.app.run.state().markedCount(), 2);
         QTest::keyClick(f.window.get(), Qt::Key_Right, Qt::AltModifier);
         QCOMPARE(f.app.run.state().idx, 2);
+    }
+
+    // Ejecutando un plan, el visor de las evidencias del caso también quita con Supr: la evidencia sale
+    // del caso (con «Deshacer») y el visor sigue con la que queda.
+    void theRunViewerRemovesEvidenceWithDelete() {
+        WindowFixture f;
+        const QString caseId = QStringLiteral("TC-101");
+        f.app.run.startSequence({caseId}, QStringLiteral("Regresión"));
+        f.window->navigate(Screen::Run);
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(caseId)->shots.size(), 1);
+        f.action("actCapture")->trigger();
+        QTRY_COMPARE(f.app.store.find(caseId)->shots.size(), 2);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* runView = f.window->findChild<RunView*>();
+        QVERIFY(runView);
+        ShotCard* card = nullptr;
+        for (auto* c : runView->findChildren<ShotCard*>()) if (c->shot().id == f.app.store.find(caseId)->shots.first().id) card = c;
+        QVERIFY(card);
+        emit card->openRequested(card->shot().id);
+        auto* viewer = runView->findChild<ImageViewer*>(QStringLiteral("runShotViewer"));
+        QVERIFY(viewer);
+        QCOMPARE(viewer->currentIndex(), 0);
+        auto* removeBtn = viewer->findChild<QPushButton*>(QStringLiteral("viewerRemove"));
+        QVERIFY(removeBtn && !removeBtn->isHidden());
+        const int first = viewer->current().id;
+        QTest::keyClick(viewer, Qt::Key_Delete);
+        QTRY_COMPARE(f.app.store.find(caseId)->shots.size(), 1);
+        QVERIFY(f.app.store.find(caseId)->shots.first().id != first);
+        QCOMPARE(viewer->findChild<QLabel*>(QStringLiteral("viewerCounter"))->text(), QStringLiteral("1 de 1"));
+        QVERIFY(f.app.store.canUndo());
+        viewer->close();
     }
 
     /// Los pasos de la ejecución son navegables: un clic en su número (pestaña «Paso») o en su tarjeta
@@ -1547,17 +1875,17 @@ private slots:
         QCOMPARE(row(broken)->property("active").toBool(), true);
         QCOMPARE(row(passed)->property("active").toBool(), false);
         auto shownShots = [&]() {
-            QStringList paths;
-            for (auto* c : history->findChildren<ShotCard*>()) paths << c->shot().path;
-            return paths;
+            QList<int> ids;
+            for (auto* c : history->findChildren<QWidget*>(QStringLiteral("evidenceLine"))) ids << c->property("shotId").toInt();
+            return ids;
         };
-        QCOMPARE(shownShots(), QStringList{f.app.store.find(broken)->shots.first().path});
+        QCOMPARE(shownShots(), QList<int>{f.app.store.find(broken)->shots.first().id});
 
         QTest::mouseClick(row(passed), Qt::LeftButton);
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         QCOMPARE(row(passed)->property("active").toBool(), true);
         QCOMPARE(row(broken)->property("active").toBool(), false);
-        QCOMPARE(shownShots(), QStringList{f.app.store.find(passed)->shots.first().path});
+        QCOMPARE(shownShots(), QList<int>{f.app.store.find(passed)->shots.first().id});
     }
 
     // El historial se adapta al ancho: con la ventana al mínimo y la lista ensanchada al máximo

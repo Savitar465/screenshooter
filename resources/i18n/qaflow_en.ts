@@ -13,6 +13,17 @@
     </message>
 </context>
 <context>
+    <name>HistoryView</name>
+    <message>
+        <source>HOY</source>
+        <translation>TODAY</translation>
+    </message>
+    <message>
+        <source>AYER</source>
+        <translation>YESTERDAY</translation>
+    </message>
+</context>
+<context>
     <name>MarkupEditorDialog</name>
     <message>
         <source>Rojo</source>
@@ -2515,10 +2526,6 @@
         <translation>Execution</translation>
     </message>
     <message>
-        <source>Todas</source>
-        <translation>All</translation>
-    </message>
-    <message>
         <source>sin suite</source>
         <translation>no suite</translation>
     </message>
@@ -2793,6 +2800,22 @@
     <message>
         <source>%1 clonado como %2</source>
         <translation>%1 cloned as %2</translation>
+    </message>
+    <message>
+        <source>Filtrar por suite</source>
+        <translation>Filter by suite</translation>
+    </message>
+    <message>
+        <source>Filtrar por suite: escribe para buscarla</source>
+        <translation>Filter by suite: type to search it</translation>
+    </message>
+    <message>
+        <source>Buscar suite…</source>
+        <translation>Search suite…</translation>
+    </message>
+    <message>
+        <source>Todas las suites</source>
+        <translation>All suites</translation>
     </message>
 </context>
 <context>
@@ -3196,16 +3219,8 @@
         <translation>Nothing matches the filter.</translation>
     </message>
     <message>
-        <source>EN CURSO</source>
-        <translation>IN PROGRESS</translation>
-    </message>
-    <message>
         <source>(plan sin nombre)</source>
         <translation>(unnamed plan)</translation>
-    </message>
-    <message>
-        <source>%1 · %2/%3 casos · %4 %</source>
-        <translation>%1 · %2/%3 cases · %4 %</translation>
     </message>
     <message>
         <source>(sin título)</source>
@@ -3228,28 +3243,8 @@
         <translation>Run a test case or a test plan and its result will be archived here.</translation>
     </message>
     <message>
-        <source>INFORME DE PLAN · %1 · %2</source>
-        <translation>PLAN REPORT · %1 · %2</translation>
-    </message>
-    <message>
-        <source>Terminado el %1</source>
-        <translation>Finished on %1</translation>
-    </message>
-    <message>
-        <source>La ejecución del plan no ha terminado</source>
-        <translation>The plan run has not finished</translation>
-    </message>
-    <message>
         <source>Exportar Markdown…</source>
         <translation>Export Markdown…</translation>
-    </message>
-    <message>
-        <source>Copiar</source>
-        <translation>Copy</translation>
-    </message>
-    <message>
-        <source>Copiar el informe en Markdown al portapapeles</source>
-        <translation>Copy the report as Markdown to the clipboard</translation>
     </message>
     <message>
         <source>Superados</source>
@@ -3264,32 +3259,8 @@
         <translation>Blocked</translation>
     </message>
     <message>
-        <source>Pendientes</source>
-        <translation>Pending</translation>
-    </message>
-    <message>
-        <source>Éxito</source>
-        <translation>Success</translation>
-    </message>
-    <message>
-        <source>Duración</source>
-        <translation>Duration</translation>
-    </message>
-    <message>
         <source>CASOS · %1</source>
         <translation>CASES · %1</translation>
-    </message>
-    <message>
-        <source>Abrir el caso</source>
-        <translation>Open the test case</translation>
-    </message>
-    <message>
-        <source>%1/%2 pasos · %3</source>
-        <translation>%1/%2 steps · %3</translation>
-    </message>
-    <message>
-        <source>PENDIENTE</source>
-        <translation>PENDING</translation>
     </message>
     <message>
         <source>MÉTRICAS</source>
@@ -3348,36 +3319,12 @@
         <translation>Only one finished cycle: the trend will appear with the next one.</translation>
     </message>
     <message>
-        <source>EJECUCIÓN · %1 · %2 · %3</source>
-        <translation>RUN · %1 · %2 · %3</translation>
-    </message>
-    <message>
-        <source> · PLAN %1</source>
-        <translation> · PLAN %1</translation>
-    </message>
-    <message>
         <source>Abrir caso</source>
         <translation>Open case</translation>
     </message>
     <message>
         <source>Ver informe del plan</source>
         <translation>View the plan report</translation>
-    </message>
-    <message>
-        <source>Pasos</source>
-        <translation>Steps</translation>
-    </message>
-    <message>
-        <source>Pasan</source>
-        <translation>Passed</translation>
-    </message>
-    <message>
-        <source>Fallan</source>
-        <translation>Failed</translation>
-    </message>
-    <message>
-        <source>REGISTRO</source>
-        <translation>LOG</translation>
     </message>
     <message>
         <source>Exportar informe</source>
@@ -3430,10 +3377,6 @@
     <message>
         <source>Publicado en Zephyr · ciclo %1</source>
         <translation>Published to Zephyr · cycle %1</translation>
-    </message>
-    <message>
-        <source>Eliminar…</source>
-        <translation>Delete…</translation>
     </message>
     <message>
         <source>Eliminar este informe del historial, con sus ejecuciones y evidencias</source>
@@ -3512,14 +3455,6 @@
         <translation>Opens in the browser the executions of this cycle in Zephyr</translation>
     </message>
     <message>
-        <source>Bugs</source>
-        <translation>Bugs</translation>
-    </message>
-    <message>
-        <source>%1 · %2 abiertos</source>
-        <translation>%1 · %2 open</translation>
-    </message>
-    <message>
         <source>BUGS ENCONTRADOS · %1</source>
         <translation>BUGS FOUND · %1</translation>
     </message>
@@ -3560,14 +3495,6 @@
         <translation> · revision %1</translation>
     </message>
     <message>
-        <source> · REVISIÓN %1</source>
-        <translation> · REVISION %1</translation>
-    </message>
-    <message>
-        <source>Continuar ciclo…</source>
-        <translation>Continue cycle…</translation>
-    </message>
-    <message>
         <source>BUGS DE ESTA EJECUCIÓN · %1</source>
         <translation>BUGS FROM THIS RUN · %1</translation>
     </message>
@@ -3596,8 +3523,48 @@
         <translation>EVIDENCE · %1</translation>
     </message>
     <message>
-        <source>Heredada de %1: el paso no se volvió a probar</source>
-        <translation>Inherited from %1: the step was not tested again</translation>
+        <source>Esta ejecución no tiene evidencias.</source>
+        <translation>This run has no evidence.</translation>
+    </message>
+    <message>
+        <source>Adjuntar…</source>
+        <translation>Attach…</translation>
+    </message>
+    <message>
+        <source>Añadir ficheros (capturas, vídeos, logs…) como evidencia de esta ejecución</source>
+        <translation>Add files (screenshots, videos, logs…) as evidence of this run</translation>
+    </message>
+    <message>
+        <source>A la ejecución (sin paso)</source>
+        <translation>To the run (no step)</translation>
+    </message>
+    <message>
+        <source>Paso %1 · %2</source>
+        <translation>Step %1 · %2</translation>
+    </message>
+    <message>
+        <source>Evidencia añadida a %1</source>
+        <translation>Evidence added to %1</translation>
+    </message>
+    <message>
+        <source>%1 evidencias añadidas a %2</source>
+        <translation>%1 pieces of evidence added to %2</translation>
+    </message>
+    <message>
+        <source> · usa «Actualizar en Zephyr» para subirla</source>
+        <translation> · use “Update in Zephyr” to upload it</translation>
+    </message>
+    <message>
+        <source>Quitar evidencia</source>
+        <translation>Remove evidence</translation>
+    </message>
+    <message>
+        <source>Esta ejecución ya está publicada en Zephyr. La evidencia se quitará de QAflow, pero seguirá adjunta en Zephyr hasta que la borres allí.
+
+¿Quitarla?</source>
+        <translation>This run is already published to Zephyr. The evidence will be removed from QAflow, but it will stay attached in Zephyr until you delete it there.
+
+Remove it?</translation>
     </message>
     <message>
         <source>No se ejecutó ningún paso.</source>
@@ -3606,6 +3573,350 @@
     <message>
         <source>Datos: %1</source>
         <translation>Data: %1</translation>
+    </message>
+    <message>
+        <source>Añadir caso al ciclo…</source>
+        <translation>Add case to cycle…</translation>
+    </message>
+    <message>
+        <source>Ejecutar en este ciclo un caso del proyecto que no tiene (se añade al ciclo, no al plan)</source>
+        <translation>Run in this cycle a project case it doesn&apos;t have (it&apos;s added to the cycle, not to the plan)</translation>
+    </message>
+    <message>
+        <source>Ejecutar en este ciclo</source>
+        <translation>Run in this cycle</translation>
+    </message>
+    <message>
+        <source>Reabre el ciclo y ejecuta este caso entero; lo demás del ciclo se queda como está</source>
+        <translation>Reopens the cycle and runs this whole case; the rest of the cycle stays as it is</translation>
+    </message>
+    <message>
+        <source>Retomar en este ciclo</source>
+        <translation>Resume in this cycle</translation>
+    </message>
+    <message>
+        <source>Reabre el ciclo y retoma este caso en el paso que se rompió; lo que se ejecute sustituye a lo de antes en el informe</source>
+        <translation>Reopens the cycle and resumes this case at the step that broke; what you run now replaces the previous result in the report</translation>
+    </message>
+    <message>
+        <source>Revisar en este ciclo</source>
+        <translation>Review in this cycle</translation>
+    </message>
+    <message>
+        <source>Reabre el ciclo con este caso tal y como se archivó, para corregir veredictos, notas o evidencias; si no se cambia nada, se queda como estaba</source>
+        <translation>Reopens the cycle with this case as it was archived, to correct verdicts, notes or evidence; if nothing changes, it stays as it was</translation>
+    </message>
+    <message>
+        <source>El ciclo ya tiene todos los casos del proyecto</source>
+        <translation>The cycle already has every case in the project</translation>
+    </message>
+    <message>
+        <source>Añadir caso al ciclo</source>
+        <translation>Add case to cycle</translation>
+    </message>
+    <message>
+        <source>Cargando los casos…</source>
+        <translation>Loading cases…</translation>
+    </message>
+    <message>
+        <source>Traer ejecución de otro ciclo…</source>
+        <translation>Bring in a run from another cycle…</translation>
+    </message>
+    <message>
+        <source>Añadir a este ciclo una ejecución ya hecha (en otro ciclo o suelta), con sus evidencias y sus bugs, sin volver a ejecutarla</source>
+        <translation>Add to this cycle a run already done (in another cycle or standalone), with its evidence and bugs, without running it again</translation>
+    </message>
+    <message>
+        <source>Quitar del ciclo…</source>
+        <translation>Remove from cycle…</translation>
+    </message>
+    <message>
+        <source>Quita el caso de este ciclo y borra sus ejecuciones en él, con sus evidencias; los bugs se conservan</source>
+        <translation>Removes the case from this cycle and deletes its runs in it, with their evidence; bugs are kept</translation>
+    </message>
+    <message>
+        <source>una ejecución que ya no está en el historial</source>
+        <translation>a run that is no longer in the history</translation>
+    </message>
+    <message>
+        <source>la ejecución suelta %1 del %2</source>
+        <translation>standalone run %1 from %2</translation>
+    </message>
+    <message>
+        <source>%1, del ciclo %2 (%3)</source>
+        <translation>%1, from cycle %2 (%3)</translation>
+    </message>
+    <message>
+        <source>Traída de %1: no se ejecutó en este ciclo; su veredicto, sus evidencias y sus bugs son los de entonces.</source>
+        <translation>Brought in from %1: it wasn&apos;t run in this cycle; its verdict, evidence and bugs are the original ones.</translation>
+    </message>
+    <message>
+        <source>suelta</source>
+        <translation>standalone</translation>
+    </message>
+    <message>
+        <source>ciclo %1</source>
+        <translation>cycle %1</translation>
+    </message>
+    <message>
+        <source>%1 · %2 · %3</source>
+        <translation>%1 · %2 · %3</translation>
+    </message>
+    <message>
+        <source>No hay ejecuciones de fuera de este ciclo que traer</source>
+        <translation>There are no runs outside this cycle to bring in</translation>
+    </message>
+    <message>
+        <source>Traer ejecución al ciclo</source>
+        <translation>Bring run into cycle</translation>
+    </message>
+    <message>
+        <source>Cargando las ejecuciones…</source>
+        <translation>Loading runs…</translation>
+    </message>
+    <message>
+        <source>No se pudo traer %1: ya está en el ciclo o el ciclo no ha terminado</source>
+        <translation>Couldn&apos;t bring in %1: it&apos;s already in the cycle or the cycle hasn&apos;t finished</translation>
+    </message>
+    <message>
+        <source>%1 traída al ciclo como %2 · %3 evidencia(s), %4 bug(s)</source>
+        <translation>%1 brought into the cycle as %2 · %3 piece(s) of evidence, %4 bug(s)</translation>
+    </message>
+    <message>
+        <source>Quitar del ciclo</source>
+        <translation>Remove from cycle</translation>
+    </message>
+    <message>
+        <source>¿Quitar %1 del ciclo %2?</source>
+        <translation>Remove %1 from cycle %2?</translation>
+    </message>
+    <message>
+        <source>No llegó a ejecutarse en el ciclo: sólo sale de su lista.</source>
+        <translation>It was never run in the cycle: it&apos;s only taken off its list.</translation>
+    </message>
+    <message>
+        <source>Se eliminará su ejecución en este ciclo</source>
+        <translation>Its run in this cycle will be deleted</translation>
+    </message>
+    <message>
+        <source>Se eliminarán sus %1 ejecuciones en este ciclo</source>
+        <translation>Its %1 runs in this cycle will be deleted</translation>
+    </message>
+    <message>
+        <source> y la evidencia tomada en ella, que se borra del disco</source>
+        <translation> along with the evidence taken in it, which is deleted from disk</translation>
+    </message>
+    <message>
+        <source> y las %1 evidencias tomadas en ellas, que se borran del disco</source>
+        <translation> along with the %1 pieces of evidence taken in them, which are deleted from disk</translation>
+    </message>
+    <message>
+        <source>. Sus bugs se conservan en el libro de bugs.</source>
+        <translation>. Its bugs are kept in the bug log.</translation>
+    </message>
+    <message>
+        <source> En el ciclo %1 de Zephyr el caso sigue: quítalo allí a mano.</source>
+        <translation> The case remains in Zephyr cycle %1: remove it there by hand.</translation>
+    </message>
+    <message>
+        <source>Quitar</source>
+        <translation>Remove</translation>
+    </message>
+    <message>
+        <source>%1 quitado del ciclo %2</source>
+        <translation>%1 removed from cycle %2</translation>
+    </message>
+    <message>
+        <source>No se puede eliminar: la ejecución %1 de este ciclo se usa en %2 (%3). Quítala de allí antes</source>
+        <translation>Can&apos;t delete: run %1 of this cycle is used in %2 (%3). Remove it from there first</translation>
+    </message>
+    <message>
+        <source>una ejecución suelta</source>
+        <translation>a standalone run</translation>
+    </message>
+    <message>
+        <source>el ciclo %1</source>
+        <translation>cycle %1</translation>
+    </message>
+    <message>
+        <source>Plan · %1/%2 casos · %3 %</source>
+        <translation>Plan · %1/%2 cases · %3 %</translation>
+    </message>
+    <message>
+        <source>Plan en curso · %1/%2 casos</source>
+        <translation>Plan in progress · %1/%2 cases</translation>
+    </message>
+    <message>
+        <source>· terminado el %1</source>
+        <translation>· finished on %1</translation>
+    </message>
+    <message>
+        <source>En curso</source>
+        <translation>In progress</translation>
+    </message>
+    <message>
+        <source>· la ejecución del plan no ha terminado</source>
+        <translation>· the plan run has not finished</translation>
+    </message>
+    <message>
+        <source>Continuar ciclo (%1)</source>
+        <translation>Continue cycle (%1)</translation>
+    </message>
+    <message>
+        <source>Más acciones: exportar, copiar, eliminar</source>
+        <translation>More actions: export, copy, delete</translation>
+    </message>
+    <message>
+        <source>Más acciones</source>
+        <translation>More actions</translation>
+    </message>
+    <message>
+        <source>Copiar informe en Markdown</source>
+        <translation>Copy report as Markdown</translation>
+    </message>
+    <message>
+        <source>Eliminar informe…</source>
+        <translation>Delete report…</translation>
+    </message>
+    <message>
+        <source>de éxito</source>
+        <translation>passed</translation>
+    </message>
+    <message>
+        <source>superados</source>
+        <translation>passed</translation>
+    </message>
+    <message>
+        <source>fallidos</source>
+        <translation>failed</translation>
+    </message>
+    <message>
+        <source>bloqueados</source>
+        <translation>blocked</translation>
+    </message>
+    <message>
+        <source>pendientes</source>
+        <translation>pending</translation>
+    </message>
+    <message>
+        <source>%1 en total</source>
+        <translation>%1 in total</translation>
+    </message>
+    <message>
+        <source>&lt;b style=&apos;color:%1&apos;&gt;%2&lt;/b&gt; de %3 bugs abiertos</source>
+        <translation>&lt;b style=&apos;color:%1&apos;&gt;%2&lt;/b&gt; of %3 bugs open</translation>
+    </message>
+    <message>
+        <source>%1 bugs, todos cerrados</source>
+        <translation>%1 bugs, all closed</translation>
+    </message>
+    <message>
+        <source>El ciclo no tiene casos.</source>
+        <translation>The cycle has no cases.</translation>
+    </message>
+    <message>
+        <source>pendiente</source>
+        <translation>pending</translation>
+    </message>
+    <message>
+        <source>1 evid.</source>
+        <translation>1 evid.</translation>
+    </message>
+    <message>
+        <source>%1 evid.</source>
+        <translation>%1 evid.</translation>
+    </message>
+    <message>
+        <source>· %1/%2 pasos · %3</source>
+        <translation>· %1/%2 steps · %3</translation>
+    </message>
+    <message>
+        <source>Pendiente</source>
+        <translation>Pending</translation>
+    </message>
+    <message>
+        <source>1 bug reportado desde este caso: %1</source>
+        <translation>1 bug reported from this case: %1</translation>
+    </message>
+    <message>
+        <source>%1 bugs reportados desde este caso: %2</source>
+        <translation>%1 bugs reported from this case: %2</translation>
+    </message>
+    <message>
+        <source>Este caso no se llegó a ejecutar en el ciclo.</source>
+        <translation>This case was not run in the cycle.</translation>
+    </message>
+    <message>
+        <source>PASOS</source>
+        <translation>STEPS</translation>
+    </message>
+    <message>
+        <source> · plan %1</source>
+        <translation> · plan %1</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;%1/%2&lt;/b&gt; pasos</source>
+        <translation>&lt;b&gt;%1/%2&lt;/b&gt; steps</translation>
+    </message>
+    <message>
+        <source>pasan</source>
+        <translation>passed</translation>
+    </message>
+    <message>
+        <source>fallan</source>
+        <translation>failed</translation>
+    </message>
+    <message>
+        <source>N/A</source>
+        <translation>N/A</translation>
+    </message>
+    <message>
+        <source>%1 abiertos</source>
+        <translation>%1 open</translation>
+    </message>
+    <message>
+        <source>Todos cerrados</source>
+        <translation>All closed</translation>
+    </message>
+    <message>
+        <source>Ver evidencias</source>
+        <translation>View evidence</translation>
+    </message>
+    <message>
+        <source>Abrir el visor con las %1 evidencias de esta ejecución (← → para pasar de una a otra)</source>
+        <translation>Open the viewer with the %1 pieces of evidence of this run (← → to move between them)</translation>
+    </message>
+    <message>
+        <source>Ver en el visor</source>
+        <translation>View in the viewer</translation>
+    </message>
+    <message>
+        <source>PASO %1</source>
+        <translation>STEP %1</translation>
+    </message>
+    <message>
+        <source>SIN PASO</source>
+        <translation>NO STEP</translation>
+    </message>
+    <message>
+        <source>Quitar esta evidencia de la ejecución</source>
+        <translation>Remove this evidence from the run</translation>
+    </message>
+    <message>
+        <source>Quitar %1</source>
+        <translation>Remove %1</translation>
+    </message>
+    <message>
+        <source>ejecución %1</source>
+        <translation>run %1</translation>
+    </message>
+    <message>
+        <source>Las evidencias del historial no se pueden anotar aquí</source>
+        <translation>Evidence in the history cannot be annotated here</translation>
+    </message>
+    <message>
+        <source>Evidencia quitada de %1; las otras ejecuciones que la tienen la conservan</source>
+        <translation>Evidence removed from %1; other runs that have it keep it</translation>
     </message>
 </context>
 <context>
@@ -3643,16 +3954,8 @@
         <translation>Copy the image to the clipboard (Ctrl+C)</translation>
     </message>
     <message>
-        <source>Anotar…</source>
-        <translation>Annotate…</translation>
-    </message>
-    <message>
         <source>Flechas, rectángulos, texto y difuminado (Ctrl+E)</source>
         <translation>Arrows, rectangles, text and blur (Ctrl+E)</translation>
-    </message>
-    <message>
-        <source>Carpeta</source>
-        <translation>Folder</translation>
     </message>
     <message>
         <source>Mostrar en la carpeta de capturas</source>
@@ -3681,6 +3984,90 @@
     <message>
         <source>Evidencia · %1</source>
         <translation>Evidence · %1</translation>
+    </message>
+    <message>
+        <source>Anotar</source>
+        <translation>Annotate</translation>
+    </message>
+    <message>
+        <source>Abrir carpeta</source>
+        <translation>Open folder</translation>
+    </message>
+    <message>
+        <source>Cerrar visor</source>
+        <translation>Close viewer</translation>
+    </message>
+    <message>
+        <source>Anterior</source>
+        <translation>Previous</translation>
+    </message>
+    <message>
+        <source>Siguiente</source>
+        <translation>Next</translation>
+    </message>
+    <message>
+        <source>Archivo</source>
+        <translation>File</translation>
+    </message>
+    <message>
+        <source>Tamaño</source>
+        <translation>Size</translation>
+    </message>
+    <message>
+        <source>Capturada</source>
+        <translation>Captured</translation>
+    </message>
+    <message>
+        <source>Paso %1 · %2</source>
+        <translation>Step %1 · %2</translation>
+    </message>
+    <message>
+        <source>← →  navegar  ·  Esc  cerrar</source>
+        <translation>← →  navigate  ·  Esc  close</translation>
+    </message>
+    <message>
+        <source>%1 de %2</source>
+        <translation>%1 of %2</translation>
+    </message>
+    <message>
+        <source>PASO %1 · %2</source>
+        <translation>STEP %1 · %2</translation>
+    </message>
+    <message>
+        <source>PASO %1</source>
+        <translation>STEP %1</translation>
+    </message>
+    <message>
+        <source>SIN PASO</source>
+        <translation>NO STEP</translation>
+    </message>
+    <message>
+        <source>Evidencia de la ejecución entera, sin paso asignado.</source>
+        <translation>Evidence of the whole run, with no step assigned.</translation>
+    </message>
+    <message>
+        <source>no está en el disco</source>
+        <translation>not on disk</translation>
+    </message>
+    <message>
+        <source>%1 × %2 · %3</source>
+        <translation>%1 × %2 · %3</translation>
+    </message>
+    <message>
+        <source>%1, seleccionada</source>
+        <translation>%1, selected</translation>
+    </message>
+    <message>
+        <source>Quitar</source>
+        <translation>Remove</translation>
+    </message>
+    <message>
+        <source>Quitar esta evidencia (Supr)</source>
+        <translation>Remove this evidence (Del)</translation>
+    </message>
+    <message>
+        <source>← →  navegar  ·  Supr  quitar  ·  Esc  cerrar</source>
+        <translation>← →  navigate  ·  Del  remove  ·  Esc  close</translation>
     </message>
 </context>
 <context>
@@ -6082,6 +6469,18 @@ Create another one anyway?</translation>
         <source>Actualizar QAflow</source>
         <translation>Update QAflow</translation>
     </message>
+    <message>
+        <source>Se ejecuta en el ciclo %1: %2. Es el mismo ciclo: lo ya probado, sus capturas y sus bugs se conservan, y lo que se ejecute ahora sustituye en el informe a lo que el caso tenía%3.</source>
+        <translation>Runs in cycle %1: %2. It&apos;s the same cycle: what was already tested, its screenshots and its bugs are kept, and what you run now replaces what the case had in the report%3.</translation>
+    </message>
+    <message>
+        <source>; después, actualiza su ciclo de Zephyr desde el informe</source>
+        <translation>; afterwards, update its Zephyr cycle from the report</translation>
+    </message>
+    <message>
+        <source>No se pudo ejecutar en el ciclo: el caso ya no está en el proyecto</source>
+        <translation>Couldn&apos;t run it in the cycle: the case is no longer in the project</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::MarkupEditorDialog</name>
@@ -7425,6 +7824,38 @@ Create another one anyway?</translation>
         <source>el historial de ejecuciones</source>
         <translation>the run history</translation>
     </message>
+    <message>
+        <source>El ciclo %1 no existe</source>
+        <translation>Cycle %1 doesn&apos;t exist</translation>
+    </message>
+    <message>
+        <source>El ciclo %1 sigue en curso</source>
+        <translation>Cycle %1 is still in progress</translation>
+    </message>
+    <message>
+        <source>%1 no es del ciclo %2</source>
+        <translation>%1 isn&apos;t part of cycle %2</translation>
+    </message>
+    <message>
+        <source>%1 es el único caso del ciclo: elimina el informe entero</source>
+        <translation>%1 is the only case in the cycle: delete the whole report instead</translation>
+    </message>
+    <message>
+        <source>una ejecución suelta</source>
+        <translation>a standalone run</translation>
+    </message>
+    <message>
+        <source>el ciclo %1</source>
+        <translation>cycle %1</translation>
+    </message>
+    <message>
+        <source>Su ejecución %1 se trajo a %2 (como %3): quítala de allí antes</source>
+        <translation>Its run %1 was brought into %2 (as %3): remove it from there first</translation>
+    </message>
+    <message>
+        <source>Su ejecución %1 la retoma %2 en %3: quítala de allí antes</source>
+        <translation>Its run %1 is resumed by %2 in %3: remove it from there first</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::RunView</name>
@@ -8011,6 +8442,10 @@ Press “Capture” or drop a file on the window.</translation>
     <message>
         <source>Evidencia de la ejecución que se retoma: se conserva mientras su paso no se vuelva a marcar</source>
         <translation>Evidence from the run being resumed: kept until its step is marked again</translation>
+    </message>
+    <message>
+        <source>Es de la ejecución que se retoma: se quita desde el historial</source>
+        <translation>It belongs to the run being resumed: remove it from the history</translation>
     </message>
 </context>
 <context>
@@ -8671,6 +9106,18 @@ Press “Capture” or drop a file on the window.</translation>
     <message>
         <source>Mostrar en la carpeta</source>
         <translation>Show in folder</translation>
+    </message>
+    <message>
+        <source>Sin paso asignado</source>
+        <translation>No step assigned</translation>
+    </message>
+    <message>
+        <source>Paso %1 · %2</source>
+        <translation>Step %1 · %2</translation>
+    </message>
+    <message>
+        <source>Paso %1</source>
+        <translation>Step %1</translation>
     </message>
 </context>
 <context>

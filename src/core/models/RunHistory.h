@@ -53,6 +53,16 @@ struct RunRecord {
     /// Ejecución fallada o bloqueada que ésta retoma: los pasos anteriores al que se rompió vienen de
     /// ella y aquí se siguió. Vacío = se ejecutó el caso desde el principio.
     QString continuesRunId;
+    /// Ejecución traída al ciclo desde otro sitio (otro ciclo o una ejecución suelta) en vez de
+    /// ejecutarse en él: `continuesRunId` es la original y todos sus pasos son heredados, así que su
+    /// veredicto, sus evidencias y sus bugs son los de aquélla. La original no cambia.
+    bool imported = false;
+    /// Evidencias (ids) quitadas de esta ejecución: ya no son suyas, aunque la ejecución que las tomó,
+    /// u otra que las hereda, las siga teniendo.
+    QList<int> unlinkedShots;
+    /// Evidencias (ids) que esta ejecución conserva aunque la que las tomó (o de la que las heredó) las
+    /// haya quitado: quitar una evidencia de una ejecución no se la quita a las demás que la tienen.
+    QList<int> pinnedShots;
 
     /// Primer paso que se rompió (0-based): el primer fallo o bloqueo. -1 si no hubo ninguno.
     int brokenStepIndex() const;

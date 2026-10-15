@@ -4,6 +4,7 @@
 #include "core/models/RunHistory.h"
 
 #include <QPointer>
+#include <QSet>
 #include <QWidget>
 
 class QLabel;
@@ -34,7 +35,7 @@ class HistoryView : public QWidget {
     Q_OBJECT
 public:
     /// `publish` puede ser nullptr (tests, o sin Zephyr configurado): entonces no se ofrece publicar;
-    /// `evidence` también (sin él las evidencias se ven pero no se anotan ni se copian); y `run`
+    /// `evidence` también (sin él las evidencias se ven pero no se anotan, ni se copian, ni se añaden o se quitan); y `run`
     /// dice qué ciclo está en curso, que es el único que no se puede eliminar (sin él, ninguno
     /// de los no terminados).
     HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPublishService* publish = nullptr,
@@ -57,6 +58,8 @@ signals:
     void openUrlRequested(const QString& url);
     /// Continuar ese ciclo con sus casos fallados y bloqueados; lo arranca quien coordina la ejecución.
     void continueCycleRequested(const QString& planRunId);
+    /// Ejecutar esos casos en el ciclo terminado (reabriéndolo); lo arranca quien coordina la ejecución.
+    void runInCycleRequested(const QString& planRunId, const QStringList& caseIds);
     void toast(const QString& message, const QString& color);
 
 private:
@@ -84,14 +87,40 @@ private:
     QWidget* stepsList(const RunRecord& run) const;
     /// Fila con la historia de Jira y el Test de Zephyr del caso; nullptr si no tiene ninguno.
     QWidget* issueLinks(const QString& jiraKey, const QString& testKey);
-    /// Rejilla con las evidencias que se capturaron en esa ejecución; nullptr si no hubo ninguna.
-    QWidget* evidenceGrid(const RunRecord& run, int columns);
+    /// Evidencias de esa ejecución (las que se capturaron en ella y las que heredó) como una lista
+    /// de su paso y su fichero, sin miniaturas, con el botón «Ver evidencias» que abre el visor y, con
+    /// servicio de evidencias, el de adjuntar más y la × de cada una. nullptr si no hay ninguna ni se
+    /// pueden añadir.
+    QWidget* evidenceList(const RunRecord& run);
+    /// Visor a tamaño completo de las evidencias de la ejecución, abierto en la `index`-ésima, con el
+    /// caso, su ciclo y el paso de cada una.
+    void openEvidenceViewer(const RunRecord& run, int index);
+    /// «Adjuntar…» de la ejecución: con pasos, un menú para elegir a cuál va la evidencia.
+    QPushButton* attachButton(const RunRecord& run);
+    /// Elige ficheros y los adjunta a la ejecución archivada, en el paso `step` (0 = sin paso).
+    void attachEvidence(const RunRecord& run, int step);
+    /// Quita una evidencia de la ejecución (si ya se publicó, avisa de que en Zephyr se queda). Si otra
+    /// ejecución la tiene, sólo se desvincula de ésta. El aviso sale sobre `dialogParent` (el visor, si
+    /// se quita desde él). Devuelve si se quitó.
+    bool removeEvidence(const RunRecord& run, int shotId, QWidget* dialogParent = nullptr);
+    /// La ejecución es de un ciclo ya publicado en Zephyr.
+    bool isPublished(const RunRecord& run) const;
+    /// Un caso cambió (evidencia añadida, quitada, anotada o deshecha): si se está viendo, se repinta.
+    void caseEvidenceChanged(const QString& caseId);
     void exportMarkdown(const PlanReport& report);
     void copyMarkdown(const PlanReport& report);
     /// Crea en Zephyr el ciclo con las ejecuciones del informe, sus pasos y sus evidencias.
     void publishToZephyr(const PlanReport& report);
     /// Actualiza el ciclo de Zephyr en el que el informe ya está publicado.
     void updateInZephyr(const PlanReport& report);
+    /// Elige un caso del proyecto que el ciclo no tiene para ejecutarlo en él.
+    void pickCaseForCycle(const PlanReport& report);
+    /// Elige una ejecución de fuera del ciclo (de otro ciclo o suelta) para traerla a él.
+    void pickRunForCycle(const PlanReport& report);
+    /// Trae la ejecución al ciclo (`RunController::importIntoCycle`) y la enseña en el informe.
+    void importRun(const QString& planRunId, const QString& runId);
+    /// Pide confirmación y quita el caso del ciclo con sus ejecuciones en él.
+    void removeCaseFromCycle(const PlanReport& report, const QString& caseId);
     /// Pide confirmación y elimina el ciclo con sus ejecuciones y evidencias.
     void deletePlan(const PlanReport& report);
 
@@ -106,6 +135,7 @@ private:
     QString m_selectedRun;
     QString m_selectedCase;  // caso del informe del plan que se ve en detalle
     QString m_metricsPlan;   // plan cuya evolución se muestra (vacío = todos)
+    QSet<QString> m_pendingCases;   // casos cambiados pendientes de repintar (se agrupan en un único repintado)
 
     QLineEdit* m_searchBox = nullptr;
     QLayout* m_filterRow = nullptr;

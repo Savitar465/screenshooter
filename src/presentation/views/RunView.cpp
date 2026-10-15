@@ -13,6 +13,7 @@
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/EvidencePreview.h"
 #include "presentation/widgets/FlowLayout.h"
+#include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/Icons.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/TextArea.h"
@@ -1152,6 +1153,9 @@ void RunView::refreshShots() {
         connect(card, &ShotCard::moveRequested, this, [this, id](int shotId, int delta) { m_cases.moveShot(id, shotId, delta); });
         connect(card, &ShotCard::removeRequested, this, [this, id](int shotId) { m_cases.removeShot(id, shotId); });
         evidence::wireCard(card, this, m_cases, m_evidence, id);
+        // Ampliarla abre el visor de esta ejecución (sus evidencias, con Supr para quitar), no el del caso.
+        disconnect(card, &ShotCard::openRequested, this, nullptr);
+        connect(card, &ShotCard::openRequested, this, [this](int shotId) { openShot(shotId); });
         m_shotsLayout->addWidget(card, 0, Qt::AlignTop);
     }
     m_shotsLayout->addStretch(1);
@@ -1445,7 +1449,59 @@ void RunView::selectShot(int shotId) {
 }
 
 void RunView::openSelectedShot() {
-    if (m_selectedShot) evidence::openViewer(this, m_cases, m_evidence, m_run.state().caseId, m_selectedShot);
+    if (m_selectedShot) openShot(m_selectedShot);
+}
+
+void RunView::openShot(int shotId) {
+    const QString caseId = m_run.state().caseId;
+    const TestCase* c = m_cases.find(caseId);
+    if (!c) return;
+    // Las evidencias que enseña la ejecución: las de ahora y las que trae de la que retoma.
+    const QList<Screenshot> shots = visibleShots(*c);
+    int index = -1;
+    for (int i = 0; i < shots.size(); ++i) if (shots[i].id == shotId) index = i;
+    if (index < 0) return;
+    auto* viewer = new ImageViewer(shots, index, this);
+    viewer->setObjectName(QStringLiteral("runShotViewer"));
+    const PlanRun* plan = m_run.planRunId().isEmpty() ? nullptr : m_history.findPlan(m_run.planRunId());
+    viewer->setContext(c->id, c->title.isEmpty() ? tr("(sin título)") : c->title, plan ? plan->name : QString());
+    QMap<int, ViewerStep> steps;
+    const RunState& state = m_run.state();
+    for (int i = 0; i < c->steps.size(); ++i) {
+        ViewerStep step{c->steps[i].action, {}, {}, {}};
+        if (state.isMarked(i)) {
+            step.result = label(state.results[i].result);
+            step.color = resultColor(state.results[i].result);
+            step.note = state.results[i].note.trimmed();
+        }
+        steps.insert(i + 1, step);
+    }
+    viewer->setSteps(steps);
+
+    QPointer<ImageViewer> guard(viewer);
+    connect(viewer, &ImageViewer::copyRequested, viewer, [this, caseId](int id) { evidence::copyToClipboard(m_evidence, m_cases, caseId, id); });
+    connect(viewer, &ImageViewer::openFolderRequested, viewer, [this, caseId](int id) { evidence::showInFolder(m_cases, caseId, id); });
+    connect(viewer, &ImageViewer::annotateRequested, viewer, [this, guard, caseId](int id) {
+        if (evidence::annotate(guard, m_cases, m_evidence, caseId, id) && guard) {
+            guard->reload();
+            if (id == m_selectedShot) m_preview->reload();
+        }
+    });
+    // Supr o «Quitar»: como la × de la tira, con «Deshacer». La que viene de la ejecución que se
+    // retoma es de aquélla y aquí no se borra.
+    viewer->setRemovable(true);
+    connect(viewer, &ImageViewer::removeRequested, viewer, [this, guard, caseId](int id) {
+        if (!guard) return;
+        if (!guard->current().runId.isEmpty()) {
+            emit toast(tr("Es de la ejecución que se retoma: se quita desde el historial"), theme::Amber);
+            return;
+        }
+        m_cases.removeShot(caseId, id);
+        guard->removeShot(id);
+    }, Qt::QueuedConnection);
+    viewer->show();
+    viewer->raise();
+    viewer->activateWindow();
 }
 
 void RunView::annotateSelectedShot() {

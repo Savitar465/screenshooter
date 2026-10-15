@@ -192,6 +192,137 @@ private slots:
         QCOMPARE(f.history.report(first).executed, 1);
     }
 
+    // ---- Traer ejecuciones a un ciclo y quitar casos de él ---------------------------------
+
+    // Una ejecución hecha fuera (suelta) se trae a un ciclo terminado sin volver a ejecutarla: el ciclo
+    // gana el caso con su veredicto, sus evidencias y sus bugs, y la original no cambia.
+    void importingARunBringsItsVerdictEvidenceAndBugsIntoTheCycle() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+        f.run.finish();
+
+        // Suelta: TC-103 falla, con una captura y un bug.
+        f.run.start(QStringLiteral("TC-103"));
+        f.store.addShot(QStringLiteral("TC-103"), Screenshot{50, 1, QStringLiteral("cap_050.png"), QStringLiteral("/tmp/qaflow-test/cap_050.png"), {}});
+        IssueLink bug;
+        bug.key = QStringLiteral("SHOP-50");
+        bug.caseId = QStringLiteral("TC-103");
+        bug.runId = f.run.state().runId;
+        bug.step = 1;
+        bug.createdAt = QDateTime::currentDateTime();
+        f.bugLedger.recordIssue(bug);
+        f.run.mark(StepResult::Fail);
+        f.run.finish();
+        const RunRecord loose = f.history.runsForCase(QStringLiteral("TC-103")).first();
+        QVERIFY(loose.planRunId.isEmpty());
+        const LastRun lastBefore = f.store.find(QStringLiteral("TC-103"))->lastRun;
+        QVERIFY(f.history.report(cycle).bugs().isEmpty());
+
+        const auto imported = f.history.importRun(cycle, loose.id);
+        QVERIFY(imported);
+        QVERIFY(imported->imported);
+        QCOMPARE(imported->continuesRunId, loose.id);
+        QCOMPARE(imported->planRunId, cycle);
+        QVERIFY(imported->id != loose.id);
+        QCOMPARE(static_cast<int>(imported->verdict), static_cast<int>(Verdict::Fallido));
+        QVERIFY(std::all_of(imported->steps.cbegin(), imported->steps.cend(), [](const RunRecordStep& st) { return st.inherited; }));
+
+        const PlanReport report = f.history.report(cycle);
+        QVERIFY(report.plan.isFinished());   // no se reabre: no hay nada que ejecutar
+        QCOMPARE(report.plan.caseIds, (QStringList{QStringLiteral("TC-101"), QStringLiteral("TC-103")}));
+        QCOMPARE(report.executed, 2);
+        QCOMPARE(report.rows[1].run.id, imported->id);
+        QCOMPARE(f.history.evidenceOf(report.rows[1].run).size(), 1);   // la de la original, sin copiar ficheros
+        QCOMPARE(f.history.evidenceOf(report.rows[1].run).first().runId, loose.id);
+        QCOMPARE(report.rows[1].bugs.size(), 1);
+        QCOMPARE(report.bugs().size(), 1);
+        // La original sigue igual y el caso no cuenta una ejecución nueva.
+        QVERIFY(f.history.findRun(loose.id)->planRunId.isEmpty());
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.at, lastBefore.at);
+        // Y se publica con su bug colgado de su paso.
+        f.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
+        f.publish.publish(report, [](const PublishResult&) {});
+        QCOMPARE(f.zephyr->published.size(), 1);
+        const QList<PublishDefect> defects = f.zephyr->published[0].cases[1].defects;
+        QCOMPARE(f.zephyr->published[0].cases[1].attachments.size(), 0);   // el fichero de prueba no existe en disco
+        QCOMPARE(defects.size(), 1);
+        QCOMPARE(defects.first().key, QStringLiteral("SHOP-50"));
+        QCOMPARE(defects.first().step, 1);
+
+        // Dos veces la misma no; una del propio ciclo, tampoco.
+        QVERIFY(!f.history.importRun(cycle, loose.id));
+        QVERIFY(!f.history.importRun(cycle, report.rows[0].run.id));
+        QVERIFY(!f.history.importRun(QStringLiteral("PR-9999"), loose.id));
+    }
+
+    // Traída sobre un caso que el ciclo ya tenía, pasa a ser la que cuenta (aunque se hiciera antes).
+    void anImportedRunReplacesTheCaseResultInTheCycle() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-103"));
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        const QString older = f.history.runsForCase(QStringLiteral("TC-103")).first().id;
+        f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        f.run.mark(StepResult::Fail);
+        f.run.finish();
+        QCOMPARE(f.history.report(cycle).failed, 1);
+        QVERIFY(f.history.importRun(cycle, older));
+        const PlanReport report = f.history.report(cycle);
+        QCOMPARE(report.passed, 1);
+        QCOMPARE(report.failed, 0);
+        QCOMPARE(report.plan.caseIds.size(), 1);
+    }
+
+    // Quitar un caso de un ciclo: sale de la lista, sus ejecuciones allí se borran con lo que se capturó
+    // en ellas y su «última ejecución» vuelve a la anterior. Lo que otro sitio usa no se quita.
+    void removingACaseFromACycleDropsItsRunsThere() {
+        AppFixture f;
+        f.run.start(QStringLiteral("TC-103"));   // antes, suelta: superada
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        const RunRecord before = f.history.runsForCase(QStringLiteral("TC-103")).first();
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        f.store.addShot(QStringLiteral("TC-103"), Screenshot{60, 1, QStringLiteral("cap_060.png"), QStringLiteral("/tmp/qaflow-test/cap_060.png"), {}});
+        f.run.mark(StepResult::Fail);
+        f.run.finish();
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.outcome, RunOutcome::Failed);
+
+        // En curso no se toca, y el único caso tampoco.
+        const QString other = f.history.startPlan(QStringLiteral("Otro"), {QStringLiteral("TC-101")});
+        QVERIFY(!f.history.cannotRemoveCase(other, QStringLiteral("TC-101")).isEmpty());
+        f.history.finishPlan(other);
+        QVERIFY(!f.history.cannotRemoveCase(other, QStringLiteral("TC-101")).isEmpty());
+        QVERIFY(!f.history.cannotRemoveCase(cycle, QStringLiteral("TC-101")).isEmpty());   // no es del ciclo
+
+        // Traída a otro ciclo, la ejecución de aquí se usa allí: hay que quitarla de allí antes.
+        const QString cycleRun = f.history.runsForPlan(cycle).first().id;
+        const auto copy = f.history.importRun(other, cycleRun);
+        QVERIFY(copy);
+        QVERIFY(f.history.cannotRemoveCase(cycle, QStringLiteral("TC-103")).contains(copy->id));
+        QVERIFY(!f.history.removeCaseFromCycle(cycle, QStringLiteral("TC-103")));
+        // Quitar la traída no toca la evidencia de la original.
+        QVERIFY(f.history.cannotRemoveCase(other, QStringLiteral("TC-103")).isEmpty());
+        QVERIFY(f.history.removeCaseFromCycle(other, QStringLiteral("TC-103")));
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->shotsOfRun(cycleRun).size(), 1);
+        QVERIFY(f.history.dependentsOf({cycleRun}).isEmpty());
+
+        QVERIFY(f.history.removeCaseFromCycle(cycle, QStringLiteral("TC-103")));
+        QCOMPARE(f.history.findPlan(cycle)->caseIds, QStringList{QStringLiteral("TC-107")});
+        QVERIFY(!f.history.findRun(cycleRun));
+        QVERIFY(f.store.find(QStringLiteral("TC-103"))->shotsOfRun(cycleRun).isEmpty());
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.outcome, RunOutcome::Passed);   // la suelta de antes
+        QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.at, before.finishedAt);
+        const PlanReport report = f.history.report(cycle);
+        QCOMPARE(report.total(), 1);
+        QCOMPARE(report.passed, 1);
+    }
+
     void finishPlanIsIdempotent() {
         AppFixture f;
         const QString id = f.history.startPlan(QStringLiteral("Uno"), {QStringLiteral("TC-103")});
@@ -200,6 +331,83 @@ private slots:
         const QDateTime first = f.history.findPlan(id)->finishedAt;
         f.history.finishPlan(id);
         QCOMPARE(f.history.findPlan(id)->finishedAt, first);
+    }
+
+    // Quitar una evidencia de una ejecución sólo la quita de ésa: la traída la desvincula y la original
+    // la conserva; quitada de la original, la traída la sigue teniendo. Cuando ya no la tiene nadie, se
+    // borra del caso. Lo desvinculado sobrevive a recargar el historial.
+    void removingEvidenceFromOneRunLeavesItInTheOthers() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+        f.run.finish();
+        f.run.start(QStringLiteral("TC-103"));
+        f.store.addShot(QStringLiteral("TC-103"), Screenshot{70, 1, QStringLiteral("cap_070.png"), QStringLiteral("/tmp/qaflow-test/cap_070.png"), {}});
+        f.store.addShot(QStringLiteral("TC-103"), Screenshot{71, 1, QStringLiteral("cap_071.png"), QStringLiteral("/tmp/qaflow-test/cap_071.png"), {}});
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+        const QString original = f.history.runsForCase(QStringLiteral("TC-103")).first().id;
+        const auto imported = f.history.importRun(cycle, original);
+        QVERIFY(imported);
+        auto ids = [&](const QString& runId) {
+            QList<int> out;
+            for (const auto& s : f.history.evidenceOf(*f.history.findRun(runId))) out << s.id;
+            return out;
+        };
+        auto inCase = [&](int id) {
+            const auto& shots = f.store.find(QStringLiteral("TC-103"))->shots;
+            return std::any_of(shots.cbegin(), shots.cend(), [id](const Screenshot& s) { return s.id == id; });
+        };
+        QCOMPARE(ids(imported->id), (QList<int>{70, 71}));
+
+        // De la traída: sólo se desvincula.
+        QVERIFY(f.history.removeEvidence(imported->id, 70));
+        QCOMPARE(ids(imported->id), QList<int>{71});
+        QCOMPARE(ids(original), (QList<int>{70, 71}));
+        QVERIFY(inCase(70));
+
+        // De la original: la traída la conserva.
+        QVERIFY(f.history.removeEvidence(original, 71));
+        QCOMPARE(ids(original), QList<int>{70});
+        QCOMPARE(ids(imported->id), QList<int>{71});
+        QVERIFY(inCase(71));
+        QVERIFY(!f.history.removeEvidence(original, 71));   // ya no la tiene
+
+        // Se recarga igual.
+        RunHistoryStore again(f.historyRepo, f.store);
+        again.load();
+        QCOMPARE(again.evidenceOf(*again.findRun(imported->id)).size(), 1);
+        QCOMPARE(again.evidenceOf(*again.findRun(imported->id)).first().id, 71);
+
+        // Ya no la tiene nadie más: se borra del caso.
+        QVERIFY(f.history.removeEvidence(imported->id, 71));
+        QVERIFY(ids(imported->id).isEmpty());
+        QVERIFY(!inCase(71));
+        QVERIFY(f.history.removeEvidence(original, 70));
+        QVERIFY(!inCase(70));
+    }
+
+    // Borrar el ciclo de la original no se lleva la evidencia que la traída conserva.
+    void deletingACycleKeepsTheEvidenceOtherRunsStillHave() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Uno"));
+        const QString first = f.run.planRunId();
+        f.store.addShot(QStringLiteral("TC-103"), Screenshot{80, 1, QStringLiteral("cap_080.png"), QStringLiteral("/tmp/qaflow-test/cap_080.png"), {}});
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+        f.run.finish();
+        const QString original = f.history.runsForPlan(first).first().id;
+        f.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Dos"));
+        const QString second = f.run.planRunId();
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+        f.run.finish();
+        const auto imported = f.history.importRun(second, original);
+        QVERIFY(imported);
+        QVERIFY(f.history.removeEvidence(original, 80));   // la traída la conserva
+        QVERIFY(f.history.removePlanRun(first));
+        const auto& shots = f.store.find(QStringLiteral("TC-103"))->shots;
+        QVERIFY(std::any_of(shots.cbegin(), shots.cend(), [](const Screenshot& s) { return s.id == 80; }));
+        QCOMPARE(f.history.evidenceOf(*f.history.findRun(imported->id)).size(), 1);
     }
 
     void historyRoundTripsThroughRepositoryAndIdsContinue() {

@@ -25,6 +25,7 @@ class QLabel;
 namespace qaflow {
 
 struct AppContext;
+struct PlanReport;
 struct UpdateRelease;
 class Sidebar;
 class StatusStrip;
@@ -150,6 +151,10 @@ private:
     void createCaseForRun();
     void continueCycleRun(const QString& planRunId);
     void beginContinuation(const QString& planRunId, const QString& environment, const QStringList& planCases = {});
+    /// Ejecuta esos casos en el ciclo terminado (`RunController::runInCycle`), tras confirmar el ambiente.
+    void runInCycle(const QString& planRunId, const QStringList& caseIds);
+    /// Lo que se pregunta al reabrir un ciclo: su ambiente, que no se cambia si ya tenía uno.
+    CycleStartDialog::Setup reopenSetup(const PlanReport& report) const;
     void runSelectedTarget();
     /// Arranca un ciclo de ese plan y lleva a la ejecución; avisa si hay algo en curso que lo impida.
     void startPlanRun(const QString& planId);

@@ -107,6 +107,10 @@ void RunController::begin(const QString& caseId) {
         const RunRecord previous = *it;
         m_resume.erase(m_resume.find(caseId));
         if (const TestCase* c = m_store.find(caseId)) resumeFrom(previous, *c);
+    } else if (const auto rv = m_review.constFind(caseId); rv != m_review.constEnd()) {
+        const RunRecord archived = *rv;
+        m_review.erase(m_review.find(caseId));
+        if (const TestCase* c = m_store.find(caseId)) reviewFrom(archived, *c);
     }
     m_store.select(caseId);
 }
@@ -167,6 +171,7 @@ void RunController::start(const QString& caseId) {
     closePlan();
     m_queue.clear();
     m_resume.clear();
+    m_review.clear();
     begin(caseId);
     changed();
 }
@@ -177,6 +182,7 @@ void RunController::startSequence(const QStringList& caseIds, const QString& pla
     commitRun(false);
     closePlan();
     m_resume.clear();   // un ciclo normal ejecuta sus casos enteros
+    m_review.clear();
     m_planRunId = m_history.startPlan(planName, caseIds, planId, environment);
     m_queue = caseIds.mid(1);
     begin(caseIds.first());
@@ -210,12 +216,60 @@ bool RunController::continueCycle(const QString& planRunId, const QString& envir
     if (!m_history.reopenPlan(planRunId, environment)) return false;
     m_history.setPlanCases(planRunId, composition);   // con lo que el plan ganó después de arrancarlo
     m_resume = resume;
+    m_review.clear();
     m_planRunId = planRunId;
     m_queue = caseIds.mid(1);
     begin(caseIds.first());
     changed();
     emit planStarted(m_planRunId, planId);
     return true;
+}
+
+bool RunController::runInCycle(const QString& planRunId, const QStringList& caseIds, const QString& environment) {
+    const PlanRun* cycle = m_history.findPlan(planRunId);
+    if (!cycle || !cycle->isFinished()) return false;
+    QStringList ids;
+    for (const auto& id : caseIds)
+        if (m_store.find(id) && !ids.contains(id)) ids << id;
+    if (ids.isEmpty()) return false;
+    // Cómo arranca cada uno depende de lo que el ciclo tiene de él: lo roto se retoma, lo superado se
+    // revisa y lo que no tiene ejecución (o es nuevo en el ciclo) va entero.
+    QHash<QString, RunRecord> resume, review;
+    for (const auto& row : m_history.report(planRunId).rows) {
+        if (!row.executed || !ids.contains(row.caseId)) continue;
+        (row.run.isBroken() ? resume : review).insert(row.caseId, row.run);
+    }
+    // Se copia antes de cerrar lo que estuviera en curso: cerrar escribe en el historial.
+    const QString planId = cycle->planId;
+    QStringList composition = cycle->caseIds;
+    for (const auto& id : ids)
+        if (!composition.contains(id)) composition << id;
+
+    commitRun(false);
+    closePlan();
+    if (!m_history.reopenPlan(planRunId, environment)) return false;
+    m_history.setPlanCases(planRunId, composition);
+    m_resume = resume;
+    m_review = review;
+    m_planRunId = planRunId;
+    m_queue = ids.mid(1);
+    begin(ids.first());
+    changed();
+    emit planStarted(m_planRunId, planId);
+    return true;
+}
+
+QList<RunRecord> RunController::importIntoCycle(const QString& planRunId, const QStringList& runIds) {
+    QList<RunRecord> out;
+    const PlanRun* cycle = m_history.findPlan(planRunId);
+    if (!cycle || !cycle->isFinished()) return out;
+    // Las que siguen vivas (la de pantalla y las aparcadas) ya tienen su id reservado.
+    QStringList held;
+    if (!m_run.runId.isEmpty()) held << m_run.runId;
+    for (const auto& p : m_parked) held << p.run.runId;
+    for (const auto& id : runIds)
+        if (const auto rec = m_history.importRun(planRunId, id, held)) out << *rec;
+    return out;
 }
 
 RunController::PlanSync RunController::syncPlanCases(const QStringList& planCases) {
@@ -369,16 +423,23 @@ bool RunController::reviewCase(const QString& caseId) {
     m_run = RunState{};
     m_run.caseId = caseId;
     m_run.runId = reserveRunId();   // por si se reporta un bug mientras se revisa
-    m_run.reviewOf = archived->id;
     m_run.startedAt = QDateTime::currentDateTime();
     m_run.results = QList<StepRecord>(c->steps.size());
+    reviewFrom(*archived, *c);
+    m_store.select(caseId);
+    changed();
+    return true;
+}
+
+void RunController::reviewFrom(const RunRecord& archived, const TestCase& c) {
+    m_run.reviewOf = archived.id;
     // Se continúa la archivada: sus pasos llegan heredados, con su nota y su evidencia, y lo que se
     // vuelva a marcar pasa a ser de esta ejecución. Como al continuar un ciclo, sólo mientras el paso
     // siga diciendo lo mismo: uno que hoy es otro queda pendiente.
-    m_continuesRunId = archived->id;
-    for (int i = 0; i < m_run.results.size() && i < archived->steps.size(); ++i) {
-        const RunRecordStep& step = archived->steps[i];
-        if (c->steps[i].action != step.action || c->steps[i].data != step.data || c->steps[i].expected != step.expected) break;
+    m_continuesRunId = archived.id;
+    for (int i = 0; i < m_run.results.size() && i < archived.steps.size() && i < c.steps.size(); ++i) {
+        const RunRecordStep& step = archived.steps[i];
+        if (c.steps[i].action != step.action || c.steps[i].data != step.data || c.steps[i].expected != step.expected) break;
         m_run.results[i].result = step.result;
         m_run.results[i].note = step.note;
         m_run.results[i].marked = true;
@@ -388,10 +449,8 @@ bool RunController::reviewCase(const QString& caseId) {
     m_run.idx = 0;
     m_run.note = m_run.results.isEmpty() ? QString() : m_run.results.first().note;
     m_run.finished = m_run.results.isEmpty();
+    m_run.stepElapsedSecs = 0;
     startStepClock();
-    m_store.select(caseId);
-    changed();
-    return true;
 }
 
 void RunController::setResult(int index, StepResult result) {
@@ -463,6 +522,7 @@ void RunController::closePlan() {
         commitRun(false);
     }
     m_parked.clear();
+    m_review.clear();   // las revisiones que no se llegaron a abrir no pasan a otro ciclo
     m_run = current;
     m_continuesRunId = continues;
     const QString id = m_planRunId;

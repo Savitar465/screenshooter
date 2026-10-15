@@ -69,11 +69,11 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
     }
 
     if (layout == Layout::Archive) {
-        // Sólo lectura: ni selector de paso (un QComboBox por tarjeta, con todos los pasos), ni
-        // flechas, ni borrar. El paso al que se asignó se lee en la miniatura y debajo.
+        // Sólo lectura: ni selector de paso (un QComboBox por tarjeta, con todos los pasos) ni
+        // flechas. El paso al que se asignó se lee en la miniatura y debajo. Borrar sólo si la vista
+        // lo permite (`setRemovable`): la × se coloca pero queda oculta.
         m_readOnly = true;
-        delete remove;   // nunca se colocan: sin padre quedarían sueltos
-        delete name;
+        delete name;   // nunca se coloca: sin padre quedaría suelto
         setProperty("role", QStringLiteral("shot-card"));
         auto* v = ui::vbox(this, 0, 0);
         m_thumb->setWidthHint(200);
@@ -92,6 +92,11 @@ ShotCard::ShotCard(const Screenshot& shot, const QList<TestStep>& steps, Layout 
         auto* h = ui::hbox(row, 0, 4);
         h->addWidget(file, 1);
         h->addWidget(annotate);
+        remove->setObjectName(QStringLiteral("removeShot"));
+        remove->setStyleSheet(QStringLiteral("font-size:14px;"));
+        h->addWidget(remove);
+        remove->hide();
+        m_archiveRemove = remove;
         bv->addWidget(row);
         auto* step = new ElidedLabel(stepText);
         step->setProperty("role", QStringLiteral("muted-sm"));
@@ -179,6 +184,11 @@ void ShotCard::setReadOnly(bool on) {
     m_readOnly = on;
 }
 
+void ShotCard::setRemovable(bool on) {
+    m_removable = on;
+    if (m_archiveRemove) m_archiveRemove->setVisible(on);
+}
+
 void ShotCard::contextMenuEvent(QContextMenuEvent* e) {
     const int id = m_shot.id;
     QMenu menu(this);
@@ -191,6 +201,9 @@ void ShotCard::contextMenuEvent(QContextMenuEvent* e) {
         // La columna de capturas no tiene flechas: el orden se cambia desde aquí.
         menu.addAction(tr("Mover antes"), this, [this, id]() { emit moveRequested(id, -1); });
         menu.addAction(tr("Mover después"), this, [this, id]() { emit moveRequested(id, +1); });
+        menu.addSeparator();
+        menu.addAction(tr("Eliminar"), this, [this, id]() { emit removeRequested(id); });
+    } else if (m_removable) {
         menu.addSeparator();
         menu.addAction(tr("Eliminar"), this, [this, id]() { emit removeRequested(id); });
     }

@@ -11,6 +11,7 @@
 #include <QGuiApplication>
 #include <QImage>
 
+#include <algorithm>
 #include <utility>
 
 namespace qaflow {
@@ -170,11 +171,27 @@ void EvidenceService::toggleRecording() {
 int EvidenceService::attachFiles(const QStringList& paths) {
     const QString caseId = targetCaseId();
     if (caseId.isEmpty()) { emit failed(tr("Inicia la ejecución del caso para capturar: la evidencia es de la ejecución")); return 0; }
+    const QStringList added = copyIn(caseId, QString(), [this, caseId]() { return targetStep(caseId); }, paths);
+    if (!added.isEmpty()) emit attached(added);
+    return added.size();
+}
+
+int EvidenceService::attachFilesToRun(const QString& caseId, const QString& runId, int step, const QStringList& paths) {
+    const TestCase* c = m_cases.find(caseId);
+    if (!c || runId.isEmpty() || paths.isEmpty()) return 0;
+    // Un paso que el caso ya no tiene no se puede enseñar en ninguno: va a la ejecución entera.
+    const int target = step > 0 && step <= c->steps.size() ? step : 0;
+    const QStringList added = copyIn(caseId, runId, [target]() { return target; }, paths);
+    if (!added.isEmpty()) emit attached(added);
+    return added.size();
+}
+
+QStringList EvidenceService::copyIn(const QString& caseId, const QString& runId, const std::function<int()>& stepOf, const QStringList& paths) {
+    QStringList added;
     const QString folder = captureFolder();
     QString error;
-    if (!ensureFolder(folder, &error)) { emit failed(error); return 0; }
+    if (!ensureFolder(folder, &error)) { emit failed(error); return added; }
     const QDir dir(folder);
-    QStringList added;
     for (const QString& src : paths) {
         const QFileInfo info(src);
         if (!info.isFile()) { emit failed(tr("No existe %1").arg(src)); continue; }
@@ -183,12 +200,21 @@ int EvidenceService::attachFiles(const QStringList& paths) {
         const QString dst = dir.filePath(name);
         if (!QFile::copy(src, dst)) { emit failed(tr("No se pudo copiar %1 a la carpeta de capturas").arg(info.fileName())); continue; }
         QFile::setPermissions(dst, QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther);
-        m_cases.addShot(caseId, Screenshot{seq, targetStep(caseId), name, dst});
+        // Con `runId` llega ya sellada: es de esa ejecución archivada, no de la que esté en curso.
+        m_cases.addShot(caseId, Screenshot{seq, stepOf(), name, dst, runId});
         emit shotAdded(caseId, seq, dst);
         added << dst;
     }
-    if (!added.isEmpty()) emit attached(added);
-    return added.size();
+    return added;
+}
+
+bool EvidenceService::removeFromRun(const QString& caseId, const QString& runId, int shotId) {
+    const TestCase* c = m_cases.find(caseId);
+    if (!c || runId.isEmpty()) return false;
+    const bool own = std::any_of(c->shots.cbegin(), c->shots.cend(), [&](const Screenshot& s) { return s.id == shotId && s.runId == runId; });
+    if (!own) return false;
+    m_cases.removeShot(caseId, shotId);
+    return true;
 }
 
 bool EvidenceService::replaceImage(const QString& caseId, int shotId, const QImage& image) {

@@ -5,6 +5,7 @@
 #include "core/services/ITestCaseRepository.h"
 
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QTimer>
 #include <memory>
@@ -82,7 +83,8 @@ public:
     int adoptLooseShots(const QString& caseId, const QString& runId);
     /// Quita de todos los casos las evidencias de esas ejecuciones (se borran del historial) y
     /// libera sus ficheros. Sin deshacer: el borrado de una ejecución es definitivo. Devuelve cuántas.
-    int releaseShotsOfRuns(const QStringList& runIds);
+    /// Las de `keep` se quedan: otra ejecución que no se borra las sigue teniendo.
+    int releaseShotsOfRuns(const QStringList& runIds, const QSet<int>& keep = {});
     void removeShot(const QString& id, int shotId);
     void assignShotStep(const QString& id, int shotId, int step);
     void moveShot(const QString& id, int shotId, int delta);

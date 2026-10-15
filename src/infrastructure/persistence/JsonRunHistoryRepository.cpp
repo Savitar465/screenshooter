@@ -14,16 +14,31 @@ namespace {
 
 QString isoOrEmpty(const QDateTime& dt) { return dt.isValid() ? dt.toString(Qt::ISODate) : QString(); }
 
+QJsonArray idsToJson(const QList<int>& ids) {
+    QJsonArray out;
+    for (int id : ids) out.append(id);
+    return out;
+}
+
+QList<int> idsFromJson(const QJsonValue& v) {
+    QList<int> out;
+    for (const auto& id : v.toArray()) out << id.toInt();
+    return out;
+}
+
 QJsonObject toJson(const RunRecord& r) {
     QJsonArray steps;
     for (const auto& s : r.steps)
         steps.append(QJsonObject{{"action", s.action}, {"data", s.data}, {"expected", s.expected}, {"result", toString(s.result)}, {"note", s.note}, {"durationSecs", s.durationSecs}, {"inherited", s.inherited}});
-    return QJsonObject{
+    QJsonObject o{
         {"id", r.id}, {"caseId", r.caseId}, {"caseTitle", r.caseTitle}, {"suite", r.suite},
         {"planRunId", r.planRunId}, {"startedAt", isoOrEmpty(r.startedAt)}, {"finishedAt", isoOrEmpty(r.finishedAt)},
         {"verdict", toString(r.verdict)}, {"plannedSteps", r.plannedSteps}, {"durationSecs", r.durationSecs}, {"steps", steps},
-        {"testKey", r.testKey}, {"continuesRunId", r.continuesRunId},
+        {"testKey", r.testKey}, {"continuesRunId", r.continuesRunId}, {"imported", r.imported},
     };
+    if (!r.unlinkedShots.isEmpty()) o["unlinkedShots"] = idsToJson(r.unlinkedShots);
+    if (!r.pinnedShots.isEmpty()) o["pinnedShots"] = idsToJson(r.pinnedShots);
+    return o;
 }
 
 RunRecord runFromJson(const QJsonObject& o) {
@@ -39,6 +54,9 @@ RunRecord runFromJson(const QJsonObject& o) {
     r.plannedSteps = o["plannedSteps"].toInt();
     r.testKey = o["testKey"].toString();
     r.continuesRunId = o["continuesRunId"].toString();
+    r.imported = o["imported"].toBool();
+    r.unlinkedShots = idsFromJson(o["unlinkedShots"]);
+    r.pinnedShots = idsFromJson(o["pinnedShots"]);
     for (const auto& v : o["steps"].toArray()) {
         const auto s = v.toObject();
         r.steps.append(RunRecordStep{s["action"].toString(), s["data"].toString(), s["expected"].toString(), stepResultFromString(s["result"].toString()), s["note"].toString(), s["durationSecs"].toInt(), s["inherited"].toBool()});

@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QStringList>
 #include <QTimer>
+#include <functional>
 #include <memory>
 
 class QDir;
@@ -23,6 +24,7 @@ class SettingsStore;
 ///    adjuntada a la ejecución, asignada al paso que se estaba ejecutando;
 ///  - grabación de GIF (iniciar / detener), que se adjunta igual que una captura;
 ///  - ficheros existentes (logs, vídeos…) copiados a la carpeta de capturas;
+///  - desde el historial, añadir y quitar evidencias de una ejecución ya archivada;
 ///  - copia al portapapeles y sustitución de una imagen tras anotarla.
 /// Es el único sitio que escribe o borra ficheros de evidencias: el store sólo conoce rutas.
 class EvidenceService : public QObject {
@@ -52,6 +54,14 @@ public:
 
     /// Copia ficheros existentes a la carpeta de capturas y los adjunta. Devuelve cuántos se adjuntaron.
     int attachFiles(const QStringList& paths);
+    /// Copia ficheros a la carpeta de capturas y los adjunta a una ejecución ya archivada (`runId`) del
+    /// caso, asignados al paso `step` (1..N; 0 = a la ejecución entera). Es completar desde el historial
+    /// la evidencia de algo que ya se probó: no hace falta ejecución en curso. Devuelve cuántos se adjuntaron.
+    int attachFilesToRun(const QString& caseId, const QString& runId, int step, const QStringList& paths);
+    /// Quita una evidencia de la ejecución archivada `runId`. Sólo las que se tomaron en ella: una que
+    /// una continuación hereda es de la ejecución en que se capturó, y se quita allí. Se puede deshacer
+    /// (el fichero se borra al confirmarse). Falso si la evidencia no es de esa ejecución.
+    bool removeFromRun(const QString& caseId, const QString& runId, int shotId);
     /// Sustituye la imagen de una evidencia (editor de anotaciones). El caso emite `caseChanged`.
     bool replaceImage(const QString& caseId, int shotId, const QImage& image);
     /// Copia la imagen de una evidencia al portapapeles.
@@ -91,6 +101,9 @@ private:
     QString targetCaseId() const;
     int targetStep(const QString& caseId) const;
     bool ensureFolder(const QString& folder, QString* error) const;
+    /// Copia los ficheros y los añade al caso como evidencias de `runId` (vacío = la ejecución en curso),
+    /// en el paso que diga `stepOf`. Devuelve las rutas copiadas.
+    QStringList copyIn(const QString& caseId, const QString& runId, const std::function<int()>& stepOf, const QStringList& paths);
     void grabNow();
     /// Nombre libre en `dir`: "bug_001.png" (`suffix` ".png") o "bug_001_log.txt" (`suffix` "log.txt").
     static QString freeBugName(const QDir& dir, const QString& suffix);

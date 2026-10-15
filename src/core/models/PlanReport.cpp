@@ -97,13 +97,10 @@ PlanReport PlanReport::build(const PlanRun& plan, const QList<RunRecord>& runsOf
     QHash<QString, const RunRecord*> published;
     for (const auto& run : runsOfPlan) {
         if (run.planRunId != plan.id) continue;
-        const auto it = latest.constFind(run.caseId);
-        // A igual hora gana la que se archivó después, que va detrás en la lista.
-        if (it == latest.cend() || !(run.finishedAt < (*it)->finishedAt)) latest[run.caseId] = &run;
-        if (!run.testKey.trimmed().isEmpty()) {
-            const auto pub = published.constFind(run.caseId);
-            if (pub == published.cend() || !(run.finishedAt < (*pub)->finishedAt)) published[run.caseId] = &run;
-        }
+        // La última es la que se archivó después, que va detrás en la lista: no la de fecha más reciente,
+        // porque una ejecución traída de otro ciclo conserva la hora a la que se hizo allí.
+        latest[run.caseId] = &run;
+        if (!run.testKey.trimmed().isEmpty()) published[run.caseId] = &run;
         r.durationSecs += run.durationSecs;
     }
 

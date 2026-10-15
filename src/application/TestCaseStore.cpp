@@ -313,14 +313,14 @@ int TestCaseStore::adoptLooseShots(const QString& caseId, const QString& runId) 
     return loose;
 }
 
-int TestCaseStore::releaseShotsOfRuns(const QStringList& runIds) {
+int TestCaseStore::releaseShotsOfRuns(const QStringList& runIds, const QSet<int>& keep) {
     if (runIds.isEmpty()) return 0;
     commitUndo();   // lo que hubiera pendiente de deshacer ya no es restaurable con coherencia
     QStringList files, touched;
     for (auto& c : m_cases) {
         const int before = c.shots.size();
         c.shots.erase(std::remove_if(c.shots.begin(), c.shots.end(), [&](const Screenshot& s) {
-                          if (!runIds.contains(s.runId)) return false;
+                          if (!runIds.contains(s.runId) || keep.contains(s.id)) return false;
                           files << s.path;
                           return true;
                       }), c.shots.end());

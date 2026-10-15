@@ -9,10 +9,12 @@
 #include "core/models/Metrics.h"
 #include "core/models/PlanReport.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlowLayout.h"
-#include "presentation/widgets/ShotCard.h"
+#include "presentation/widgets/Icons.h"
+#include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/MetricBars.h"
 #include "presentation/widgets/ProgressCells.h"
 #include "presentation/widgets/Responsive.h"
@@ -27,6 +29,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QPointer>
 #include <QGridLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -36,8 +39,10 @@
 #include <QScrollArea>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTimer>
 
 #include <algorithm>
+#include <utility>
 
 namespace qaflow {
 
@@ -126,6 +131,12 @@ HistoryView::HistoryView(TestCaseStore& cases, RunHistoryStore& history, TestPub
     split->setPanes(list, buildDetailPane());
 
     connect(&m_history, &RunHistoryStore::historyChanged, this, [this]() { refreshList(); refreshDetail(); });
+    connect(&m_cases, &TestCaseStore::caseChanged, this, &HistoryView::caseEvidenceChanged);
+    // Deshacer (el de una evidencia quitada, también) restaura todos los casos de golpe.
+    connect(&m_cases, &TestCaseStore::casesChanged, this, [this]() {
+        if (!m_selectedPlan.isEmpty()) caseEvidenceChanged(m_selectedCase);
+        else if (const RunRecord* run = m_selectedRun.isEmpty() ? nullptr : m_history.findRun(m_selectedRun)) caseEvidenceChanged(run->caseId);
+    });
     refreshFilters();
     refreshList();
     refreshDetail();
@@ -459,6 +470,17 @@ void HistoryView::renderPlan(const PlanReport& report) {
     // El ciclo en curso no se elimina: la ejecución sigue escribiendo en él. Un ciclo sin terminar
     // que no es el actual quedó a medias (la sesión se perdió) y sí puede irse.
     const bool inProgress = !plan.isFinished() && (!m_run || m_run->planRunId() == plan.id);
+    // Un ciclo terminado se completa: un caso que no tenía se añade y se ejecuta en él.
+    if (plan.isFinished()) {
+        auto* add = menu->addAction(tr("Añadir caso al ciclo…"), this, [this, report]() { pickCaseForCycle(report); }, Qt::QueuedConnection);
+        add->setObjectName(QStringLiteral("addCaseToCycle"));
+        add->setToolTip(tr("Ejecutar en este ciclo un caso del proyecto que no tiene (se añade al ciclo, no al plan)"));
+        if (m_run) {
+            auto* bring = menu->addAction(tr("Traer ejecución de otro ciclo…"), this, [this, report]() { pickRunForCycle(report); }, Qt::QueuedConnection);
+            bring->setObjectName(QStringLiteral("importRunToCycle"));
+            bring->setToolTip(tr("Añadir a este ciclo una ejecución ya hecha (en otro ciclo o suelta), con sus evidencias y sus bugs, sin volver a ejecutarla"));
+        }
+    }
     if (!inProgress) {
         menu->addSeparator();
         auto* del = menu->addAction(tr("Eliminar informe…"), this, [this, report]() { deletePlan(report); }, Qt::QueuedConnection);
@@ -630,11 +652,52 @@ void HistoryView::renderPlanCase(const PlanReport& report) {
     }
     tv->addWidget(state);
     th->addWidget(tb, 1);
+    auto* buttons = new QWidget;
+    auto* bv = ui::vbox(buttons, 0, 6);
     auto* open = ui::button(tr("Abrir caso"), "outline");
     open->setObjectName(QStringLiteral("openPlanCase"));
     connect(open, &QPushButton::clicked, this, [this, cid = row.caseId]() { emit openCaseRequested(cid); });
-    th->addWidget(open, 0, Qt::AlignTop);
+    bv->addWidget(open);
+    // Con el ciclo terminado, el caso se vuelve a ejecutar en él: lo roto se retoma donde se rompió, lo
+    // superado se revisa (con lo archivado) y lo que no se ejecutó va entero.
+    if (report.plan.isFinished() && m_cases.find(row.caseId)) {
+        QString text = tr("Ejecutar en este ciclo");
+        QString tip = tr("Reabre el ciclo y ejecuta este caso entero; lo demás del ciclo se queda como está");
+        if (row.executed && row.run.isBroken()) {
+            text = tr("Retomar en este ciclo");
+            tip = tr("Reabre el ciclo y retoma este caso en el paso que se rompió; lo que se ejecute sustituye a lo de antes en el informe");
+        } else if (row.executed) {
+            text = tr("Revisar en este ciclo");
+            tip = tr("Reabre el ciclo con este caso tal y como se archivó, para corregir veredictos, notas o evidencias; si no se cambia nada, se queda como estaba");
+        }
+        auto* again = ui::button(text, "outline");
+        again->setObjectName(QStringLiteral("runCaseInCycle"));
+        again->setToolTip(tip);
+        connect(again, &QPushButton::clicked, this, [this, planRunId = report.plan.id, cid = row.caseId]() { emit runInCycleRequested(planRunId, {cid}); });
+        bv->addWidget(again);
+    }
+    if (report.plan.isFinished()) {
+        auto* remove = ui::button(tr("Quitar del ciclo…"), "outline");
+        remove->setObjectName(QStringLiteral("removeCaseFromCycle"));
+        const QString why = m_history.cannotRemoveCase(report.plan.id, row.caseId);
+        remove->setEnabled(why.isEmpty());
+        remove->setToolTip(why.isEmpty() ? tr("Quita el caso de este ciclo y borra sus ejecuciones en él, con sus evidencias; los bugs se conservan") : why);
+        connect(remove, &QPushButton::clicked, this, [this, report, cid = row.caseId]() { removeCaseFromCycle(report, cid); }, Qt::QueuedConnection);
+        bv->addWidget(remove);
+    }
+    th->addWidget(buttons, 0, Qt::AlignTop);
     m_caseLayout->addWidget(top);
+    // Traída de otro sitio: no se ejecutó en este ciclo, y conviene que se lea así.
+    if (row.executed && row.run.imported) {
+        const RunRecord* source = m_history.findRun(row.run.continuesRunId);
+        const QString where = !source ? tr("una ejecución que ya no está en el historial")
+                              : source->planRunId.isEmpty() ? tr("la ejecución suelta %1 del %2").arg(source->id, when(source->finishedAt))
+                                                            : tr("%1, del ciclo %2 (%3)").arg(source->id, source->planRunId, when(source->finishedAt));
+        auto* note = ui::label(tr("Traída de %1: no se ejecutó en este ciclo; su veredicto, sus evidencias y sus bugs son los de entonces.").arg(where), "muted-sm");
+        note->setObjectName(QStringLiteral("importedRunNote"));
+        note->setWordWrap(true);
+        m_caseLayout->addWidget(note);
+    }
     // Con qué está enlazado: la historia de Jira del caso y el Test que se creó para esta ejecución.
     if (auto* links = issueLinks(row.jiraKey, row.testKey)) m_caseLayout->addWidget(links);
     // Los bugs del caso ya están, con su paso, en la tarjeta de bugs del ciclo: aquí sólo se avisa.
@@ -655,7 +718,7 @@ void HistoryView::renderPlanCase(const PlanReport& report) {
         sv->addWidget(ui::label(tr("PASOS"), "eyebrow"));
         sv->addWidget(stepsList(row.run));
         m_caseLayout->addWidget(steps);
-        if (auto* shots = evidenceGrid(row.run, 3)) m_caseLayout->addWidget(shots);
+        if (auto* shots = evidenceList(row.run)) m_caseLayout->addWidget(shots);
     }
     m_caseLayout->addStretch(1);
 }
@@ -929,7 +992,7 @@ void HistoryView::renderRun(const RunRecord& run) {
     sv->addWidget(stepsList(run));
     cv->addWidget(steps);
     // Lo que se capturó ejecutando: es de esta ejecución y aquí es donde se ve.
-    if (auto* shots = evidenceGrid(run, 3)) cv->addWidget(shots);
+    if (auto* shots = evidenceList(run)) cv->addWidget(shots);
     m_detailLayout->addWidget(card);
 }
 
@@ -953,30 +1016,199 @@ QWidget* HistoryView::issueLinks(const QString& jiraKey, const QString& testKey)
     return row;
 }
 
-QWidget* HistoryView::evidenceGrid(const RunRecord& run, int columns) {
+QWidget* HistoryView::evidenceList(const RunRecord& run) {
     const QString caseId = run.caseId;
-    const TestCase* c = m_cases.find(caseId);
-    if (!c) return nullptr;
+    if (!m_cases.find(caseId)) return nullptr;
     // Las evidencias son de la ejecución: se enseñan aquí, con el paso al que se asignaron. Las de una
     // continuación traen también las de los pasos que heredó, que son lo que se publica con ella.
     const QList<Screenshot> shots = m_history.evidenceOf(run);
-    if (shots.isEmpty()) return nullptr;
+    // Sin servicio de evidencias no se puede completar nada: una ejecución sin evidencias no enseña la sección.
+    if (shots.isEmpty() && !m_evidence) return nullptr;
     auto* box = new QWidget;
+    box->setObjectName(QStringLiteral("runEvidence"));
     auto* v = ui::vbox(box, 0, 8);
-    v->addWidget(ui::label(tr("EVIDENCIAS · %1").arg(shots.size()), "eyebrow"));
-    // Tantas columnas como quepan (hasta `columns`): en un panel estrecho bajan de fila.
-    auto* grid = new AutoGrid(190, columns, 12);
-    for (int i = 0; i < shots.size(); ++i) {
-        // La ejecución ya pasó: su evidencia se mira, se anota y se copia, pero no se reordena ni
-        // se reasigna de paso, que la cambiaría después de haberse publicado. La tarjeta de archivo
-        // ni siquiera crea esos controles, y su miniatura se lee en segundo plano al enseñarse.
-        auto* card = new ShotCard(shots[i], c->steps, ShotCard::Layout::Archive);
-        if (shots[i].runId != run.id) card->setToolTip(tr("Heredada de %1: el paso no se volvió a probar").arg(shots[i].runId));
-        if (m_evidence) evidence::wireCard(card, this, m_cases, *m_evidence, caseId);
-        grid->addWidget(card);
+    auto* head = new QWidget;
+    auto* hh = new FlowLayout(head, 0, 8, 6);
+    auto* eyebrow = ui::label(tr("EVIDENCIAS · %1").arg(shots.size()), "eyebrow");
+    eyebrow->setMinimumHeight(30);
+    hh->addWidget(eyebrow);
+    // Se miran en el visor, a tamaño completo y con su paso al lado: el informe ya no lee ni pinta
+    // las capturas, sólo las lista.
+    if (!shots.isEmpty()) {
+        auto* view = ui::button(tr("Ver evidencias"), "primary");
+        view->setObjectName(QStringLiteral("viewRunEvidence"));
+        view->setIcon(QIcon(icons::pixmap(icons::Glyph::Eye, theme::OnAccent, 16)));
+        view->setToolTip(tr("Abrir el visor con las %1 evidencias de esta ejecución (← → para pasar de una a otra)").arg(shots.size()));
+        connect(view, &QPushButton::clicked, this, [this, run]() { openEvidenceViewer(run, 0); });
+        hh->addWidget(view);
     }
-    v->addWidget(grid);
+    if (m_evidence) hh->addWidget(attachButton(run));
+    v->addWidget(head);
+    if (shots.isEmpty()) {
+        v->addWidget(ui::label(tr("Esta ejecución no tiene evidencias."), "muted-sm"));
+        return box;
+    }
+    // Una línea por evidencia: su paso y su fichero. Pulsarla la abre en el visor; la × la quita de esta
+    // ejecución (las demás que la tengan la conservan).
+    auto* list = new QWidget;
+    auto* lv = ui::vbox(list, 0, 2);
+    for (int i = 0; i < shots.size(); ++i) {
+        const Screenshot& s = shots[i];
+        auto* line = new QWidget;
+        line->setObjectName(QStringLiteral("evidenceLine"));
+        line->setProperty("shotId", s.id);
+        auto* lh = ui::hbox(line, 0, 4);
+        auto* row = ui::button(QString(), "row-soft");
+        row->setObjectName(QStringLiteral("evidenceRow"));
+        row->setToolTip(tr("Ver en el visor"));
+        row->setAccessibleName(s.fileName);
+        auto* rh = ui::hbox(row, 0, 10);
+        rh->setContentsMargins(8, 6, 8, 6);
+        const QString stepColor = s.step > 0 ? theme::Muted : theme::Amber;
+        auto* step = ui::pill(s.step > 0 ? tr("PASO %1").arg(s.step) : tr("SIN PASO"), theme::tint(stepColor, 30), stepColor);
+        rh->addWidget(step, 0, Qt::AlignVCenter);
+        auto* name = new ElidedLabel(s.fileName);
+        name->setStyleSheet(QStringLiteral("color:%1;font-family:\"Consolas\",\"DejaVu Sans Mono\",monospace;font-size:12px;").arg(theme::TextSoft));
+        rh->addWidget(name, 1);
+        if (s.isAnimation()) rh->addWidget(ui::pill(QStringLiteral("GIF"), theme::tint(theme::Violet, 40), theme::Violet), 0, Qt::AlignVCenter);
+        else if (!s.isImage()) rh->addWidget(ui::label(s.extension().toUpper(), "mono-muted"), 0, Qt::AlignVCenter);
+        for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+        connect(row, &QPushButton::clicked, this, [this, run, i]() { openEvidenceViewer(run, i); });
+        lh->addWidget(row, 1);
+        if (m_evidence) {
+            auto* remove = ui::button(QStringLiteral("×"), "icon");
+            remove->setObjectName(QStringLiteral("removeShot"));
+            remove->setToolTip(tr("Quitar esta evidencia de la ejecución"));
+            remove->setAccessibleName(tr("Quitar %1").arg(s.fileName));
+            connect(remove, &QPushButton::clicked, this, [this, run, id = s.id]() { removeEvidence(run, id); }, Qt::QueuedConnection);
+            lh->addWidget(remove, 0, Qt::AlignVCenter);
+        }
+        lv->addWidget(line);
+    }
+    v->addWidget(list);
     return box;
+}
+
+void HistoryView::openEvidenceViewer(const RunRecord& run, int index) {
+    const QList<Screenshot> shots = m_history.evidenceOf(run);
+    if (shots.isEmpty()) return;
+    auto* viewer = new ImageViewer(shots, index, this);
+    viewer->setObjectName(QStringLiteral("runEvidenceViewer"));
+    // De qué caso y de dónde: el ciclo, o la ejecución suelta.
+    const PlanRun* plan = run.planRunId.isEmpty() ? nullptr : m_history.findPlan(run.planRunId);
+    const QString where = plan ? (plan->name.isEmpty() ? plan->id : plan->name) : tr("ejecución %1").arg(run.id);
+    viewer->setContext(run.caseId, run.caseTitle.isEmpty() ? tr("(sin título)") : run.caseTitle, where);
+    QMap<int, ViewerStep> steps;
+    for (int i = 0; i < run.steps.size(); ++i) {
+        const auto& st = run.steps[i];
+        steps.insert(i + 1, ViewerStep{st.action, label(st.result), resultColor(st.result), st.note.trimmed()});
+    }
+    viewer->setSteps(steps);
+
+    QPointer<ImageViewer> guard(viewer);
+    if (m_evidence) {
+        // Supr o «Quitar»: como la × de la lista (sólo de esta ejecución, con el aviso si ya se publicó).
+        viewer->setRemovable(true);
+        connect(viewer, &ImageViewer::removeRequested, viewer, [this, guard, run](int id) {
+            if (removeEvidence(run, id, guard) && guard) guard->removeShot(id);
+        }, Qt::QueuedConnection);
+        connect(viewer, &ImageViewer::copyRequested, viewer, [this, caseId = run.caseId](int id) { evidence::copyToClipboard(*m_evidence, m_cases, caseId, id); });
+        connect(viewer, &ImageViewer::annotateRequested, viewer, [this, guard, caseId = run.caseId](int id) {
+            if (evidence::annotate(guard, m_cases, *m_evidence, caseId, id) && guard) guard->reload();
+        });
+    } else {
+        // Sin servicio se mira, se copia la imagen tal cual, pero no se anota.
+        connect(viewer, &ImageViewer::copyRequested, viewer, [guard](int) { if (guard) QApplication::clipboard()->setImage(QImage(guard->current().path)); });
+        connect(viewer, &ImageViewer::annotateRequested, viewer, [this]() { emit toast(tr("Las evidencias del historial no se pueden anotar aquí"), theme::Amber); });
+    }
+    connect(viewer, &ImageViewer::openFolderRequested, viewer, [guard](int) { if (guard) evidence::showInFolder(guard->current().path); });
+    viewer->show();
+    viewer->raise();
+    viewer->activateWindow();
+}
+
+QPushButton* HistoryView::attachButton(const RunRecord& run) {
+    auto* b = ui::button(tr("Adjuntar…"), "outline");
+    b->setObjectName(QStringLiteral("attachRunEvidence"));
+    b->setToolTip(tr("Añadir ficheros (capturas, vídeos, logs…) como evidencia de esta ejecución"));
+    // Con pasos se elige a cuál va (como al capturar ejecutando, en Zephyr va al resultado de ese paso);
+    // sin ellos, a la ejecución entera.
+    if (run.steps.isEmpty()) {
+        connect(b, &QPushButton::clicked, this, [this, run]() { attachEvidence(run, 0); });
+        return b;
+    }
+    auto* menu = new QMenu(b);
+    menu->setObjectName(QStringLiteral("attachRunEvidenceMenu"));
+    menu->addAction(tr("A la ejecución (sin paso)"), this, [this, run]() { attachEvidence(run, 0); });
+    menu->addSeparator();
+    for (int i = 0; i < run.steps.size(); ++i)
+        menu->addAction(tr("Paso %1 · %2").arg(i + 1).arg(ui::elide(run.steps[i].action, 40)), this, [this, run, i]() { attachEvidence(run, i + 1); });
+    b->setMenu(menu);
+    return b;
+}
+
+void HistoryView::attachEvidence(const RunRecord& run, int step) {
+    if (!m_evidence) return;
+    const QStringList paths = evidence::pickFiles(this);
+    if (paths.isEmpty()) return;
+    const int added = m_evidence->attachFilesToRun(run.caseId, run.id, step, paths);
+    if (added == 0) return;   // el servicio ya avisó de lo que falló
+    QString message = added == 1 ? tr("Evidencia añadida a %1").arg(run.id) : tr("%1 evidencias añadidas a %2").arg(added).arg(run.id);
+    if (isPublished(run)) message += tr(" · usa «Actualizar en Zephyr» para subirla");
+    emit toast(message, theme::Green);
+}
+
+bool HistoryView::removeEvidence(const RunRecord& run, int shotId, QWidget* dialogParent) {
+    if (!m_evidence) return false;
+    if (isPublished(run)) {
+        // Al actualizar Zephyr sólo se suben las que falten: la que ya está allí no se borra.
+        const auto choice = QMessageBox::question(dialogParent ? dialogParent : this, tr("Quitar evidencia"),
+                                                  tr("Esta ejecución ya está publicada en Zephyr. La evidencia se quitará de QAflow, "
+                                                     "pero seguirá adjunta en Zephyr hasta que la borres allí.\n\n¿Quitarla?"));
+        if (choice != QMessageBox::Yes) return false;
+    }
+    // Si otra ejecución la tiene (la que la tomó, o una que la heredó o la trajo), sólo se desvincula de
+    // ésta. Si no, se borra, y el aviso con «Deshacer» lo da la ventana, como con cualquier evidencia.
+    if (!m_history.removeEvidence(run.id, shotId)) return false;
+    const TestCase* c = m_cases.find(run.caseId);
+    const bool kept = c && std::any_of(c->shots.cbegin(), c->shots.cend(), [shotId](const Screenshot& s) { return s.id == shotId; });
+    if (kept) emit toast(tr("Evidencia quitada de %1; las otras ejecuciones que la tienen la conservan").arg(run.id), theme::Cyan);
+    return true;
+}
+
+bool HistoryView::isPublished(const RunRecord& run) const {
+    const PlanRun* plan = run.planRunId.isEmpty() ? nullptr : m_history.findPlan(run.planRunId);
+    return plan && plan->isPublished();
+}
+
+void HistoryView::caseEvidenceChanged(const QString& caseId) {
+    // Lo que se añade, se quita, se anota o se deshace cambia el caso, no el historial. Se rehace sólo
+    // si es lo que está a la vista, y después: la señal puede salir de una tarjeta que se va a borrar.
+    if (m_pendingCases.isEmpty())
+        QTimer::singleShot(0, this, [this]() {
+            const QSet<QString> cases = std::exchange(m_pendingCases, {});
+            if (m_mode == Mode::Metrics) return;
+            if (!m_selectedPlan.isEmpty()) {
+                if (!cases.contains(m_selectedCase) || !m_caseLayout || !m_caseList || !m_history.findPlan(m_selectedPlan)) return;
+                const PlanReport report = m_history.report(m_selectedPlan);
+                // La fila de la lista lleva cuántas evidencias tiene: se cambia por una nueva.
+                for (const auto& row : report.rows) {
+                    if (row.caseId != m_selectedCase) continue;
+                    auto* old = m_caseList->findChild<QPushButton*>(QStringLiteral("planCase-%1").arg(row.caseId));
+                    if (old && m_caseList->layout()) {
+                        auto* fresh = caseRow(row);
+                        delete m_caseList->layout()->replaceWidget(old, fresh);
+                        old->hide();
+                        old->deleteLater();
+                    }
+                }
+                renderPlanCase(report);
+                return;
+            }
+            if (const RunRecord* run = m_selectedRun.isEmpty() ? nullptr : m_history.findRun(m_selectedRun))
+                if (cases.contains(run->caseId)) refreshDetail();
+        });
+    m_pendingCases.insert(caseId);
 }
 
 QWidget* HistoryView::stepsList(const RunRecord& run) const {
@@ -1058,9 +1290,114 @@ void HistoryView::copyMarkdown(const PlanReport& report) {
     emit toast(tr("Informe copiado al portapapeles"), theme::Cyan);
 }
 
+void HistoryView::pickCaseForCycle(const PlanReport& report) {
+    // Los del proyecto que el ciclo no tiene; los obsoletos ya no se ejecutan.
+    QList<Choice> choices;
+    for (const auto& c : m_cases.cases())
+        if (!report.plan.caseIds.contains(c.id) && c.status != CaseStatus::Obsoleto)
+            choices << Choice{c.id, c.title.isEmpty() ? tr("(sin título)") : c.title, c.suite};
+    if (choices.isEmpty()) {
+        emit toast(tr("El ciclo ya tiene todos los casos del proyecto"), theme::Amber);
+        return;
+    }
+    auto* dialog = new ChoiceDialog(tr("Añadir caso al ciclo"), tr("Cargando los casos…"),
+                                    [choices](const ChoiceDialog::Loaded& done) { done(choices, {}); }, QString(), this);
+    dialog->setObjectName(QStringLiteral("addCaseToCycleDialog"));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &ChoiceDialog::chosen, this, [this, planRunId = report.plan.id](const QString& id) { emit runInCycleRequested(planRunId, {id}); });
+    dialog->open();
+}
+
+void HistoryView::pickRunForCycle(const PlanReport& report) {
+    // Lo ejecutado fuera de este ciclo, lo más reciente primero. Las traídas no se ofrecen: se trae la
+    // original, que es la que tiene sus evidencias y sus bugs.
+    QList<Choice> choices;
+    for (auto it = m_history.runs().crbegin(); it != m_history.runs().crend(); ++it) {
+        const RunRecord& r = *it;
+        if (r.planRunId == report.plan.id || r.imported || !m_cases.find(r.caseId)) continue;
+        const QString title = r.caseTitle.isEmpty() ? r.caseId : QStringLiteral("%1 · %2").arg(r.caseId, r.caseTitle);
+        const QString where = r.planRunId.isEmpty() ? tr("suelta") : tr("ciclo %1").arg(r.planRunId);
+        choices << Choice{r.id, title, tr("%1 · %2 · %3").arg(label(r.verdict), when(r.finishedAt), where)};
+    }
+    if (choices.isEmpty()) {
+        emit toast(tr("No hay ejecuciones de fuera de este ciclo que traer"), theme::Amber);
+        return;
+    }
+    auto* dialog = new ChoiceDialog(tr("Traer ejecución al ciclo"), tr("Cargando las ejecuciones…"),
+                                    [choices](const ChoiceDialog::Loaded& done) { done(choices, {}); }, QString(), this);
+    dialog->setObjectName(QStringLiteral("importRunDialog"));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &ChoiceDialog::chosen, this, [this, planRunId = report.plan.id](const QString& runId) { importRun(planRunId, runId); });
+    dialog->open();
+}
+
+void HistoryView::importRun(const QString& planRunId, const QString& runId) {
+    if (!m_run) return;
+    const QList<RunRecord> added = m_run->importIntoCycle(planRunId, {runId});
+    if (added.isEmpty()) {
+        emit toast(tr("No se pudo traer %1: ya está en el ciclo o el ciclo no ha terminado").arg(runId), theme::Amber);
+        return;
+    }
+    const RunRecord& rec = added.first();
+    // Que se vea lo que se trajo: el caso, en el informe.
+    m_selectedCase = rec.caseId;
+    refreshDetail();
+    const int evidence = int(m_history.evidenceOf(rec).size());
+    const int bugs = int(m_history.bugsOfRun(rec).size());
+    QString message = tr("%1 traída al ciclo como %2 · %3 evidencia(s), %4 bug(s)").arg(runId, rec.id).arg(evidence).arg(bugs);
+    if (const PlanRun* plan = m_history.findPlan(planRunId); plan && plan->isPublished()) message += tr(" · usa «Actualizar en Zephyr» para subirla");
+    emit toast(message, theme::Green);
+}
+
+void HistoryView::removeCaseFromCycle(const PlanReport& report, const QString& caseId) {
+    const PlanRun& plan = report.plan;
+    if (const QString why = m_history.cannotRemoveCase(plan.id, caseId); !why.isEmpty()) {
+        emit toast(why, theme::Amber);
+        return;
+    }
+    int runs = 0, evidence = 0;
+    const TestCase* c = m_cases.find(caseId);
+    for (const auto& r : m_history.runsForPlan(plan.id)) {
+        if (r.caseId != caseId) continue;
+        ++runs;
+        if (c) evidence += int(c->shotsOfRun(r.id).size());
+    }
+    QMessageBox box(QMessageBox::Warning, tr("Quitar del ciclo"), tr("¿Quitar %1 del ciclo %2?").arg(caseId, plan.id), QMessageBox::NoButton, this);
+    box.setObjectName(QStringLiteral("removeCaseFromCycleBox"));
+    QString detail = runs == 0 ? tr("No llegó a ejecutarse en el ciclo: sólo sale de su lista.")
+                     : runs == 1 ? tr("Se eliminará su ejecución en este ciclo") : tr("Se eliminarán sus %1 ejecuciones en este ciclo").arg(runs);
+    if (runs > 0) {
+        if (evidence == 1) detail += tr(" y la evidencia tomada en ella, que se borra del disco");
+        else if (evidence > 1) detail += tr(" y las %1 evidencias tomadas en ellas, que se borran del disco").arg(evidence);
+        detail += tr(". Sus bugs se conservan en el libro de bugs.");
+    }
+    if (plan.isPublished()) detail += tr(" En el ciclo %1 de Zephyr el caso sigue: quítalo allí a mano.").arg(plan.zephyrCycleId);
+    detail += tr(" Esta acción no se puede deshacer.");
+    box.setInformativeText(detail);
+    auto* remove = box.addButton(tr("Quitar"), QMessageBox::DestructiveRole);
+    remove->setObjectName(QStringLiteral("confirmRemoveCase"));
+    box.addButton(tr("Cancelar"), QMessageBox::RejectRole);
+    box.exec();
+    if (box.clickedButton() != remove) return;
+
+    m_selectedCase.clear();   // el informe elige otro caso al repintarse
+    if (!m_history.removeCaseFromCycle(plan.id, caseId)) return;
+    emit toast(tr("%1 quitado del ciclo %2").arg(caseId, plan.id), theme::Cyan);
+}
+
 void HistoryView::deletePlan(const PlanReport& report) {
     const PlanRun& plan = report.plan;
     const QList<RunRecord> runs = m_history.runsForPlan(plan.id);
+    // Lo que otro ciclo trajo de éste depende de sus ejecuciones (sus evidencias son las de aquí).
+    QStringList ids;
+    for (const auto& r : runs) ids << r.id;
+    if (const QList<RunRecord> dependents = m_history.dependentsOf(ids); !dependents.isEmpty()) {
+        const RunRecord& d = dependents.first();
+        emit toast(tr("No se puede eliminar: la ejecución %1 de este ciclo se usa en %2 (%3). Quítala de allí antes")
+                       .arg(d.continuesRunId, d.planRunId.isEmpty() ? tr("una ejecución suelta") : tr("el ciclo %1").arg(d.planRunId), d.id),
+                   theme::Amber);
+        return;
+    }
     int evidence = 0;
     for (const auto& r : runs) if (const TestCase* c = m_cases.find(r.caseId)) evidence += c->shotsOfRun(r.id).size();
 

@@ -505,16 +505,7 @@ void MainWindow::continueCycleRun(const QString& planRunId) {
         showToast(tr("A ese ciclo no le queda ningún caso por terminar"), theme::Amber);
         return;
     }
-    CycleStartDialog::Setup setup = cycleSetup(report.plan.planId, report.plan.name);
-    // Continuar es seguir con el mismo ciclo, en su ambiente: no se cambia. Sólo un ciclo que no lo
-    // anotó deja elegirlo, y se queda con el que se elija.
-    if (!report.plan.environment.trimmed().isEmpty()) setup.environment = report.plan.environment.trimmed();
-    if (setup.phases || !setup.environment.trimmed().isEmpty()) {
-        setup.phases = false;
-        setup.fixedEnvironment = true;
-        setup.blocked.clear();
-        setup.notes.clear();
-    }
+    CycleStartDialog::Setup setup = reopenSetup(report);
     const int broken = int(report.brokenCaseIds().size());
     setup.continuation = tr("Continúa el ciclo %1: se ejecutan sus %2 caso(s) por terminar —%3 roto(s), desde el paso que "
                             "se rompió, y %4 sin ejecutar o añadido(s) al plan después, enteros—. Es el mismo ciclo: lo "
@@ -527,6 +518,61 @@ void MainWindow::continueCycleRun(const QString& planRunId) {
     auto* dialog = new CycleStartDialog(setup, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, planRunId, dialog, planCases]() { beginContinuation(planRunId, dialog->environment(), planCases); });
+    dialog->open();
+    updateActions();
+}
+
+CycleStartDialog::Setup MainWindow::reopenSetup(const PlanReport& report) const {
+    CycleStartDialog::Setup setup = cycleSetup(report.plan.planId, report.plan.name);
+    // Reabrir es seguir con el mismo ciclo, en su ambiente: no se cambia. Sólo un ciclo que no lo
+    // anotó deja elegirlo, y se queda con el que se elija.
+    if (!report.plan.environment.trimmed().isEmpty()) setup.environment = report.plan.environment.trimmed();
+    if (setup.phases || !setup.environment.trimmed().isEmpty()) {
+        setup.phases = false;
+        setup.fixedEnvironment = true;
+        setup.blocked.clear();
+        setup.notes.clear();
+    }
+    return setup;
+}
+
+void MainWindow::runInCycle(const QString& planRunId, const QStringList& caseIds) {
+    if (!m_ctx.run->state().caseId.isEmpty()) {
+        showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
+        return;
+    }
+    if (m_ctx.evidence->isRecording() || m_ctx.evidence->isCountingDown() || m_ctx.evidence->isBusy()) {
+        showToast(tr("Espera a que termine la captura"), theme::Amber);
+        return;
+    }
+    const PlanReport report = m_ctx.history->report(planRunId);
+    if (!report.plan.isFinished() || caseIds.isEmpty()) return;
+    QStringList names;
+    for (const auto& id : caseIds) {
+        const TestCase* c = m_ctx.cases->find(id);
+        names << (c && !c->title.trimmed().isEmpty() ? QStringLiteral("%1 · %2").arg(id, c->title.trimmed()) : id);
+    }
+    CycleStartDialog::Setup setup = reopenSetup(report);
+    setup.continuation = tr("Se ejecuta en el ciclo %1: %2. Es el mismo ciclo: lo ya probado, sus capturas y sus bugs se "
+                            "conservan, y lo que se ejecute ahora sustituye en el informe a lo que el caso tenía%3.")
+                             .arg(planRunId, names.join(QStringLiteral(", ")),
+                                  report.plan.isPublished() ? tr("; después, actualiza su ciclo de Zephyr desde el informe") : QString());
+    auto* dialog = new CycleStartDialog(setup, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &QDialog::accepted, this, [this, planRunId, dialog, caseIds]() {
+        // Como al arrancar: entre la pregunta y la respuesta puede haber empezado otra ejecución.
+        if (!m_ctx.run->state().caseId.isEmpty()) {
+            showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
+            return;
+        }
+        if (!m_ctx.run->runInCycle(planRunId, caseIds, dialog->environment())) {
+            showToast(tr("No se pudo ejecutar en el ciclo: el caso ya no está en el proyecto"), theme::Amber);
+            return;
+        }
+        if (const PlanRun* cycle = m_ctx.history->findPlan(m_ctx.run->planRunId()); cycle && !cycle->planId.isEmpty())
+            m_ctx.plan->setActive(cycle->planId);
+        navigateInto(Screen::Run);
+    });
     dialog->open();
     updateActions();
 }
@@ -863,6 +909,7 @@ void MainWindow::wireRun() {
 void MainWindow::wireHistory() {
     connect(m_history, &HistoryView::toast, this, &MainWindow::showToast);
     connect(m_history, &HistoryView::continueCycleRequested, this, &MainWindow::continueCycleRun);
+    connect(m_history, &HistoryView::runInCycleRequested, this, &MainWindow::runInCycle);
     connect(m_history, &HistoryView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
     connect(m_history, &HistoryView::openJiraRequested, this, &MainWindow::openTrackerIssue);
     connect(m_history, &HistoryView::openUrlRequested, this, [](const QString& url) { if (!url.isEmpty()) QDesktopServices::openUrl(QUrl(url)); });

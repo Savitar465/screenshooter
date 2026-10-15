@@ -3,6 +3,7 @@
 
 #include "support/AppFixture.h"
 
+#include <QSignalSpy>
 #include <QtTest>
 
 using namespace qaflow;
@@ -74,6 +75,110 @@ private slots:
         QCOMPARE(report.executed, 3);
         QCOMPARE(report.passed, 3);
         QVERIFY(!report.canContinue());
+    }
+
+    // ---- Ejecutar casos sueltos en un ciclo terminado ----------------------------------
+
+    // Un caso que el ciclo no tenía se añade a él (no a su plan) y se ejecuta entero; lo demás del
+    // ciclo se queda como estaba y el informe lo cuenta junto a lo anterior.
+    void runningANewCaseInAFinishedCycleAddsItToThatCycle() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Regresión"), QStringLiteral("PL-0001"), QStringLiteral("QA"));
+        const QString cycle = f.run.planRunId();
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+        f.run.finish();
+        QVERIFY(f.history.findPlan(cycle)->isFinished());
+        const int runsBefore = f.history.runs().size();
+        QSignalSpy started(&f.run, &RunController::planStarted);
+
+        QVERIFY(f.run.runInCycle(cycle, {QStringLiteral("TC-104")}));
+        QCOMPARE(started.count(), 1);
+        QCOMPARE(f.run.planRunId(), cycle);
+        QCOMPARE(f.history.plans().size(), 1);   // el mismo ciclo, reabierto
+        QVERIFY(!f.history.findPlan(cycle)->isFinished());
+        QCOMPARE(f.history.findPlan(cycle)->environment, QStringLiteral("QA"));
+        QCOMPARE(f.history.findPlan(cycle)->caseIds, (QStringList{QStringLiteral("TC-101"), QStringLiteral("TC-104")}));
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-104"));
+        QVERIFY(f.run.continuesRunId().isEmpty());   // entero
+        QVERIFY(!f.run.isReviewing());
+        QCOMPARE(f.run.queuedCount(), 0);
+
+        while (!f.run.state().finished) f.run.mark(StepResult::Fail);
+        QVERIFY(!f.run.finish());
+        QCOMPARE(f.history.runs().size(), runsBefore + 1);
+        const PlanReport report = f.history.report(cycle);
+        QVERIFY(report.plan.isFinished());
+        QCOMPARE(report.executed, 2);
+        QCOMPARE(report.passed, 1);
+        QCOMPARE(report.brokenCaseIds(), QStringList{QStringLiteral("TC-104")});
+    }
+
+    // Uno ya superado se abre en revisión: sin cambiar nada no deja otra ejecución; cambiando un
+    // veredicto, la nueva sustituye a la archivada en el informe. Uno roto se retoma en su paso.
+    void runningExecutedCasesInAFinishedCycleReviewsOrResumesThem() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-102")}, QStringLiteral("Regresión"), QStringLiteral("PL-0001"));
+        const QString cycle = f.run.planRunId();
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);   // TC-101 superado
+        f.run.finish();
+        f.run.mark(StepResult::Pass);                                   // TC-102 falla en el paso 2
+        f.run.mark(StepResult::Fail);
+        f.run.finish();
+        const QString passedRun = f.history.report(cycle).rows[0].run.id;
+        const int runsBefore = f.history.runs().size();
+
+        // En revisión y sin tocar: el ciclo vuelve a cerrarse sin ejecuciones nuevas.
+        QVERIFY(f.run.runInCycle(cycle, {QStringLiteral("TC-101")}));
+        QVERIFY(f.run.isReviewing());
+        QCOMPARE(f.run.state().reviewOf, passedRun);
+        QCOMPARE(f.run.state().idx, 0);
+        QVERIFY(f.run.state().allMarked());
+        QVERIFY(f.run.reviewUntouched());
+        f.run.finish();
+        QVERIFY(f.history.findPlan(cycle)->isFinished());
+        QCOMPARE(f.history.runs().size(), runsBefore);
+        QCOMPARE(f.history.report(cycle).rows[0].run.id, passedRun);
+
+        // Los dos a la vez, en el orden pedido: el roto se retoma en el paso 2 y el superado se revisa.
+        QVERIFY(f.run.runInCycle(cycle, {QStringLiteral("TC-102"), QStringLiteral("TC-101"), QStringLiteral("TC-NOPE")}));
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-102"));
+        QVERIFY(!f.run.isReviewing());
+        QCOMPARE(f.run.state().idx, 1);
+        QVERIFY(f.run.state().results[0].inherited);
+        QCOMPARE(f.run.queuedCount(), 1);
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.finish());   // pasa a TC-101, en revisión
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-101"));
+        QVERIFY(f.run.isReviewing());
+        f.run.setResult(2, StepResult::Fail);   // se corrige un veredicto
+        QVERIFY(!f.run.finish());
+        const PlanReport report = f.history.report(cycle);
+        QVERIFY(report.plan.isFinished());
+        QVERIFY(report.rows[0].run.id != passedRun);
+        QCOMPARE(static_cast<int>(report.rows[0].run.verdict), static_cast<int>(Verdict::Fallido));
+        QCOMPARE(static_cast<int>(report.rows[1].run.verdict), static_cast<int>(Verdict::Superado));
+        QCOMPARE(report.plan.caseIds.size(), 2);   // ningún caso de más
+
+        // «Repetir» sobre la revisión ejecuta el caso entero: la revisión se consume al abrirla.
+        QVERIFY(f.run.runInCycle(cycle, {QStringLiteral("TC-102")}));
+        QVERIFY(f.run.isReviewing());
+        f.run.restart();
+        QVERIFY(!f.run.isReviewing());
+        QVERIFY(!f.run.state().isMarked(0));
+        f.run.abandon();
+    }
+
+    void runningInACycleThatIsNotFinishedOrWithoutCasesIsRefused() {
+        AppFixture f;
+        QVERIFY(!f.run.runInCycle(QStringLiteral("PR-9999"), {QStringLiteral("TC-101")}));
+        f.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        QVERIFY(!f.run.runInCycle(cycle, {QStringLiteral("TC-102")}));   // sigue en curso
+        f.run.abandon();
+        QVERIFY(f.history.findPlan(cycle)->isFinished());
+        QVERIFY(!f.run.runInCycle(cycle, {}));
+        QVERIFY(!f.run.runInCycle(cycle, {QStringLiteral("TC-NOPE")}));
+        QVERIFY(f.history.findPlan(cycle)->isFinished());   // no se reabrió para nada
     }
 
     // Lo que ya tenía el ciclo sigue siendo suyo al continuarlo: las evidencias de lo superado, las de

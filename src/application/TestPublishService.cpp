@@ -18,16 +18,26 @@ TestPublishService::TestPublishService(std::shared_ptr<ITestManagement> zephyr, 
     : QObject(parent), m_zephyr(std::move(zephyr)), m_cases(cases), m_history(history), m_settings(settings), m_bugs(bugs) {}
 
 QList<PublishDefect> TestPublishService::defectsOf(const PlanReport& report, const QString& caseId, const QString& runId) const {
+    // De qué ejecución se trajo la que se publica (y las que aquélla retomaba): sus bugs salieron de
+    // otro ciclo, pero son los de su veredicto, y sus pasos son los de ésta.
+    QList<const RunRecord*> imported;
+    bool through = false;
+    for (const RunRecord* r = m_history.findRun(runId); r && imported.size() < 100;) {
+        if (through) imported << r;
+        through = through || r->imported;
+        r = r->continuesRunId.isEmpty() ? nullptr : m_history.findRun(r->continuesRunId);
+    }
     // Los bugs de ese caso que salieron de este ciclo, con la misma regla con la que el informe los
     // enseña (`PlanReport::foundIn`): lo que se ve en la pantalla es lo que se sube.
     QList<PublishDefect> defects;
     for (const auto& bug : m_bugs.issues()) {
         if (bug.caseId != caseId || bug.key.trimmed().isEmpty()) continue;
-        if (!PlanReport::foundIn(report.plan, bug)) continue;
+        const bool fromImport = std::any_of(imported.cbegin(), imported.cend(), [&bug](const RunRecord* r) { return PlanReport::foundIn(*r, bug); });
+        if (!fromImport && !PlanReport::foundIn(report.plan, bug)) continue;
         // El paso es el de la ejecución de la que salió el bug. Si fue otra (el caso se repitió en el
         // ciclo y se publica la última), el bug va sólo a la ejecución. Los que no anotaron su
         // ejecución conservan su paso, como antes.
-        const bool otherRun = !bug.runId.trimmed().isEmpty() && bug.runId != runId;
+        const bool otherRun = !fromImport && !bug.runId.trimmed().isEmpty() && bug.runId != runId;
         defects << PublishDefect{bug.key.trimmed(), otherRun ? 0 : bug.step};
     }
     return defects;

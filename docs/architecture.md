@@ -26,12 +26,16 @@ src/
 │   │                      deshacer de un nivel para borrados
 │   ├── CaseTransferService importación y exportación de casos a ficheros
 │   ├── RunController      ejecución paso a paso (y cola de casos para el plan); archiva cada
-│   │                      ejecución terminada en el historial y guarda la que está en curso
-│   ├── RunHistoryStore    historial de ejecuciones y de planes; genera el PlanReport
+│   │                      ejecución terminada en el historial y guarda la que está en curso; reabre un
+│   │                      ciclo terminado para continuarlo o para ejecutar en él casos sueltos
+│   ├── RunHistoryStore    historial de ejecuciones y de planes; genera el PlanReport; trae a un ciclo
+│   │                      ejecuciones hechas fuera (heredándolas, con sus evidencias y bugs) y quita casos
+│   │                      de un ciclo terminado
 │   ├── PlanStore          colección de planes, plan activo, orden de ejecución, ciclos y estimación
 │   ├── SettingsStore      ajustes del gestor (token en ISecretStore), de captura y generales (idioma, tema, bandeja)
 │   ├── EvidenceService    evidencias: captura (con cuenta atrás), grabación GIF, ficheros adjuntos,
-│   │                      portapapeles y sustitución de la imagen anotada; único sitio que toca ficheros
+│   │                      portapapeles y sustitución de la imagen anotada; añadir y quitar evidencias de
+│   │                      una ejecución ya archivada (desde el historial); único sitio que toca ficheros
 │   ├── BugReportService   borrador de bug, envío al gestor, cola offline, estados y metadatos
 │   ├── BugStore           libro de bugs: issues enlazados a la ejecución de la que salieron y cola de pendientes
 │   ├── IssueStore         issues de QA: los planes que prueban cada requerimiento (y los casos y ciclos que
@@ -462,6 +466,13 @@ volver a darle veredicto lo hace de esta ejecución. Si el caso se editó desde 
 nada a partir del primer paso que ya no diga lo mismo: lo que cambió hay que probarlo. El cronómetro
 siempre empieza de cero —el tiempo es el de ahora— y la ejecución archivada recuerda a cuál retoma
 (`RunRecord::continuesRunId`).
+
+Las evidencias de los pasos heredados no se copian: `RunHistoryStore::evidenceOf()` las toma de la
+ejecución original. Quitar una evidencia en el historial (`removeEvidence()`) sólo la quita de esa
+ejecución: si otra la tiene (la original, una continuación o una traída), se desvincula
+(`RunRecord::unlinkedShots`) y las que la tenían a través de ésta la conservan por su cuenta
+(`RunRecord::pinnedShots`), así que quitarla de la original no se la quita a las demás. El fichero sólo
+se borra cuando ya no la tiene ninguna, y borrar un ciclo respeta las que otras ejecuciones conservan.
 
 La pantalla de ejecución lo dice bajo la barra del caso: «CONTINUANDO EL CICLO PR-0003 · se repiten sólo
 los casos que fallaron o quedaron bloqueados» (los ciclos de continuación antiguos, «CONTINUANDO LA

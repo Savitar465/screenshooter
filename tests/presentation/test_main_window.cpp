@@ -3189,6 +3189,51 @@ private slots:
         QCOMPARE(f.app.run.state().caseId, f.app.plans.orderedCaseIds(planId).first());
     }
 
+    // Antes de arrancar se eligen los casos del ciclo: todos los del plan marcados, se desmarca uno y se
+    // añade otro del proyecto sólo para este ciclo. El plan no cambia.
+    void theCasesOfTheCycleAreChosenBeforeStarting() {
+        WindowFixture f;
+        const QString planId = f.app.plans.activeId();
+        const QStringList plan = f.app.plans.orderedCaseIds(planId);
+        QVERIFY(plan.size() >= 2);
+        QString extra;
+        for (const auto& c : f.app.store.cases())
+            if (!plan.contains(c.id) && c.status != CaseStatus::Obsoleto) { extra = c.id; break; }
+        QVERIFY(!extra.isEmpty());
+
+        f.window->navigate(Screen::Plan);
+        emit f.window->findChild<PlanView*>()->runPlanRequested(planId);   // «Ejecutar plan»
+        auto* dialog = f.window->findChild<CycleStartDialog*>();
+        QVERIFY(dialog);
+        auto* list = dialog->findChild<QListWidget*>(QStringLiteral("cycleStartCases"));
+        QVERIFY(list);
+        QCOMPARE(list->count(), plan.size());
+        for (int i = 0; i < list->count(); ++i) QCOMPARE(list->item(i)->checkState(), Qt::Checked);
+        auto* count = dialog->findChild<QLabel*>(QStringLiteral("cycleStartCaseCount"));
+        QCOMPARE(count->text(), QStringLiteral("%1 de %1 casos").arg(plan.size()));
+
+        // Sin ninguno marcado no se arranca.
+        auto* accept = dialog->findChild<QPushButton*>(QStringLiteral("cycleStartAccept"));
+        dialog->findChild<QPushButton*>(QStringLiteral("cycleStartNone"))->click();
+        QVERIFY(!accept->isEnabled());
+        dialog->findChild<QPushButton*>(QStringLiteral("cycleStartAll"))->click();
+        QVERIFY(accept->isEnabled());
+
+        list->item(1)->setCheckState(Qt::Unchecked);
+        dialog->addCase(extra);
+        QCOMPARE(list->count(), plan.size() + 1);
+        QVERIFY(dialog->findChild<QCheckBox*>(QStringLiteral("cycleStartAddToPlan"))->isVisibleTo(dialog));
+        QVERIFY(f.answerCycleDialog());
+
+        const PlanRun* cycle = f.app.history.findPlan(f.app.run.planRunId());
+        QVERIFY(cycle);
+        QVERIFY(!cycle->caseIds.contains(plan.at(1)));
+        QCOMPARE(cycle->excludedCaseIds, QStringList{plan.at(1)});
+        QCOMPARE(cycle->caseIds.last(), extra);
+        QCOMPARE(cycle->addedCaseIds, QStringList{extra});
+        QCOMPARE(f.app.plans.orderedCaseIds(planId), plan);   // el plan sigue igual
+    }
+
     // Un requerimiento que sólo se prueba en PRE: desde el menú «Fases…» se quita QA, y la pista y el
     // ciclo que se arranque son de PRE.
     void anIssueCanBeTestedOnlyInPre() {

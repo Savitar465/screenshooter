@@ -41,6 +41,12 @@ class Toast;
 class BusyIndicator;
 class FlashOverlay;
 
+/// Qué casos ejecuta el ciclo que se arranca, tal como se eligieron en `CycleStartDialog`.
+struct CycleSelection {
+    QStringList caseIds;    // en orden; vacío = el plan entero. Lo excluido y lo añadido sale de comparar con el plan
+    bool addToPlan = false; // los añadidos entran también al plan
+};
+
 /// Ventana principal: menú, rail de navegación, pila de pantallas y barra de estado. Coordina la navegación entre vistas,
 /// los atajos globales, el icono de la bandeja y los avisos globales (toast, destello de captura,
 /// fallos de guardado).
@@ -141,10 +147,14 @@ private:
     CycleStartDialog::Setup cycleSetup(const QString& planId, const QString& planName) const;
     /// Pregunta en qué ambiente se va a probar y, si se acepta, arranca el ciclo (`beginPlanRun`).
     void askCycleEnvironment(const QString& planId, const QString& planName);
+    /// Llena en `setup` los casos que se eligen al arrancar un ciclo de ese plan: los del plan, con cómo
+    /// quedaron en su último ciclo terminado, y los del proyecto que se pueden añadir.
+    void addCaseChoices(CycleStartDialog::Setup& setup, const QString& planId) const;
     /// Arranca el ciclo del plan en ese ambiente y lleva a la ejecución.
     /// `approve`: el issue cuya revisión abierta se cierra como aprobada en su fase antes de arrancar,
-    /// porque el ciclo se arranca en la fase siguiente (vacío = ninguno).
-    void beginPlanRun(const QString& planId, const QString& environment, const QString& approve = QString());
+    /// porque el ciclo se arranca en la fase siguiente (vacío = ninguno). `selection`: los casos elegidos.
+    void beginPlanRun(const QString& planId, const QString& environment, const QString& approve = QString(),
+                      const CycleSelection& selection = {});
     /// Continúa un ciclo terminado con sus casos fallados y bloqueados: comprueba que se puede,
     /// pregunta el ambiente y arranca la continuación.
     /// «+ Nuevo caso» de la ejecución: lo escribe en una ventana y lo añade al plan del ciclo en curso.

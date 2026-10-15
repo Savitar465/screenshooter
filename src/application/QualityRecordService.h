@@ -77,6 +77,9 @@ public:
 
     /// Casos que prueban el issue: los de su plan.
     QStringList caseIdsOf(const Issue& issue) const;
+    /// Casos que la ronda tiene que probar: los del plan y los que sus ciclos añadieron sólo para ellos,
+    /// menos los que sus ciclos dejaron fuera al arrancar (`PlanRun::excludedCaseIds`) y ninguno ejecuta.
+    QStringList revisionCaseIds(const Issue& issue, int revision = 0) const;
     /// Ejecuciones de la ronda, la más reciente primero.
     QList<RunRecord> revisionRuns(const Issue& issue, int revision = 0) const;
     /// Bugs reportados desde los casos del issue durante esa ronda (de cuándo se abrió a cuándo se

@@ -115,7 +115,7 @@ public:
     /// el paso de Zephyr de la publicación. Al final enlaza los Tests al issue del gestor.
     void uploadPlan(const QString& issueId, bool sync, std::function<void(const PlanUploaded&)> done);
     /// Arrancó un ciclo de plan: si es de un issue y Zephyr está activo, deja preparado el ciclo de su fase
-    /// con todos los casos del plan, sin resultados, y avisa con `planCyclePrepared`.
+    /// con los casos del ciclo (sin los que se dejaron fuera al arrancarlo), sin resultados, y avisa con `planCyclePrepared`.
     void prepareStartedCycle(const QString& planRunId);
 
     struct Options {

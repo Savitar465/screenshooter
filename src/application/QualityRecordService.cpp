@@ -34,6 +34,22 @@ QDateTime QualityRecordService::revisionEnd(const Issue& issue, int revision) co
 
 QStringList QualityRecordService::caseIdsOf(const Issue& issue) const { return IssueStore::caseIdsOf(issue, m_plans); }
 
+QStringList QualityRecordService::revisionCaseIds(const Issue& issue, int revision) const {
+    QStringList out = caseIdsOf(issue);
+    QSet<QString> included, excluded;
+    for (const auto& cycle : IssueStore::cyclesOfRevision(issue, m_history, revisionNumber(issue, revision))) {
+        for (const auto& id : cycle.caseIds) {
+            included.insert(id);
+            if (!out.contains(id)) out << id;
+        }
+        for (const auto& id : cycle.excludedCaseIds) excluded.insert(id);
+    }
+    // Lo que se dejó fuera de un ciclo no se le exige a la ronda, salvo que otro ciclo suyo lo tenga.
+    out.erase(std::remove_if(out.begin(), out.end(), [&](const QString& id) { return excluded.contains(id) && !included.contains(id); }),
+              out.end());
+    return out;
+}
+
 int QualityRecordService::revisionNumber(const Issue& issue, int revision) const {
     const IssueRevision* round = issue.revision(revision);
     return round ? round->number : 0;
@@ -75,7 +91,7 @@ QList<IssueLink> QualityRecordService::revisionBugs(const Issue& issue, int revi
 IssueProgress QualityRecordService::progressFor(const QString& issueId, int revision) const {
     const Issue* issue = m_issues.find(issueId);
     if (!issue) return {};
-    return issueProgress(caseIdsOf(*issue), m_cases.cases(), revisionRuns(*issue, revision), m_bugs.issues(),
+    return issueProgress(revisionCaseIds(*issue, revision), m_cases.cases(), revisionRuns(*issue, revision), m_bugs.issues(),
                          revisionStart(*issue, revision));
 }
 

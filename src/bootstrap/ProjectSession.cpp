@@ -69,7 +69,7 @@ ProjectSession::ProjectSession(ProjectStore& projects, const QString& id, std::s
                          const IssueStore::RevisionRef started = store->notePlanStarted(planId, cycle ? cycle->environment : QString());
                          if (!started.isEmpty()) log->noteCycleRevision(planRunId, started.issueId, started.revision);
                      });
-    // Y el plan sube a Zephyr al arrancarlo: el ciclo de su fase queda con todos sus casos, sin ejecutar,
+    // Y el plan sube a Zephyr al arrancarlo: el ciclo de su fase queda con los casos del ciclo, sin ejecutar,
     // para que desde Zephyr se vea qué se va a probar. Después del de arriba: el ciclo ya sabe su issue.
     QObject::connect(run.get(), &RunController::planStarted, revisionPublish.get(),
                      [service = revisionPublish.get()](const QString& planRunId, const QString&) { service->prepareStartedCycle(planRunId); });

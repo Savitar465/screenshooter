@@ -47,7 +47,8 @@ Testing issueInTesting(AppFixture& f) {
 /// Añade al historial un ciclo de ese plan con sus resultados y en esa fecha (así se pueden colocar
 /// ciclos antes y después de que empiece la revisión) y devuelve su id.
 QString addCycle(AppFixture& f, const QString& planId, const QString& name, const QDateTime& startedAt,
-                 const QList<QPair<QString, Verdict>>& results, const QString& zephyrCycleId = QString()) {
+                 const QList<QPair<QString, Verdict>>& results, const QString& zephyrCycleId = QString(),
+                 const QStringList& excluded = {}) {
     RunHistory history = f.historyRepo->history.value_or(RunHistory{});
     PlanRun plan;
     plan.id = QStringLiteral("PR-%1").arg(history.plans.size() + 1);
@@ -56,6 +57,7 @@ QString addCycle(AppFixture& f, const QString& planId, const QString& name, cons
     plan.startedAt = startedAt;
     plan.finishedAt = startedAt.addSecs(3600);
     plan.zephyrCycleId = zephyrCycleId;
+    plan.excludedCaseIds = excluded;
     if (!zephyrCycleId.isEmpty()) plan.publishedAt = startedAt.addSecs(4000);
     int n = history.runs.size();
     for (const auto& [caseId, verdict] : results) {
@@ -116,6 +118,25 @@ private slots:
         QCOMPARE(progress.failed, 1);
         QVERIFY(progress.suggested == QaOutcome::Observado);
         QVERIFY(progress.canClose());
+    }
+
+    // Un caso que el ciclo dejó fuera al arrancarlo no se le exige a la revisión: con el resto superado,
+    // queda conforme. Si otro ciclo de la ronda lo tiene, vuelve a contar.
+    void aCaseExcludedFromTheCycleIsNotRequiredByTheRevision() {
+        AppFixture f;
+        const Testing t = issueInTesting(f);
+        const QDateTime now = QDateTime::currentDateTime();
+        addCycle(f, t.planId, QStringLiteral("PRE"), now.addSecs(60), {{QStringLiteral("TC-101"), Verdict::Superado}}, QString(),
+                 {QStringLiteral("TC-102")});
+        IssueProgress progress = f.records.progressFor(t.issueId);
+        QCOMPARE(progress.cases, 1);
+        QCOMPARE(progress.notRun(), 0);
+        QVERIFY(progress.suggested == QaOutcome::Conforme);
+
+        addCycle(f, t.planId, QStringLiteral("Otra"), now.addSecs(3600), {{QStringLiteral("TC-102"), Verdict::Fallido}});
+        progress = f.records.progressFor(t.issueId);
+        QCOMPARE(progress.cases, 2);
+        QCOMPARE(progress.failed, 1);
     }
 
     // Con varias ejecuciones en la misma revisión, el acta se levanta con la que se elija.

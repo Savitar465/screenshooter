@@ -426,7 +426,8 @@ CycleStartDialog::Setup MainWindow::cycleSetup(const QString& planId, const QStr
 void MainWindow::askCycleEnvironment(const QString& planId, const QString& planName) {
     // El ambiente se pregunta al arrancar porque es de este ciclo, no del plan: el mismo plan se prueba
     // en QA y luego en PRE, y cada ejecución tiene que decir de dónde salieron sus resultados.
-    const CycleStartDialog::Setup setup = cycleSetup(planId, planName);
+    CycleStartDialog::Setup setup = cycleSetup(planId, planName);
+    addCaseChoices(setup, planId);
     // Las fases con nota son las que se alcanzan aprobando la revisión abierta.
     const QString issueId = m_ctx.issues->nextCycleContext(planId).issueId;
     const QStringList approving = setup.notes.keys();
@@ -434,13 +435,41 @@ void MainWindow::askCycleEnvironment(const QString& planId, const QString& planN
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, planId, dialog, issueId, approving]() {
         const QString environment = dialog->environment();
-        beginPlanRun(planId, environment, approving.contains(environment) ? issueId : QString());
+        const CycleSelection selection{dialog->caseIds(), dialog->addToPlan()};
+        beginPlanRun(planId, environment, approving.contains(environment) ? issueId : QString(), selection);
     });
     dialog->open();
     updateActions();
 }
 
-void MainWindow::beginPlanRun(const QString& planId, const QString& environment, const QString& approve) {
+void MainWindow::addCaseChoices(CycleStartDialog::Setup& setup, const QString& planId) const {
+    // Junto a cada caso, cómo quedó en el último ciclo terminado del plan: es lo que decide qué repetir.
+    const PlanRun* previous = nullptr;
+    for (auto it = m_ctx.history->plans().crbegin(); it != m_ctx.history->plans().crend() && !previous; ++it)
+        if (it->planId == planId && it->isFinished()) previous = &*it;
+    QHash<QString, QString> hints;
+    if (previous) {
+        setup.previousCycle = previous->environment.trimmed().isEmpty()
+                                  ? previous->id
+                                  : QStringLiteral("%1 · %2").arg(previous->id, previous->environment.trimmed());
+        for (const auto& row : m_ctx.history->report(previous->id).rows)
+            hints.insert(row.caseId, row.executed ? label(row.run.verdict) : tr("sin ejecutar"));
+        for (const auto& id : previous->excludedCaseIds) hints.insert(id, tr("fuera del ciclo"));
+    }
+    const QStringList ids = m_ctx.plan->orderedCaseIds(planId);
+    for (const auto& id : ids) {
+        const TestCase* c = m_ctx.cases->find(id);
+        setup.cases << CycleStartDialog::Setup::CaseOption{id, c ? c->title : QString(),
+                                                           previous ? hints.value(id, tr("no estaba en el ciclo")) : QString()};
+    }
+    // Lo que se puede añadir: los del proyecto que el plan no tiene; los obsoletos ya no se ejecutan.
+    for (const auto& c : m_ctx.cases->cases())
+        if (!ids.contains(c.id) && c.status != CaseStatus::Obsoleto)
+            setup.catalog << CycleStartDialog::Setup::CaseOption{c.id, c.title, c.suite};
+}
+
+void MainWindow::beginPlanRun(const QString& planId, const QString& environment, const QString& approve,
+                              const CycleSelection& selection) {
     // Se vuelve a comprobar todo: entre la pregunta y la respuesta puede haber arrancado otra cosa.
     if (!m_ctx.run->state().caseId.isEmpty()) {
         showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
@@ -465,8 +494,27 @@ void MainWindow::beginPlanRun(const QString& planId, const QString& environment,
         else
             m_ctx.issues->closeRevision(approve, QaOutcome::Conforme);
     }
+    // Lo elegido al arrancar, sin lo que dejó de estar en el proyecto mientras se elegía. Sin elección
+    // (o si no queda nada de ella), el plan entero.
+    QStringList chosen;
+    for (const auto& id : selection.caseIds)
+        if (m_ctx.cases->find(id) && !chosen.contains(id)) chosen << id;
+    QStringList excluded, added;
+    if (!chosen.isEmpty()) {
+        for (const auto& id : ids)
+            if (!chosen.contains(id)) excluded << id;
+        for (const auto& id : chosen)
+            if (!ids.contains(id)) added << id;
+    } else {
+        chosen = ids;
+    }
+    // Los añadidos al plan son del plan: ya no son sólo de este ciclo.
+    if (selection.addToPlan && !added.isEmpty()) {
+        m_ctx.plan->addCases(planId, added);
+        added.clear();
+    }
     m_ctx.plan->setActive(planId);
-    m_ctx.run->startSequence(ids, plan->name, planId, environment);
+    m_ctx.run->startSequence(chosen, plan->name, planId, environment, excluded, added);
     navigateInto(Screen::Run);
 }
 

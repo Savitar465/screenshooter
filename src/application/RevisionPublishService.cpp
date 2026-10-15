@@ -380,7 +380,8 @@ void RevisionPublishService::prepareStartedCycle(const QString& planRunId) {
     const PlanRun* run = m_history.findPlan(planRunId);
     const Issue* issue = run && !run->issueId.isEmpty() ? m_issues.find(run->issueId) : nullptr;
     if (!issue || !canPrepareTests()) return;
-    const QStringList caseIds = m_records.caseIdsOf(*issue);
+    // Los del ciclo, no todo el plan: lo que se dejó fuera al arrancarlo no se va a probar en esta fase.
+    const QStringList caseIds = run->caseIds;
     if (caseIds.isEmpty()) return;
     // La fase es la del ciclo que arrancó: su ambiente o, si no lo dijo, la de su ronda.
     const QString phase = m_zephyr->phaseOf(m_history.report(planRunId));

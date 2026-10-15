@@ -2903,6 +2903,74 @@
         <source>Se propone la fase que le toca a la revisión; aprobada una fase desde el issue, se pasa a la siguiente.</source>
         <translation>The revision&apos;s phase is proposed; once a phase is approved from the issue, the next one follows.</translation>
     </message>
+    <message>
+        <source>CASOS DE ESTE CICLO</source>
+        <translation>CASES IN THIS CYCLE</translation>
+    </message>
+    <message>
+        <source>Desmarca los que no se van a probar en este ciclo: no salen del plan, sólo de este ciclo.</source>
+        <translation>Uncheck the ones that won't be tested in this cycle: they stay in the plan, they only leave this cycle.</translation>
+    </message>
+    <message>
+        <source>Desmarca los que no se van a probar en este ciclo: no salen del plan, sólo de este ciclo. Al lado, cómo quedó cada uno en %1.</source>
+        <translation>Uncheck the ones that won't be tested in this cycle: they stay in the plan, they only leave this cycle. Next to each one, how it ended in %1.</translation>
+    </message>
+    <message>
+        <source>Todos</source>
+        <translation>All</translation>
+    </message>
+    <message>
+        <source>Ninguno</source>
+        <translation>None</translation>
+    </message>
+    <message>
+        <source>Añadir caso…</source>
+        <translation>Add case…</translation>
+    </message>
+    <message>
+        <source>El plan ya tiene todos los casos del proyecto</source>
+        <translation>The plan already has every case in the project</translation>
+    </message>
+    <message>
+        <source>Añadir también al plan los casos añadidos</source>
+        <translation>Also add the added cases to the plan</translation>
+    </message>
+    <message>
+        <source>Sin marcar, los añadidos son sólo de este ciclo; marcado, los siguientes ciclos del plan también los tendrán.</source>
+        <translation>Unchecked, the added cases belong only to this cycle; checked, the plan's next cycles will have them too.</translation>
+    </message>
+    <message>
+        <source>añadido a este ciclo</source>
+        <translation>added to this cycle</translation>
+    </message>
+    <message>
+        <source>(sin título)</source>
+        <translation>(untitled)</translation>
+    </message>
+    <message>
+        <source>Añadir caso al ciclo</source>
+        <translation>Add case to cycle</translation>
+    </message>
+    <message>
+        <source>Cargando los casos…</source>
+        <translation>Loading cases…</translation>
+    </message>
+    <message>
+        <source>Ya están en la lista todos los casos del proyecto</source>
+        <translation>Every case in the project is already in the list</translation>
+    </message>
+    <message>
+        <source>%1 caso(s) · %2 añadido(s)</source>
+        <translation>%1 case(s) · %2 added</translation>
+    </message>
+    <message>
+        <source>%1 de %2 casos</source>
+        <translation>%1 of %2 cases</translation>
+    </message>
+    <message>
+        <source>Marca al menos un caso para arrancar el ciclo</source>
+        <translation>Check at least one case to start the cycle</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::DocumentReader</name>
@@ -6480,6 +6548,18 @@ Create another one anyway?</translation>
     <message>
         <source>No se pudo ejecutar en el ciclo: el caso ya no está en el proyecto</source>
         <translation>Couldn&apos;t run it in the cycle: the case is no longer in the project</translation>
+    </message>
+    <message>
+        <source>sin ejecutar</source>
+        <translation>not run</translation>
+    </message>
+    <message>
+        <source>fuera del ciclo</source>
+        <translation>left out of the cycle</translation>
+    </message>
+    <message>
+        <source>no estaba en el ciclo</source>
+        <translation>not in the cycle</translation>
     </message>
 </context>
 <context>

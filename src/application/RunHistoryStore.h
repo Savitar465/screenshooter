@@ -56,8 +56,11 @@ public:
 
     /// Abre una ejecución de plan y devuelve su id (vacío si no hay casos). `environment` es el
     /// ambiente en el que se va a probar ("QA", "Staging"…), que acompaña al ciclo hasta Zephyr.
+    /// `excluded` son los casos del plan que se dejaron fuera de este ciclo (`PlanRun::excludedCaseIds`)
+    /// y `added`, los que entran sólo en este ciclo sin estar en el plan (`PlanRun::addedCaseIds`).
     QString startPlan(const QString& name, const QStringList& caseIds, const QString& planId = QString(),
-                      const QString& environment = QString());
+                      const QString& environment = QString(), const QStringList& excluded = {},
+                      const QStringList& added = {});
     void finishPlan(const QString& planRunId);
     /// Vuelve a abrir un ciclo terminado para continuarlo: sigue siendo el mismo, con sus ejecuciones,
     /// sus evidencias, sus bugs y su ciclo de Zephyr, y lo que se repita ahora sustituye en el informe a
@@ -65,7 +68,8 @@ public:
     /// Falso si no existe o no había terminado.
     bool reopenPlan(const QString& planRunId, const QString& environment = QString());
     /// Cambia los casos del ciclo (`PlanRun::caseIds`): el ciclo en curso sigue a su plan cuando se le
-    /// añaden o se le quitan casos, y una continuación añade los que el plan ganó después.
+    /// añaden o se le quitan casos, y una continuación añade los que el plan ganó después. Un caso
+    /// excluido que vuelve al ciclo deja de estar excluido.
     void setPlanCases(const QString& planRunId, const QStringList& caseIds);
     /// Anota de qué control de calidad es el ciclo: el issue del requerimiento y la revisión que
     /// estaba abierta al arrancarlo. Lo llama quien coordina el arranque, en cuanto el issue abre su

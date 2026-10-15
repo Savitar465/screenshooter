@@ -124,6 +124,8 @@ private slots:
         p.zephyrCycleId = QStringLiteral("77"); p.publishedAt = r.finishedAt.addSecs(600);
         p.issueId = QStringLiteral("IS-0003"); p.revision = 2; p.environment = QStringLiteral("QA");
         p.continuesCycleId = QStringLiteral("PR-0000");
+        p.excludedCaseIds = {QStringLiteral("TC-105")};
+        p.addedCaseIds = {QStringLiteral("TC-106")};
         h.plans << p;
         QVERIFY(repo.saveHistory(h));
         const auto loaded = repo.loadHistory();
@@ -149,6 +151,9 @@ private slots:
         QCOMPARE(loaded->plans[0].environment, QStringLiteral("QA"));
         // Y a quién continúan el ciclo y la ejecución, que es lo que las ata a lo que se rompió.
         QCOMPARE(loaded->plans[0].continuesCycleId, QStringLiteral("PR-0000"));
+        // Y qué casos se dejaron fuera del ciclo o se le añadieron al arrancarlo.
+        QCOMPARE(loaded->plans[0].excludedCaseIds, QStringList{QStringLiteral("TC-105")});
+        QCOMPARE(loaded->plans[0].addedCaseIds, QStringList{QStringLiteral("TC-106")});
         QVERIFY(loaded->plans[0].isContinuation());
         QCOMPARE(loaded->runs[0].continuesRunId, QStringLiteral("R-0000"));
         QVERIFY(loaded->runs[0].imported);

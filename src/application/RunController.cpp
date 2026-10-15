@@ -177,13 +177,13 @@ void RunController::start(const QString& caseId) {
 }
 
 void RunController::startSequence(const QStringList& caseIds, const QString& planName, const QString& planId,
-                                  const QString& environment) {
+                                  const QString& environment, const QStringList& excluded, const QStringList& added) {
     if (caseIds.isEmpty()) return;
     commitRun(false);
     closePlan();
     m_resume.clear();   // un ciclo normal ejecuta sus casos enteros
     m_review.clear();
-    m_planRunId = m_history.startPlan(planName, caseIds, planId, environment);
+    m_planRunId = m_history.startPlan(planName, caseIds, planId, environment, excluded, added);
     m_queue = caseIds.mid(1);
     begin(caseIds.first());
     changed();
@@ -277,14 +277,16 @@ RunController::PlanSync RunController::syncPlanCases(const QStringList& planCase
     const PlanRun* cycle = m_planRunId.isEmpty() ? nullptr : m_history.findPlan(m_planRunId);
     if (!cycle) return sync;
     const QStringList before = cycle->caseIds;
-    // Lo que ya se tocó en el ciclo no sale: lo ejecutado, el caso en pantalla y los aparcados.
-    QSet<QString> touched;
+    // Lo que ya se tocó en el ciclo no sale: lo ejecutado, el caso en pantalla y los aparcados. Ni lo
+    // que se añadió al arrancarlo sólo para este ciclo: nunca fue del plan.
+    QSet<QString> touched(cycle->addedCaseIds.cbegin(), cycle->addedCaseIds.cend());
     for (const auto& run : m_history.runsForPlan(m_planRunId)) touched.insert(run.caseId);
     touched.insert(m_run.caseId);
     for (auto it = m_parked.cbegin(); it != m_parked.cend(); ++it) touched.insert(it.key());
 
+    // Lo que se dejó fuera al arrancar no entra aunque el plan lo tenga (o lo vuelva a tener).
     for (const auto& id : planCases)
-        if (!before.contains(id) && m_store.find(id)) sync.added << id;
+        if (!before.contains(id) && !cycle->excludedCaseIds.contains(id) && m_store.find(id)) sync.added << id;
     for (const auto& id : before)
         if (!planCases.contains(id) && !touched.contains(id)) sync.removed << id;
     if (sync.isEmpty()) return sync;

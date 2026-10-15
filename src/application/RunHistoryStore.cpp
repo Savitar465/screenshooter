@@ -160,13 +160,17 @@ bool RunHistoryStore::reachesImport(const RunRecord& run) const {
 }
 
 QString RunHistoryStore::startPlan(const QString& name, const QStringList& caseIds, const QString& planId,
-                                  const QString& environment) {
+                                  const QString& environment, const QStringList& excluded, const QStringList& added) {
     if (caseIds.isEmpty()) return {};
     PlanRun p;
     p.id = nextId(m_history.plans, QStringLiteral("PR-"));
     p.planId = planId;
     p.name = name;
     p.caseIds = caseIds;
+    for (const auto& id : excluded)
+        if (!caseIds.contains(id) && !p.excludedCaseIds.contains(id)) p.excludedCaseIds << id;
+    for (const auto& id : added)
+        if (caseIds.contains(id) && !p.addedCaseIds.contains(id)) p.addedCaseIds << id;
     p.environment = environment.trimmed();
     p.startedAt = QDateTime::currentDateTime();
     m_history.plans.append(p);
@@ -206,7 +210,11 @@ void RunHistoryStore::finishPlan(const QString& planRunId) {
 void RunHistoryStore::setPlanCases(const QString& planRunId, const QStringList& caseIds) {
     for (auto& p : m_history.plans) {
         if (p.id != planRunId) continue;
-        if (p.caseIds == caseIds) return;
+        const int excluded = int(p.excludedCaseIds.size());
+        p.excludedCaseIds.erase(std::remove_if(p.excludedCaseIds.begin(), p.excludedCaseIds.end(),
+                                               [&caseIds](const QString& id) { return caseIds.contains(id); }),
+                                p.excludedCaseIds.end());
+        if (p.caseIds == caseIds && p.excludedCaseIds.size() == excluded) return;
         p.caseIds = caseIds;
         persist();
         return;
@@ -367,7 +375,10 @@ std::optional<RunRecord> RunHistoryStore::importRun(const QString& planRunId, co
     rec.imported = true;
     for (auto& step : rec.steps) step.inherited = true;
     for (auto& p : m_history.plans)
-        if (p.id == planRunId && !p.caseIds.contains(rec.caseId)) p.caseIds << rec.caseId;
+        if (p.id == planRunId) {
+            if (!p.caseIds.contains(rec.caseId)) p.caseIds << rec.caseId;
+            p.excludedCaseIds.removeAll(rec.caseId);
+        }
     // No cambia la «última ejecución» del caso: no se ha vuelto a ejecutar.
     m_history.runs.append(rec);
     persist();

@@ -365,6 +365,53 @@ private slots:
         QVERIFY(!f.run.isQueued(QStringLiteral("TC-107")));
     }
 
+    // ---- Los casos se eligen al arrancar ------------------------------------------------------
+
+    // Lo que se dejó fuera al arrancar no entra aunque el ciclo siga a su plan, y lo añadido sólo para
+    // el ciclo no sale aunque el plan no lo tenga.
+    void theCasesChosenAtStartSurviveThePlanSync() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-106")}, QStringLiteral("Regresión"), QStringLiteral("PL-0001"),
+                            QStringLiteral("PRE"), {QStringLiteral("TC-107")}, {QStringLiteral("TC-106")});
+        const QString cycle = f.run.planRunId();
+        QCOMPARE(f.history.findPlan(cycle)->excludedCaseIds, QStringList{QStringLiteral("TC-107")});
+        QCOMPARE(f.history.findPlan(cycle)->addedCaseIds, QStringList{QStringLiteral("TC-106")});
+
+        // El plan sigue teniendo TC-103 y TC-107, y no TC-106.
+        QVERIFY(f.run.syncPlanCases({QStringLiteral("TC-103"), QStringLiteral("TC-107")}).isEmpty());
+        QVERIFY(!f.run.isQueued(QStringLiteral("TC-107")));
+        QVERIFY(f.run.isQueued(QStringLiteral("TC-106")));
+        QCOMPARE(f.history.findPlan(cycle)->caseIds, (QStringList{QStringLiteral("TC-103"), QStringLiteral("TC-106")}));
+
+        // Al terminar, continuarlo no ofrece lo excluido como si se hubiera añadido al plan después.
+        while (f.run.isRunning()) {
+            while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+            if (!f.run.finish()) break;
+        }
+        QVERIFY(f.history.findPlan(cycle)->isFinished());
+        const PlanReport report = f.history.report(cycle);
+        QCOMPARE(report.rows.size(), 2);   // lo excluido no está en el informe
+        QVERIFY(report.toContinue({QStringLiteral("TC-103"), QStringLiteral("TC-107")}).isEmpty());
+        // Y uno nuevo del plan sí se ofrece.
+        QCOMPARE(report.toContinue({QStringLiteral("TC-103"), QStringLiteral("TC-107"), QStringLiteral("TC-105")}),
+                 QStringList{QStringLiteral("TC-105")});
+    }
+
+    // Ejecutar en el ciclo un caso que se dejó fuera lo recupera: ya no está excluido.
+    void runningAnExcludedCaseInTheCycleBringsItBack() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-103")}, QStringLiteral("Regresión"), QStringLiteral("PL-0001"), QString(),
+                            {QStringLiteral("TC-107")});
+        const QString cycle = f.run.planRunId();
+        while (!f.run.state().finished) f.run.mark(StepResult::Pass);
+        f.run.finish();
+        QVERIFY(f.history.findPlan(cycle)->isFinished());
+
+        QVERIFY(f.run.runInCycle(cycle, {QStringLiteral("TC-107")}));
+        QVERIFY(f.history.findPlan(cycle)->caseIds.contains(QStringLiteral("TC-107")));
+        QVERIFY(f.history.findPlan(cycle)->excludedCaseIds.isEmpty());
+    }
+
     // Si el caso cambió desde aquella ejecución, lo de antes no se da por bueno: se prueba entero.
     void anEditedCaseIsNotResumedFromTheOldResults() {
         AppFixture f;

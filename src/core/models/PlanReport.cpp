@@ -27,8 +27,9 @@ QStringList PlanReport::toContinue(const QStringList& planCases) const {
         out << row.caseId;
     }
     // Lo que el plan tiene ahora y el ciclo no tenía al arrancar, en el orden del plan.
+    // Salvo lo que se dejó fuera del ciclo al arrancarlo: no es que se añadiera después.
     for (const auto& caseId : planCases)
-        if (!plan.caseIds.contains(caseId) && !out.contains(caseId)) out << caseId;
+        if (!plan.caseIds.contains(caseId) && !plan.excludedCaseIds.contains(caseId) && !out.contains(caseId)) out << caseId;
     return out;
 }
 

@@ -53,7 +53,7 @@ struct PlanReport {
     QStringList brokenCaseIds() const;
     /// Lo que repite una continuación del ciclo, en el orden del plan: los casos rotos (que se retoman en
     /// el paso que se rompió), los que el ciclo dejó sin ejecutar y, con `planCases` —lo que tiene hoy su
-    /// plan—, los que se añadieron al plan después de arrancarlo. Con `planCases`, lo que ya no está en el
+    /// plan—, los que se añadieron al plan después de arrancarlo (no los que se excluyeron al arrancarlo). Con `planCases`, lo que ya no está en el
     /// plan y no llegó a ejecutarse no se continúa.
     QStringList toContinue(const QStringList& planCases = {}) const;
     /// El ciclo se puede continuar: terminó y le queda algo de `toContinue`.

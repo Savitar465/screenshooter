@@ -79,6 +79,13 @@ struct PlanRun {
     QString planId;           // TestPlan del que es ciclo (vacío en registros antiguos)
     QString name;
     QStringList caseIds;      // composición del plan al arrancar, en orden de ejecución
+    /// Casos del plan que se decidió no ejecutar en este ciclo al arrancarlo (en PRE no se repite todo
+    /// lo de QA, por ejemplo). No son del ciclo: no entran aunque el plan los vuelva a tener, no se
+    /// ofrecen al continuarlo y la revisión no los exige. Añadirlos al ciclo a mano los recupera.
+    QStringList excludedCaseIds;
+    /// Casos que se añadieron al arrancarlo sólo para este ciclo, sin estar en su plan: el ciclo no los
+    /// suelta aunque siga a su plan y éste no los tenga.
+    QStringList addedCaseIds;
     QDateTime startedAt;
     QDateTime finishedAt;     // inválida mientras el plan sigue en curso
     /// De qué control de calidad son estos resultados: el issue del requerimiento y el número de la

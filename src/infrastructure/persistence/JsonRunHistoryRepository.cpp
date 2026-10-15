@@ -84,6 +84,8 @@ void inferInheritedSteps(RunRecord& run, const RunRecord& previous) {
 QJsonObject toJson(const PlanRun& p) {
     return QJsonObject{
         {"id", p.id}, {"planId", p.planId}, {"name", p.name}, {"caseIds", QJsonArray::fromStringList(p.caseIds)},
+        {"excludedCaseIds", QJsonArray::fromStringList(p.excludedCaseIds)},
+        {"addedCaseIds", QJsonArray::fromStringList(p.addedCaseIds)},
         {"startedAt", isoOrEmpty(p.startedAt)}, {"finishedAt", isoOrEmpty(p.finishedAt)},
         {"issueId", p.issueId}, {"revision", p.revision}, {"environment", p.environment},
         {"continuesCycleId", p.continuesCycleId}, {"continuations", p.continuations},
@@ -97,6 +99,8 @@ PlanRun planFromJson(const QJsonObject& o) {
     p.planId = o["planId"].toString();
     p.name = o["name"].toString();
     for (const auto& v : o["caseIds"].toArray()) p.caseIds << v.toString();
+    for (const auto& v : o["excludedCaseIds"].toArray()) p.excludedCaseIds << v.toString();
+    for (const auto& v : o["addedCaseIds"].toArray()) p.addedCaseIds << v.toString();
     p.startedAt = QDateTime::fromString(o["startedAt"].toString(), Qt::ISODate);
     p.finishedAt = QDateTime::fromString(o["finishedAt"].toString(), Qt::ISODate);
     p.issueId = o["issueId"].toString();

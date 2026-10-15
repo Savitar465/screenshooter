@@ -63,9 +63,12 @@ public:
 
     void start(const QString& caseId);
     /// Ejecuta los casos en orden; `finish()` pasa al siguiente automáticamente. `environment` es el
-    /// ambiente en el que se prueba el ciclo, que queda anotado en él.
+    /// ambiente en el que se prueba el ciclo, que queda anotado en él; `excluded`, los casos del plan
+    /// que se dejan fuera de este ciclo (no entran aunque el plan cambie), y `added`, los que entran
+    /// sólo en este ciclo sin ser del plan (no salen aunque el plan cambie).
     void startSequence(const QStringList& caseIds, const QString& planName = QString(), const QString& planId = QString(),
-                       const QString& environment = QString());
+                       const QString& environment = QString(), const QStringList& excluded = {},
+                       const QStringList& added = {});
     /// Continúa un ciclo terminado: vuelve a ejecutar **sólo sus casos fallados y bloqueados**, cada uno
     /// retomado en el paso que se rompió (los anteriores conservan su veredicto y su nota).
     /// **Se reabre el mismo ciclo**: lo ya probado, sus evidencias, sus bugs y su ciclo de Zephyr siguen

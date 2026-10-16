@@ -75,8 +75,6 @@ signals:
     void reportBugRequested(int stepIndex);
     /// Escribir un caso nuevo para el plan del ciclo en curso (y que entre en él).
     void newCaseRequested();
-    /// El usuario pulsó "Cerrar ejecución": la ventana decide si sigue el plan, muestra el informe o vuelve.
-    void finishRequested();
     void toast(const QString& message, const QString& color);
     /// El modo foco cambió: la ventana esconde (o recupera) su rail, su barra y su barra de estado.
     void focusModeChanged(bool on);
@@ -159,11 +157,6 @@ private:
     QFrame* m_stateDot;
     QLabel* m_stateText;
     ElidedLabel* m_caseTitle;
-    QLabel* m_caseStats;
-    QPushButton* m_pause;
-    QPushButton* m_finish;
-    QWidget* m_continuation;   // aviso de que esta ejecución continúa una revisión
-    QLabel* m_continuationText;
 
     // Visor
     QWidget* m_stage;   // barra + visor
@@ -232,6 +225,7 @@ private:
     QWidget* m_focusVerdicts;
     QPushButton* m_focusReportBug;
     QPushButton* m_focusPause;
+    QPushButton* m_focusCapture;
     QShortcut* m_exitFocus;
 
     /// Fichas de bug abiertas, por clave: pulsar otra vez el mismo bug trae la suya al frente.

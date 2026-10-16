@@ -118,6 +118,8 @@ signals:
     void runPlanRequested(const QString& planId);
     /// Continuar ese ciclo con lo que quedó fallado o bloqueado, dentro de la misma revisión.
     void continueCycleRequested(const QString& planRunId);
+    /// Reanudar el ciclo en pausa de la revisión, que quedó aparcado donde se dejó.
+    void resumeCycleRequested(const QString& planRunId);
     void openRunRequested(const QString& runId);
     void openUrlRequested(const QString& url);
     /// Falta configurar algo (el sistema de GESREQ del proyecto): hay que abrir los ajustes.
@@ -285,6 +287,11 @@ private:
     /// Ciclo de la revisión en curso que se puede continuar (el más reciente que dejó casos rotos);
     /// vacío si no hay ninguno.
     QString continuableCycle(const Issue& issue, int revision) const;
+    /// Desde cuándo está en pausa la ejecución de un ciclo del issue (sólo puede serlo uno de su ronda
+    /// abierta); inválida si no hay ninguno en pausa.
+    QDateTime pausedSince(const Issue& issue) const;
+    /// El ciclo en pausa del issue (aparcado, a la espera de reanudarse); vacío si no hay.
+    QString pausedCycle(const Issue& issue) const;
     /// Lo que repetiría continuar ese ciclo, con lo que tiene hoy su plan (`PlanReport::toContinue`);
     /// vacío si el ciclo no terminó o no le queda nada.
     QStringList continuationOf(const PlanReport& report) const;
@@ -416,8 +423,6 @@ private:
     QLabel* m_phaseTrack;
     QPushButton* m_phasesButton;
     QWidget* m_requirementCard;
-    QWidget* m_changes;
-    QLabel* m_changesText;
     QWidget* m_missing;
     QLabel* m_missingText;
     QLabel* m_requirementSummary;

@@ -263,6 +263,7 @@ void HistoryView::refreshList() {
             color = rep.plan.isFinished() ? verdictColor(rep.verdict()) : theme::Muted;
             title->setText(rep.plan.name.isEmpty() ? tr("(plan sin nombre)") : rep.plan.name);
             QString info = rep.plan.isFinished() ? tr("Plan · %1/%2 casos · %3 %").arg(rep.executed).arg(rep.total()).arg(rep.successRate())
+                           : rep.plan.isPaused() ? tr("Plan en pausa · %1/%2 casos").arg(rep.executed).arg(rep.total())
                                                  : tr("Plan en curso · %1/%2 casos").arg(rep.executed).arg(rep.total());
             // Dos ciclos del mismo plan se distinguen por su ronda y su ambiente, no sólo por la fecha.
             if (rep.plan.revision > 0) info += tr(" · revisión %1").arg(rep.plan.revision);
@@ -395,6 +396,9 @@ void HistoryView::renderPlan(const PlanReport& report) {
     if (plan.isFinished()) {
         sh->addWidget(verdictTag(report.verdict()));
         sh->addWidget(ui::label(tr("· terminado el %1").arg(when(plan.finishedAt)), "muted-sm"));
+    } else if (plan.isPaused()) {
+        sh->addWidget(verdictTag(tr("En pausa"), theme::Amber));
+        sh->addWidget(ui::label(tr("· desde el %1; se reanuda donde se dejó").arg(when(plan.pausedAt)), "muted-sm"));
     } else {
         sh->addWidget(verdictTag(tr("En curso"), theme::Muted));
         sh->addWidget(ui::label(tr("· la ejecución del plan no ha terminado"), "muted-sm"));
@@ -424,6 +428,14 @@ void HistoryView::renderPlan(const PlanReport& report) {
         tv->addWidget(where);
     }
     hv->addWidget(titleBlock);
+    // Un ciclo en pausa se reanuda desde aquí, en el caso y el paso donde se dejó.
+    if (plan.isPaused()) {
+        auto* resumeBtn = ui::button(tr("▶ Reanudar ciclo"), "primary");
+        resumeBtn->setObjectName(QStringLiteral("resumeCycle"));
+        resumeBtn->setToolTip(tr("Vuelve a poner en curso el ciclo %1 donde se dejó: su caso, su paso y sus casos a medias").arg(plan.id));
+        connect(resumeBtn, &QPushButton::clicked, this, [this, id = plan.id]() { emit resumeCycleRequested(id); });
+        ah->addWidget(resumeBtn);
+    }
     // Lo que quedó roto se retoma desde aquí: es lo siguiente que se hace con un informe con fallos.
     if (report.canContinue()) {
         auto* continueBtn = ui::button(tr("Continuar ciclo (%1)").arg(report.toContinue().size()), "primary");
@@ -469,7 +481,8 @@ void HistoryView::renderPlan(const PlanReport& report) {
     menu->addAction(tr("Copiar informe en Markdown"), this, [this, report]() { copyMarkdown(report); }, Qt::QueuedConnection)->setObjectName(QStringLiteral("copyPlan"));
     // El ciclo en curso no se elimina: la ejecución sigue escribiendo en él. Un ciclo sin terminar
     // que no es el actual quedó a medias (la sesión se perdió) y sí puede irse.
-    const bool inProgress = !plan.isFinished() && (!m_run || m_run->planRunId() == plan.id);
+    // Uno en pausa tampoco: tiene su ejecución aparcada, a la espera de reanudarse.
+    const bool inProgress = !plan.isFinished() && (!m_run || m_run->planRunId() == plan.id || plan.isPaused());
     // Un ciclo terminado se completa: un caso que no tenía se añade y se ejecuta en él.
     if (plan.isFinished()) {
         auto* add = menu->addAction(tr("Añadir caso al ciclo…"), this, [this, report]() { pickCaseForCycle(report); }, Qt::QueuedConnection);

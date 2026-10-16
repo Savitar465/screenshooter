@@ -29,25 +29,102 @@ void RunController::load() {
         if (saved) m_session->clearSession();
         return;
     }
-    m_run = saved->run;
-    m_queue = saved->queue;
-    m_planRunId = saved->planRunId;
-    m_continuesRunId = saved->continuesRunId;
-    for (const auto& p : saved->parked)
+    restore(*saved);
+    // Un ciclo en pausa no ocupa la ejecución: si se cerró así (una sesión de antes de que se
+    // aparcaran), se aparca ahora y queda libre.
+    const PlanRun* plan = m_planRunId.isEmpty() ? nullptr : m_history.findPlan(m_planRunId);
+    if (plan && (plan->isPaused() || m_run.paused)) {
+        m_run.paused = false;
+        suspendCycle();
+        return;
+    }
+    startStepClock();   // un caso suelto que se cerró en pausa sigue en pausa
+    m_store.select(m_run.caseId);
+    emit runChanged();
+}
+
+RunSession RunController::snapshot() const {
+    RunSession s{m_run, m_queue, m_planRunId, m_continuesRunId, m_parked.values(), {}, {}};
+    for (auto it = m_resume.cbegin(); it != m_resume.cend(); ++it) s.resume.insert(it.key(), it->id);
+    for (auto it = m_review.cbegin(); it != m_review.cend(); ++it) s.review.insert(it.key(), it->id);
+    // Lo transcurrido en este paso se consolida para que al restaurar siga desde aquí.
+    s.run.stepElapsedSecs = m_run.currentStepSecs();
+    if (s.run.idx >= 0 && s.run.idx < s.run.results.size()) {
+        s.run.results[s.run.idx].durationSecs = s.run.stepElapsedSecs;
+        s.run.results[s.run.idx].note = s.run.note;
+    }
+    s.run.stepStartedAt = QDateTime();
+    return s;
+}
+
+void RunController::restore(const RunSession& saved) {
+    m_run = saved.run;
+    m_queue = saved.queue;
+    m_planRunId = saved.planRunId;
+    m_continuesRunId = saved.continuesRunId;
+    m_parked.clear();
+    for (const auto& p : saved.parked)
         if (m_store.find(p.run.caseId) && m_queue.contains(p.run.caseId)) m_parked.insert(p.run.caseId, p);
+    // Los casos de la cola que se retoman (o se revisan) desde lo archivado: sin ellos, al llegar se
+    // ejecutarían enteros.
+    m_resume.clear();
+    m_review.clear();
+    for (auto it = saved.resume.cbegin(); it != saved.resume.cend(); ++it)
+        if (const RunRecord* r = m_history.findRun(it.value()); r && m_queue.contains(it.key())) m_resume.insert(it.key(), *r);
+    for (auto it = saved.review.cbegin(); it != saved.review.cend(); ++it)
+        if (const RunRecord* r = m_history.findRun(it.value()); r && m_queue.contains(it.key())) m_review.insert(it.key(), *r);
     // La lista siempre tiene un registro por paso: se recorta si el caso perdió pasos entre
     // sesiones y se completa con pendientes si ganó alguno.
     m_run.results.resize(totalSteps());
     recomputeFinished();
-    // El tiempo con la aplicación cerrada no cuenta: el paso actual vuelve a arrancar ahora.
-    // (Las sesiones antiguas sólo guardaban los pasos ejecutados: el reloj llega aparte.)
+    // El tiempo fuera (con la aplicación cerrada o el ciclo aparcado) no cuenta: el paso actual vuelve
+    // a arrancar ahora. (Las sesiones antiguas sólo guardaban los pasos ejecutados: el reloj llega aparte.)
     if (m_run.idx < m_run.results.size())
         m_run.results[m_run.idx].durationSecs = std::max(m_run.results[m_run.idx].durationSecs, m_run.stepElapsedSecs);
     m_run.stepElapsedSecs = m_run.idx < m_run.results.size() ? m_run.results[m_run.idx].durationSecs : 0;
-    if (m_run.finished) m_run.paused = false;
-    startStepClock();   // una ejecución que se cerró en pausa sigue en pausa
+}
+
+bool RunController::suspendCycle() {
+    if (m_planRunId.isEmpty() || m_run.caseId.isEmpty() || !m_session) return false;
+    holdStep();
+    const RunSession s = snapshot();
+    if (!m_session->saveSuspended(m_planRunId, s)) {
+        emit saveFailed(tr("el ciclo en pausa"));
+        return false;
+    }
+    const QString id = m_planRunId;
+    m_history.setPlanPaused(id, true);
+    // La ejecución queda libre: el ciclo sigue abierto en el historial, con su sesión aparcada.
+    m_run = RunState{};
+    m_queue.clear();
+    m_parked.clear();
+    m_resume.clear();
+    m_review.clear();
+    m_planRunId.clear();
+    m_continuesRunId.clear();
+    changed();
+    emit cycleSuspended(id);
+    return true;
+}
+
+bool RunController::isSuspended(const QString& planRunId) const {
+    const PlanRun* plan = m_history.findPlan(planRunId);
+    return plan && plan->isPaused() && planRunId != m_planRunId;
+}
+
+bool RunController::resumeCycle(const QString& planRunId) {
+    if (!m_run.caseId.isEmpty() || !m_session || !isSuspended(planRunId)) return false;
+    const auto saved = m_session->loadSuspended(planRunId);
+    if (!saved || saved->run.caseId.isEmpty() || !m_store.find(saved->run.caseId)) return false;
+    restore(*saved);
+    m_planRunId = planRunId;
+    m_run.paused = false;
+    m_session->clearSuspended(planRunId);
+    m_history.setPlanPaused(planRunId, false);
+    startStepClock();
     m_store.select(m_run.caseId);
-    emit runChanged();
+    changed();
+    return true;
 }
 
 QStringList RunController::planCases() const {
@@ -310,13 +387,19 @@ RunController::PlanSync RunController::syncPlanCases(const QStringList& planCase
 }
 
 void RunController::restart() {
+    if (m_run.paused) return;
     commitRun(false);
     begin(QString(m_run.caseId));   // la cola del plan no se toca: se repite este caso, no el plan
     changed();
 }
 
 void RunController::pause() {
-    if (!isRunning() || m_run.paused) return;
+    if (m_run.caseId.isEmpty() || m_run.paused) return;
+    // Un ciclo se pausa entero y se aparca, dejando la ejecución libre para otro.
+    if (!m_planRunId.isEmpty()) {
+        suspendCycle();
+        return;
+    }
     // Lo que lleva el paso se consolida y el reloj se para: la pausa no cuenta.
     m_run.stepElapsedSecs = m_run.currentStepSecs();
     m_run.paused = true;
@@ -383,7 +466,7 @@ void RunController::setAside() {
 }
 
 bool RunController::goToCase(const QString& caseId) {
-    if (m_planRunId.isEmpty() || m_run.caseId.isEmpty() || !m_queue.contains(caseId)) return false;
+    if (m_planRunId.isEmpty() || m_run.caseId.isEmpty() || m_run.paused || !m_queue.contains(caseId)) return false;
     m_queue.removeAll(caseId);
     setAside();
     enterCase(caseId);
@@ -416,7 +499,7 @@ bool RunController::reviewUntouched() const {
 }
 
 bool RunController::reviewCase(const QString& caseId) {
-    if (m_planRunId.isEmpty() || m_run.caseId.isEmpty() || caseId == m_run.caseId || m_queue.contains(caseId)) return false;
+    if (m_planRunId.isEmpty() || m_run.caseId.isEmpty() || m_run.paused || caseId == m_run.caseId || m_queue.contains(caseId)) return false;
     const TestCase* c = m_store.find(caseId);
     const std::optional<RunRecord> archived = archivedRun(caseId);
     if (!c || !archived) return false;
@@ -496,6 +579,15 @@ void RunController::commitRun(bool evenIfPending) {
                                        r.marked && r.inherited && !m_continuesRunId.isEmpty()});
         rec.durationSecs += r.durationSecs;
     }
+    // Al retomar otra, la evidencia que ésta tenía se queda también en los pasos que se volvieron a
+    // marcar (los heredados ya la traen): volver a probar un paso suma capturas, no las reemplaza.
+    if (!m_continuesRunId.isEmpty()) {
+        QList<int> retested;
+        for (int i = 0; i < c->steps.size(); ++i)
+            if (i >= rec.steps.size() || !rec.steps[i].inherited) retested << i + 1;
+        for (const auto& shot : m_history.evidenceOfSteps(m_continuesRunId, retested))
+            if (!rec.pinnedShots.contains(shot.id)) rec.pinnedShots << shot.id;
+    }
     const RunRecord saved = m_history.addRun(rec);
     // La evidencia capturada durante la ejecución pasa a ser suya: desde aquí se enseña y se
     // publica con ella, no con el caso.
@@ -535,7 +627,7 @@ void RunController::closePlan() {
 }
 
 bool RunController::finish() {
-    if (m_run.caseId.isEmpty()) return false;
+    if (m_run.caseId.isEmpty() || m_run.paused) return false;
     commitRun(true);
     if (!m_queue.isEmpty()) {
         enterCase(m_queue.takeFirst());
@@ -548,8 +640,24 @@ bool RunController::finish() {
     return false;
 }
 
-void RunController::abandon() {
-    commitRun(false);
+void RunController::abandon(bool keepProgress) {
+    if (keepProgress) {
+        // Guardar lo hecho: el caso de pantalla y los aparcados se archivan con lo que tengan marcado
+        // (lo pendiente, N/A); una revisión sin cambios no archiva nada. Los que no se empezaron, no.
+        commitRun(true);
+        const RunState current = m_run;
+        const QString continues = m_continuesRunId;
+        for (const auto& p : std::as_const(m_parked)) {
+            m_run = p.run;
+            m_continuesRunId = p.continuesRunId;
+            commitRun(true);
+        }
+        m_parked.clear();
+        m_run = current;
+        m_continuesRunId = continues;
+    } else {
+        commitRun(false);
+    }
     m_run = RunState{};
     closePlan();
     changed();
@@ -565,15 +673,7 @@ bool RunController::persistSession() {
     m_saveTimer.stop();
     if (!m_session) return false;
     if (m_run.caseId.isEmpty()) { m_session->clearSession(); return true; }
-    RunSession s{m_run, m_queue, m_planRunId, m_continuesRunId, m_parked.values()};
-    // Lo transcurrido en este paso se consolida para que al restaurar siga desde aquí.
-    s.run.stepElapsedSecs = m_run.currentStepSecs();
-    if (s.run.idx >= 0 && s.run.idx < s.run.results.size()) {
-        s.run.results[s.run.idx].durationSecs = s.run.stepElapsedSecs;
-        s.run.results[s.run.idx].note = s.run.note;
-    }
-    s.run.stepStartedAt = QDateTime();
-    if (m_session->saveSession(s)) return true;
+    if (m_session->saveSession(snapshot())) return true;
     emit saveFailed(tr("la ejecución en curso"));
     return false;
 }

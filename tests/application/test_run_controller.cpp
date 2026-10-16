@@ -231,9 +231,9 @@ private slots:
         QCOMPARE(f.publish.requestFor(report, true).cycleId, QStringLiteral("77"));
     }
 
-    // Lo que se capturó sin asignar a ningún paso no se vuelve a probar al retomar el caso: la ejecución
-    // que lo continúa lo conserva, igual que lo de los pasos heredados.
-    void continuingACaseKeepsItsUnassignedEvidence() {
+    // Retomar el caso no pierde evidencia: la ejecución que lo continúa conserva la de la que se rompió,
+    // la sin paso y también la del paso que se vuelve a marcar, junto con lo que se capture ahora.
+    void continuingACaseKeepsItsEvidence() {
         AppFixture f;
         f.run.startSequence({QStringLiteral("TC-102")}, QStringLiteral("Regresión"));
         const QString cycle = f.run.planRunId();
@@ -243,13 +243,17 @@ private slots:
         f.run.finish();
 
         QVERIFY(f.run.continueCycle(cycle));
+        f.store.addShot(QStringLiteral("TC-102"), Screenshot{3, 1, QStringLiteral("c.png"), QStringLiteral("/tmp/qaflow-test/c.png"), {}});
         f.run.mark(StepResult::Pass);
         f.run.finish();
         const RunRecord resumed = f.history.report(cycle).rows.first().run;
         const QList<Screenshot> shots = f.history.evidenceOf(resumed);
-        QCOMPARE(shots.size(), 1);             // la sin paso; la del paso roto se sustituye al repetirlo
-        QCOMPARE(shots.first().step, 0);
-        QVERIFY(shots.first().runId != resumed.id);
+        QCOMPARE(shots.size(), 3);
+        QCOMPARE(shots[0].id, 1);   // la sin paso
+        QCOMPARE(shots[1].id, 2);   // la del paso roto, aunque se haya vuelto a marcar
+        QVERIFY(shots[1].runId != resumed.id);
+        QCOMPARE(shots[2].id, 3);   // y la de ahora
+        QCOMPARE(shots[2].runId, resumed.id);
     }
 
     // Las ejecuciones vivas de un ciclo (la de pantalla y las aparcadas) tienen cada una su id: los bugs
@@ -886,14 +890,21 @@ private slots:
         QCOMPARE(f.run.state().markedCount(), 1);
     }
 
-    void aFinishedRunCannotBePaused() {
+    // Con el caso ya terminado también se pausa: lo que queda (cerrarlo, repetirlo) espera a reanudar.
+    void aFinishedRunCanBePausedAndWaitsToBeClosed() {
         AppFixture f;
         f.run.start(QStringLiteral("TC-103"));   // 1 paso
         f.run.mark(StepResult::Pass);
         QVERIFY(f.run.state().finished);
         f.run.togglePause();
+        QVERIFY(f.run.isPaused());
+        QVERIFY(!f.run.finish());
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-103"));
+        QVERIFY(f.history.runs().isEmpty());
+        f.run.togglePause();
         QVERIFY(!f.run.isPaused());
-        QVERIFY(!f.run.state().paused);
+        QVERIFY(!f.run.finish());   // un caso suelto: se archiva y no queda nada más
+        QCOMPARE(f.history.runs().size(), 1);
     }
 
     void aPausedRunStaysPausedAfterRestart() {
@@ -913,16 +924,108 @@ private slots:
         QVERIFY(again.state().stepStartedAt.isValid());
     }
 
-    // Ir a otro caso del ciclo es ponerse a probar: el nuevo no hereda la pausa, y el aparcado se retoma sin ella.
-    void goingToAnotherCaseLeavesThePause() {
+    // Pausar un ciclo lo aparca entero —el caso en pantalla, su paso, la cola y los casos a medias— y deja
+    // la ejecución libre para otro; reanudarlo lo pone en curso exactamente donde se dejó.
+    void pausingACycleParksItAndFreesTheRun() {
         AppFixture f;
         f.run.startSequence({QStringLiteral("TC-104"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        f.run.mark(StepResult::Pass);
+        QVERIFY(f.run.goToCase(QStringLiteral("TC-107")));   // TC-104 queda aparcado con un paso marcado
+        QSignalSpy suspended(&f.run, &RunController::cycleSuspended);
         f.run.pause();
-        QVERIFY(f.run.goToCase(QStringLiteral("TC-107")));
+        QCOMPARE(suspended.count(), 1);
+        QVERIFY(f.run.state().caseId.isEmpty());
+        QVERIFY(f.run.planRunId().isEmpty());
         QVERIFY(!f.run.isPaused());
-        QVERIFY(f.run.goToCase(QStringLiteral("TC-104")));
+        QVERIFY(f.run.isSuspended(cycle));
+        QVERIFY(f.history.findPlan(cycle)->isPaused());
+        QVERIFY(!f.history.findPlan(cycle)->isFinished());
+        QVERIFY(f.sessionRepo->suspended.contains(cycle));
+
+        // Con él aparcado se puede ejecutar otra cosa, y mientras tanto no se reanuda.
+        f.run.start(QStringLiteral("TC-103"));
+        QVERIFY(!f.run.resumeCycle(cycle));
+        f.run.mark(StepResult::Pass);
+        f.run.finish();
+
+        // Reanudarlo vuelve a TC-107, con TC-104 a medias y en la cola.
+        QVERIFY(f.run.resumeCycle(cycle));
+        QCOMPARE(f.run.planRunId(), cycle);
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-107"));
         QVERIFY(!f.run.isPaused());
         QVERIFY(f.run.state().stepStartedAt.isValid());
+        QVERIFY(!f.history.findPlan(cycle)->isPaused());
+        QVERIFY(!f.sessionRepo->suspended.contains(cycle));
+        QVERIFY(f.run.isQueued(QStringLiteral("TC-104")));
+        QCOMPARE(f.run.parkedRun(QStringLiteral("TC-104"))->markedCount(), 1);
+        QVERIFY(!f.run.resumeCycle(cycle));   // ya está en curso
+    }
+
+    // Una continuación aparcada (o una sesión restaurada) sigue sabiendo desde qué paso se retoma cada caso
+    // de su cola: no se vuelven a ejecutar enteros.
+    void aParkedContinuationStillResumesItsBrokenCasesFromTheirStep() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-101"), QStringLiteral("TC-102")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        f.run.mark(StepResult::Pass); f.run.mark(StepResult::Fail);   // TC-101 se rompe en el paso 2
+        f.run.finish();
+        f.run.mark(StepResult::Pass); f.run.mark(StepResult::Fail);   // TC-102, también
+        f.run.finish();
+        QVERIFY(f.run.continueCycle(cycle));
+        QCOMPARE(f.run.state().caseId, QStringLiteral("TC-101"));
+        f.run.pause();
+
+        // Y también tras cerrar la aplicación: el que lo reanuda es otro controlador.
+        RunController again(f.store, f.history, f.sessionRepo);
+        again.load();
+        QVERIFY(again.state().caseId.isEmpty());
+        QVERIFY(again.resumeCycle(cycle));
+        QCOMPARE(again.state().caseId, QStringLiteral("TC-101"));
+        QCOMPARE(again.state().idx, 1);
+        again.mark(StepResult::Pass); again.mark(StepResult::Pass);
+        QVERIFY(again.finish());
+        QCOMPARE(again.state().caseId, QStringLiteral("TC-102"));
+        QCOMPARE(again.state().idx, 1);   // retomado en el paso que se rompió, no desde el primero
+        QVERIFY(again.state().results[0].inherited);
+    }
+
+    // Una sesión de antes de aparcar los ciclos, cerrada con el ciclo en pausa, se aparca al arrancar.
+    void anOldPausedCycleSessionIsParkedOnLoad() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-104")}, QStringLiteral("Regresión"));
+        const QString cycle = f.run.planRunId();
+        RunSession old = *f.sessionRepo->session;
+        old.run.paused = true;
+        f.sessionRepo->session = old;
+        RunController again(f.store, f.history, f.sessionRepo);
+        again.load();
+        QVERIFY(again.state().caseId.isEmpty());
+        QVERIFY(again.isSuspended(cycle));
+        QVERIFY(again.resumeCycle(cycle));
+        QCOMPARE(again.state().caseId, QStringLiteral("TC-104"));
+    }
+
+    // Detener guardando archiva lo hecho —el caso en pantalla y los aparcados, a medias— y cierra el ciclo;
+    // detener descartando sólo conserva lo terminado.
+    void stoppingKeepsOrDiscardsTheProgress() {
+        for (const bool keep : {true, false}) {
+            AppFixture f;
+            f.run.startSequence({QStringLiteral("TC-104"), QStringLiteral("TC-101"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"));
+            const QString cycle = f.run.planRunId();
+            f.run.mark(StepResult::Pass);                          // TC-104: 1 de 4
+            QVERIFY(f.run.goToCase(QStringLiteral("TC-101")));
+            f.run.mark(StepResult::Pass);                          // TC-101: 1 de 3
+            f.run.abandon(keep);
+            QVERIFY(f.history.findPlan(cycle)->isFinished());
+            const QList<RunRecord> runs = f.history.runsForPlan(cycle);
+            QCOMPARE(runs.size(), keep ? 2 : 0);
+            if (keep) {
+                QCOMPARE(runs.first().steps.size(), 1);
+                QCOMPARE(runs.first().plannedSteps, 3);   // el de pantalla, primero
+                QCOMPARE(runs.last().caseId, QStringLiteral("TC-104"));
+            }
+        }
     }
 
     // ---- Sesión persistente ------------------------------------------------------------

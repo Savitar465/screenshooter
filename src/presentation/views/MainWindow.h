@@ -160,6 +160,11 @@ private:
     /// «+ Nuevo caso» de la ejecución: lo escribe en una ventana y lo añade al plan del ciclo en curso.
     void createCaseForRun();
     void continueCycleRun(const QString& planRunId);
+    /// Reanuda un ciclo en pausa donde se dejó. Con otro ciclo en curso pregunta si pausarlo para
+    /// cambiar; con un caso suelto en curso pide terminarlo antes.
+    void resumeCycleRun(const QString& planRunId);
+    /// ■: detiene la ejecución y cierra su ciclo, preguntando antes si guardar lo hecho o descartarlo.
+    void stopRun();
     void beginContinuation(const QString& planRunId, const QString& environment, const QStringList& planCases = {});
     /// Ejecuta esos casos en el ciclo terminado (`RunController::runInCycle`), tras confirmar el ambiente.
     void runInCycle(const QString& planRunId, const QStringList& caseIds);

@@ -394,8 +394,11 @@ void IssuesView::focusSearch() {
 }
 
 void IssuesView::showDetail(bool on) {
-    if (!on) m_viewedRevision = 0;   // al volver a entrar, el issue se abre por la ronda en curso
+    if (!on) {
+        m_viewedRevision = 0;   // al volver a entrar, el issue se abre por la ronda en curso
+    }
     m_pages->setCurrentIndex(static_cast<int>(on && selected() ? Page::Detail : Page::Board));
+    if (const Issue* issue = on ? selected() : nullptr) refreshRequirement(Issue(*issue));
 }
 
 void IssuesView::placeHeader() {
@@ -849,6 +852,12 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     QList<QLabel*> tags;
     if (issue.isImported() && !issue.requirement.data.systemCode.isEmpty())
         tags << cardTag(issue.requirement.data.systemCode, theme::tint(theme::Muted, 26), theme::Muted);
+    // Su ejecución está en pausa: lo primero que hay que saber al volver a él.
+    if (pausedSince(issue).isValid()) {
+        auto* paused = cardTag(tr("EN PAUSA"), theme::tint(theme::Amber, 46), theme::AmberSoft);
+        paused->setObjectName(QStringLiteral("issuePaused-%1").arg(issue.id));
+        tags << paused;
+    }
     if (s.progress.failed > 0)
         tags << cardTag(tr("%n FALLIDO(S)", nullptr, s.progress.failed), theme::tint(theme::Red, 46), theme::RedSoft);
     if (s.progress.blocked > 0)
@@ -942,7 +951,16 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
     // Lo fallado se continúa mientras la ronda sigue abierta. Cerrada (observada, que es lo que la lleva
     // a esta columna), sus ciclos ya son historia: lo que toca es acabar con ella —el acta y publicar el
     // resultado— y, después, volver a probar en la ronda siguiente.
-    if (column == Column::Broken && s.open && !s.continuable.isEmpty()) {
+    // Lo primero es lo que se dejó en pausa: reanudarlo sigue en el caso y el paso donde se quedó.
+    if (const QString paused = pausedCycle(issue); !paused.isEmpty()) {
+        a.title = tr("Reanudar la ejecución");
+        a.why = tr("El ciclo %1 está en pausa desde el %2: se sigue en el caso y el paso donde se dejó.")
+                    .arg(paused, when(pausedSince(issue)));
+        a.hint = tr("Reanudar la ejecución");
+        a.button = tr("▶ Reanudar (%1)").arg(paused);
+        a.shortButton = tr("▶ Reanudar");
+        a.run = [this, paused](QWidget*) { emit resumeCycleRequested(paused); };
+    } else if (column == Column::Broken && s.open && !s.continuable.isEmpty()) {
         const int broken = int(continuationOf(m_history.report(s.continuable)).size());
         a.title = tr("Continuar lo fallado");
         a.why = tr("%1 dejó %2 fallido(s) y %3 bloqueado(s): se repiten desde el paso que se rompió, en la misma revisión.")
@@ -1080,6 +1098,8 @@ void IssuesView::showCardMenu(const QString& issueId, const QPoint& globalPos) {
     add(tr("Abrir el issue"), "issueMenuOpen", [this]() { showDetail(true); });
     if (next.run) add(tr("Lo siguiente: %1").arg(next.title), "issueMenuNext", [run = next.run]() { run(nullptr); });
     menu->addSeparator();
+    if (const QString paused = pausedCycle(issue); !paused.isEmpty())
+        add(tr("Reanudar la ejecución (%1)").arg(paused), "issueMenuResume", [this, paused]() { emit resumeCycleRequested(paused); });
     add(tr("Ejecutar plan…"), "issueMenuRun", [this]() { runPlan(); }, !runnablePlan(issue).isEmpty());
     if (!s.continuable.isEmpty())
         add(tr("Continuar lo fallado…"), "issueMenuContinue", [this, cycle = s.continuable]() { emit continueCycleRequested(cycle); });
@@ -1940,24 +1960,11 @@ void IssuesView::buildDetail(QVBoxLayout* root) {
     m_nextRevision->setContentsMargins(0, 8, 0, 10);
     data->addWidget(nextRevision);
 
-    // El requerimiento de GESREQ: lo que cambió, si sigue en la bandeja y un resumen; la ficha, plegada.
+    // El requerimiento de GESREQ: si sigue en la bandeja y un resumen; la ficha, plegada.
     QVBoxLayout* requirementBody;
     auto* requirementCard = sideCard(tr("REQUERIMIENTO"), &requirementBody);
     requirementCard->setObjectName(QStringLiteral("issueRequirement"));
     m_requirementCard = requirementCard;
-
-    QBoxLayout* changesLayout;
-    auto* changes = notice(&m_changesText, &changesLayout, true);
-    changes->setObjectName(QStringLiteral("issueChanges"));
-    m_changes = changes;
-    m_changesText->setTextFormat(Qt::RichText);
-    auto* acknowledge = smallButton(tr("Marcar como revisado"), "outline");
-    acknowledge->setObjectName(QStringLiteral("issueAcknowledge"));
-    connect(acknowledge, &QPushButton::clicked, this, [this]() {
-        if (const Issue* issue = selected()) m_issues.acknowledgeChanges(QString(issue->id));
-    });
-    changesLayout->addWidget(acknowledge, 0, Qt::AlignLeft);
-    requirementBody->addWidget(changes);
 
     auto* missing = notice(&m_missingText, nullptr, true);
     missing->setObjectName(QStringLiteral("issueMissing"));
@@ -2204,6 +2211,7 @@ void IssuesView::refreshRevision(const Issue& issue) {
     const QString outcomeName = outcomeText(issue, outcome, snapshot.phase);
     const QStringList phases = m_issues.phasesOf(issue);
     const bool none = issue.revisions.isEmpty();
+    const QDateTime paused = pausedSince(issue);   // la ejecución de su ronda abierta, en pausa
     // La ronda que está en pantalla: la elegida o, si no, la última.
     const int shown = past ? number : issue.currentRevisionNumber();
 
@@ -2212,12 +2220,14 @@ void IssuesView::refreshRevision(const Issue& issue) {
     for (const auto& round : issue.revisions) {
         const QString phase = phaseOf(round, phases);
         const QString color = phaseColor(phase, phases);
-        const QString state = round.isOpen() ? theme::Blue : outcomeColor(round.outcome);
+        const bool roundPaused = round.isOpen() && paused.isValid();
+        const QString state = roundPaused ? theme::Amber : round.isOpen() ? theme::Blue : outcomeColor(round.outcome);
         const bool chosen = round.number == shown;
         auto* tab = new QPushButton;
         tab->setObjectName(QStringLiteral("issueRevisionTab-%1").arg(round.number));
         tab->setCursor(Qt::PointingHandCursor);
-        tab->setToolTip(round.isOpen() ? tr("Revisión %1 en %2, en curso").arg(round.number).arg(phase)
+        tab->setToolTip(roundPaused ? tr("Revisión %1 en %2, en curso: su ejecución está en pausa").arg(round.number).arg(phase)
+                        : round.isOpen() ? tr("Revisión %1 en %2, en curso").arg(round.number).arg(phase)
                                        : tr("Revisión %1 en %2, cerrada el %3 como %4")
                                              .arg(round.number)
                                              .arg(phase, when(round.closedAt), outcomeText(issue, round.outcome, phase)));
@@ -2233,7 +2243,7 @@ void IssuesView::refreshRevision(const Issue& issue) {
         auto* chip = ui::label(phase.toUpper());
         chip->setStyleSheet(chipStyle(color));
         th->addWidget(chip);
-        auto* result = ui::label(round.isOpen() ? tr("En curso") : outcomeText(issue, round.outcome, phase));
+        auto* result = ui::label(roundPaused ? tr("En pausa") : round.isOpen() ? tr("En curso") : outcomeText(issue, round.outcome, phase));
         result->setStyleSheet(QStringLiteral("font-size:12px;font-weight:600;color:%1;").arg(state));
         th->addWidget(result);
         for (auto* child : tab->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -2283,9 +2293,13 @@ void IssuesView::refreshRevision(const Issue& issue) {
     m_revisionState->setText(none     ? tr("Se abre con el primer ciclo del plan")
                              : past   ? tr("Anterior · cerrada el %1").arg(viewed->closedAt.toString(day))
                              : closed ? tr("Cerrada el %1").arg(last->closedAt.toString(day))
+                             : paused.isValid() ? tr("❚❚ En pausa desde el %1 a las %2 · en curso desde el %3")
+                                                      .arg(paused.toString(day), paused.toString(QStringLiteral("HH:mm")),
+                                                           open->startedAt.toString(day))
                                       : tr("● En curso desde el %1").arg(open->startedAt.toString(day)));
     m_revisionState->setStyleSheet(QStringLiteral("font-weight:600;color:%1;")
-                                       .arg(none || past ? theme::Muted : closed ? outcomeColor(outcome) : theme::Blue));
+                                       .arg(none || past ? theme::Muted : closed ? outcomeColor(outcome)
+                                                        : paused.isValid() ? theme::Amber : theme::Blue));
     if (past) {
         m_pastBannerText->setText(tr("Revisión %1 (%2) de consulta. Lo que se ejecute, continúe o cierre es de la revisión %3 en %4; "
                                      "desde aquí se regenera su acta y se completa su publicación.")
@@ -2436,13 +2450,21 @@ void IssuesView::refreshRevision(const Issue& issue) {
             // y, si ya está cerrada, la continuación abre la siguiente y es de ella. Si lo hay, es lo que toca.
             const QString pending = snapshot.continuable;
             // El ciclo se arranca desde aquí: es el paso siguiente del issue y no hay por qué salir a buscarlo.
-            auto* run = smallButton(tr("Ejecutar plan…"), pending.isEmpty() ? role(row, executed) : "outline",
+            auto* run = smallButton(tr("Ejecutar plan…"), pending.isEmpty() && pausedCycle(issue).isEmpty() ? role(row, executed) : "outline",
                                     tr("Arranca un ciclo del plan: pregunta el ambiente y lleva a la ejecución. El primero abre la "
                                        "revisión y deja el issue en pruebas"));
             run->setObjectName(QStringLiteral("issueStepRun"));
             addIcon(run, icons::Glyph::Run);
             run->setEnabled(!runnablePlan(issue).isEmpty());
             connect(run, &QPushButton::clicked, this, [this]() { runPlan(); });
+            // Con un ciclo en pausa, lo que toca es reanudarlo: va delante y es la acción principal.
+            if (const QString paused = pausedCycle(issue); !paused.isEmpty()) {
+                auto* resume = smallButton(tr("▶ Reanudar"), "primary",
+                                           tr("Vuelve a poner en curso el ciclo %1 donde se dejó: su caso, su paso y sus casos a medias").arg(paused));
+                resume->setObjectName(QStringLiteral("issueStepResume"));
+                connect(resume, &QPushButton::clicked, this, [this, paused]() { emit resumeCycleRequested(paused); });
+                actions->addWidget(resume);
+            }
             actions->addWidget(run);
             if (!pending.isEmpty()) {
                 const PlanReport report = m_history.report(pending);
@@ -2669,14 +2691,15 @@ void IssuesView::refreshRevision(const Issue& issue) {
         auto* top = new QWidget;
         auto* th = ui::hbox(top, 0, 8);
         const QString phase = phaseOf(*it, phases);
-        const QString color = it->isOpen() ? theme::Blue : outcomeColor(it->outcome);
+        const bool roundPaused = it->isOpen() && pausedSince(issue).isValid();
+        const QString color = roundPaused ? theme::Amber : it->isOpen() ? theme::Blue : outcomeColor(it->outcome);
         auto* name = ui::label(tr("Rev %1").arg(round), chosen ? nullptr : "muted-sm");
         if (chosen) name->setStyleSheet(QStringLiteral("font-weight:700;"));
         th->addWidget(name);
         auto* chip = ui::label(phase.toUpper());
         chip->setStyleSheet(chipStyle(phaseColor(phase, phases)));
         th->addWidget(chip, 0, Qt::AlignVCenter);
-        auto* result = ui::label(it->isOpen() ? tr("En curso") : outcomeText(issue, it->outcome, phase));
+        auto* result = ui::label(roundPaused ? tr("En pausa") : it->isOpen() ? tr("En curso") : outcomeText(issue, it->outcome, phase));
         result->setStyleSheet(QStringLiteral("color:%1;font-weight:600;").arg(color));
         result->setWordWrap(true);
         th->addWidget(result, 1);
@@ -3033,15 +3056,11 @@ void IssuesView::refreshRequirement(const Issue& issue) {
     const RequirementLink& link = issue.requirement;
     const ExternalRequirement& r = link.data;
 
-    m_changes->setVisible(!link.changes.isEmpty());
-    if (!link.changes.isEmpty()) {
-        QStringList lines;
-        for (const auto& c : link.changes)
-            lines << QStringLiteral("<b>%1</b>: %2 → %3").arg(requirementFieldLabel(c.field).toHtmlEscaped(),
-                                                             c.before.isEmpty() ? tr("(vacío)") : c.before.toHtmlEscaped(),
-                                                             c.after.isEmpty() ? tr("(vacío)") : c.after.toHtmlEscaped());
-        m_changesText->setText(tr("⚠ Cambió en GESREQ desde la última revisión:") + QStringLiteral("<br>") + lines.join(QStringLiteral("<br>")));
-    }
+    // Lo que cambió en GESREQ se da por revisado en cuanto se ve el detalle del issue (sin aviso).
+    const bool onScreen = isVisible() && m_pages->currentIndex() == static_cast<int>(Page::Detail);
+    if (onScreen && !link.changes.isEmpty())
+        // Después del refresco: dar por revisado vuelve a pintar el detalle.
+        QTimer::singleShot(0, this, [this, id = issue.id]() { m_issues.acknowledgeChanges(id); });
     m_missing->setVisible(link.missing);
     m_missingText->setText(tr("Ya no está en tu bandeja de control de calidad (se vio por última vez el %1). El issue y sus pruebas se conservan.")
                                .arg(when(link.fetchedAt)));
@@ -3421,6 +3440,12 @@ void IssuesView::fillResults(const Issue& issue, const QList<PlanRun>& cycles, Q
         if (cycle.isContinuation()) tip << tr("Continúa %1").arg(cycle.continuesCycleId);
         if (cycle.isPublished()) tip << tr("Publicado en Zephyr");
         row.header->setToolTip(tip.join(QLatin1Char('\n')));
+        if (cycle.isPaused()) {
+            auto* resume = rowIcon(icons::Glyph::Run, tr("Reanudar este ciclo, en pausa desde el %1").arg(when(cycle.pausedAt)), theme::AmberSoft);
+            resume->setObjectName(QStringLiteral("issueCycleResume-%1").arg(cycle.id));
+            connect(resume, &QPushButton::clicked, this, [this, id = cycle.id]() { emit resumeCycleRequested(id); });
+            row.head->addWidget(resume);
+        }
         if (const QStringList left = past ? QStringList{} : continuationOf(report); !left.isEmpty()) {
             auto* proceed = rowIcon(icons::Glyph::Retry,
                                     tr("Volver a ejecutar los %1 caso(s) por terminar de este ciclo: fallados, bloqueados o sin ejecutar").arg(left.size()),
@@ -3635,6 +3660,17 @@ void IssuesView::createPlan() {
 QString IssuesView::runnablePlan(const Issue& issue) const {
     const TestPlan* plan = m_plans.find(issue.planId);
     return plan && !plan->archived && !m_plans.orderedCaseIds(issue.planId).isEmpty() ? issue.planId : QString();
+}
+
+QDateTime IssuesView::pausedSince(const Issue& issue) const {
+    const PlanRun* cycle = m_history.findPlan(pausedCycle(issue));
+    return cycle ? cycle->pausedAt : QDateTime();
+}
+
+QString IssuesView::pausedCycle(const Issue& issue) const {
+    for (const auto& cycle : IssueStore::cyclesOf(issue, m_history))
+        if (cycle.isPaused()) return cycle.id;
+    return {};
 }
 
 QString IssuesView::continuableCycle(const Issue& issue, int revision) const {

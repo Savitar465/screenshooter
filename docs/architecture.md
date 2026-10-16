@@ -379,18 +379,37 @@ corta la ejecución: un bloqueo se queda en su paso y se sigue navegando por el 
   están marcados. Nada se archiva hasta que se cierra, así que estas correcciones no dejan rastro
   en el historial.
 * **Persistencia de la sesión.** Tras cada cambio (`changed()`) el controlador guarda un
-  `RunSession` (estado, cola del plan, id del plan y la ejecución que se retoma) mediante
+  `RunSession` (estado, cola del plan, id del plan, la ejecución que se retoma y, por caso de la cola,
+  la ejecución archivada desde la que se retoma o se revisa al llegar a él) mediante
   `IRunSessionRepository`. Al arrancar,
   `load()` la restaura si el caso sigue existiendo, ajusta la lista de resultados si el caso ganó o
   perdió pasos y
   reinicia el cronómetro del paso actual: el tiempo con la aplicación cerrada no cuenta, pero lo
   acumulado antes (`stepElapsedSecs`) sí. `MainWindow` abre directamente la pantalla de ejecución.
+* **Pausa: el ciclo se aparca.** Hay una sola ejecución en curso, pero pausar un ciclo lo **aparca**
+  entero y la deja libre: `pause()` llama a `suspendCycle()`, que guarda su `RunSession` (caso en
+  pantalla, paso, cola, aparcados y lo que la cola retoma o revisa de lo archivado) aparte con
+  `IRunSessionRepository::saveSuspended` —`sessions/<PR-…>.json`—, anota `PlanRun::pausedAt` y emite
+  `cycleSuspended`. El ciclo sigue abierto (sin terminar) en el historial y puede haber varios así, uno
+  por plan: `startPlanRun` no arranca otro ciclo de un plan que tiene uno en pausa. `resumeCycle(id)` lo
+  restaura tal cual (`restore()`, el mismo camino que `load()`) y lo quita de la pausa; sólo con la
+  ejecución libre, así que `MainWindow::resumeCycleRun` pregunta antes si pausar el ciclo en curso (un
+  caso suelto en curso hay que terminarlo o detenerlo). Se reanuda desde el issue («▶ Reanudar», que
+  pasa a ser lo siguiente que toca), el informe del historial («▶ Reanudar ciclo») o el selector de la
+  barra («En pausa · PR-…»); continuar uno en pausa lo reanuda. Un caso suelto no tiene dónde
+  aparcarse: se queda en pantalla en pausa (`isPaused()`), con el reloj parado y sin admitir
+  veredictos, pasos, cierre ni capturas. Se pausa con el ▶/❚❚ de la barra de herramientas (el mismo
+  botón que arranca la selección cuando no hay nada en marcha), con Ctrl+Alt+Espacio o, en modo foco,
+  con el botón de su barra. Una sesión de antes, cerrada con el ciclo en pausa, se aparca al
+  arrancar. La pantalla del issue lo enseña —etiqueta **EN PAUSA** en su tarjeta y «❚❚ En pausa
+  desde…» en la revisión (`IssuesView::pausedCycle`)—, el historial dice «En pausa» y la tarjeta del
+  plan «CICLO EN PAUSA»; el estado del issue no cambia y un ciclo en pausa no se puede borrar.
 * **Duración real.** Cada `StepRecord` mide su tiempo; `RunRecord::durationSecs` es la suma. La
   vista muestra un reloj por paso y por caso (un `QTimer` de un segundo sólo actualiza etiquetas).
 * **La pantalla: el visor a la izquierda, el inspector a la derecha.** `RunView` se construye por
   piezas. A la izquierda: `buildCaseBar()` (el caso **encima de la imagen**: estado, título en una
-  línea con `ElidedLabel` —entero, con suite y componente, en el tooltip—, pasos, capturas y
-  cronómetro, «Cerrar ejecución», y debajo el aviso de continuación), `buildStage()` (la barra de la
+  línea con `ElidedLabel` —entero, con suite y componente, en el tooltip—; pausar y cerrar el caso
+  están en la barra de herramientas de la ventana), `buildStage()` (la barra de la
   evidencia —la etiqueta de su paso en el color de su veredicto, el fichero, «Asignar a», «Ampliar»,
   anotar, «Foco», quitar—, **encima** del visor y nunca sobre la imagen; el visor, con ‹ › a los lados
   y la posición «2 / 2» abajo, colocados en `placeViewerOverlay`) y `buildFilmStrip()` (la **tira
@@ -474,10 +493,8 @@ ejecución: si otra la tiene (la original, una continuación o una traída), se 
 (`RunRecord::pinnedShots`), así que quitarla de la original no se la quita a las demás. El fichero sólo
 se borra cuando ya no la tiene ninguna, y borrar un ciclo respeta las que otras ejecuciones conservan.
 
-La pantalla de ejecución lo dice bajo la barra del caso: «CONTINUANDO EL CICLO PR-0003 · se repiten sólo
-los casos que fallaron o quedaron bloqueados» (los ciclos de continuación antiguos, «CONTINUANDO LA
-REVISIÓN 2…»), con la ronda, el ambiente y, en el caso en curso, de qué ejecución vienen sus pasos
-heredados. Un ciclo normal enseña ahí su ronda y su ambiente.
+La pantalla de ejecución no lleva aviso de continuación: los pasos heredados se marcan «ANTERIOR» en la
+lista, y un caso archivado que se abre para revisarlo dice «REVISANDO R-…» en la barra del caso.
 
 Se ofrece desde los tres sitios donde se ven los ciclos —el informe del historial, el «Historial de
 ciclos» del plan y la pantalla del issue (paso 2 de la revisión y cada ciclo de «Resultados»)—, todos
@@ -493,11 +510,14 @@ continúa: mismo plan, misma revisión, mismo día y mismo ambiente— y lo dice
 Cada ejecución que se cierra se convierte en un `RunRecord`: instantánea del texto de los pasos,
 resultado y nota de cada uno, veredicto, inicio y fin. `RunController::commitRun()` la archiva en
 `RunHistoryStore` y actualiza la "última ejecución" del caso (`Passed`, `Failed` o `Blocked`).
-«Cerrar ejecución» archiva también una ejecución a medias —lo normal cuando un paso bloquea y no
-tiene sentido seguir—: se guardan los pasos hasta el último marcado y los huecos quedan como N/A,
-con `plannedSteps` diciendo cuántos tenía el caso ("2 de 5"). Arrancar otro caso, repetir o
-abandonar sólo archivan si la ejecución ya estaba terminada, para que nada se pierda sin que se
-cuele media prueba en el historial.
+Un caso se cierra cuando todos sus pasos tienen veredicto («Finalizar caso» en la barra de
+herramientas: «Siguiente caso» o «Terminar plan y ver informe»); un paso que no tiene sentido probar
+se marca N/A. Una revisión no tiene botón para cerrarla: se deja eligiendo otro caso de la lista. **■
+detiene** la ejecución y cierra su ciclo, y antes pregunta (`MainWindow::stopRun`): «Guardar progreso»
+—`abandon(true)`— archiva con `commitRun(true)` el caso en pantalla y los aparcados hasta su último paso
+marcado (los huecos como N/A, con `plannedSteps` diciendo cuántos tenía el caso, "2 de 5"; una revisión
+sin cambios, nada); «Descartar» sólo conserva lo que ya estaba terminado. Arrancar otro caso, repetir o abandonar sólo archivan si la ejecución ya estaba terminada,
+para que nada se pierda sin que se cuele media prueba en el historial.
 
 Al iniciar un plan se abre un `PlanRun` (nombre, casos en orden, inicio) y todos los `RunRecord`
 que genera llevan su `planRunId`. Cuando la cola se vacía (o se abandona) el plan se cierra y
@@ -962,8 +982,9 @@ de **todos los proyectos** (`IssueDirectory::applyInbox` → `IssueStore::applyI
 2. En los que siguen en ella, `importRequirements()` reemplaza sólo lo extraído. Lo que cambió
    (`diffRequirement`: estado, descripción, prioridad, sistema, fechas de asignación, solicitante…) se
    acumula en `changes` con `mergeChanges` —de cada campo, el valor revisado por última vez y el último
-   leído; si vuelve a como estaba, desaparece— hasta «Marcar como revisado». El rail cuenta los issues con
-   cambios sin revisar.
+   leído; si vuelve a como estaba, desaparece— hasta que se abre el detalle del issue, que los da por
+   revisados solo, sin enseñar un aviso en el requerimiento. La etiqueta «CAMBIOS» de su tarjeta y el
+   rail marcan los issues con cambios sin abrir.
 3. Leer la bandeja **no crea issues**: eso es empezar las pruebas de un requerimiento, desde su fila.
 
 De un proyecto con la sesión abierta se escribe a través de su store; de uno sin abrir, con un `IssueStore`

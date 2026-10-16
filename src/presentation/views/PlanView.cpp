@@ -437,7 +437,8 @@ void PlanView::refreshCycle() {
     m_cycleCard->setVisible(cycle && !cycle->plan.isFinished());
     if (!cycle || cycle->plan.isFinished()) return;
     const PlanReport& r = *cycle;
-    m_cycleTitle->setText(QStringLiteral("%1 · %2 · %3").arg(tr("CICLO EN CURSO"), r.plan.id, when(r.plan.startedAt)));
+    m_cycleTitle->setText(QStringLiteral("%1 · %2 · %3").arg(r.plan.isPaused() ? tr("CICLO EN PAUSA") : tr("CICLO EN CURSO"), r.plan.id,
+                                                              when(r.plan.startedAt)));
     m_cycleSummary->setText(tr("<b>%1/%2 ejecutados</b> · <span style=\"color:%7\">%3 ✓</span> · <span style=\"color:%8\">%4 ✗</span> · <span style=\"color:%9\">%5 bloq.</span> · %6 % de éxito")
                                 .arg(r.executed).arg(r.total()).arg(r.passed).arg(r.failed).arg(r.blocked).arg(r.successRate())
                                 .arg(theme::Green, theme::Red, theme::Amber));

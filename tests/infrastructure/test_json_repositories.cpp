@@ -127,6 +127,10 @@ private slots:
         p.excludedCaseIds = {QStringLiteral("TC-105")};
         p.addedCaseIds = {QStringLiteral("TC-106")};
         h.plans << p;
+        PlanRun paused;   // uno en curso y en pausa: la pausa del ciclo entero sobrevive al cierre
+        paused.id = QStringLiteral("PR-0002"); paused.caseIds = {QStringLiteral("TC-104")};
+        paused.startedAt = r.startedAt; paused.pausedAt = r.finishedAt;
+        h.plans << paused;
         QVERIFY(repo.saveHistory(h));
         const auto loaded = repo.loadHistory();
         QVERIFY(loaded);
@@ -138,7 +142,10 @@ private slots:
         QCOMPARE(loaded->runs[0].steps[1].durationSecs, 60);
         QCOMPARE(loaded->runs[0].durationSecs, 90);
         QCOMPARE(loaded->runs[0].testKey, QStringLiteral("SHOP-42"));   // el Test de la ejecución sobrevive al cierre
-        QCOMPARE(loaded->plans.size(), 1);
+        QCOMPARE(loaded->plans.size(), 2);
+        QVERIFY(!loaded->plans[0].isPaused());
+        QVERIFY(loaded->plans[1].isPaused());
+        QCOMPARE(loaded->plans[1].pausedAt, paused.pausedAt);
         QCOMPARE(loaded->plans[0].planId, QStringLiteral("PL-0001"));
         QVERIFY(loaded->plans[0].isFinished());
         // Dónde se publicaron esos resultados sobrevive al cierre de la aplicación.
@@ -199,6 +206,22 @@ private slots:
         repo.clearSession();
         QVERIFY(!repo.loadSession());
         QVERIFY(!QFile::exists(dir.filePath(QStringLiteral("session.json"))));
+
+        // Un ciclo en pausa aparca la suya aparte, con lo que su cola retoma o revisa de lo archivado.
+        s.resume = {{QStringLiteral("TC-105"), QStringLiteral("R-0004")}};
+        s.review = {{QStringLiteral("TC-106"), QStringLiteral("R-0005")}};
+        QVERIFY(repo.saveSuspended(QStringLiteral("PR-0003"), s));
+        QVERIFY(QFile::exists(dir.filePath(QStringLiteral("sessions/PR-0003.json"))));
+        QVERIFY(!repo.loadSession());   // la ejecución en curso sigue libre
+        const auto parkedCycle = repo.loadSuspended(QStringLiteral("PR-0003"));
+        QVERIFY(parkedCycle);
+        QCOMPARE(parkedCycle->run.caseId, QStringLiteral("TC-104"));
+        QCOMPARE(parkedCycle->parked.size(), 1);
+        QCOMPARE(parkedCycle->resume.value(QStringLiteral("TC-105")), QStringLiteral("R-0004"));
+        QCOMPARE(parkedCycle->review.value(QStringLiteral("TC-106")), QStringLiteral("R-0005"));
+        QVERIFY(!repo.loadSuspended(QStringLiteral("PR-0004")));
+        repo.clearSuspended(QStringLiteral("PR-0003"));
+        QVERIFY(!repo.loadSuspended(QStringLiteral("PR-0003")));
     }
 
     void bugLedgerRoundTrip() {

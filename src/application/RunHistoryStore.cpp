@@ -202,6 +202,17 @@ void RunHistoryStore::finishPlan(const QString& planRunId) {
     for (auto& p : m_history.plans) {
         if (p.id != planRunId || p.isFinished()) continue;
         p.finishedAt = QDateTime::currentDateTime();
+        p.pausedAt = QDateTime();   // terminar es salir de la pausa
+        persist();
+        return;
+    }
+}
+
+void RunHistoryStore::setPlanPaused(const QString& planRunId, bool paused) {
+    for (auto& p : m_history.plans) {
+        if (p.id != planRunId) continue;
+        if (p.isFinished() || paused == p.pausedAt.isValid()) return;
+        p.pausedAt = paused ? QDateTime::currentDateTime() : QDateTime();
         persist();
         return;
     }
@@ -226,6 +237,7 @@ bool RunHistoryStore::reopenPlan(const QString& planRunId, const QString& enviro
         if (p.id != planRunId) continue;
         if (!p.isFinished()) return false;
         p.finishedAt = QDateTime();
+        p.pausedAt = QDateTime();
         if (p.environment.trimmed().isEmpty()) p.environment = environment.trimmed();
         ++p.continuations;
         persist();

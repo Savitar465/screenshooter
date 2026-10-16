@@ -23,7 +23,6 @@
 #include <QCoreApplication>
 #include <QLabel>
 #include <QMenu>
-#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPointer>
 #include <QPushButton>
@@ -346,7 +345,8 @@ QWidget* RunView::buildStage() {
 }
 
 QWidget* RunView::buildCaseBar() {
-    // El caso que se está probando, encima de la imagen: qué es, cómo va y cómo se cierra.
+    // El caso que se está probando, encima de la imagen: en qué estado está y cuál es. Pausar y cerrar
+    // el caso están en la barra de herramientas de la ventana.
     m_caseBar = new QWidget;
     m_caseBar->setObjectName(QStringLiteral("runCaseBar"));
     auto* v = ui::vbox(m_caseBar, 0, 8);
@@ -360,39 +360,8 @@ QWidget* RunView::buildCaseBar() {
     m_caseTitle->setObjectName(QStringLiteral("runCaseTitle"));
     m_caseTitle->setStyleSheet(QStringLiteral("font-size:15px;font-weight:800;"));
     h->addWidget(m_caseTitle, 1);
-    m_caseStats = ui::label(QString(), "mono-muted");
-    h->addWidget(m_caseStats);
-    m_pause = pauseButton("runPause");
-    m_pause->setFixedHeight(32);
-    h->addWidget(m_pause);
-    m_finish = ui::button(tr("Cerrar ejecución"), "outline");
-    m_finish->setObjectName(QStringLiteral("runFinish"));
-    m_finish->setFixedHeight(32);
-    m_finish->setStyleSheet(QStringLiteral("padding:0 12px;"));
-    connect(m_finish, &QPushButton::clicked, this, [this]() {
-        // Cerrarla a medias la archiva con lo que se llegó a marcar: se avisa antes.
-        const RunState& r = m_run.state();
-        const int pending = m_run.totalSteps() - r.markedCount();
-        if (m_run.isRunning() && pending > 0 && !m_run.reviewUntouched() &&
-            QMessageBox::question(this, tr("Cerrar la ejecución"),
-                                  tr("Quedan %1 pasos sin marcar. Se archivará en el historial con los %2 que ya tienen veredicto; "
-                                     "los demás quedan como N/A.").arg(pending).arg(r.markedCount())) != QMessageBox::Yes)
-            return;
-        emit finishRequested();
-    });
-    h->addWidget(m_finish);
     v->addWidget(row);
 
-    // De qué va esta ejecución: la ronda del control de calidad y, sobre todo, si se está continuando
-    // una anterior (entonces no se prueba el plan entero, sólo lo que se rompió).
-    m_continuation = ui::card("card-flat");
-    m_continuation->setObjectName(QStringLiteral("runContinuation"));
-    auto* cv = ui::vbox(m_continuation, 0, 2);
-    cv->setContentsMargins(10, 7, 10, 7);
-    m_continuationText = ui::label(QString(), "muted-sm");
-    m_continuationText->setWordWrap(true);
-    cv->addWidget(m_continuationText);
-    v->addWidget(m_continuation);
     return m_caseBar;
 }
 
@@ -525,9 +494,9 @@ QWidget* RunView::buildFocusBar() {
     m_focusVerdicts = buildVerdicts();
     m_focusVerdicts->setFixedWidth(360);
     h->addWidget(m_focusVerdicts);
-    auto* capture = captureButton(nullptr);
-    capture->setFixedWidth(128);
-    h->addWidget(capture);
+    m_focusCapture = captureButton(nullptr);
+    m_focusCapture->setFixedWidth(128);
+    h->addWidget(m_focusCapture);
     m_focusReportBug = iconButton(icons::Glyph::Bug, theme::RedSoft, tr("Reportar bug"), kActionHeight);
     m_focusReportBug->setObjectName(QStringLiteral("focusReportBug"));
     connect(m_focusReportBug, &QPushButton::clicked, this, [this]() { emit reportBugRequested(bugStepIndex()); });
@@ -779,10 +748,6 @@ void RunView::tick() {
     const RunState& r = m_run.state();
     if (r.caseId.isEmpty()) { m_clock.stop(); return; }
     if (!r.finished) m_stepClock->setText((r.paused ? tr("❚❚ %1") : tr("⏱ %1")).arg(formatDuration(r.currentStepSecs())));
-    const TestCase* c = m_cases.find(r.caseId);
-    if (!c) return;
-    m_caseStats->setText(tr("%1/%2 pasos · %3 capturas · ⏱ %4")
-                             .arg(r.markedCount()).arg(c->steps.size()).arg(c->shotsOfRun(QString()).size()).arg(formatDuration(r.elapsedSecs())));
 }
 
 void RunView::refresh() {
@@ -810,19 +775,20 @@ void RunView::refresh() {
     m_verdicts->setVisible(active);
     m_focusVerdicts->setVisible(active);
     m_doneActions->setVisible(hasRun && r.finished);
-    m_continuation->setVisible(false);
-    // En pausa no se marca ni se cambia de paso: los veredictos siguen a la vista, apagados.
-    const bool paused = active && m_run.isPaused();
+    // En pausa no se marca, no se cambia de paso ni se captura: todo sigue a la vista, apagado.
+    const bool paused = hasRun && m_run.isPaused();
     m_verdicts->setEnabled(!paused);
     m_focusVerdicts->setEnabled(!paused);
-    for (auto* b : {m_pause, m_focusPause}) {
-        b->setVisible(active);
-        b->setText(paused ? tr("▶ Reanudar") : tr("❚❚ Pausar"));
-        b->setToolTip(paused ? tr("Reanuda la ejecución: los cronómetros vuelven a correr (Ctrl+Alt+Espacio)")
-                             : tr("Pausa la ejecución: el tiempo en pausa no cuenta (Ctrl+Alt+Espacio)"));
-        b->setStyleSheet(paused ? QStringLiteral("QPushButton{padding:0 12px;border-color:%1;color:%1;}").arg(theme::Amber)
-                                : QStringLiteral("QPushButton{padding:0 12px;}"));
-    }
+    m_doneActions->setEnabled(!paused);
+    m_capture->setEnabled(!paused);
+    m_focusCapture->setEnabled(!paused);
+    // La pausa vive en la barra de herramientas; el modo foco la esconde, así que lleva la suya.
+    m_focusPause->setVisible(hasRun);
+    m_focusPause->setText(paused ? tr("▶ Reanudar") : tr("❚❚ Pausar"));
+    m_focusPause->setToolTip(paused ? tr("Reanuda la ejecución: los cronómetros vuelven a correr (Ctrl+Alt+Espacio)")
+                                    : tr("Pausa la ejecución: el tiempo en pausa no cuenta (Ctrl+Alt+Espacio)"));
+    m_focusPause->setStyleSheet(paused ? QStringLiteral("QPushButton{padding:0 12px;border-color:%1;color:%1;}").arg(theme::Amber)
+                                       : QStringLiteral("QPushButton{padding:0 12px;}"));
     if (!hasRun) {
         m_clock.stop();
         ui::clearLayout(m_stepsLayout);
@@ -838,48 +804,6 @@ void RunView::refresh() {
         return;
     }
 
-    // De qué ronda es esta ejecución y si continúa otra: lo primero que hay que saber al llegar aquí,
-    // porque cambia lo que se espera de ella (no se prueba el plan entero, sino lo que se rompió).
-    if (const PlanRun* cycle = m_run.planRunId().isEmpty() ? nullptr : m_history.findPlan(m_run.planRunId())) {
-        QStringList parts;
-        if (cycle->revision > 0) parts << tr("revisión %1").arg(cycle->revision);
-        if (!cycle->environment.trimmed().isEmpty()) parts << cycle->environment.trimmed();
-        QString text;
-        if (cycle->wasContinued() && !cycle->isFinished()) {
-            // Continuar reabre el mismo ciclo: lo que pasó sigue en él y sólo se repite lo roto.
-            text = tr("<b>CONTINUANDO EL CICLO %1</b> · se repiten sólo los casos que fallaron o quedaron bloqueados; "
-                      "lo ya superado, sus capturas y sus bugs se conservan")
-                       .arg(cycle->id);
-            if (!parts.isEmpty()) text += QStringLiteral(" · ") + parts.join(QStringLiteral(" · "));
-            if (!m_run.continuesRunId().isEmpty())
-                text += tr("<br>Este caso se retoma en el paso que se rompió; los anteriores vienen de la ejecución %1.")
-                            .arg(m_run.continuesRunId());
-        } else if (cycle->isContinuation()) {
-            text = tr("<b>CONTINUANDO LA %1</b> · se repiten sólo los casos que fallaron o quedaron bloqueados en el ciclo %2")
-                       .arg(parts.isEmpty() ? tr("ronda de pruebas") : tr("REVISIÓN %1").arg(cycle->revision), cycle->continuesCycleId);
-            if (!cycle->environment.trimmed().isEmpty()) text += tr(" · ambiente %1").arg(cycle->environment.trimmed());
-            if (!m_run.continuesRunId().isEmpty())
-                text += tr("<br>Este caso se retoma en el paso que se rompió; los anteriores vienen de la ejecución %1.")
-                            .arg(m_run.continuesRunId());
-        } else if (!parts.isEmpty()) {
-            text = tr("Ciclo %1 · %2").arg(cycle->id, parts.join(QStringLiteral(" · ")));
-        }
-        // Revisar un caso ya archivado pide saberlo antes que nada: lo que se toque lo corrige.
-        if (m_run.isReviewing())
-            text = m_run.reviewUntouched()
-                       ? tr("<b>REVISANDO %1</b> · lo archivado de %2 llega heredado paso a paso. Cambia un veredicto o una nota, "
-                            "o añade evidencia, para corregirlo; si no tocas nada, al seguir queda como estaba")
-                             .arg(r.reviewOf, c->id)
-                       : tr("<b>CORRIGIENDO %1</b> · al cerrar se archiva como una ejecución nueva del ciclo y sustituye a la "
-                            "anterior en su informe")
-                             .arg(r.reviewOf);
-        m_continuationText->setText(text);
-        m_continuationText->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;")
-                                              .arg(m_run.isReviewing() ? theme::Blue
-                                                   : cycle->isContinuation() || cycle->wasContinued() ? theme::Amber : theme::Muted));
-        m_continuation->setVisible(!text.isEmpty() && !m_focusMode);
-    }
-
     if (!m_clock.isActive()) m_clock.start();
     // El título entero va en el tooltip, con la suite y el componente: en la barra cabe en una línea.
     m_caseTitle->setFullText(c->title);
@@ -892,7 +816,9 @@ void RunView::refresh() {
     if (active) {
         const QString stateColor = paused ? theme::Amber : theme::Green;
         m_stateDot->setStyleSheet(QStringLiteral("background:%1;border-radius:4px;").arg(stateColor));
-        m_stateText->setText(paused ? tr("%1 · EN PAUSA").arg(c->id) : tr("%1 · EJECUTANDO").arg(c->id));
+        m_stateText->setText(paused ? tr("%1 · EN PAUSA").arg(c->id)
+                             : m_run.isReviewing() ? tr("%1 · REVISANDO %2").arg(c->id, r.reviewOf)
+                                                   : tr("%1 · EJECUTANDO").arg(c->id));
         m_stateText->setStyleSheet(QStringLiteral("color:%1;").arg(stateColor));
         // Un paso ya marcado se puede volver a ver (y a marcar): el rótulo lo dice.
         m_stepCounter->setText(r.isMarked(r.idx)
@@ -911,8 +837,6 @@ void RunView::refresh() {
         m_note->setPlaceholderText(tr("Observaciones del paso %1…").arg(r.idx + 1));
         m_back->setEnabled(m_run.canGoBack());
         m_next->setEnabled(m_run.canGoNext());
-        m_finish->setText(!m_run.isReviewing() ? tr("Cerrar ejecución")
-                          : m_run.reviewUntouched() ? tr("Terminar revisión") : tr("Guardar corrección"));
         m_focusCounter->setText(paused ? tr("EN PAUSA · PASO %1 / %2").arg(r.idx + 1).arg(total)
                                        : tr("PASO %1 / %2").arg(r.idx + 1).arg(total));
         m_focusAction->setFullText(c->steps[r.idx].action);
@@ -921,8 +845,8 @@ void RunView::refresh() {
         const QString color = v == Verdict::Bloqueado ? theme::Amber : v == Verdict::Fallido ? theme::Red : theme::Green;
         const QString text = v == Verdict::Bloqueado ? tr("Bloqueado") : v == Verdict::Fallido ? tr("Fallido") : tr("Superado");
         m_stateDot->setStyleSheet(QStringLiteral("background:%1;border-radius:4px;").arg(color));
-        m_stateText->setText(tr("%1 · TERMINADA").arg(c->id));
-        m_stateText->setStyleSheet(QStringLiteral("color:%1;").arg(color));
+        m_stateText->setText(paused ? tr("%1 · TERMINADA · EN PAUSA").arg(c->id) : tr("%1 · TERMINADA").arg(c->id));
+        m_stateText->setStyleSheet(QStringLiteral("color:%1;").arg(paused ? theme::Amber : color));
         m_stepCounter->setText(tr("EJECUCIÓN TERMINADA"));
         m_stepCounter->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Muted));
         m_stepClock->clear();
@@ -940,9 +864,6 @@ void RunView::refresh() {
         m_focusCounter->setText(tr("TERMINADA"));
         m_focusAction->setFullText(QStringLiteral("%1 · %2").arg(text, summary));
         m_reopen->setVisible(r.markedCount() > 0);
-        m_finish->setText(m_run.queuedCount() > 0 ? tr("Siguiente caso · quedan %1").arg(m_run.queuedCount())
-                          : !m_run.planRunId().isEmpty() ? tr("Terminar plan y ver informe")
-                                                         : tr("Finalizar y volver"));
     }
     m_stepsTab->setText(tr("Pasos · %1").arg(total));
 
@@ -1144,7 +1065,7 @@ void RunView::refreshShots() {
         // cambia de paso, que reescribiría aquélla.
         const bool inherited = !shot.runId.isEmpty();
         card->setReadOnly(inherited);
-        if (inherited) card->setToolTip(tr("De %1, la ejecución que se retoma: se conserva mientras su paso no se vuelva a marcar").arg(shot.runId));
+        if (inherited) card->setToolTip(tr("De %1, la ejecución que se retoma: se conserva en ésta").arg(shot.runId));
         if (shot.id == m_selectedShot) {
             selectedCard = card;
             position = i + 1;
@@ -1201,7 +1122,7 @@ void RunView::refreshShots() {
     m_shotStep->setText(inheritedShot ? (shot->step > 0 ? tr("PASO %1 · DE %2").arg(shot->step).arg(shot->runId)
                                                         : tr("SIN PASO · DE %1").arg(shot->runId))
                         : shot->step > 0 ? tr("PASO %1").arg(shot->step) : tr("SIN PASO"));
-    m_shotStep->setToolTip(inheritedShot ? tr("Evidencia de la ejecución que se retoma: se conserva mientras su paso no se vuelva a marcar") : QString());
+    m_shotStep->setToolTip(inheritedShot ? tr("Evidencia de la ejecución que se retoma: se conserva en ésta") : QString());
     m_shotStep->setStyleSheet(QStringLiteral("background:%1;color:%2;border:1px solid %3;border-radius:4px;padding:2px 8px;"
                                              "font-size:11px;font-weight:800;")
                                   .arg(theme::tint(stepColorName, 40), stepColorName == theme::Border ? theme::TextSoft : stepColorName,
@@ -1421,12 +1342,10 @@ QWidget* RunView::caseCard(const QString& caseId, const QHash<QString, RunRecord
 
 QList<Screenshot> RunView::visibleShots(const TestCase& c) const {
     const RunState& r = m_run.state();
-    // De la ejecución que se retoma se ve lo de cada paso que ésta no ha vuelto a marcar —el heredado y
-    // el que está por repetir, con la captura de cuando se rompió— y lo que no era de ningún paso (0).
-    // Un paso marcado de nuevo se prueba con lo que se capture ahora.
+    // De la ejecución que se retoma se ve toda su evidencia, también la de los pasos que se vuelven a
+    // marcar: se conserva junto con lo que se capture ahora, y así se archiva.
     QList<int> previous{0};
-    for (int i = 0; i < r.results.size(); ++i)
-        if (!r.results[i].marked || r.results[i].inherited) previous << i + 1;
+    for (int i = 0; i < r.results.size(); ++i) previous << i + 1;
     return m_history.evidenceOfSteps(m_run.continuesRunId(), previous) + c.shotsOfRun(QString());
 }
 

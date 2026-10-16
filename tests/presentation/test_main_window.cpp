@@ -449,9 +449,9 @@ private slots:
         QTRY_VERIFY(visibleEvidence());
     }
 
-    // En Casos, cada ejecución cuenta las evidencias que el historial le da: quitada de la original,
-    // ésta deja de contarla y la traída a un ciclo la sigue teniendo.
-    void theCaseRunsCountOnlyTheEvidenceTheyStillHave() {
+    // Quitada una evidencia de la original, ésta deja de tenerla y la traída a un ciclo la conserva. En
+    // Casos, la fila de cada ejecución ya no dice cuántas tiene: abre su ficha, donde se ven.
+    void theCaseRunsKeepOnlyTheEvidenceTheyStillHave() {
         WindowFixture f;
         const QString id = f.app.store.selectedId();
         f.app.run.startSequence({QStringLiteral("TC-101") == id ? QStringLiteral("TC-103") : QStringLiteral("TC-101")}, QStringLiteral("Regresión"));
@@ -477,8 +477,11 @@ private slots:
             return text;
         };
         QTRY_VERIFY(!rowText(imported->id).isEmpty());
-        QVERIFY(!rowText(original).contains(QStringLiteral("evidencia")));
-        QVERIFY(rowText(imported->id).contains(QStringLiteral("1 evidencia")));
+        QVERIFY(!rowText(original).isEmpty());
+        QVERIFY(f.app.history.evidenceOf(*f.app.history.findRun(original)).isEmpty());
+        const QList<Screenshot> kept = f.app.history.evidenceOf(*f.app.history.findRun(imported->id));
+        QCOMPARE(kept.size(), 1);
+        QCOMPARE(kept.first().id, shotId);
     }
 
     // La evidencia de una ejecución se ve en su ficha del historial como una lista, sin miniaturas; un
@@ -1041,15 +1044,20 @@ private slots:
         QTRY_COMPARE(f.app.run.state().caseId, QStringLiteral("TC-104"));
         QVERIFY(f.app.run.isReviewing());
         QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("runStepTab"))->isChecked());
-        auto* finish = f.window->findChild<QPushButton*>(QStringLiteral("runFinish"));
-        QCOMPARE(finish->text(), QStringLiteral("Terminar revisión"));
+        // Una revisión no tiene botón propio para cerrarla: ni en la pantalla ni en la barra de herramientas.
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("runFinish")));
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("navbarFinish"))->isHidden());
         // El caso revisado enseña lo suyo: su captura, y ni la de TC-103 ni su bug.
         QTRY_VERIFY(shotIds().contains(901));
         QVERIFY(!shotIds().contains(902));
         QCOMPARE(bugCards(QStringLiteral("SHOP-31")), 0);
 
-        // Sin cambios, terminar la revisión vuelve al caso que se continuaba y no archiva nada.
-        finish->click();
+        // Sin cambios, volver al caso que se continuaba deja la revisión sin archivar nada.
+        casesTab->click();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* continued = f.window->findChild<QFrame*>(QStringLiteral("caseCard-TC-103"));
+        QVERIFY(continued);
+        QTest::mouseClick(continued, Qt::LeftButton);
         QTRY_COMPARE(f.app.run.state().caseId, QStringLiteral("TC-103"));
         QCOMPARE(f.app.history.runsForPlan(cycle).size(), runs);
         QTRY_VERIFY(shotIds().contains(902));
@@ -1585,11 +1593,18 @@ private slots:
         run->click();
         QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-103"));
         QVERIFY(f.app.run.planRunId().isEmpty());
-        QVERIFY(!run->isEnabled());
         QVERIFY(!targets->isEnabled());
         QVERIFY(stop->isEnabled());
+        // En marcha, ▶ no arranca otra ejecución: pausa la que hay y la reanuda.
+        QCOMPARE(run->text(), QStringLiteral("❚❚"));
+        run->click();
+        QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-103"));
+        QVERIFY(f.app.run.isPaused());
+        run->click();
+        QVERIFY(!f.app.run.isPaused());
         f.app.run.mark(StepResult::Pass);
         QVERIFY(!finish->isHidden());
+        QCOMPARE(finish->text(), QStringLiteral("Finalizar y volver"));
         finish->click();
         QVERIFY(f.app.run.state().caseId.isEmpty());
         QVERIFY(run->isEnabled());
@@ -1604,6 +1619,35 @@ private slots:
         QCOMPARE(f.app.run.state().caseId, f.app.plans.orderedCaseIds().first());
         QCOMPARE(f.app.run.queuedCount(), f.app.plans.orderedCaseIds().size() - 1);
         QCOMPARE(f.window->currentScreen(), Screen::Run);
+    }
+
+    // ■ detiene la ejecución y cierra su ciclo, pero antes pregunta: guardar archiva lo hecho, a medias.
+    void stoppingAsksWhetherToKeepTheProgress() {
+        WindowFixture f;
+        f.app.run.startSequence({QStringLiteral("TC-104"), QStringLiteral("TC-101")}, QStringLiteral("Regresión"));
+        const QString cycle = f.app.run.planRunId();
+        f.app.run.mark(StepResult::Pass);
+        bool asked = false;
+        QTimer answer;
+        answer.setInterval(20);
+        QObject::connect(&answer, &QTimer::timeout, [&]() {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            auto* keep = box ? box->findChild<QPushButton*>(QStringLiteral("stopKeep")) : nullptr;
+            if (!keep) return;
+            QVERIFY(box->findChild<QPushButton*>(QStringLiteral("stopDiscard")));
+            asked = true;
+            answer.stop();
+            keep->click();
+        });
+        answer.start();
+        f.window->findChild<QPushButton*>(QStringLiteral("navbarStop"))->click();
+        QTRY_VERIFY(asked);
+        QVERIFY(f.app.run.state().caseId.isEmpty());
+        QVERIFY(f.app.history.findPlan(cycle)->isFinished());
+        const QList<RunRecord> runs = f.app.history.runsForPlan(cycle);
+        QCOMPARE(runs.size(), 1);
+        QCOMPARE(runs.first().steps.size(), 1);   // lo marcado; lo pendiente no llegó a archivarse
+        QCOMPARE(f.window->currentScreen(), Screen::Historial);
     }
 
     // El plan se ejecuta y se le añaden casos desde su propia pantalla, que es donde se compone.
@@ -2256,7 +2300,7 @@ private slots:
         const QString runStep = f.liveLabel("issueStepRunDetail")->text();
         QVERIFY2(runStep.contains(QStringLiteral("1 ejecución")), qPrintable(runStep));
 
-        // Lo escrito en QAflow se queda aunque GESREQ cambie; el cambio se avisa hasta revisarlo.
+        // Lo escrito en QAflow se queda aunque GESREQ cambie.
         title->selectAll();
         QTest::keyClicks(title, "Mi titulo");
         QTest::keyClick(title, Qt::Key_Return);
@@ -2271,11 +2315,9 @@ private slots:
         QCOMPARE(f.app.issues.issues().size(), 1);
         QCOMPARE(f.app.issues.find(id)->title, QStringLiteral("Mi titulo"));
         QCOMPARE(f.app.tracker->publishedIssues.size(), 1);   // volver a empezar no crea otro issue
-        auto* changes = f.window->findChild<QWidget*>(QStringLiteral("issueChanges"));
-        QVERIFY(changes && !changes->isHidden());
-        QVERIFY(f.badge(Screen::Issues)->isVisible());
-        f.window->findChild<QPushButton*>(QStringLiteral("issueAcknowledge"))->click();
-        QVERIFY(changes->isHidden());
+        // Abrir el issue da por revisado el cambio, sin ningún aviso en el requerimiento.
+        QVERIFY(!f.window->findChild<QWidget*>(QStringLiteral("issueChanges")));
+        QTRY_VERIFY(f.app.issues.find(id)->requirement.changes.isEmpty());
         QVERIFY(!f.badge(Screen::Issues)->isVisible());
         f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
     }
@@ -3784,7 +3826,8 @@ private slots:
     }
 
     // Lo que falló o quedó bloqueado se retoma desde el informe: con la ronda abierta se reabre el mismo
-    // ciclo, que repite sólo esos casos, y la pantalla de ejecución dice que se está continuando.
+    // ciclo, que repite sólo esos casos. Pausarlo desde la barra de herramientas pausa el ciclo entero, y
+    // su issue lo enseña en la tarjeta y en la revisión.
     void theReportContinuesTheCycleWithItsBrokenCases() {
         WindowFixture f;
         const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
@@ -3832,17 +3875,59 @@ private slots:
         QCOMPARE(cycle->revision, 1);
         QCOMPARE(cycle->issueId, issueId);
 
-        // Y la ejecución lo dice, con el caso retomado en el paso que se rompió.
-        auto* banner = f.window->findChild<QWidget*>(QStringLiteral("runContinuation"));
-        QVERIFY(banner);
-        QVERIFY(banner->isVisible());
-        const QString text = banner->findChild<QLabel*>()->text();
-        QVERIFY2(text.contains(QStringLiteral("CONTINUANDO")) && text.contains(planRunId), qPrintable(text));
+        // Sin aviso de continuación: el caso se retoma en el paso que se rompió.
+        QVERIFY(!f.window->findChild<QWidget*>(QStringLiteral("runContinuation")));
         QCOMPARE(f.app.run.state().idx, 1);
         QVERIFY(f.app.run.state().results[0].inherited);
         // Y el bug que se reportó cuando se rompió sigue con el caso.
         QTRY_VERIFY(f.window->findChild<QPushButton*>(QStringLiteral("runBug-SHOP-88")));
         QCOMPARE(f.window->findChild<QPushButton*>(QStringLiteral("runBugsTab"))->text(), QStringLiteral("Bugs · 1"));
+
+        // ❚❚ en la barra de herramientas pausa el ciclo y lo aparca: la ejecución queda libre (▶ vuelve a
+        // arrancar la selección) y se vuelve a su issue, que lo enseña en pausa.
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("runPause")));
+        auto* play = f.window->findChild<QPushButton*>(QStringLiteral("navbarRun"));
+        QCOMPARE(play->text(), QStringLiteral("❚❚"));
+        play->click();
+        QVERIFY(f.app.run.state().caseId.isEmpty());
+        QVERIFY(f.app.run.isSuspended(planRunId));
+        QCOMPARE(play->text(), QStringLiteral("▶"));
+        QCOMPARE(f.window->currentScreen(), Screen::Issues);
+        auto* targets = f.window->findChild<QComboBox*>(QStringLiteral("runTargetSelector"));
+        auto* issues = f.window->findChild<IssuesView*>();
+        QVERIFY(targets->findData(QStringLiteral("paused:") + planRunId) >= 0);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QVERIFY(f.window->findChild<QLabel*>(QStringLiteral("issuePaused-%1").arg(issueId)));
+        const QString state = f.window->findChild<QLabel*>(QStringLiteral("issueRevisionState"))->text();
+        QVERIFY2(state.contains(QStringLiteral("En pausa")), qPrintable(state));
+
+        auto* resume = f.window->findChild<QPushButton*>(QStringLiteral("issueStepResume"));
+        QVERIFY(resume);
+
+        // Con él aparcado se ejecuta otra cosa; con un caso suelto en curso no se reanuda.
+        f.app.run.start(QStringLiteral("TC-103"));
+        resume->click();
+        QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-103"));
+        QVERIFY(f.app.run.isSuspended(planRunId));
+        f.app.run.abandon();
+        // Y el mismo plan no arranca otro ciclo a su lado: se reanuda el que tiene.
+        f.window->navigate(Screen::Issues);
+        issues->openIssue(issueId);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        f.window->findChild<QPushButton*>(QStringLiteral("issueStepRun"))->click();
+        QVERIFY(!f.window->findChild<CycleStartDialog*>());
+        QVERIFY(f.app.run.state().caseId.isEmpty());
+
+        // «▶ Reanudar» del issue lo pone en curso donde se dejó: TC-102, en su segundo paso.
+        resume = f.window->findChild<QPushButton*>(QStringLiteral("issueStepResume"));
+        resume->click();
+        QCOMPARE(f.window->currentScreen(), Screen::Run);
+        QCOMPARE(f.app.run.planRunId(), planRunId);
+        QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-102"));
+        QCOMPARE(f.app.run.state().idx, 1);
+        QVERIFY(!f.app.history.findPlan(planRunId)->isPaused());
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QVERIFY(!f.window->findChild<QLabel*>(QStringLiteral("issuePaused-%1").arg(issueId)));
     }
 
     // La columna de la derecha tiene dos pestañas: las capturas y los bugs de la ejecución, los dos

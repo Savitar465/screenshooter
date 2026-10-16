@@ -2670,10 +2670,6 @@
         <translation>This test case has not been run yet.</translation>
     </message>
     <message>
-        <source>%1/%2 pasos · %3</source>
-        <translation>%1/%2 steps · %3</translation>
-    </message>
-    <message>
         <source>Ejecución suelta</source>
         <translation>Standalone run</translation>
     </message>
@@ -2744,14 +2740,6 @@
     <message>
         <source>Ver los resultados de esta ejecución</source>
         <translation>See the results of this execution</translation>
-    </message>
-    <message>
-        <source> · 1 evidencia</source>
-        <translation> · 1 piece of evidence</translation>
-    </message>
-    <message>
-        <source> · %1 evidencias</source>
-        <translation> · %1 pieces of evidence</translation>
     </message>
     <message>
         <source>DATOS DE LA PRUEBA</source>
@@ -2909,11 +2897,11 @@
     </message>
     <message>
         <source>Desmarca los que no se van a probar en este ciclo: no salen del plan, sólo de este ciclo.</source>
-        <translation>Uncheck the ones that won't be tested in this cycle: they stay in the plan, they only leave this cycle.</translation>
+        <translation>Uncheck the ones that won&apos;t be tested in this cycle: they stay in the plan, they only leave this cycle.</translation>
     </message>
     <message>
         <source>Desmarca los que no se van a probar en este ciclo: no salen del plan, sólo de este ciclo. Al lado, cómo quedó cada uno en %1.</source>
-        <translation>Uncheck the ones that won't be tested in this cycle: they stay in the plan, they only leave this cycle. Next to each one, how it ended in %1.</translation>
+        <translation>Uncheck the ones that won&apos;t be tested in this cycle: they stay in the plan, they only leave this cycle. Next to each one, how it ended in %1.</translation>
     </message>
     <message>
         <source>Todos</source>
@@ -2937,7 +2925,7 @@
     </message>
     <message>
         <source>Sin marcar, los añadidos son sólo de este ciclo; marcado, los siguientes ciclos del plan también los tendrán.</source>
-        <translation>Unchecked, the added cases belong only to this cycle; checked, the plan's next cycles will have them too.</translation>
+        <translation>Unchecked, the added cases belong only to this cycle; checked, the plan&apos;s next cycles will have them too.</translation>
     </message>
     <message>
         <source>añadido a este ciclo</source>
@@ -3986,6 +3974,26 @@ Remove it?</translation>
         <source>Evidencia quitada de %1; las otras ejecuciones que la tienen la conservan</source>
         <translation>Evidence removed from %1; other runs that have it keep it</translation>
     </message>
+    <message>
+        <source>Plan en pausa · %1/%2 casos</source>
+        <translation>Plan paused · %1/%2 cases</translation>
+    </message>
+    <message>
+        <source>En pausa</source>
+        <translation>Paused</translation>
+    </message>
+    <message>
+        <source>· desde el %1; se reanuda donde se dejó</source>
+        <translation>· since %1; it resumes where it was left</translation>
+    </message>
+    <message>
+        <source>▶ Reanudar ciclo</source>
+        <translation>▶ Resume cycle</translation>
+    </message>
+    <message>
+        <source>Vuelve a poner en curso el ciclo %1 donde se dejó: su caso, su paso y sus casos a medias</source>
+        <translation>Puts cycle %1 back in progress where it was left: its case, its step and its half-done cases</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ImageViewer</name>
@@ -4278,6 +4286,26 @@ Remove it?</translation>
         <source>%1 ya tiene revisiones cerradas en %2: esa fase no se puede quitar</source>
         <translation>%1 already has closed revisions in %2: that phase cannot be removed</translation>
     </message>
+    <message>
+        <source>No hay ninguna revisión abierta</source>
+        <translation>There is no open revision</translation>
+    </message>
+    <message>
+        <source>La revisión %1 ya tiene ciclos: ciérrala con su resultado</source>
+        <translation>Revision %1 already has cycles: close it with its result</translation>
+    </message>
+    <message>
+        <source>La revisión %1 ya tiene acta</source>
+        <translation>Revision %1 already has a record</translation>
+    </message>
+    <message>
+        <source>El resultado de la revisión %1 ya se envió al gestor</source>
+        <translation>The result of revision %1 was already sent to the tracker</translation>
+    </message>
+    <message>
+        <source>El resultado de la revisión %1 ya se registró en GESREQ</source>
+        <translation>The result of revision %1 was already recorded in GESREQ</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::IssuesView</name>
@@ -4374,10 +4402,6 @@ Remove it?</translation>
         <translation>Opens the record in the browser (you need to be signed in to GESREQ)</translation>
     </message>
     <message>
-        <source>Marcar como revisado</source>
-        <translation>Mark as reviewed</translation>
-    </message>
-    <message>
         <source>Vincular plan…</source>
         <translation>Link plan…</translation>
     </message>
@@ -4392,14 +4416,6 @@ Remove it?</translation>
     <message>
         <source>Sin publicar en Jira</source>
         <translation>Not published in Jira</translation>
-    </message>
-    <message>
-        <source>(vacío)</source>
-        <translation>(empty)</translation>
-    </message>
-    <message>
-        <source>⚠ Cambió en GESREQ desde la última revisión:</source>
-        <translation>⚠ Changed in GESREQ since the last review:</translation>
     </message>
     <message>
         <source>Ya no está en tu bandeja de control de calidad (se vio por última vez el %1). El issue y sus pruebas se conservan.</source>
@@ -4826,10 +4842,6 @@ Create another one anyway?</translation>
         <translation>Test again</translation>
     </message>
     <message>
-        <source>Abre otra ronda de pruebas del requerimiento</source>
-        <translation>Opens another testing round of the requirement</translation>
-    </message>
-    <message>
         <source>%1 · pruebas del requerimiento %2 · plan %3 listo</source>
         <translation>%1 · tests of requirement %2 · plan %3 ready</translation>
     </message>
@@ -4876,10 +4888,6 @@ Create another one anyway?</translation>
     <message>
         <source>Revisar los bugs reportados</source>
         <translation>Review the reported bugs</translation>
-    </message>
-    <message>
-        <source>%1 bug(s) · %2 abierto(s)</source>
-        <translation>%1 bug(s) · %2 open</translation>
     </message>
     <message>
         <source>Publicar en el gestor…</source>
@@ -5029,10 +5037,6 @@ Create another one anyway?</translation>
         <translation>Prepare the plan</translation>
     </message>
     <message>
-        <source>Revisar los bugs</source>
-        <translation>Review the bugs</translation>
-    </message>
-    <message>
         <source>Publicar</source>
         <translation>Publish</translation>
     </message>
@@ -5041,13 +5045,6 @@ Create another one anyway?</translation>
         <translation>
             <numerusform>%n case</numerusform>
             <numerusform>%n cases</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <source>%n abierto(s)</source>
-        <translation>
-            <numerusform>%n open</numerusform>
-            <numerusform>%n open</numerusform>
         </translation>
     </message>
     <message>
@@ -5339,16 +5336,8 @@ Create another one anyway?</translation>
         <translation>%1 · %2 · closed on %3</translation>
     </message>
     <message>
-        <source>REVISIÓN %1 · %2 · %3</source>
-        <translation>REVISION %1 · %2 · %3</translation>
-    </message>
-    <message>
         <source>Cada fase se prueba en una o más revisiones. Conforme en una fase la aprueba y se pasa a la siguiente; sólo el Conforme de la última registra el OK en GESREQ y cierra el issue del gestor.</source>
         <translation>Each phase is tested in one or more revisions. Conforming in a phase approves it and moves on to the next; only conforming in the last one registers the OK in GESREQ and closes the tracker issue.</translation>
-    </message>
-    <message>
-        <source>%1 aprobada: la revisión %2 es de %3</source>
-        <translation>%1 passed: revision %2 is %3</translation>
     </message>
     <message>
         <source>Arranca un ciclo del plan en %1: abre la revisión %2</source>
@@ -5396,10 +5385,6 @@ Create another one anyway?</translation>
     <message>
         <source>Cerrar (%1)</source>
         <translation>Close (%1)</translation>
-    </message>
-    <message>
-        <source>%1 bug(s) · %2 abierto(s), %3 ya verificado(s) en un reintento</source>
-        <translation>%1 bug(s) · %2 open, %3 already verified in a retest</translation>
     </message>
     <message>
         <source>Cierra en el gestor los bugs cuyo paso se volvió a probar y pasó</source>
@@ -5527,10 +5512,6 @@ Create another one anyway?</translation>
         <translation>Hide record</translation>
     </message>
     <message>
-        <source>HISTORIAL</source>
-        <translation>HISTORY</translation>
-    </message>
-    <message>
         <source>Eliminar issue…</source>
         <translation>Delete issue…</translation>
     </message>
@@ -5571,14 +5552,6 @@ Create another one anyway?</translation>
         <translation>Starts a cycle of the plan: asks for the environment and takes you to the run. The first one opens the revision and puts the issue in testing</translation>
     </message>
     <message>
-        <source>Bugs</source>
-        <translation>Bugs</translation>
-    </message>
-    <message>
-        <source>Sin bugs reportados</source>
-        <translation>No bugs reported</translation>
-    </message>
-    <message>
         <source>BUGS · %1 ABIERTO(S)</source>
         <translation>BUGS · %1 OPEN</translation>
     </message>
@@ -5605,22 +5578,6 @@ Create another one anyway?</translation>
     <message>
         <source>Aprueba %1 y pasa a %2, u observada</source>
         <translation>Approves %1 and moves to %2, or observed</translation>
-    </message>
-    <message>
-        <source>Repetir</source>
-        <translation>Repeat</translation>
-    </message>
-    <message>
-        <source>Revisión</source>
-        <translation>Revision</translation>
-    </message>
-    <message>
-        <source>Quedó observado: al corregirlo se abre la revisión %1 en %2</source>
-        <translation>Left observed: once fixed, revision %1 opens in %2</translation>
-    </message>
-    <message>
-        <source>Rev %1 · %2</source>
-        <translation>Rev %1 · %2</translation>
     </message>
     <message>
         <source>Solicita %1</source>
@@ -5850,20 +5807,8 @@ Create another one anyway?</translation>
         <translation>Back to the current revision</translation>
     </message>
     <message>
-        <source>REVISIÓN %1 · %2 · ANTERIOR</source>
-        <translation>REVISION %1 · %2 · PREVIOUS</translation>
-    </message>
-    <message>
-        <source>Estás viendo la revisión %1 (%2), cerrada el %3. Lo que se ejecute, continúe o cierre es de la revisión en curso; desde aquí se regenera su acta y se completa su publicación.</source>
-        <translation>You are viewing revision %1 (%2), closed on %3. Anything run, continued or closed belongs to the current revision; from here you can regenerate its record and complete its publication.</translation>
-    </message>
-    <message>
         <source>%1 ejecución(es) en esta revisión</source>
         <translation>%1 run(s) in this revision</translation>
-    </message>
-    <message>
-        <source>EN PANTALLA</source>
-        <translation>ON SCREEN</translation>
     </message>
     <message>
         <source>Abre la revisión %1 aquí: sus ejecuciones, sus bugs, su acta y dónde llegó su resultado</source>
@@ -5884,6 +5829,193 @@ Create another one anyway?</translation>
     <message>
         <source>Reescribe el título y la descripción del issue del gestor con los de QAflow, revisándolos antes</source>
         <translation>Rewrites the tracker issue&apos;s title and description with QAflow&apos;s, reviewing them first</translation>
+    </message>
+    <message>
+        <source>EN PAUSA</source>
+        <translation>PAUSED</translation>
+    </message>
+    <message>
+        <source>Revisión %1 en %2, en curso: su ejecución está en pausa</source>
+        <translation>Revision %1 in %2, in progress: its run is paused</translation>
+    </message>
+    <message>
+        <source>Revisión %1 en %2, en curso</source>
+        <translation>Revision %1 in %2, in progress</translation>
+    </message>
+    <message>
+        <source>Revisión %1 en %2, cerrada el %3 como %4</source>
+        <translation>Revision %1 in %2, closed on %3 as %4</translation>
+    </message>
+    <message>
+        <source>Rev %1</source>
+        <translation>Rev %1</translation>
+    </message>
+    <message>
+        <source>En pausa</source>
+        <translation>Paused</translation>
+    </message>
+    <message>
+        <source>En curso</source>
+        <translation>In progress</translation>
+    </message>
+    <message>
+        <source>SE PROBARÁ EN</source>
+        <translation>WILL BE TESTED IN</translation>
+    </message>
+    <message>
+        <source>SE PROBÓ EN</source>
+        <translation>TESTED IN</translation>
+    </message>
+    <message>
+        <source>PROBANDO EN</source>
+        <translation>TESTING IN</translation>
+    </message>
+    <message>
+        <source>Aún sin ciclos</source>
+        <translation>No cycles yet</translation>
+    </message>
+    <message>
+        <source>Sin ciclos todavía</source>
+        <translation>No cycles yet</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n ciclo(s) en este ambiente</source>
+        <translation>
+            <numerusform>%n cycle in this environment</numerusform>
+            <numerusform>%n cycles in this environment</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Ciclos en %1</source>
+        <translation>Cycles in %1</translation>
+    </message>
+    <message>
+        <source>Sin abrir</source>
+        <translation>Not opened</translation>
+    </message>
+    <message>
+        <source>Revisión %1 de %2</source>
+        <translation>Revision %1 of %2</translation>
+    </message>
+    <message>
+        <source>Se abre con el primer ciclo del plan</source>
+        <translation>Opens with the first cycle of the plan</translation>
+    </message>
+    <message>
+        <source>Anterior · cerrada el %1</source>
+        <translation>Previous · closed on %1</translation>
+    </message>
+    <message>
+        <source>Cerrada el %1</source>
+        <translation>Closed on %1</translation>
+    </message>
+    <message>
+        <source>❚❚ En pausa desde el %1 a las %2 · en curso desde el %3</source>
+        <translation>❚❚ Paused since %1 at %2 · in progress since %3</translation>
+    </message>
+    <message>
+        <source>● En curso desde el %1</source>
+        <translation>● In progress since %1</translation>
+    </message>
+    <message>
+        <source>Revisión %1 (%2) de consulta. Lo que se ejecute, continúe o cierre es de la revisión %3 en %4; desde aquí se regenera su acta y se completa su publicación.</source>
+        <translation>Revision %1 (%2), read only. Whatever is run, continued or closed belongs to revision %3 in %4; from here you can regenerate its record and complete its publication.</translation>
+    </message>
+    <message>
+        <source> · %1 bug(s), %2 abierto(s)</source>
+        <translation> · %1 bug(s), %2 open</translation>
+    </message>
+    <message>
+        <source> · %1 bug(s), %2 abierto(s), %3 ya verificado(s) en un reintento</source>
+        <translation> · %1 bug(s), %2 open, %3 already verified in a retry</translation>
+    </message>
+    <message>
+        <source>La revisión %1 sigue abierta en %2: se habilita al cerrarla.</source>
+        <translation>Revision %1 is still open in %2: available once it is closed.</translation>
+    </message>
+    <message>
+        <source>Descartar revisión…</source>
+        <translation>Discard revision…</translation>
+    </message>
+    <message>
+        <source>Quita la revisión %1 como si no se hubiera abierto: todavía no tiene ciclos, acta ni nada publicado</source>
+        <translation>Removes revision %1 as if it had never been opened: it has no cycles, record or anything published yet</translation>
+    </message>
+    <message>
+        <source>↻ Volver a probar</source>
+        <translation>↻ Test again</translation>
+    </message>
+    <message>
+        <source>La primera revisión se abre también al ejecutar el plan.</source>
+        <translation>The first revision also opens when the plan is run.</translation>
+    </message>
+    <message>
+        <source>%1 aprobada: la revisión %2 es de %3.</source>
+        <translation>%1 passed: revision %2 is in %3.</translation>
+    </message>
+    <message>
+        <source>Quedó observado: al corregirlo se abre la revisión %1 en %2.</source>
+        <translation>Left observed: once fixed, revision %1 opens in %2.</translation>
+    </message>
+    <message>
+        <source>Abre otra ronda de pruebas del requerimiento.</source>
+        <translation>Opens another round of tests for the requirement.</translation>
+    </message>
+    <message>
+        <source>desde %1</source>
+        <translation>since %1</translation>
+    </message>
+    <message>
+        <source>Vuelve a la revisión %1, la que está en curso</source>
+        <translation>Back to revision %1, the one in progress</translation>
+    </message>
+    <message>
+        <source>Descartar la revisión</source>
+        <translation>Discard the revision</translation>
+    </message>
+    <message>
+        <source>¿Descartar la revisión %1 (%2)?</source>
+        <translation>Discard revision %1 (%2)?</translation>
+    </message>
+    <message>
+        <source>Se quita como si no se hubiera abierto y el issue vuelve al estado que tenía antes. No tiene ciclos, acta ni nada publicado, así que no se pierde nada.</source>
+        <translation>It is removed as if it had never been opened and the issue goes back to its previous state. It has no cycles, record or anything published, so nothing is lost.</translation>
+    </message>
+    <message>
+        <source>Descartar</source>
+        <translation>Discard</translation>
+    </message>
+    <message>
+        <source>Revisión %1 descartada</source>
+        <translation>Revision %1 discarded</translation>
+    </message>
+    <message>
+        <source>Reanudar la ejecución</source>
+        <translation>Resume the run</translation>
+    </message>
+    <message>
+        <source>El ciclo %1 está en pausa desde el %2: se sigue en el caso y el paso donde se dejó.</source>
+        <translation>Cycle %1 has been paused since %2: it continues at the case and step where it was left.</translation>
+    </message>
+    <message>
+        <source>▶ Reanudar (%1)</source>
+        <translation>▶ Resume (%1)</translation>
+    </message>
+    <message>
+        <source>▶ Reanudar</source>
+        <translation>▶ Resume</translation>
+    </message>
+    <message>
+        <source>Reanudar la ejecución (%1)</source>
+        <translation>Resume the run (%1)</translation>
+    </message>
+    <message>
+        <source>Vuelve a poner en curso el ciclo %1 donde se dejó: su caso, su paso y sus casos a medias</source>
+        <translation>Puts cycle %1 back in progress where it was left: its case, its step and its half-done cases</translation>
+    </message>
+    <message>
+        <source>Reanudar este ciclo, en pausa desde el %1</source>
+        <translation>Resume this cycle, paused since %1</translation>
     </message>
 </context>
 <context>
@@ -6248,10 +6380,6 @@ Create another one anyway?</translation>
         <translation>Stop execution</translation>
     </message>
     <message>
-        <source>¿Detener la ejecución y descartar los pasos del caso que aún no ha terminado?</source>
-        <translation>Stop the run and discard the steps of the unfinished case?</translation>
-    </message>
-    <message>
         <source>Finalizar caso</source>
         <translation>Finish case</translation>
     </message>
@@ -6560,6 +6688,110 @@ Create another one anyway?</translation>
     <message>
         <source>no estaba en el ciclo</source>
         <translation>not in the cycle</translation>
+    </message>
+    <message>
+        <source>Reanudar la ejecución (Ctrl+Alt+Espacio)</source>
+        <translation>Resume the run (Ctrl+Alt+Space)</translation>
+    </message>
+    <message>
+        <source>Pausar la ejecución: el tiempo en pausa no cuenta (Ctrl+Alt+Espacio)</source>
+        <translation>Pause the run: time while paused does not count (Ctrl+Alt+Space)</translation>
+    </message>
+    <message>
+        <source>Reanudar ejecución</source>
+        <translation>Resume run</translation>
+    </message>
+    <message>
+        <source>Pausar ejecución</source>
+        <translation>Pause run</translation>
+    </message>
+    <message>
+        <source>Siguiente caso · quedan %1</source>
+        <translation>Next case · %1 remaining</translation>
+    </message>
+    <message>
+        <source>Terminar plan y ver informe</source>
+        <translation>Finish plan and view report</translation>
+    </message>
+    <message>
+        <source>Finalizar y volver</source>
+        <translation>Finish and go back</translation>
+    </message>
+    <message>
+        <source>En pausa</source>
+        <translation>Paused</translation>
+    </message>
+    <message>
+        <source>La ejecución está en pausa: reanúdala para capturar</source>
+        <translation>The run is paused: resume it to capture</translation>
+    </message>
+    <message>
+        <source>La ejecución está en pausa: reanúdala para seguir</source>
+        <translation>The run is paused: resume it to continue</translation>
+    </message>
+    <message>
+        <source>En pausa · %1 · %2</source>
+        <translation>Paused · %1 · %2</translation>
+    </message>
+    <message>
+        <source>Pausar el ciclo: queda aparcado donde está y puedes ponerte con otro issue (Ctrl+Alt+Espacio)</source>
+        <translation>Pause the cycle: it is set aside where it is and you can work on another issue (Ctrl+Alt+Space)</translation>
+    </message>
+    <message>
+        <source>El plan tiene el ciclo %1 en pausa: reanúdalo para seguir con él</source>
+        <translation>The plan has cycle %1 paused: resume it to continue with it</translation>
+    </message>
+    <message>
+        <source>Ciclo %1 en pausa: lo reanudas desde su issue, el historial o el selector de la barra</source>
+        <translation>Cycle %1 paused: resume it from its issue, the history or the toolbar selector</translation>
+    </message>
+    <message>
+        <source>El ciclo %1 no está en pausa</source>
+        <translation>Cycle %1 is not paused</translation>
+    </message>
+    <message>
+        <source>Termina o detén el caso en curso antes de reanudar otro ciclo</source>
+        <translation>Finish or stop the current case before resuming another cycle</translation>
+    </message>
+    <message>
+        <source>Reanudar el ciclo %1</source>
+        <translation>Resume cycle %1</translation>
+    </message>
+    <message>
+        <source>El ciclo %1 está en curso. ¿Ponerlo en pausa y reanudar el %2? Podrás reanudarlo después donde lo dejes.</source>
+        <translation>Cycle %1 is in progress. Pause it and resume %2? You can resume it later where you leave it.</translation>
+    </message>
+    <message>
+        <source>No se pudo reanudar el ciclo %1: su ejecución guardada ya no está</source>
+        <translation>Cycle %1 could not be resumed: its saved run is gone</translation>
+    </message>
+    <message>
+        <source>Ciclo %1 reanudado</source>
+        <translation>Cycle %1 resumed</translation>
+    </message>
+    <message>
+        <source>Se cierra el ciclo %1. ¿Guardar lo hecho o descartarlo?</source>
+        <translation>Cycle %1 will be closed. Keep what was done or discard it?</translation>
+    </message>
+    <message>
+        <source>¿Guardar lo hecho en %1 o descartarlo?</source>
+        <translation>Keep what was done in %1 or discard it?</translation>
+    </message>
+    <message>
+        <source>Guardar archiva el caso en pantalla%1 con lo que tenga marcado (lo pendiente queda N/A); una revisión archiva su corrección. Descartar sólo conserva lo que ya estaba terminado.</source>
+        <translation>Keep archives the case on screen%1 with what has a verdict (pending steps become N/A); a review archives its correction. Discard only keeps what was already finished.</translation>
+    </message>
+    <message>
+        <source> y los que dejaste a medias</source>
+        <translation> and the ones you left half done</translation>
+    </message>
+    <message>
+        <source>Guardar progreso</source>
+        <translation>Keep progress</translation>
+    </message>
+    <message>
+        <source>Descartar</source>
+        <translation>Discard</translation>
     </message>
 </context>
 <context>
@@ -7173,6 +7405,10 @@ Create another one anyway?</translation>
     <message>
         <source>Volver a ejecutar los %1 caso(s) por terminar de este ciclo: fallados, bloqueados, sin ejecutar o añadidos al plan después</source>
         <translation>Run again the %1 case(s) left to finish in this cycle: failed, blocked, not run or added to the plan later</translation>
+    </message>
+    <message>
+        <source>CICLO EN PAUSA</source>
+        <translation>CYCLE PAUSED</translation>
     </message>
 </context>
 <context>
@@ -7897,6 +8133,10 @@ Create another one anyway?</translation>
         <source>la ejecución en curso</source>
         <translation>the run in progress</translation>
     </message>
+    <message>
+        <source>el ciclo en pausa</source>
+        <translation>the paused cycle</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::RunHistoryStore</name>
@@ -8000,10 +8240,6 @@ Create another one anyway?</translation>
         <translation>Runs the test case again from the first step</translation>
     </message>
     <message>
-        <source>Finalizar y volver</source>
-        <translation>Finish and go back</translation>
-    </message>
-    <message>
         <source>+ Capturar</source>
         <translation>+ Capture</translation>
     </message>
@@ -8028,14 +8264,6 @@ Create another one anyway?</translation>
         <translation> · %1 N/A</translation>
     </message>
     <message>
-        <source>Siguiente caso · quedan %1</source>
-        <translation>Next case · %1 remaining</translation>
-    </message>
-    <message>
-        <source>Terminar plan y ver informe</source>
-        <translation>Finish plan and view report</translation>
-    </message>
-    <message>
         <source>● GIF</source>
         <translation>● GIF</translation>
     </message>
@@ -8054,14 +8282,6 @@ Create another one anyway?</translation>
     <message>
         <source>Adjunta logs, vídeos o imágenes existentes</source>
         <translation>Attach existing logs, videos or images</translation>
-    </message>
-    <message>
-        <source>Cerrar ejecución</source>
-        <translation>Close run</translation>
-    </message>
-    <message>
-        <source>Cerrar la ejecución</source>
-        <translation>Close the run</translation>
     </message>
     <message>
         <source>Bloq.</source>
@@ -8148,10 +8368,6 @@ Create another one anyway?</translation>
         <translation>Moves to the next step without giving this one a verdict (Alt+→)</translation>
     </message>
     <message>
-        <source>Quedan %1 pasos sin marcar. Se archivará en el historial con los %2 que ya tienen veredicto; los demás quedan como N/A.</source>
-        <translation>There are %1 steps left unmarked. It will be archived in the history with the %2 that already have a verdict; the rest are recorded as N/A.</translation>
-    </message>
-    <message>
         <source>PASO %1 DE %2 · %3</source>
         <translation>STEP %1 OF %2 · %3</translation>
     </message>
@@ -8192,34 +8408,6 @@ When you report one it stays here, with the step it came from.</translation>
     <message>
         <source>PASO %1 · %2</source>
         <translation>STEP %1 · %2</translation>
-    </message>
-    <message>
-        <source>revisión %1</source>
-        <translation>revision %1</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;CONTINUANDO LA %1&lt;/b&gt; · se repiten sólo los casos que fallaron o quedaron bloqueados en el ciclo %2</source>
-        <translation>&lt;b&gt;CONTINUING %1&lt;/b&gt; · only the cases that failed or were blocked in cycle %2 are run again</translation>
-    </message>
-    <message>
-        <source>ronda de pruebas</source>
-        <translation>test round</translation>
-    </message>
-    <message>
-        <source>REVISIÓN %1</source>
-        <translation>REVISION %1</translation>
-    </message>
-    <message>
-        <source> · ambiente %1</source>
-        <translation> · environment %1</translation>
-    </message>
-    <message>
-        <source>&lt;br&gt;Este caso se retoma en el paso que se rompió; los anteriores vienen de la ejecución %1.</source>
-        <translation>&lt;br&gt;This case resumes at the step that broke; the previous ones come from run %1.</translation>
-    </message>
-    <message>
-        <source>Ciclo %1 · %2</source>
-        <translation>Cycle %1 · %2</translation>
     </message>
     <message>
         <source>ANTERIOR</source>
@@ -8360,10 +8548,6 @@ Press “Capture” or drop a file on the window.</translation>
         <translation>⏱ %1</translation>
     </message>
     <message>
-        <source>%1/%2 pasos · %3 capturas · ⏱ %4</source>
-        <translation>%1/%2 steps · %3 screenshots · ⏱ %4</translation>
-    </message>
-    <message>
         <source>%1 · EJECUTANDO</source>
         <translation>%1 · RUNNING</translation>
     </message>
@@ -8476,32 +8660,12 @@ Press “Capture” or drop a file on the window.</translation>
         <translation>STEP %1 · FROM %2</translation>
     </message>
     <message>
-        <source>&lt;b&gt;CONTINUANDO EL CICLO %1&lt;/b&gt; · se repiten sólo los casos que fallaron o quedaron bloqueados; lo ya superado, sus capturas y sus bugs se conservan</source>
-        <translation>&lt;b&gt;CONTINUING CYCLE %1&lt;/b&gt; · only the cases that failed or were blocked are repeated; what already passed, its screenshots and its bugs are kept</translation>
-    </message>
-    <message>
         <source>+ Nuevo caso</source>
         <translation>+ New case</translation>
     </message>
     <message>
         <source>Escribe un caso nuevo: se añade al plan y entra al final del ciclo en curso</source>
         <translation>Write a new case: it is added to the plan and joins the end of the running cycle</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;REVISANDO %1&lt;/b&gt; · lo archivado de %2 llega heredado paso a paso. Cambia un veredicto o una nota, o añade evidencia, para corregirlo; si no tocas nada, al seguir queda como estaba</source>
-        <translation>&lt;b&gt;REVIEWING %1&lt;/b&gt; · what was archived for %2 is inherited step by step. Change a verdict or a note, or add evidence, to correct it; if you change nothing, it stays as it was when you move on</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;CORRIGIENDO %1&lt;/b&gt; · al cerrar se archiva como una ejecución nueva del ciclo y sustituye a la anterior en su informe</source>
-        <translation>&lt;b&gt;CORRECTING %1&lt;/b&gt; · when closed it is archived as a new run of the cycle and replaces the previous one in its report</translation>
-    </message>
-    <message>
-        <source>Terminar revisión</source>
-        <translation>Finish review</translation>
-    </message>
-    <message>
-        <source>Guardar corrección</source>
-        <translation>Save correction</translation>
     </message>
     <message>
         <source>REVISANDO</source>
@@ -8512,20 +8676,28 @@ Press “Capture” or drop a file on the window.</translation>
         <translation>Open its archived run (%1) to review it; the current one is paused. If you change nothing, it stays as it was</translation>
     </message>
     <message>
-        <source>De %1, la ejecución que se retoma: se conserva mientras su paso no se vuelva a marcar</source>
-        <translation>From %1, the run being resumed: kept until its step is marked again</translation>
+        <source>De %1, la ejecución que se retoma: se conserva en ésta</source>
+        <translation>From %1, the run being resumed: kept in this one</translation>
     </message>
     <message>
         <source>SIN PASO · DE %1</source>
         <translation>NO STEP · FROM %1</translation>
     </message>
     <message>
-        <source>Evidencia de la ejecución que se retoma: se conserva mientras su paso no se vuelva a marcar</source>
-        <translation>Evidence from the run being resumed: kept until its step is marked again</translation>
+        <source>Evidencia de la ejecución que se retoma: se conserva en ésta</source>
+        <translation>Evidence from the run being resumed: kept in this one</translation>
     </message>
     <message>
         <source>Es de la ejecución que se retoma: se quita desde el historial</source>
         <translation>It belongs to the run being resumed: remove it from the history</translation>
+    </message>
+    <message>
+        <source>%1 · REVISANDO %2</source>
+        <translation>%1 · REVIEWING %2</translation>
+    </message>
+    <message>
+        <source>%1 · TERMINADA · EN PAUSA</source>
+        <translation>%1 · FINISHED · PAUSED</translation>
     </message>
 </context>
 <context>

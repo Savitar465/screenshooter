@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDateTime>
+#include <QHash>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -124,6 +125,11 @@ struct RunSession {
     QString planRunId;     // ejecución de plan abierta en el historial (vacío si es suelta)
     QString continuesRunId;   // ejecución que se está retomando (vacío si el caso se ejecuta entero)
     QList<ParkedRun> parked;  // casos del plan empezados y dejados para ir a otro
+    /// Casos de la cola que, al entrar en ellos, se retoman desde una ejecución archivada: caso → id de
+    /// esa ejecución. `resume`, los rotos (desde el paso que se rompió); `review`, los que se abren para
+    /// revisarlos. Sin esto, al restaurar se ejecutarían enteros.
+    QHash<QString, QString> resume;
+    QHash<QString, QString> review;
 };
 
 } // namespace qaflow

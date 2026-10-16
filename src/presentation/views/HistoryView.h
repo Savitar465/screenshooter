@@ -58,6 +58,8 @@ signals:
     void openUrlRequested(const QString& url);
     /// Continuar ese ciclo con sus casos fallados y bloqueados; lo arranca quien coordina la ejecución.
     void continueCycleRequested(const QString& planRunId);
+    /// Reanudar un ciclo en pausa, que quedó aparcado donde se dejó.
+    void resumeCycleRequested(const QString& planRunId);
     /// Ejecutar esos casos en el ciclo terminado (reabriéndolo); lo arranca quien coordina la ejecución.
     void runInCycleRequested(const QString& planRunId, const QStringList& caseIds);
     void toast(const QString& message, const QString& color);

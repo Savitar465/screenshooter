@@ -58,8 +58,11 @@ public:
     const RunState* parkedRun(const QString& caseId) const;
     bool canGoBack() const { return !m_run.caseId.isEmpty() && !m_run.paused && (m_run.finished || m_run.idx > 0); }
     bool canGoNext() const { return !m_run.caseId.isEmpty() && !m_run.paused && m_run.idx + 1 < m_run.results.size(); }
-    /// La ejecución en curso está en pausa: sus cronómetros no corren y no admite veredictos ni moverse de paso.
-    bool isPaused() const { return isRunning() && m_run.paused; }
+    /// El caso suelto en curso está en pausa: su cronómetro no corre y no admite veredictos, moverse de
+    /// paso ni cerrarlo. Un ciclo no se queda así: al pausarlo se aparca (`isSuspended`).
+    bool isPaused() const { return !m_run.caseId.isEmpty() && m_run.paused; }
+    /// El ciclo está en pausa y aparcado: tiene su sesión guardada aparte y la ejecución quedó libre.
+    bool isSuspended(const QString& planRunId) const;
 
     void start(const QString& caseId);
     /// Ejecuta los casos en orden; `finish()` pasa al siguiente automáticamente. `environment` es el
@@ -101,10 +104,16 @@ public:
     /// aparcado o uno ya ejecutado se quedan, para no perder lo probado—. Emite `planCasesChanged`.
     PlanSync syncPlanCases(const QStringList& planCases);
     void restart();
-    /// Pone en pausa la ejecución en curso: el tiempo que pase hasta reanudarla no cuenta para el paso ni
-    /// para la ejecución. Sólo una ejecución activa (no terminada) se pausa. Sobrevive al cierre.
+    /// Pone en pausa la ejecución en curso: el tiempo que pase hasta reanudarla no cuenta. Un ciclo se
+    /// pausa entero y se **aparca** (`suspendCycle`): su sesión se guarda aparte, `PlanRun::pausedAt` lo
+    /// anota (su issue lo enseña) y la ejecución queda libre para arrancar o reanudar otra cosa. Un caso
+    /// suelto se queda en pantalla en pausa. Vale también con el caso ya terminado. Sobrevive al cierre.
     void pause();
+    /// Reanuda el caso suelto en pausa. Un ciclo aparcado se reanuda con `resumeCycle`.
     void resume();
+    /// Vuelve a poner en curso un ciclo aparcado, exactamente donde quedó: su caso, su paso, su cola y
+    /// sus casos a medias. Falso si hay otra ejecución en curso o el ciclo no está aparcado.
+    bool resumeCycle(const QString& planRunId);
     void togglePause() { if (isPaused()) resume(); else pause(); }
     /// La nota se guarda en disco con retardo; `persistSessionNow()` fuerza la escritura.
     void setNote(const QString& note);
@@ -134,7 +143,10 @@ public:
     /// Cierra la ejecución archivándola —con lo marcado hasta ahora si quedan pasos pendientes—.
     /// Devuelve true si arrancó el siguiente caso de la cola.
     bool finish();
-    void abandon();
+    /// Detiene la ejecución y cierra su ciclo. `keepProgress` archiva lo hecho: el caso en pantalla y
+    /// los aparcados con lo que tengan marcado (lo pendiente, N/A; una revisión sin cambios, nada). Sin
+    /// él se descarta lo que no estuviera terminado.
+    void abandon(bool keepProgress = false);
 
 signals:
     void runChanged();
@@ -145,6 +157,8 @@ signals:
     /// El ciclo en curso siguió un cambio de su plan (`syncPlanCases`).
     void planCasesChanged(const QString& planRunId, const QStringList& added, const QStringList& removed);
     void saveFailed(const QString& what);
+    /// Un ciclo se pausó y se aparcó: la ejecución quedó libre.
+    void cycleSuspended(const QString& planRunId);
 
 private:
     void begin(const QString& caseId);
@@ -176,6 +190,12 @@ private:
     /// Emite runChanged() y programa el guardado de la sesión.
     void changed();
     bool persistSession();
+    /// La ejecución tal como se guarda: la de `session.json` o la de un ciclo aparcado.
+    RunSession snapshot() const;
+    /// Pone en curso una ejecución guardada (al arrancar o al reanudar un ciclo aparcado).
+    void restore(const RunSession& saved);
+    /// Aparca el ciclo en curso (ver `pause`). Falso si no se pudo guardar: entonces sigue en curso.
+    bool suspendCycle();
 
     TestCaseStore& m_store;
     RunHistoryStore& m_history;

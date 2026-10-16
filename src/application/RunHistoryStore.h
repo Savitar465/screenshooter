@@ -62,6 +62,8 @@ public:
                       const QString& environment = QString(), const QStringList& excluded = {},
                       const QStringList& added = {});
     void finishPlan(const QString& planRunId);
+    /// Pone en pausa (o reanuda) el ciclo en curso entero (`PlanRun::pausedAt`). Uno terminado no.
+    void setPlanPaused(const QString& planRunId, bool paused);
     /// Vuelve a abrir un ciclo terminado para continuarlo: sigue siendo el mismo, con sus ejecuciones,
     /// sus evidencias, sus bugs y su ciclo de Zephyr, y lo que se repita ahora sustituye en el informe a
     /// lo que se rompió. Su ambiente no cambia; `environment` sólo se anota si no tenía ninguno.

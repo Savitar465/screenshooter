@@ -47,13 +47,50 @@ QJsonObject runToJson(const RunState& run) {
     };
 }
 
+QJsonObject idsToJson(const QHash<QString, QString>& ids) {
+    QJsonObject o;
+    for (auto it = ids.cbegin(); it != ids.cend(); ++it) o.insert(it.key(), it.value());
+    return o;
+}
+
+QHash<QString, QString> idsFromJson(const QJsonObject& o) {
+    QHash<QString, QString> ids;
+    for (auto it = o.constBegin(); it != o.constEnd(); ++it) ids.insert(it.key(), it.value().toString());
+    return ids;
+}
+
 } // namespace
 
 JsonRunSessionRepository::JsonRunSessionRepository(const QString& dataDir)
-    : m_path(QDir(dataDir).filePath(QStringLiteral("session.json"))) {}
+    : m_path(QDir(dataDir).filePath(QStringLiteral("session.json"))), m_dir(dataDir) {}
 
-std::optional<RunSession> JsonRunSessionRepository::loadSession() {
-    QFile f(m_path);
+std::optional<RunSession> JsonRunSessionRepository::loadSession() { return read(m_path); }
+
+bool JsonRunSessionRepository::saveSession(const RunSession& s) { return write(m_path, s); }
+
+void JsonRunSessionRepository::clearSession() { QFile::remove(m_path); }
+
+QString JsonRunSessionRepository::suspendedPath(const QString& planRunId) const {
+    // El id es nuestro (PR-0001), pero va a una ruta: nada de separadores.
+    QString name = planRunId;
+    name.replace(QLatin1Char('/'), QLatin1Char('_')).replace(QLatin1Char('\\'), QLatin1Char('_'));
+    return QDir(m_dir).filePath(QStringLiteral("sessions/%1.json").arg(name));
+}
+
+std::optional<RunSession> JsonRunSessionRepository::loadSuspended(const QString& planRunId) {
+    return planRunId.isEmpty() ? std::nullopt : read(suspendedPath(planRunId));
+}
+
+bool JsonRunSessionRepository::saveSuspended(const QString& planRunId, const RunSession& s) {
+    return !planRunId.isEmpty() && write(suspendedPath(planRunId), s);
+}
+
+void JsonRunSessionRepository::clearSuspended(const QString& planRunId) {
+    if (!planRunId.isEmpty()) QFile::remove(suspendedPath(planRunId));
+}
+
+std::optional<RunSession> JsonRunSessionRepository::read(const QString& path) {
+    QFile f(path);
     if (!f.exists() || !f.open(QIODevice::ReadOnly)) return std::nullopt;
     QJsonParseError err{};
     const auto doc = QJsonDocument::fromJson(f.readAll(), &err);
@@ -69,21 +106,22 @@ std::optional<RunSession> JsonRunSessionRepository::loadSession() {
         const auto p = v.toObject();
         s.parked.append(ParkedRun{runFromJson(p["run"].toObject()), p["continuesRunId"].toString()});
     }
+    s.resume = idsFromJson(o["resume"].toObject());
+    s.review = idsFromJson(o["review"].toObject());
     return s;
 }
 
-bool JsonRunSessionRepository::saveSession(const RunSession& s) {
+bool JsonRunSessionRepository::write(const QString& path, const RunSession& s) {
     QJsonArray parked;
     for (const auto& p : s.parked) parked.append(QJsonObject{{"run", runToJson(p.run)}, {"continuesRunId", p.continuesRunId}});
-    QDir().mkpath(QFileInfo(m_path).absolutePath());
-    QSaveFile f(m_path);
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly)) return false;
     f.write(QJsonDocument(QJsonObject{{"run", runToJson(s.run)}, {"queue", QJsonArray::fromStringList(s.queue)}, {"planRunId", s.planRunId},
-                                      {"continuesRunId", s.continuesRunId}, {"parked", parked}})
+                                      {"continuesRunId", s.continuesRunId}, {"parked", parked},
+                                      {"resume", idsToJson(s.resume)}, {"review", idsToJson(s.review)}})
                 .toJson(QJsonDocument::Indented));
     return f.commit();
 }
-
-void JsonRunSessionRepository::clearSession() { QFile::remove(m_path); }
 
 } // namespace qaflow

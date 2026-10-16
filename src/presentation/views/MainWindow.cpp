@@ -267,17 +267,17 @@ QWidget* MainWindow::buildNavbar() {
     m_navRun->setObjectName(QStringLiteral("navbarRun"));
     m_navRun->setToolTip(tr("Ejecutar selección (F5)"));
     m_navRun->setAccessibleName(tr("Ejecutar selección"));
-    connect(m_navRun, &QPushButton::clicked, this, &MainWindow::runSelectedTarget);
+    // Con una ejecución en marcha, el mismo botón la pausa y la reanuda (en un ciclo, el ciclo entero).
+    connect(m_navRun, &QPushButton::clicked, this, [this]() {
+        if (!m_ctx.run->state().caseId.isEmpty()) m_ctx.run->togglePause();
+        else runSelectedTarget();
+    });
     h->addWidget(m_navRun);
     m_navStop = ui::button(QStringLiteral("■"), "outline");
     m_navStop->setObjectName(QStringLiteral("navbarStop"));
     m_navStop->setToolTip(tr("Detener ejecución"));
     m_navStop->setAccessibleName(tr("Detener ejecución"));
-    connect(m_navStop, &QPushButton::clicked, this, [this]() {
-        if (QMessageBox::question(this, tr("Detener ejecución"), tr("¿Detener la ejecución y descartar los pasos del caso que aún no ha terminado?")) != QMessageBox::Yes) return;
-        m_ctx.run->abandon();
-        navigate(Screen::Historial);
-    });
+    connect(m_navStop, &QPushButton::clicked, this, &MainWindow::stopRun);
     h->addWidget(m_navStop);
     m_navFinish = ui::button(tr("Finalizar caso"), "primary");
     m_navFinish->setObjectName(QStringLiteral("navbarFinish"));
@@ -308,6 +308,10 @@ void MainWindow::refreshNavbar() {
         const QSignalBlocker block(m_runTarget);
         const QString previous = m_runTarget->currentData().toString();
         m_runTarget->clear();
+        // Los ciclos en pausa van primero: elegir uno lo reanuda donde se dejó.
+        for (const auto& cycle : m_ctx.history->plans())
+            if (m_ctx.run->isSuspended(cycle.id))
+                m_runTarget->addItem(tr("En pausa · %1 · %2").arg(cycle.id, cycle.name), QStringLiteral("paused:") + cycle.id);
         for (const auto& p : m_ctx.plan->plans()) {
             if (!p.archived && !m_ctx.plan->orderedCaseIds(p.id).isEmpty())
                 m_runTarget->addItem(tr("Plan · %1 · %2").arg(p.id, p.name), QStringLiteral("plan:") + p.id);
@@ -326,13 +330,28 @@ void MainWindow::refreshNavbar() {
         m_runTarget->setCurrentIndex(index >= 0 ? index : (m_runTarget->count() ? 0 : -1));
         m_runTarget->lineEdit()->setCursorPosition(0);
     }
+    const RunController& run = *m_ctx.run;
+    const bool paused = run.isPaused();
     m_runTarget->setEnabled(!executing);
-    m_navRun->setEnabled(!executing && !capturing && m_runTarget->currentIndex() >= 0);
+    m_navRun->setEnabled(executing ? !capturing : !capturing && m_runTarget->currentIndex() >= 0);
+    m_navRun->setText(executing && !paused ? QStringLiteral("❚❚") : QStringLiteral("▶"));
+    const QString runTip = !executing ? tr("Ejecutar selección (F5)")
+                           : paused  ? tr("Reanudar la ejecución (Ctrl+Alt+Espacio)")
+                           : !run.planRunId().isEmpty() ? tr("Pausar el ciclo: queda aparcado donde está y puedes ponerte con otro issue (Ctrl+Alt+Espacio)")
+                                                        : tr("Pausar la ejecución: el tiempo en pausa no cuenta (Ctrl+Alt+Espacio)");
+    m_navRun->setToolTip(runTip);
+    m_navRun->setAccessibleName(!executing ? tr("Ejecutar selección") : paused ? tr("Reanudar ejecución") : tr("Pausar ejecución"));
     m_navStop->setEnabled(executing && !capturing);
-    m_navFinish->setVisible(executing && m_ctx.run->state().finished);
-    m_navFinish->setEnabled(!capturing);
+    // Cerrar el caso terminado: pasa al siguiente o termina el plan. Una revisión no se cierra aquí: se
+    // deja eligiendo otro caso de la lista, o con ■, que pregunta si guardar la corrección.
+    m_navFinish->setVisible(executing && run.state().finished && !run.isReviewing());
+    m_navFinish->setEnabled(!capturing && !paused);
+    m_navFinish->setText(run.queuedCount() > 0 ? tr("Siguiente caso · quedan %1").arg(run.queuedCount())
+                         : !run.planRunId().isEmpty() ? tr("Terminar plan y ver informe")
+                                                      : tr("Finalizar y volver"));
     m_navStatus->setVisible(executing);
-    m_navStatus->setText(tr("%1 · %2").arg(m_ctx.run->state().caseId, m_ctx.run->state().finished ? tr("Listo para finalizar") : tr("En ejecución")));
+    m_navStatus->setText(tr("%1 · %2").arg(run.state().caseId, paused ? tr("En pausa")
+                                                               : run.state().finished ? tr("Listo para finalizar") : tr("En ejecución")));
 }
 
 void MainWindow::selectContextTarget() {
@@ -359,6 +378,12 @@ void MainWindow::startPlanRun(const QString& planId) {
         showToast(tr("El plan no tiene casos que ejecutar"), theme::Amber);
         return;
     }
+    // Un ciclo del plan en pausa se reanuda (o se detiene), no se empieza otro al lado.
+    for (const auto& cycle : m_ctx.history->plans())
+        if (cycle.planId == planId && m_ctx.run->isSuspended(cycle.id)) {
+            showToast(tr("El plan tiene el ciclo %1 en pausa: reanúdalo para seguir con él").arg(cycle.id), theme::Amber);
+            return;
+        }
     askCycleEnvironment(planId, plan->name);
 }
 
@@ -537,6 +562,11 @@ void MainWindow::createCaseForRun() {
 }
 
 void MainWindow::continueCycleRun(const QString& planRunId) {
+    // Uno en pausa no se continúa: se reanuda donde se dejó.
+    if (m_ctx.run->isSuspended(planRunId)) {
+        resumeCycleRun(planRunId);
+        return;
+    }
     if (!m_ctx.run->state().caseId.isEmpty()) {
         showToast(tr("Termina o detén la ejecución en curso antes de arrancar otra"), theme::Amber);
         return;
@@ -647,6 +677,10 @@ void MainWindow::runSelectedTarget() {
         return;
     }
     const QString target = m_runTarget->currentData().toString();
+    if (target.startsWith(QStringLiteral("paused:"))) {
+        resumeCycleRun(target.mid(7));
+        return;
+    }
     if (target.startsWith(QStringLiteral("plan:"))) {
         // El ciclo lo arranca `startPlanRun`, que antes pregunta el ambiente y lleva a la ejecución.
         startPlanRun(target.mid(5));
@@ -850,7 +884,7 @@ void MainWindow::updateActions() {
     m_actUndo->setText(m_ctx.cases->canUndo() ? tr("&Deshacer «%1»").arg(m_ctx.cases->undoLabel()) : tr("&Deshacer"));
     const bool hasSelection = !m_ctx.cases->selectedId().isEmpty();
     refreshNavbar();
-    m_actRun->setEnabled(m_navRun->isEnabled());
+    m_actRun->setEnabled(m_ctx.run->state().caseId.isEmpty() && m_navRun->isEnabled());
     m_actDuplicate->setEnabled(hasSelection);
     m_actDelete->setEnabled(hasSelection);
     m_actCapture->setEnabled(hasSelection || m_bugDialog);   // el parte captura aunque no haya caso
@@ -860,7 +894,7 @@ void MainWindow::updateActions() {
     const bool stepping = m_ctx.run->isRunning() && !m_ctx.run->isPaused();
     m_actStepPass->setEnabled(stepping);
     m_actStepFail->setEnabled(stepping);
-    m_actPause->setEnabled(m_ctx.run->isRunning());
+    m_actPause->setEnabled(!m_ctx.run->state().caseId.isEmpty());
     m_actPause->setText(m_ctx.run->isPaused() ? tr("Rea&nudar ejecución") : tr("Pa&usar ejecución"));
     m_actStepBack->setEnabled(m_ctx.run->canGoBack());
     m_actStepNext->setEnabled(m_ctx.run->canGoNext());
@@ -945,7 +979,6 @@ void MainWindow::wireRun() {
     connect(m_run, &RunView::captureRequested, this, &MainWindow::captureScreen);
     connect(m_run, &RunView::reportBugRequested, this, &MainWindow::reportBug);
     connect(m_run, &RunView::newCaseRequested, this, &MainWindow::createCaseForRun);
-    connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
     // El modo foco deja la evidencia sola: la ventana esconde su marco mientras dura.
     connect(m_run, &RunView::focusModeChanged, this, [this](bool on) {
         m_sidebar->setVisible(!on);
@@ -957,6 +990,7 @@ void MainWindow::wireRun() {
 void MainWindow::wireHistory() {
     connect(m_history, &HistoryView::toast, this, &MainWindow::showToast);
     connect(m_history, &HistoryView::continueCycleRequested, this, &MainWindow::continueCycleRun);
+    connect(m_history, &HistoryView::resumeCycleRequested, this, &MainWindow::resumeCycleRun);
     connect(m_history, &HistoryView::runInCycleRequested, this, &MainWindow::runInCycle);
     connect(m_history, &HistoryView::openCaseRequested, this, [this](const QString& id) { m_ctx.cases->select(id); navigateInto(Screen::Casos); });
     connect(m_history, &HistoryView::openJiraRequested, this, &MainWindow::openTrackerIssue);
@@ -978,6 +1012,7 @@ QWidget* MainWindow::bugWindow() const { return m_bugDialog; }
 
 void MainWindow::captureScreen() {
     if (m_bugDialog) m_bugDialog->captureScreen();
+    else if (m_ctx.run->isPaused()) showToast(tr("La ejecución está en pausa: reanúdala para capturar"), theme::Amber);
     else m_ctx.evidence->captureForSelectedCase();
 }
 
@@ -1025,6 +1060,7 @@ void MainWindow::wireIssues() {
     connect(m_issuesView, &IssuesView::runPlanRequested, this, &MainWindow::startPlanRun);
     // Continuar lo que quedó roto se pide desde donde se ven los ciclos: el issue, su informe y el plan.
     connect(m_issuesView, &IssuesView::continueCycleRequested, this, &MainWindow::continueCycleRun);
+    connect(m_issuesView, &IssuesView::resumeCycleRequested, this, &MainWindow::resumeCycleRun);
     connect(m_issuesView, &IssuesView::openRunRequested, this, [this](const QString& runId) {
         navigateInto(Screen::Historial);
         historyView()->showRun(runId);
@@ -1141,6 +1177,14 @@ void MainWindow::wireSignals() {
     connect(m_ctx.settings, &SettingsStore::captureChanged, this, &MainWindow::updateShortcuts);
     connect(m_ctx.settings, &SettingsStore::runShortcutsChanged, this, &MainWindow::updateShortcuts);
     connect(m_ctx.run, &RunController::runChanged, this, &MainWindow::updateActions);
+    // Pausar un ciclo lo aparca y deja la ejecución libre: se dice dónde se reanuda y, si es de un
+    // issue, se vuelve a él (lo normal es pausarlo para ponerse con otro).
+    connect(m_ctx.run, &RunController::cycleSuspended, this, [this](const QString& planRunId) {
+        showToast(tr("Ciclo %1 en pausa: lo reanudas desde su issue, el historial o el selector de la barra").arg(planRunId), theme::Amber);
+        const PlanRun* cycle = m_ctx.history->findPlan(planRunId);
+        if (currentScreen() == Screen::Run && cycle && !cycle->issueId.isEmpty() && m_ctx.issues->find(cycle->issueId))
+            openIssue(cycle->issueId);
+    });
 
     // Fallos de guardado: cada store avisa; aquí se muestra con la opción de reintentar.
     connect(m_ctx.cases, &TestCaseStore::saveFailed, this, [this](const QString& what) { showSaveError(what, [this]() { return m_ctx.cases->save(); }); });
@@ -1158,7 +1202,72 @@ void MainWindow::showSaveError(const QString& what, const std::function<bool()>&
                   });
 }
 
+void MainWindow::resumeCycleRun(const QString& planRunId) {
+    if (m_ctx.evidence->isRecording() || m_ctx.evidence->isCountingDown() || m_ctx.evidence->isBusy()) {
+        showToast(tr("Espera a que termine la captura"), theme::Amber);
+        return;
+    }
+    if (m_ctx.run->planRunId() == planRunId) {   // ya es el que está en curso
+        navigateInto(Screen::Run);
+        return;
+    }
+    if (!m_ctx.run->isSuspended(planRunId)) {
+        showToast(tr("El ciclo %1 no está en pausa").arg(planRunId), theme::Amber);
+        return;
+    }
+    if (!m_ctx.run->state().caseId.isEmpty()) {
+        const QString current = m_ctx.run->planRunId();
+        if (current.isEmpty()) {
+            showToast(tr("Termina o detén el caso en curso antes de reanudar otro ciclo"), theme::Amber);
+            return;
+        }
+        // Sólo hay una ejecución en curso: cambiar de ciclo es pausar el de ahora, y se pregunta.
+        if (QMessageBox::question(this, tr("Reanudar el ciclo %1").arg(planRunId),
+                                  tr("El ciclo %1 está en curso. ¿Ponerlo en pausa y reanudar el %2? Podrás reanudarlo "
+                                     "después donde lo dejes.").arg(current, planRunId)) != QMessageBox::Yes)
+            return;
+        m_ctx.run->pause();
+        if (!m_ctx.run->state().caseId.isEmpty()) return;   // no se pudo aparcar: ya se avisó
+    }
+    if (!m_ctx.run->resumeCycle(planRunId)) {
+        showToast(tr("No se pudo reanudar el ciclo %1: su ejecución guardada ya no está").arg(planRunId), theme::Amber);
+        return;
+    }
+    if (const PlanRun* cycle = m_ctx.history->findPlan(planRunId); cycle && !cycle->planId.isEmpty())
+        m_ctx.plan->setActive(cycle->planId);
+    showToast(tr("Ciclo %1 reanudado").arg(planRunId), theme::Green);
+    navigateInto(Screen::Run);
+}
+
+void MainWindow::stopRun() {
+    if (m_ctx.run->state().caseId.isEmpty()) return;
+    // Detener cierra la ejecución (y su ciclo): lo hecho se guarda o se descarta, y se pregunta cuál.
+    const bool cycle = !m_ctx.run->planRunId().isEmpty();
+    QMessageBox box(QMessageBox::Question, tr("Detener ejecución"),
+                    cycle ? tr("Se cierra el ciclo %1. ¿Guardar lo hecho o descartarlo?").arg(m_ctx.run->planRunId())
+                          : tr("¿Guardar lo hecho en %1 o descartarlo?").arg(m_ctx.run->state().caseId),
+                    QMessageBox::NoButton, this);
+    box.setInformativeText(tr("Guardar archiva el caso en pantalla%1 con lo que tenga marcado (lo pendiente queda N/A); "
+                              "una revisión archiva su corrección. Descartar sólo conserva lo que ya estaba terminado.")
+                               .arg(cycle ? tr(" y los que dejaste a medias") : QString()));
+    auto* keep = box.addButton(tr("Guardar progreso"), QMessageBox::AcceptRole);
+    keep->setObjectName(QStringLiteral("stopKeep"));
+    auto* discard = box.addButton(tr("Descartar"), QMessageBox::DestructiveRole);
+    discard->setObjectName(QStringLiteral("stopDiscard"));
+    box.addButton(QMessageBox::Cancel);
+    box.setDefaultButton(keep);
+    box.exec();
+    if (box.clickedButton() != keep && box.clickedButton() != discard) return;
+    m_ctx.run->abandon(box.clickedButton() == keep);
+    navigate(Screen::Historial);
+}
+
 void MainWindow::finishRun() {
+    // En pausa no se cierra nada: `finish()` no haría nada y se tomaría por el final del plan.
+    if (m_ctx.run->isPaused()) {
+        showToast(tr("La ejecución está en pausa: reanúdala para seguir"), theme::Amber);
+        return;
+    }
     const QString planRunId = m_ctx.run->planRunId();
     if (m_ctx.run->finish()) {
         showToast(tr("Siguiente caso del plan · quedan %1").arg(m_ctx.run->queuedCount() + 1), theme::Green);

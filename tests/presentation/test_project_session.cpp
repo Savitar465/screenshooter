@@ -347,7 +347,9 @@ private slots:
             a.plan->toggle(caseId);
             a.run->start(caseId);
             QVERIFY(!selector->isEnabled());
-            QVERIFY(!runButton->isEnabled());
+            // Con la ejecución en marcha, el botón de ejecutar pasa a pausarla.
+            QVERIFY(runButton->isEnabled());
+            QCOMPARE(runButton->text(), QStringLiteral("❚❚"));
             a.run->mark(StepResult::Pass);
             QVERIFY(!selector->isEnabled()); // El resultado todavía debe archivarse.
             a.run->finish();

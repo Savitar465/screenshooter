@@ -88,6 +88,9 @@ struct PlanRun {
     QStringList addedCaseIds;
     QDateTime startedAt;
     QDateTime finishedAt;     // inválida mientras el plan sigue en curso
+    /// Desde cuándo está en pausa el ciclo entero: no se marca, no se cambia de caso y su reloj no
+    /// corre. Inválida = no está en pausa. Lo ve también su issue, que lo enseña en su revisión.
+    QDateTime pausedAt;
     /// De qué control de calidad son estos resultados: el issue del requerimiento y el número de la
     /// revisión que estaba abierta al arrancar el ciclo. Un issue prueba varios planes y vuelve a
     /// probarlos en cada ronda, así que sin esto no se sabe a qué revisión pertenece cada ejecución.
@@ -109,6 +112,7 @@ struct PlanRun {
     QDateTime publishedAt;
 
     bool isFinished() const { return finishedAt.isValid(); }
+    bool isPaused() const { return !isFinished() && pausedAt.isValid(); }
     bool isPublished() const { return !zephyrCycleId.isEmpty(); }
     bool isContinuation() const { return !continuesCycleId.isEmpty(); }
     bool wasContinued() const { return continuations > 0; }

@@ -50,6 +50,13 @@ public:
     std::optional<RunSession> loadSession() override { return session; }
     bool saveSession(const RunSession& s) override { if (failWrites) return false; session = s; return true; }
     void clearSession() override { session.reset(); }
+
+    QHash<QString, RunSession> suspended;
+    std::optional<RunSession> loadSuspended(const QString& id) override {
+        return suspended.contains(id) ? std::optional<RunSession>(suspended.value(id)) : std::nullopt;
+    }
+    bool saveSuspended(const QString& id, const RunSession& s) override { if (failWrites) return false; suspended.insert(id, s); return true; }
+    void clearSuspended(const QString& id) override { suspended.remove(id); }
 };
 
 class MemoryBugRepository : public IBugRepository {

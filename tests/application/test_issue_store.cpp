@@ -520,6 +520,49 @@ private slots:
         QCOMPARE(round2.first().environment, QStringLiteral("Staging"));
     }
 
+    // Una ronda abierta por error se quita mientras no tenga nada: el issue vuelve a como estaba.
+    void anEmptyOpenRevisionCanBeDiscarded() {
+        AppFixture f;
+        const QString id = f.issues.createIssue(QStringLiteral("Checkout"));
+        f.issues.linkPlan(id, QStringLiteral("PL-0001"));
+        QCOMPARE(f.issues.openRevision(id), 1);
+        QVERIFY(IssueStore::discardBlocker(*f.issues.find(id), f.history).isEmpty());
+        QVERIFY(f.issues.discardRevision(id, f.history));
+        QVERIFY(f.issues.find(id)->revisions.isEmpty());
+        QVERIFY(f.issues.find(id)->state == IssueState::Preparing);
+        QVERIFY(!f.issues.discardRevision(id, f.history));   // ya no hay ninguna abierta
+
+        // Después de una observada, vuelve a «En pruebas» con la anterior como última.
+        f.issues.openRevision(id);
+        f.issues.closeRevision(id, QaOutcome::Observado);
+        QCOMPARE(f.issues.openRevision(id), 2);
+        QVERIFY(f.issues.discardRevision(id, f.history));
+        QCOMPARE(f.issues.find(id)->revisions.size(), 1);
+        QVERIFY(f.issues.find(id)->state == IssueState::Testing);
+        QCOMPARE(f.issues.openRevision(id), 2);   // la siguiente vuelve a ser la 2
+    }
+
+    void aRevisionWithCyclesOrARecordIsNotDiscarded() {
+        AppFixture f;
+        const QString id = f.issues.createIssue(QStringLiteral("Checkout"));
+        f.issues.linkPlan(id, QStringLiteral("PL-0001"));
+        const IssueStore::RevisionRef started = f.issues.notePlanStarted(QStringLiteral("PL-0001"));
+        const QString cycle = f.history.startPlan(QStringLiteral("Regresión"), {QStringLiteral("TC-101")},
+                                                  QStringLiteral("PL-0001"), QStringLiteral("QA"));
+        f.history.noteCycleRevision(cycle, started.issueId, started.revision);
+        QVERIFY(!IssueStore::discardBlocker(*f.issues.find(id), f.history).isEmpty());
+        QVERIFY(!f.issues.discardRevision(id, f.history));
+        QCOMPARE(f.issues.find(id)->revisions.size(), 1);
+
+        const QString other = f.issues.createIssue(QStringLiteral("Login"));
+        f.issues.openRevision(other);
+        QualityRecord record;
+        record.greq = QStringLiteral("2026997");
+        f.issues.setRevisionRecord(other, record);
+        QVERIFY(!f.issues.discardRevision(other, f.history));
+        QVERIFY(f.issues.find(other)->currentRevision());
+    }
+
     // ---- Datos que no se pueden leer ------------------------------------------------------------
     void unreadableIssuesAreNeverOverwritten() {
         auto repo = std::make_shared<MemoryIssueRepository>();

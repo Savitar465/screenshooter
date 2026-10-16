@@ -2933,6 +2933,42 @@ private slots:
         // los servicios a mano): lo comprueba `startingAPlanCycleStampsTheIssueAndItsRevisionOnIt`.
     }
 
+    // Una revisión abierta por error se descarta desde el panel del issue, tras confirmarlo; con ciclos ya
+    // no: el botón sigue ahí, deshabilitado, y dice por qué.
+    void anEmptyOpenRevisionIsDiscardedFromTheIssue() {
+        WindowFixture f;
+        const QString id = f.app.issues.createIssue(QStringLiteral("Checkout"));
+        const QString planId = f.app.plans.createPlan(QStringLiteral("Plan Checkout"));
+        f.app.plans.toggle(QStringLiteral("TC-101"));
+        f.app.issues.linkPlan(id, planId);
+        f.app.issues.openRevision(id);
+        f.app.issues.select(id);
+        f.window->navigate(Screen::Issues);
+        auto live = [&f](const QString& name) -> QPushButton* {
+            for (auto* b : f.window->findChildren<QPushButton*>(name))
+                if (!b->isHidden() && b->parent()) return b;
+            return nullptr;
+        };
+        auto* discard = live(QStringLiteral("issueDiscardRevision"));
+        QVERIFY(discard && discard->isEnabled());
+        QTimer::singleShot(0, []() {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            if (auto* accept = box ? box->findChild<QAbstractButton*>(QStringLiteral("discardRevisionAccept")) : nullptr) accept->click();
+        });
+        discard->click();
+        QVERIFY(f.app.issues.find(id)->revisions.isEmpty());
+        QVERIFY(f.app.issues.find(id)->state == IssueState::Preparing);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QVERIFY(!live(QStringLiteral("issueDiscardRevision")));
+
+        f.app.issues.openRevision(id);
+        f.app.run.startSequence({QStringLiteral("TC-101")}, QStringLiteral("Plan Checkout"), planId);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        discard = live(QStringLiteral("issueDiscardRevision"));
+        QVERIFY(discard && !discard->isEnabled());
+        QVERIFY2(discard->toolTip().contains(QStringLiteral("ciclos")), qPrintable(discard->toolTip()));
+    }
+
     // Una ronda que se cerró sin publicar se abre desde su fila del historial y se termina desde ella: el
     // issue ya está probando la siguiente y aun así lo de la anterior llega a su sitio.
     void aPreviousRevisionIsFinishedFromTheHistory() {
@@ -2981,12 +3017,13 @@ private slots:
         view->click();
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         QVERIFY(!f.window->findChild<QWidget*>(QStringLiteral("issuePastRevision"))->isHidden());
-        QVERIFY(f.window->findChild<QLabel*>(QStringLiteral("issueRevisionHeader"))->text().contains(QStringLiteral("REVISIÓN 1")));
+        QVERIFY(f.window->findChild<QLabel*>(QStringLiteral("issueRevisionHeader"))->text().contains(QStringLiteral("Revisión 1 de 2")));
         // De una ronda anterior no se ejecuta, continúa, cierra ni abre otra: eso es de la ronda en curso.
         QVERIFY(!live(QStringLiteral("issueStepRun")));
         QVERIFY(!live(QStringLiteral("issueStepContinue")));
         QVERIFY(!live(QStringLiteral("issueCloseRevision")));
-        QVERIFY(!live(QStringLiteral("issueNewRevision")));
+        // Abrir otra sigue en el panel, pero no mientras la 2 esté abierta.
+        QVERIFY(live(QStringLiteral("issueNewRevision")) && !live(QStringLiteral("issueNewRevision"))->isEnabled());
         QVERIFY(!live(QStringLiteral("issueSyncTests")) && !live(QStringLiteral("issueCreateTests")));
         auto* finish = live(QStringLiteral("issuePublishRevision"));
         QVERIFY(finish && finish->isEnabled());

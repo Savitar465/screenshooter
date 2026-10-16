@@ -22,6 +22,7 @@ class QGridLayout;
 class QFrame;
 class QHBoxLayout;
 class QLabel;
+class QLayout;
 class QLineEdit;
 class QMenu;
 class QPushButton;
@@ -334,6 +335,8 @@ private:
     QString pendingText(const Issue& issue, int revision) const;
     /// Abre la ronda siguiente de pruebas del requerimiento.
     void openRevision();
+    /// Quita la ronda en curso abierta por error, si todavía no tiene ciclos, acta ni nada publicado.
+    void discardRevision();
     /// Crear la representación en el gestor, revisándola antes; con `update`, reescribir la ya publicada.
     void openPublishDialog(bool update);
     void publishToJira();
@@ -438,7 +441,15 @@ private:
     QWidget* m_pastBanner;      // «Estás viendo la revisión N»: con la vuelta a la ronda en curso
     QLabel* m_pastBannerText;
     int m_viewedRevision = 0;   // ronda anterior que se ve en el detalle; 0 = la ronda en curso
+    QWidget* m_revisionTabsRow;
+    QLayout* m_revisionTabs;      // una pestaña por ronda, sobre la tarjeta de la que se ve
+    QFrame* m_revisionSummary;    // la tarjeta de la ronda que se ve: ambiente, cuál es y cómo va
+    QFrame* m_revisionHead;
+    QLabel* m_envEyebrow;
+    QLabel* m_envName;            // la fase de la ronda, que es el ambiente de sus ciclos, en grande
+    QLabel* m_envDetail;
     QLabel* m_revisionHeader;
+    QLabel* m_revisionState;
     QLabel* m_revisionProgress;
     QVBoxLayout* m_progressBar;   // la barra de resultados de la ronda, que se rehace en cada refresco
     QLabel* m_tileExecuted;
@@ -455,9 +466,7 @@ private:
     QString m_stepIssue;            // issue del último refresco: otro issue empieza por el paso que toca
     int m_stepRevision = 0;         // ronda vista en el último refresco: otra ronda también
     QSet<QString> m_expanded;       // filas plegables abiertas: «plan:PL-0001», «cycle:PR-0003»
-    QWidget* m_bugsSection;
-    QLabel* m_bugsHeader;
-    QVBoxLayout* m_bugsList;
+    QVBoxLayout* m_nextRevision;    // «Volver a probar»: abrir la ronda siguiente, junto al estado del issue
     QWidget* m_historyCard;
     QVBoxLayout* m_revisionsList;
 };

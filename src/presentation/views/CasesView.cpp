@@ -640,12 +640,7 @@ void CasesView::refreshHistory() {
         const QString color = r.verdict == Verdict::Superado ? theme::Green : r.verdict == Verdict::Fallido ? theme::Red : theme::Amber;
         h->addWidget(ui::pill(label(r.verdict).toUpper(), color, r.verdict == Verdict::Fallido ? QStringLiteral("#ffffff") : theme::Bg));
         h->addWidget(ui::label(r.finishedAt.toString(QStringLiteral("dd/MM/yyyy HH:mm")), "muted-sm"));
-        QString detail = tr("%1/%2 pasos · %3").arg(r.steps.size()).arg(r.plannedSteps).arg(formatDuration(r.durationSecs));
-        // Las evidencias son de la ejecución: aquí sólo se dice cuántas tiene cada una. Son las mismas
-        // que enseña el historial: sin las que se le quitaron y con las que heredó o conserva.
-        if (const int shots = int(m_history.evidenceOf(r).size()); shots > 0)
-            detail += shots == 1 ? tr(" · 1 evidencia") : tr(" · %1 evidencias").arg(shots);
-        h->addWidget(ui::label(detail, "muted-sm"));
+
         h->addStretch(1);
         const PlanRun* p = r.planRunId.isEmpty() ? nullptr : m_history.findPlan(r.planRunId);
         h->addWidget(ui::label(p ? p->name : tr("Ejecución suelta"), "muted-sm"));

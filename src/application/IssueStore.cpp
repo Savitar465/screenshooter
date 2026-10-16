@@ -101,7 +101,10 @@ QString IssueStore::createIssue(const QString& title) {
     return issue.id;
 }
 
-void IssueStore::updateIssue(const QString& id, const std::function<void(Issue&)>& mutate) {
+void IssueStore::updateIssue(const QString& issueId, const std::function<void(Issue&)>& mutate) {
+    // Copia: quien llama suele pasar el `id` de un issue de la propia lista (`find(...)->id`), y modificarla
+    // puede soltar la memoria a la que apunta esa referencia antes de usarla para avisar del cambio.
+    const QString id = issueId;
     Issue* issue = findMutable(id);
     if (!issue) return;
     mutate(*issue);
@@ -372,6 +375,30 @@ void IssueStore::closeRevision(const QString& issueId, QaOutcome outcome) {
         // dos casos eso abre la revisión siguiente (notePlanStarted / openRevision), no reabre ésta.
         i.state = closesRequirement(revision, phases) ? IssueState::Done : IssueState::Testing;
     });
+}
+
+QString IssueStore::discardBlocker(const Issue& issue, const RunHistoryStore& history) {
+    const IssueRevision* open = issue.currentRevision();
+    if (!open) return tr("No hay ninguna revisión abierta");
+    if (!cyclesOfRevision(issue, history, open->number).isEmpty())
+        return tr("La revisión %1 ya tiene ciclos: ciérrala con su resultado").arg(open->number);
+    if (open->hasDocument() || !open->record.isEmpty()) return tr("La revisión %1 ya tiene acta").arg(open->number);
+    if (!open->jira.isEmpty()) return tr("El resultado de la revisión %1 ya se envió al gestor").arg(open->number);
+    if (!open->gesreq.isEmpty()) return tr("El resultado de la revisión %1 ya se registró en GESREQ").arg(open->number);
+    return {};
+}
+
+bool IssueStore::discardRevision(const QString& issueId, const RunHistoryStore& history) {
+    const Issue* issue = find(issueId);
+    if (!issue || !discardBlocker(*issue, history).isEmpty()) return false;
+    updateIssue(issueId, [this](Issue& i) {
+        i.revisions.removeLast();
+        // El estado que tenía antes de abrirla: el que deja el cierre de la ronda anterior (ver
+        // `closeRevision`) o, si era la primera, el de un issue que todavía no se ha empezado a probar.
+        if (!i.revisions.isEmpty()) i.state = closesRequirement(i.revisions.last(), phasesOf(i)) ? IssueState::Done : IssueState::Testing;
+        else i.state = i.planId.isEmpty() ? IssueState::Pending : IssueState::Preparing;
+    });
+    return true;
 }
 
 // ---- Importación -------------------------------------------------------------------------------

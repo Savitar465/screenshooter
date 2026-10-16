@@ -114,6 +114,13 @@ public:
     /// sigue en pruebas para la siguiente, y Observado lo devuelve a pruebas. Sin revisión abierta no
     /// hace nada.
     void closeRevision(const QString& issueId, QaOutcome outcome);
+    /// Por qué no se puede descartar la revisión en curso; vacío si se puede. Sólo se descarta una ronda
+    /// abierta por error: sin ciclos, sin acta y sin nada enviado al gestor ni a GESREQ.
+    static QString discardBlocker(const Issue& issue, const RunHistoryStore& history);
+    /// Quita la revisión en curso como si no se hubiera abierto: el issue vuelve al estado en el que lo
+    /// dejó la ronda anterior (o, sin ninguna, a «En preparación» con plan y «Pendiente» sin él).
+    /// Devuelve false, sin tocar nada, si `discardBlocker` dice que no se puede.
+    bool discardRevision(const QString& issueId, const RunHistoryStore& history);
 
     // ---- Importación ---------------------------------------------------------------------------
     struct ImportCandidate {

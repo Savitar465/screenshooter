@@ -28,7 +28,6 @@ TrackerSettings settingsFor(const QString& url) {
     s.user = QStringLiteral("aperez");
     s.token = QStringLiteral("s3creta");
     s.connected = true;
-    s.zephyr = true;
     return s;
 }
 

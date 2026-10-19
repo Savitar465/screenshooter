@@ -38,8 +38,7 @@ struct TrackerSettings {
     QString token;      // API token, contraseña o PAT: nunca se persiste en claro, va al llavero del sistema
     bool connected = false;
 
-    /// Publicar los ciclos de plan en Zephyr for Jira (misma instancia y credenciales). Sólo con Jira.
-    bool zephyr = false;
+    /// Zephyr for Jira (misma instancia y credenciales) se usa siempre que el gestor sea Jira.
     QString zephyrVersion;   // versión del proyecto a la que van los ciclos; vacío = sin programar
     /// Tipo de incidencia con el que se crean los Tests que faltan; vacío = "Test", el que instala
     /// Zephyr (en un Jira traducido puede llamarse de otra manera).

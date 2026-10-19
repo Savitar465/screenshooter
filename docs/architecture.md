@@ -833,7 +833,7 @@ medias: el Test ya existe en Jira y el reintento debe reutilizarlo, no duplicarl
 informe viaja, por tanto, con sus Tests; publicar otro ciclo del mismo caso estrena otros. El
 `PlanReport` toma `row.testKey` de la ejecución (la historia de Jira sí sale del caso de hoy).
 
-El tipo de incidencia con el que se crean sale de los ajustes y por defecto es `Test`, el que instala
+El tipo de incidencia con el que se crean es `Test`, el que instala
 Zephyr; en un Jira traducido se llama de otra manera, y si el proyecto no lo tiene se dice con su
 nombre —también al probar la conexión— en vez de fallar issue a issue sin explicar por qué.
 

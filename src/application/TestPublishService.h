@@ -59,7 +59,7 @@ public:
     void preparePhaseCycle(const QString& issueId, const QString& phase, const QStringList& caseIds,
                            std::function<void(const PublishResult&)> done);
 
-    /// ¿Está configurada la publicación? (gestor Jira, conectado y Zephyr activado en Ajustes).
+    /// ¿Está configurada la publicación? (Zephyr va siempre que el gestor sea Jira).
     bool enabled() const;
 
     /// Nombre del ciclo de Zephyr al que va el informe: el de su fase si prueba un issue («GREQ 2026997

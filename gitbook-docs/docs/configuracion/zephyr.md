@@ -9,13 +9,9 @@ por caso con el veredicto de cada paso, las evidencias colgadas donde correspond
 
 ## Activarlo
 
-En **Ajustes**, bajo el gestor de incidencias, sección **Gestión de pruebas**. Usa la **misma instancia y
-credenciales de Jira**. Indica:
-
-| Ajuste | Para qué |
-|--------|----------|
-| **Versión** | La versión del proyecto a la que van los ciclos |
-| **Tipo de incidencia de los Tests** | `Test` por defecto; cámbialo si tu Jira está traducido y lo llama de otra manera |
+No hay nada que activar: con **Jira** como gestor de incidencias, Zephyr va siempre y los resultados se
+suben solos al ejecutar las pruebas. Usa la **misma instancia y credenciales de Jira**; los ciclos se crean
+sin programar (*Unscheduled*) y los Tests con el tipo de incidencia `Test`, el que instala Zephyr.
 
 Funciona con la **ZAPI** pública (incluida desde Zephyr 5.6) y con la API del propio plugin
 (`/rest/zephyr/latest`), la única de versiones anteriores como la **5.3**. QAflow prueba las dos.

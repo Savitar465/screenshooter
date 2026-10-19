@@ -242,7 +242,6 @@ private slots:
         QVERIFY(f.history.findRun(loose.id)->planRunId.isEmpty());
         QCOMPARE(f.store.find(QStringLiteral("TC-103"))->lastRun.at, lastBefore.at);
         // Y se publica con su bug colgado de su paso.
-        f.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
         f.publish.publish(report, [](const PublishResult&) {});
         QCOMPARE(f.zephyr->published.size(), 1);
         const QList<PublishDefect> defects = f.zephyr->published[0].cases[1].defects;

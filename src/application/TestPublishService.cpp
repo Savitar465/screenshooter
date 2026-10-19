@@ -44,8 +44,7 @@ QList<PublishDefect> TestPublishService::defectsOf(const PlanReport& report, con
 }
 
 bool TestPublishService::enabled() const {
-    const TrackerSettings& t = m_settings.tracker();
-    return m_zephyr && t.zephyr && t.kind == TrackerKind::Jira;
+    return m_zephyr && m_settings.tracker().kind == TrackerKind::Jira;
 }
 
 QStringList TestPublishService::casesNeedingTest(const PlanReport& report) const {
@@ -106,7 +105,7 @@ void TestPublishService::prepareTests(const QString& issueId, const QStringList&
                                       std::function<void(const PublishResult&)> done) {
     const Issue* issue = m_issues ? m_issues->find(issueId) : nullptr;
     PublishResult refused;
-    if (!enabled()) refused.error = tr("Activa Zephyr en Ajustes para crear los Tests");
+    if (!enabled()) refused.error = tr("Zephyr necesita Jira como gestor para crear los Tests");
     else if (!issue) refused.error = tr("El issue ya no existe");
     if (!refused.error.isEmpty()) { done(refused); return; }
     PublishRequest req;
@@ -144,7 +143,7 @@ void TestPublishService::preparePhaseCycle(const QString& issueId, const QString
                                            std::function<void(const PublishResult&)> done) {
     const Issue* issue = m_issues ? m_issues->find(issueId) : nullptr;
     PublishResult refused;
-    if (!enabled()) refused.error = tr("Activa Zephyr en Ajustes para publicar los ciclos");
+    if (!enabled()) refused.error = tr("Zephyr necesita Jira como gestor para publicar los ciclos");
     else if (!issue) refused.error = tr("El issue ya no existe");
     else if (phase.trimmed().isEmpty()) refused.error = tr("No se sabe en qué fase se prueba el issue");
     if (!refused.error.isEmpty()) { done(refused); return; }
@@ -331,7 +330,7 @@ void TestPublishService::update(const PlanReport& report, std::function<void(con
 void TestPublishService::send(const PlanReport& report, bool update, std::function<void(const PublishResult&)> done) {
     if (!enabled()) {
         PublishResult r;
-        r.error = tr("Activa Zephyr en Ajustes para publicar los ciclos");
+        r.error = tr("Zephyr necesita Jira como gestor para publicar los ciclos");
         done(r);
         return;
     }

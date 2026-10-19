@@ -16,7 +16,6 @@ namespace qaflow {
 struct AppContext;
 class SettingsStore;
 class BugReportService;
-class TestPublishService;
 class RequirementSourceService;
 class AiService;
 class ProjectStore;
@@ -30,7 +29,7 @@ class SettingsView : public QWidget {
     Q_OBJECT
 public:
     /// Del contexto usa los ajustes y el servicio de bugs, que son obligatorios, y si los hay el atajo
-    /// global, la publicación en Zephyr, la conexión con GESREQ y el catálogo de proyectos; sin ellos no se
+    /// global, la conexión con GESREQ y el catálogo de proyectos; sin ellos no se
     /// ofrece lo que depende de ellos (tests).
     explicit SettingsView(const AppContext& ctx, QWidget* parent = nullptr);
 
@@ -63,12 +62,9 @@ private:
     /// Rellena el selector de pantalla con las pantallas conectadas (cambia al conectar un monitor).
     void refreshScreens();
     void testConnection();
-    void testZephyr();
-    void refreshZephyr();
 
     SettingsStore& m_settings;
     BugReportService& m_bugs;
-    TestPublishService* m_publish;
     RequirementSourceService* m_requirements;
     AiService* m_ai;
     ProjectStore* m_projects;
@@ -115,12 +111,6 @@ private:
     QLabel* m_tokenLabel;
     QLineEdit* m_token;
     QLabel* m_secretNote;
-    QWidget* m_zephyrBlock;
-    QCheckBox* m_zephyr;
-    QLineEdit* m_zephyrVersion;
-    QLineEdit* m_zephyrTestType;
-    QPushButton* m_zephyrTest;
-    QLabel* m_zephyrNote;
     QPushButton* m_aiBadge;
     QComboBox* m_aiProvider;
     QLineEdit* m_aiKey;

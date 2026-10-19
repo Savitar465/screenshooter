@@ -355,10 +355,9 @@ private slots:
             a.run->finish();
             QVERIFY(selector->isEnabled());
             QCOMPARE(a.history->runs().size(), 1); QVERIFY(b.history->runs().isEmpty());
-            a.settings->updateTracker([](TrackerSettings& s) { s.project = QStringLiteral("A"); s.token = QStringLiteral("token-a"); s.zephyr = true; });
+            a.settings->updateTracker([](TrackerSettings& s) { s.project = QStringLiteral("A"); s.token = QStringLiteral("token-a"); });
             QCOMPARE(b.settings->tracker().token, QStringLiteral("token-a"));
             QVERIFY(b.settings->tracker().project.isEmpty());
-            QVERIFY(b.settings->tracker().zephyr);
             // GESREQ: la conexión y su contraseña se comparten; el sistema es de cada proyecto y no se repite.
             QVERIFY(a.ctx.requirements && b.ctx.requirements);
             a.settings->updateRequirementSource([](RequirementSourceSettings& r) { r.url = QStringLiteral("http://gesreq.test/greq"); r.password = QStringLiteral("clave"); });
@@ -389,7 +388,6 @@ private slots:
         QCOMPARE(b.settings->tracker().token, QStringLiteral("token-b"));
         QCOMPARE(a.settings->tracker().project, QStringLiteral("A"));
         QCOMPARE(b.settings->tracker().project, QStringLiteral("B"));
-        QVERIFY(a.settings->tracker().zephyr); QVERIFY(b.settings->tracker().zephyr);
         QCOMPARE(a.settings->capture().folder, firstFolder);
         QCOMPARE(b.settings->capture().folder, firstFolder);
         QVERIFY(a.cases->suites().contains(QStringLiteral("Suite común")));

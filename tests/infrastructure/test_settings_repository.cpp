@@ -38,10 +38,9 @@ private slots:
         QCOMPARE(a.loadTracker().url, QStringLiteral("https://shared.example"));
         QCOMPARE(a.loadCapture().folder, QStringLiteral("/shared"));
         auto t = b.loadTracker();
-        t.project = QStringLiteral("B"); t.url = QStringLiteral("https://updated.example"); t.zephyr = true;
+        t.project = QStringLiteral("B"); t.url = QStringLiteral("https://updated.example");
         b.saveTracker(t);
         QCOMPARE(a.loadTracker().url, t.url);
-        QVERIFY(a.loadTracker().zephyr);
         QCOMPARE(a.loadTracker().project, QStringLiteral("A"));
         QCOMPARE(main.loadTracker().project, QStringLiteral("MAIN"));
         t.kind = TrackerKind::GitHub; t.project = QStringLiteral("org/repo");

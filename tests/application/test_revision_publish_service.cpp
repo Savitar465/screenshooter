@@ -42,7 +42,7 @@ Finished finishedRevision(AppFixture& f, bool publishedInTracker = true, bool cl
         r.connected = true;
     });
     f.settings.updateTracker([](TrackerSettings& t) {
-        t.zephyr = true;
+       
         t.url = QStringLiteral("https://acme.atlassian.net");
         t.project = QStringLiteral("SHOP");
     });
@@ -297,8 +297,8 @@ private slots:
         QVERIFY(!f.zephyr->published[0].cases[0].executed);
         QCOMPARE(f.issues.find(done.issueId)->zephyr.cycleOf(QStringLiteral("QA")), QStringLiteral("77"));
 
-        // Sin Zephyr no se intenta nada.
-        f.settings.updateTracker([](TrackerSettings& t) { t.zephyr = false; });
+        // Sin Jira no hay Zephyr: no se intenta nada.
+        f.settings.updateTracker([](TrackerSettings& t) { t.kind = TrackerKind::GitHub; });
         f.revisionPublish.prepareStartedCycle(done.planRunId);
         QCOMPARE(prepared.count(), 1);
     }
@@ -330,11 +330,11 @@ private slots:
         QCOMPARE(f.revisionPublish.pendingFor(open.issueId, 1), QList<Destination>{Destination::Requirement});
     }
 
-    // Sin Zephyr ni gestor, cerrar sólo cierra.
+    // Sin Zephyr (otro gestor) ni issue publicado, cerrar sólo cierra.
     void closingWithNothingConfiguredOnlyCloses() {
         AppFixture f;
         const Finished open = finishedRevision(f, false, false);
-        f.settings.updateTracker([](TrackerSettings& t) { t.zephyr = false; });
+        f.settings.updateTracker([](TrackerSettings& t) { t.kind = TrackerKind::GitHub; });
         RevisionPublishService::Result result;
         f.revisionPublish.closeRevision(open.issueId, QaOutcome::Conforme, [&result](const RevisionPublishService::Result& r) { result = r; });
         QVERIFY(result.ok && result.steps.isEmpty());

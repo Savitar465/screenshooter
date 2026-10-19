@@ -75,7 +75,6 @@ private slots:
     // misma fase van al mismo ciclo, y el Test del caso es el mismo en QA y en PRE.
     void anIssueHasOneCyclePerPhaseAndOneTestPerCase() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
         publish.setIssues(&f.issues);
@@ -116,7 +115,6 @@ private slots:
     // Si el ciclo de la fase se borró en Zephyr, se olvida y se publica en uno nuevo.
     void aDeletedPhaseCycleIsCreatedAgain() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
         publish.setIssues(&f.issues);
@@ -137,7 +135,6 @@ private slots:
     // Los Tests del requerimiento se pueden crear antes de probarlo; los que ya tiene no se repiten.
     void theTestsOfAnIssueAreCreatedBeforeTesting() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
         publish.setIssues(&f.issues);
@@ -163,7 +160,6 @@ private slots:
     // los que no, sin ella para crearlo.
     void syncingTheTestsSendsEveryCaseWithItsTest() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
         publish.setIssues(&f.issues);
@@ -186,14 +182,11 @@ private slots:
         QCOMPARE(f.issues.find(issueId)->zephyr.tests.value(QStringLiteral("TC-102")), QStringLiteral("SHOP-102"));
     }
 
-    void publishingIsOffUntilZephyrIsEnabledForJira() {
+    void publishingIsOnOnlyWithJira() {
         AppFixture f;
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
-        QVERIFY(!publish.enabled());                       // Zephyr desactivado en los ajustes
-
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
-        QVERIFY(publish.enabled());
+        QVERIFY(publish.enabled());                        // con Jira, Zephyr va siempre
 
         f.settings.updateTracker([](TrackerSettings& s) { s.kind = TrackerKind::GitHub; });
         QVERIFY(!publish.enabled());                       // Zephyr es un plugin de Jira
@@ -206,7 +199,7 @@ private slots:
 
     void onlyExecutedCasesTravelAndTheyCarryTheTestOfTheirRun() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; s.zephyrVersion = QStringLiteral("2.3.0"); });
+        f.settings.updateTracker([](TrackerSettings& s) { s.zephyrVersion = QStringLiteral("2.3.0"); });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
 
@@ -236,7 +229,6 @@ private slots:
     // requerimiento y la fase; la ronda y el ambiente siguen en su descripción.
     void theCycleCarriesTheRequirementTheRevisionAndTheEnvironment() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
         publish.setIssues(&f.issues);
@@ -282,7 +274,6 @@ private slots:
     // caracteres; con el título de un requerimiento real (168) la descripción se pasaba.
     void aLongRequirementTitleStillFitsInTheCycle() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
         publish.setIssues(&f.issues);
@@ -321,7 +312,6 @@ private slots:
 
     void casesWhoseTestWillBeCreatedAreListedBeforePublishing() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         TestPublishService publish(std::make_shared<FakeTestManagement>(), f.store, f.history, f.settings, f.bugLedger);
         PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado},
                                         {QStringLiteral("TC-102"), Verdict::Superado}});
@@ -339,7 +329,6 @@ private slots:
                        TestStep{QStringLiteral("Aplicar cupón"), QStringLiteral("Cupón QA10"), QStringLiteral("Descuenta")},
                        TestStep{QStringLiteral("Pagar"), {}, QStringLiteral("Se confirma")}};
         });
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
 
@@ -358,7 +347,6 @@ private slots:
     // informe reutiliza el Test, y otro ciclo del mismo caso estrena el suyo.
     void theKeyOfACreatedTestBelongsToTheRunNotToTheCase() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         zephyr->resultToReturn.ok = true;
         zephyr->resultToReturn.cycleId = QStringLiteral("77");
@@ -399,7 +387,6 @@ private slots:
     // reintento debe reutilizarlos, no duplicarlos.
     void createdTestsAreKeptEvenWhenTheCycleFails() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         zephyr->resultToReturn.ok = false;
         zephyr->resultToReturn.error = QStringLiteral("500");
@@ -419,7 +406,6 @@ private slots:
     // publicado, en vez de crear otro; y sin publicar no hay nada que actualizar.
     void updatingTargetsTheCycleTheReportIsPublishedIn() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
 
@@ -442,7 +428,7 @@ private slots:
     // El enlace al ciclo en Jira sale del nombre con el que se publicó (plan y fecha) y de la URL del gestor.
     void cycleUrlPointsAtTheExecutionsOfThePublishedCycle() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; s.url = QStringLiteral("https://jira.acme.com"); s.project = QStringLiteral("SHOP"); });
+        f.settings.updateTracker([](TrackerSettings& s) { s.url = QStringLiteral("https://jira.acme.com"); s.project = QStringLiteral("SHOP"); });
         TestPublishService publish(std::make_shared<FakeTestManagement>(), f.store, f.history, f.settings, f.bugLedger);
         PlanReport report = reportWith({{QStringLiteral("TC-101"), Verdict::Superado}});
         QVERIFY(publish.cycleUrl(report).isEmpty());   // sin publicar no hay ciclo al que ir
@@ -473,7 +459,6 @@ private slots:
                        Screenshot{2, 0, QStringLiteral("perdida.png"), dir.filePath(QStringLiteral("perdida.png")), QStringLiteral("R-1")},
                        Screenshot{9, 1, QStringLiteral("cap_009.png"), anterior, QStringLiteral("R-0")}};
         });
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
 
@@ -488,7 +473,6 @@ private slots:
     // y se publica la última, el de la anterior va a la ejecución pero no a un paso que en ésta pudo pasar.
     void onlyBugsOfThePublishedRunAreLinkedToTheirStep() {
         AppFixture f;
-        f.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         auto zephyr = std::make_shared<FakeTestManagement>();
         TestPublishService publish(zephyr, f.store, f.history, f.settings, f.bugLedger);
         auto bug = [&](const QString& key, const QString& runId, int step) {

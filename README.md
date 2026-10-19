@@ -186,9 +186,8 @@ Además, cada caso del informe —y el detalle de cada ejecución— muestra con
 historia de Jira del caso y el Test de Zephyr de esa ejecución, en chips que abren el issue en el navegador. El Markdown
 exportado lo lleva también, para que el informe pegado en un ticket se explique solo.
 
-Se activa en Ajustes, bajo el gestor de incidencias: usa la misma instancia y las mismas credenciales
-de Jira, y allí se indican la versión del proyecto a la que van los ciclos y el tipo de incidencia con
-el que se crean los Tests (`Test` salvo en un Jira traducido, donde se llame de otra manera). La API se busca en las dos rutas por las que Zephyr la sirve, así que funciona tanto con la
+Va siempre que el gestor de incidencias sea Jira, sin nada que activar en Ajustes: usa la misma instancia
+y las mismas credenciales, deja los ciclos sin programar y crea los Tests con el tipo de incidencia `Test`. La API se busca en las dos rutas por las que Zephyr la sirve, así que funciona tanto con la
 **ZAPI** pública (incluida de fábrica desde Zephyr 5.6) como con la del propio plugin
 (`/rest/zephyr/latest`), que es lo único que hay en las versiones anteriores como la **5.3**.
 

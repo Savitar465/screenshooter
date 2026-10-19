@@ -4,7 +4,6 @@
 #include "application/AiService.h"
 #include "application/BugReportService.h"
 #include "application/SettingsStore.h"
-#include "application/TestPublishService.h"
 #include "application/UpdateService.h"
 #include "core/models/Issue.h"   // defaultQaPhases, normalizedQaPhases
 #include "core/services/IGlobalHotkey.h"
@@ -104,7 +103,7 @@ QString hintFor(const TrackerSettings& t) {
 } // namespace
 
 SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
-    : QWidget(parent), m_settings(*ctx.settings), m_bugs(*ctx.bugs), m_publish(ctx.publish), m_requirements(ctx.requirements), m_ai(ctx.ai),
+    : QWidget(parent), m_settings(*ctx.settings), m_bugs(*ctx.bugs), m_requirements(ctx.requirements), m_ai(ctx.ai),
       m_projects(ctx.projects), m_projectId(ctx.projectId), m_hotkey(ctx.hotkey), m_updates(ctx.updates), m_captureBackend(ctx.captureBackend) {
     auto* root = ui::hbox(this, 0, 0);
     QWidget* content;
@@ -356,53 +355,6 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     m_secretNote->setWordWrap(true);
     tb->addWidget(m_secretNote);
 
-    // Gestión de pruebas: Zephyr vive en la misma instancia de Jira y con las mismas credenciales.
-    m_zephyrBlock = new QWidget;
-    auto* zv = ui::vbox(m_zephyrBlock, 0, 10);
-    zv->addWidget(ui::label(tr("GESTIÓN DE PRUEBAS"), "eyebrow"));
-    m_zephyr = new WrapCheckBox(tr("Publicar los ciclos de plan en Zephyr"));
-    m_zephyr->setObjectName(QStringLiteral("settingsZephyr"));
-    m_zephyr->setToolTip(tr("Al terminar un ciclo, el informe puede crear en Zephyr el ciclo con sus ejecuciones, el veredicto de cada paso y las evidencias"));
-    connect(m_zephyr, &QCheckBox::toggled, this, [this](bool on) {
-        if (m_selfEdit) return;
-        m_selfEdit = true;
-        m_settings.updateTracker([&](TrackerSettings& s) { s.zephyr = on; });
-        m_selfEdit = false;
-        refreshZephyr();
-    });
-    zv->addWidget(m_zephyr);
-    auto* zrow = new QWidget;
-    auto* zg = new QGridLayout(zrow);
-    zg->setContentsMargins(0, 0, 0, 0);
-    zg->setHorizontalSpacing(12);
-    m_zephyrVersion = new QLineEdit;
-    m_zephyrVersion->setPlaceholderText(tr("Sin programar (Unscheduled)"));
-    m_zephyrVersion->setToolTip(tr("Versión del proyecto a la que van los ciclos; vacío los deja sin programar"));
-    connect(m_zephyrVersion, &QLineEdit::textEdited, this, [this](const QString& text) {
-        m_selfEdit = true;
-        m_settings.updateTracker([&](TrackerSettings& s) { s.zephyrVersion = text; });
-        m_selfEdit = false;
-    });
-    m_zephyrTestType = new QLineEdit;
-    m_zephyrTestType->setPlaceholderText(QStringLiteral("Test"));
-    m_zephyrTestType->setToolTip(tr("Tipo de incidencia con el que se crean los Tests; vacío usa «Test», el que instala Zephyr"));
-    connect(m_zephyrTestType, &QLineEdit::textEdited, this, [this](const QString& text) {
-        m_selfEdit = true;
-        m_settings.updateTracker([&](TrackerSettings& s) { s.zephyrTestType = text; });
-        m_selfEdit = false;
-    });
-    m_zephyrTest = ui::button(tr("Probar Zephyr"), "outline");
-    connect(m_zephyrTest, &QPushButton::clicked, this, &SettingsView::testZephyr);
-    zg->addWidget(field(tr("Versión del proyecto"), m_zephyrVersion), 0, 0);
-    zg->addWidget(field(tr("Tipo de incidencia del Test"), m_zephyrTestType), 0, 1);
-    zg->addWidget(m_zephyrTest, 0, 2, Qt::AlignBottom);
-    zg->setColumnStretch(0, 1);
-    zg->setColumnStretch(1, 1);
-    zv->addWidget(zrow);
-    m_zephyrNote = ui::label(QString(), "muted-sm");
-    m_zephyrNote->setWordWrap(true);
-    zv->addWidget(m_zephyrNote);
-    tb->addWidget(m_zephyrBlock);
     v->addWidget(tracker);
 
     auto bind = [this](QLineEdit* e, void (*apply)(TrackerSettings&, const QString&)) {
@@ -798,7 +750,7 @@ void SettingsView::refreshTracker() {
     const TrackerSettings& t = m_settings.tracker();
     ui::setFlag(m_badge, "active", t.connected);
     m_badge->setText(t.connected ? tr("●  Conectado") : tr("●  Desconectado"));
-    m_kindHint->setText(hintFor(t) + tr(" Los ajustes de conexión y Zephyr se comparten entre todos los proyectos."));
+    m_kindHint->setText(hintFor(t) + tr(" Los ajustes de conexión se comparten entre todos los proyectos."));
     m_projectLabel->setText(t.projectLabel().toUpper());
     m_project->setToolTip(t.kind == TrackerKind::Jira ? tr("Este código pertenece al proyecto actual. Los demás ajustes son generales.") : tr("Ajuste general para todos los proyectos"));
     m_project->setPlaceholderText(t.projectPlaceholder());
@@ -823,7 +775,6 @@ void SettingsView::refreshTracker() {
     m_secretNote->setStyleSheet(QStringLiteral("font-size:11.5px;color:%1;").arg(secure ? theme::Muted : theme::AmberSoft));
     if (m_selfEdit) return;
     m_selfEdit = true;
-    refreshZephyr();
     m_kind->setCurrentText(toString(t.kind));
     m_url->setText(t.url);
     m_project->setText(t.project);
@@ -887,37 +838,6 @@ void SettingsView::refreshRunShortcuts() {
     m_stepBack->setText(r.previous);
     m_stepNext->setText(r.next);
     m_selfEdit = false;
-}
-
-void SettingsView::refreshZephyr() {
-    const TrackerSettings& t = m_settings.tracker();
-    // Zephyr es un plugin de Jira: no tiene sentido ofrecerlo con otro gestor.
-    m_zephyrBlock->setVisible(m_publish != nullptr && t.kind == TrackerKind::Jira);
-    m_zephyrVersion->setEnabled(t.zephyr);
-    m_zephyrTestType->setEnabled(t.zephyr);
-    m_zephyrTest->setEnabled(t.zephyr);
-    m_zephyrNote->setText(t.zephyr
-                              ? tr("Cada caso publica su ejecución sobre el issue de tipo Test que tiene enlazado; el que aún no lo tenga lo estrena a partir del caso (título, precondiciones y pasos) y su clave se guarda en el campo «Test de Zephyr».")
-                              : tr("Zephyr for Jira: los ciclos y sus ejecuciones se crean en la misma instancia con estas credenciales."));
-    if (m_selfEdit) return;
-    const bool wasEditing = m_selfEdit;
-    m_selfEdit = true;
-    m_zephyr->setChecked(t.zephyr);
-    m_zephyrVersion->setText(t.zephyrVersion);
-    m_zephyrTestType->setText(t.zephyrTestType);
-    m_selfEdit = wasEditing;
-}
-
-void SettingsView::testZephyr() {
-    if (!m_publish) return;
-    m_zephyrTest->setEnabled(false);
-    m_zephyrTest->setText(tr("Probando…"));
-    m_publish->testConnection([this](const ConnectionResult& r) {
-        m_zephyrTest->setEnabled(true);
-        m_zephyrTest->setText(tr("Probar Zephyr"));
-        if (r.ok) emit toast(tr("Zephyr responde · %1").arg(r.displayName), theme::Green);
-        else emit toast(tr("No se pudo hablar con Zephyr · %1").arg(r.error), theme::Red);
-    });
 }
 
 void SettingsView::testConnection() {

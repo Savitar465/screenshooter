@@ -157,7 +157,7 @@ QList<RevisionPublishService::Step> RevisionPublishService::stepsFor(const QStri
                         : tr("Zephyr · %1 ciclo(s) del plan del issue").arg(cycles.size());
     zephyr.done = !cycles.isEmpty() && published == cycles.size();
     zephyr.available = m_zephyr && m_zephyr->enabled() && executed > 0;
-    if (!m_zephyr || !m_zephyr->enabled()) zephyr.blocked = tr("Activa Zephyr en Ajustes para publicar los ciclos");
+    if (!m_zephyr || !m_zephyr->enabled()) zephyr.blocked = tr("Zephyr necesita Jira como gestor para publicar los ciclos");
     else if (cycles.isEmpty()) zephyr.blocked = tr("La revisión no tiene ningún ciclo de plan ejecutado");
     else if (executed == 0) zephyr.blocked = tr("Ningún caso de esos ciclos llegó a ejecutarse");
     if (zephyr.done) {
@@ -274,7 +274,7 @@ QString RevisionPublishService::uploadPhase(const Issue& issue) const {
 void RevisionPublishService::uploadPlan(const QString& issueId, bool sync, std::function<void(const PlanUploaded&)> done) {
     const Issue* issue = m_issues.find(issueId);
     PlanUploaded refused;
-    if (!canPrepareTests()) refused.error = tr("Activa Zephyr en Ajustes para subir el plan");
+    if (!canPrepareTests()) refused.error = tr("Zephyr necesita Jira como gestor para subir el plan");
     else if (!issue) refused.error = tr("El issue ya no existe");
     if (!refused.error.isEmpty()) { done(refused); return; }
     const QStringList caseIds = m_records.caseIdsOf(*issue);

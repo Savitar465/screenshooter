@@ -242,7 +242,6 @@ void run(MainWindow& window, AppContext& ctx) {
         {"09-planes", [&] {
             // El primer ciclo, publicado en Zephyr con el Test de cada ejecución: así el historial de
             // ciclos enseña el bloque de Zephyr (Tests enlazados y «Actualizar en Zephyr»).
-            ctx.settings->updateTracker([](TrackerSettings& s) { s.zephyr = true; });
             QHash<QString, QString> tests;
             int n = 77;
             for (const auto& r : ctx.history->runsForPlan(QStringLiteral("PR-0001"))) tests.insert(r.id, QStringLiteral("SHOP-%1").arg(n++));
@@ -403,7 +402,6 @@ void run(MainWindow& window, AppContext& ctx) {
         }, [&] { return window.bugWindow(); }},
         {"05-ajustes", [&] {
             if (QWidget* bug = window.bugWindow()) bug->close();
-            ctx.settings->updateTracker([](TrackerSettings& s) { s.zephyr = false; });   // como estaba, para la captura de ajustes
             window.openSettings();
         }, [&] { return window.settingsWindow(); }},
         {"06-casos-en-ejecucion", [&] {

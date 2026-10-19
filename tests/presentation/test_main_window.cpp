@@ -1578,7 +1578,7 @@ private slots:
     void thePlanReportShowsWhatEachCaseIsLinkedTo() {
         WindowFixture f;
         // Con Zephyr activo la cabecera lleva además el botón de publicar: es la fila más apretada.
-        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; s.url = QStringLiteral("https://jira.acme.com"); s.project = QStringLiteral("SHOP"); });
+        f.app.settings.updateTracker([](TrackerSettings& s) { s.url = QStringLiteral("https://jira.acme.com"); s.project = QStringLiteral("SHOP"); });
         const QString planRunId = f.app.history.startPlan(QStringLiteral("Regresión Sprint 14 · candidata de release"), {QStringLiteral("TC-101")});
         RunRecord rec;
         rec.caseId = QStringLiteral("TC-101");
@@ -1825,7 +1825,6 @@ private slots:
 
     void thePlanScreenShowsTheZephyrTestOfEachPublishedRun() {
         WindowFixture f;
-        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = true; });
         const QString planId = f.app.plans.activeId();
         // Ciclo 1, publicado: una ejecución con Test y otra que se quedó sin él.
         f.app.run.startSequence({QStringLiteral("TC-103"), QStringLiteral("TC-107")}, QStringLiteral("Regresión"), planId);
@@ -1862,8 +1861,8 @@ private slots:
         QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("publishZephyr-%1").arg(unpublished)));
         QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("updateZephyr-%1").arg(unpublished)));
 
-        // Sin Zephyr en los ajustes no se ofrece ni publicar ni actualizar, pero los Tests se siguen viendo.
-        f.app.settings.updateTracker([](TrackerSettings& s) { s.zephyr = false; });
+        // Sin Jira no hay Zephyr: no se ofrece ni publicar ni actualizar, pero los Tests se siguen viendo.
+        f.app.settings.updateTracker([](TrackerSettings& s) { s.kind = TrackerKind::GitHub; });
         QTest::qWait(50);
         QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("cycleTest-%1").arg(runs[0].id)));
         QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("updateZephyr-%1").arg(published)));
@@ -3010,7 +3009,6 @@ private slots:
         WindowFixture f;
         // Un proyecto de una sola fase: su Conforme es el final, el que se registra en GESREQ.
         f.app.issues.setPhases({QStringLiteral("QA")});
-        f.app.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
         f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) {
             r.url = QStringLiteral("http://gesreq.test:7401/greq");
             r.user = QStringLiteral("jmaidana");
@@ -3069,7 +3067,6 @@ private slots:
     // que GESREQ lo recibió con la observación y que los ciclos llegaron a Zephyr.
     void anObservedRevisionContinuesWithTheRecordAndThePublication() {
         WindowFixture f;
-        f.app.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
         f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) {
             r.url = QStringLiteral("http://gesreq.test:7401/greq");
             r.user = QStringLiteral("jmaidana");
@@ -3304,25 +3301,17 @@ private slots:
         QVERIFY(!selector->toolTip().contains(QStringLiteral("abriendo")));
     }
 
-    void settingsEnableZephyrPublishing() {
+    // Zephyr no se activa en Ajustes: con Jira se publica siempre, y con otro gestor no hay Zephyr.
+    void zephyrIsAlwaysOnWithJira() {
         WindowFixture f;
         f.action("actSettings")->trigger();
         QWidget* dialog = f.window->settingsWindow();
-        auto* zephyr = dialog->findChild<QCheckBox*>(QStringLiteral("settingsZephyr"));
-        QVERIFY(zephyr);
-        QVERIFY(zephyr->isVisible());
-        QVERIFY(!f.app.settings.tracker().zephyr);
-        QVERIFY(!f.app.publish.enabled());
-
-        zephyr->setChecked(true);
-        QVERIFY(f.app.settings.tracker().zephyr);
+        QVERIFY(!dialog->findChild<QCheckBox*>(QStringLiteral("settingsZephyr")));
         QVERIFY(f.app.publish.enabled());
 
-        // Con otro gestor el bloque desaparece: Zephyr es un plugin de Jira.
         auto* kind = dialog->findChild<QComboBox*>(QStringLiteral("settingsKind"));
         QVERIFY(kind);
         kind->setCurrentText(toString(TrackerKind::GitHub));
-        QVERIFY(!zephyr->isVisible());
         QVERIFY(!f.app.publish.enabled());
     }
 
@@ -3635,7 +3624,6 @@ private slots:
     // enlazado a su issue del gestor, y el ciclo de la fase con todos los casos, sin ejecutar.
     void theIssueUploadsItsPlanToZephyr() {
         WindowFixture f;
-        f.app.settings.updateTracker([](TrackerSettings& t) { t.zephyr = true; });
         const QString issueId = f.app.issues.createIssue(QStringLiteral("Alta de clientes"));
         f.app.issues.updateIssue(issueId, [](Issue& i) {
             i.publication.tracker = QStringLiteral("Jira");
@@ -4213,8 +4201,12 @@ private slots:
                              qPrintable(QStringLiteral("%1: la ventana no estrecha de %2").arg(where).arg(f.window->width())));
                 QVERIFY2(f.window->height() == size.height(),
                          qPrintable(QStringLiteral("%1: la ventana no baja de %2").arg(where).arg(f.window->height())));
-                const QStringList clipped = clippedWidgets(f.window.get());
-                QVERIFY2(clipped.isEmpty(), qPrintable(where + QStringLiteral(":\n  ") + clipped.join(QStringLiteral("\n  "))));
+                // Las alturas que dependen del ancho (textos que se parten, botones que pasan a otra
+                // línea) se reparten en varias vueltas de LayoutRequest, y en Windows llegan más tarde:
+                // se espera a que el reparto termine en vez de medir una pasada intermedia.
+                QStringList clipped;
+                QTRY_VERIFY2((clipped = clippedWidgets(f.window.get())).isEmpty(),
+                             qPrintable(where + QStringLiteral(":\n  ") + clipped.join(QStringLiteral("\n  "))));
             }
         }
     }

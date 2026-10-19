@@ -45,7 +45,8 @@ nuevas pero no se instala sola.
 
 ## Actualizaciones
 
-QAflow busca versiones nuevas **una vez al día** y también desde **Ayuda → Buscar actualizaciones…**.
+QAflow busca versiones nuevas **una vez al día** (se puede desactivar en Ajustes) y también desde **Ayuda →
+Buscar actualizaciones…**. En Ajustes eliges el canal: sólo **versiones estables** o **estables y beta**.
 Instalada como AppImage o con el instalador de Windows, descarga el paquete, comprueba su firma y lo
 instala al reiniciar o al cerrar. Con los demás paquetes sólo avisa.
 

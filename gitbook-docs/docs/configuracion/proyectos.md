@@ -12,7 +12,10 @@ común a todos, y las evidencias se guardan en una subcarpeta por proyecto para 
 * El **selector** de la barra superior cambia de proyecto dentro de la misma ventana. Se recuerda el último
   proyecto abierto.
 * El menú `⋯` junto al selector permite **crear** un proyecto vacío o **renombrar** el actual.
-* Al crear un proyecto puedes indicar ya su código Jira y su sistema de GESREQ (ambos opcionales).
+* Al crear un proyecto puedes indicar ya su código Jira y su sistema de GESREQ (ambos opcionales, con
+  «Buscar…» para elegirlos de cada sistema).
+
+![Nuevo proyecto](../.gitbook/assets/15-proyecto-nuevo.png)
 
 {% hint style="warning" %}
 No se puede cambiar de proyecto con una **ejecución o una captura en curso**: termínala o detenla antes. Los

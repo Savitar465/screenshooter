@@ -49,6 +49,8 @@ También puedes crear un issue **a mano** con **+ Nuevo**, sin requerimiento de 
 
 ## El tablero
 
+![Tablero de issues](../.gitbook/assets/11-issues.png)
+
 Cinco columnas: **Pendiente, En preparación, En pruebas, Fallido / bloqueado, Finalizado** (ver
 [El flujo de trabajo](../conceptos/flujo-de-trabajo.md#como-se-mueve-un-issue-por-el-tablero)).
 
@@ -73,26 +75,47 @@ proyecto. Abrir uno **pregunta antes** de cambiar de proyecto. El filtro **«Só
 ## La lista
 
 El conmutador **Tablero / Lista** cambia a una tabla ordenable con **todos** los issues (también los
-finalizados): issue, GREQ, título, proyecto, estado, revisión, clave del gestor, actualizado y finalizado.
+finalizados): issue, GREQ, título, proyecto, estado, revisión, clave del gestor, actualizado y finalizado. Un clic
+elige el issue y muestra su panel; doble clic o `Intro` lo abre.
+
+![Issues en modo lista](../.gitbook/assets/11c-issues-lista.png)
 
 ## El detalle
 
-Tres bloques:
+Doble clic en una tarjeta, **Abrir el issue**, **+ Nuevo** o un requerimiento que se empieza a probar llevan al
+detalle; **← Tablero** vuelve.
 
-1. **El requerimiento**: lo importado de GESREQ, sus cambios, si salió de la bandeja y su ficha completa
-   (se abre en otra ventana con el alcance, los adjuntos y los plazos de QA).
-2. **La revisión**: los pasos del control de calidad, con lo que cuelga de cada uno (el plan con sus casos,
-   los ciclos, los bugs, la publicación). Ver [Revisiones y fases](revisiones-y-fases.md).
-3. **Revisiones anteriores**: cada ronda cerrada con su resultado, su acta y a dónde llegó (ZEPHYR / GESTOR /
-   GESREQ), con «Generar acta…» o «Completar publicación…» si le falta algo.
+![Detalle de un issue](../.gitbook/assets/11b-issue-detalle.png)
+
+| Zona | Qué hay |
+|------|---------|
+| **Centro** | La **revisión**: sus pestañas (una por ronda), la cabecera con la fase y el resultado propuesto, y sus cinco pasos. Ver [Revisiones y fases](revisiones-y-fases.md) |
+| **Panel derecho** | Estado de QA, prioridad, fases, el tag del gestor, el origen y los botones para abrir, descartar o volver a probar una revisión |
+| **Tarjeta del requerimiento** | El **plazo de QA** («7 días para cerrar QA», con su barra entre la fecha de asignación y la de vencimiento), el estado en GESREQ, el tipo, la prioridad y el solicitante, con **Ver ficha completa** y **Abrir en GESREQ** |
+
+### La ficha del requerimiento
+
+**Ver ficha completa** abre el requerimiento en su propia ventana:
+
+![Ficha del requerimiento](../.gitbook/assets/11d-requerimiento.png)
+
+* A la izquierda: GREQ y sistema, estado, **plazo QA** (vencido, vence hoy, faltan N días), prioridad y tipo,
+  solicitante y los **adjuntos**.
+* Pestañas **Qué probar** (el alcance), **Recorrido** (solicitado → aceptado → desarrollo → control funcional →
+  control de calidad, con sus fechas) y **Ficha GESREQ** (todos los datos, agrupados).
+* **Cargar ficha** / **Actualizar ficha** la lee de GESREQ (el alcance, dónde probar y los adjuntos llegan así);
+  **Abrir en GESREQ** la abre en el navegador.
+
+Si el requerimiento ya no está en tu bandeja, la ventana lo avisa con la fecha en que se vio por última vez.
 
 ### El tag del gestor
 
-En la cabecera, el **tag** con la clave y el estado en Jira. Su menú: publicar, vincular un issue existente,
-abrir, consultar el estado y desvincular. Debajo se avisa si el issue tiene cambios **pendientes de
-actualizar** en Jira o un envío **sin confirmar**.
+En el panel, junto a **Gestor**, el **tag** con la clave y el estado en Jira (o «Sin publicar en Jira»). Su menú:
+publicar, vincular un issue existente, abrir, consultar el estado, actualizar y desvincular. Debajo se avisa si
+el issue tiene cambios **pendientes de actualizar** en Jira o un envío **sin confirmar**.
 
 {% hint style="info" %}
 QAflow nunca sobrescribe lo editado en Jira sin preguntar. «Actualizar» reescribe título y descripción sólo
-cuando lo pides, y un issue **vinculado** (creado por otra persona) no se sobrescribe.
+cuando lo pides, y un issue **vinculado** (creado por otra persona) no se sobrescribe. Desvincular sólo olvida
+la relación: en Jira no se borra nada.
 {% endhint %}

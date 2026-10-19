@@ -56,10 +56,27 @@ la estimación de los planes.
 `F11` o «Foco» dejan la evidencia a toda la ventana con un mando al pie para seguir marcando (`P/F/B/S`
 siguen funcionando), capturar y reportar bugs. `Esc` vuelve.
 
+![Modo foco](../.gitbook/assets/03c-ejecucion-foco.png)
+
+## Pausar
+
+**❚❚** en la barra superior (o `Ctrl+Alt+Espacio`) pausa: el reloj se para y el tiempo en pausa no cuenta. En
+un plan, el ciclo entero queda **aparcado** y puedes ponerte con otro (ver [Planes y ciclos](planes-y-ciclos.md#pausar)).
+
+## Crear un caso sin salir de la prueba
+
+Si al probar descubres algo que el plan no cubre, **+ Nuevo caso** en la pantalla de ejecución lo crea con sus
+pasos. El caso se añade al plan y entra al final del ciclo en curso.
+
+![Caso nuevo durante un ciclo](../.gitbook/assets/14-caso-nuevo.png)
+
 ## Terminar
 
 Cuando todos los pasos tienen veredicto, **Finalizar caso** lo archiva y, en un plan, pasa al siguiente o
 termina el ciclo:
+
+![Caso terminado](../.gitbook/assets/03b-ejecucion-fin.png)
+
 
 * Si el plan prueba un **requerimiento**, el ciclo termina en su **issue** (con un botón «Ver informe»).
 * Si no, termina en el **informe del ciclo**.

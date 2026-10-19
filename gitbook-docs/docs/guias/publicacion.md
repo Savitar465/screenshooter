@@ -4,7 +4,7 @@ description: Publicar el resultado de una revisión en Zephyr, el gestor y GESRE
 
 # Publicar el resultado
 
-Con la revisión **cerrada**, el paso **6 · Publicar el resultado** ofrece **Publicar…**. Una sola ventana
+Con la revisión **cerrada**, el paso **5 · Publicar** ofrece **Publicar…**. Una sola ventana
 enseña los destinos, qué iría a cada uno y lo que ya se hizo, para elegir y ver cómo termina cada paso.
 
 ## Los destinos, en orden
@@ -34,9 +34,9 @@ Un Conforme registrado no se repite nunca; sólo un Observado deja que la revisi
 
 ## Publicar revisiones anteriores
 
-Una revisión cerrada que quedó a medias (se volvió a probar antes de publicarla) se completa desde
-**Revisiones anteriores → Completar publicación…**. Cada ronda enseña un chip por destino
-(ZEPHYR / GESTOR / GESREQ) con ✓ hecho o — pendiente.
+Una revisión cerrada que quedó a medias (se volvió a probar antes de publicarla) se completa eligiendo su
+**pestaña** (`Rev 1`, `Rev 2`…) en el detalle del issue y pulsando **Completar publicación…** en su paso 5. El
+panel del tablero enseña además una caja por destino (ZEPHYR / GESTOR / GESREQ) con cómo quedó.
 
 ## Publicar ciclos sueltos en Zephyr
 

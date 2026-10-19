@@ -35,6 +35,8 @@ El editor de anotaciones tiene **flechas, rectángulos, elipses, marcador, texto
 datos sensibles), con colores, grosor y deshacer. Se abre desde la miniatura (✎), desde el visor o
 automáticamente tras capturar. Guardar sustituye el fichero.
 
+![Editor de anotaciones](../.gitbook/assets/12-anotar.png)
+
 ## Visor a tamaño completo
 
 Clic en cualquier miniatura: navegación con ← →, zoom, arrastre, `Ctrl+E` anota, `Ctrl+C` copia, y mostrar en

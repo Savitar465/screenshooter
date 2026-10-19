@@ -26,7 +26,8 @@ Casos  →  Plan  →  Ciclo (ejecución de cada caso)  →  Bugs  →  Informe 
 ## Control de calidad de un requerimiento
 
 Cada requerimiento es un **issue**, y su trabajo se organiza en **revisiones**. La pantalla del issue enseña
-la revisión como una serie de pasos y siempre dice **qué toca ahora** («Lo siguiente»).
+la revisión como cinco pasos —**Plan, Ejecutar, Acta, Cerrar, Publicar**— y siempre dice **qué toca ahora**
+(«Lo siguiente» en el tablero, «TOCA AHORA» en el detalle).
 
 {% stepper %}
 {% step %}
@@ -55,38 +56,41 @@ resultados a Zephyr. Ejecuta los casos; si algo falla, «Continuar lo fallado» 
 {% endstep %}
 
 {% step %}
-### 3 · Revisar los bugs reportados
+### Revisar los bugs reportados
 
-Los bugs de los ciclos de la revisión aparecen aquí con su clasificación. Los que ya pasaron el reintento
-salen como **VERIFICADO** y se cierran en el gestor con «Cerrar verificados».
+Dentro del mismo paso, los bugs de los ciclos de la revisión aparecen con su clasificación. Los que ya pasaron
+el reintento salen como **VERIFICADO** y se cierran en el gestor con «Cerrar verificados». El paso no se da por
+hecho mientras quede alguno abierto.
 {% endstep %}
 
 {% step %}
-### 4 · Generar el acta (R-213)
+### 3 · Generar el acta (R-213)
 
 QAflow propone el acta con el requerimiento, el ciclo elegido y los bugs por clasificación. La revisas y se
 genera el `.docx`.
 {% endstep %}
 
 {% step %}
-### 5 · Cerrar la revisión
+### 4 · Cerrar la revisión
 
 Eliges **Conforme** u **Observado**. Al cerrar, los resultados y bugs suben a Zephyr y el resultado con el
 acta se comenta en el issue de Jira.
 {% endstep %}
 
 {% step %}
-### 6 · Publicar el resultado
+### 5 · Publicar el resultado
 
 «Publicar…» registra el control en **GESREQ** (cambia el estado del requerimiento) y, con el Conforme de la
 última fase, **cierra** el issue de Jira.
 {% endstep %}
 
 {% step %}
-### 7 · Volver a probar o pasar a PRE
+### Volver a probar o pasar a PRE
 
-* **Observado**: el requerimiento vuelve a desarrollo. Cuando llegue la corrección, abre la revisión siguiente
-  (o «Continuar lo fallado»).
+Desde el panel derecho del issue:
+
+* **Observado**: el requerimiento vuelve a desarrollo. Cuando llegue la corrección, **↻ Volver a probar** abre la
+  revisión siguiente (o «Continuar lo fallado»).
 * **Conforme en QA**: la fase QA queda aprobada y «▶ Empezar PRE…» arranca la siguiente fase.
 * **Conforme en PRE**: el control termina y el issue queda **Finalizado**.
 {% endstep %}

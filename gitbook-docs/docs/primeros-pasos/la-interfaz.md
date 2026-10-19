@@ -36,8 +36,15 @@ Al pie: la ejecución en curso, la tasa de éxito y el plan activo. Cada bloque 
 
 ## Menú y bandeja
 
-El menú (Archivo, Editar, Ver, Ejecución, Ayuda) tiene los atajos estándar. Los **Ajustes** se abren con
-**Archivo → Ajustes** (`Ctrl+,`) en su propia ventana; los cambios se guardan al momento.
+| Menú | Qué tiene |
+|------|-----------|
+| **Archivo** | Nuevo caso, importar y exportar casos, **abrir la carpeta de datos** y **la de capturas**, Ajustes (`Ctrl+,`), salir |
+| **Editar** | Deshacer, buscar, clonar y eliminar caso |
+| **Ver** | Atrás, las pantallas, **Tema** (oscuro, claro, sistema) e **Idioma** |
+| **Ejecución** | Ejecutar la selección de la barra, capturar, grabar GIF, adjuntar archivo, reportar bug, pasa/falla y siguiente, paso anterior/siguiente, pausar |
+| **Ayuda** | Atajos de teclado, buscar actualizaciones, acerca de QAflow |
+
+Los **Ajustes** se abren en su propia ventana; los cambios se guardan al momento.
 
 Con bandeja del sistema disponible hay un icono para mostrar u ocultar la ventana, capturar, grabar un GIF o
 salir. Si activas **Cerrar a la bandeja**, cerrar la ventana la oculta en lugar de salir.

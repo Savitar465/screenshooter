@@ -12,8 +12,11 @@ Un **plan** es una lista ordenada de casos. Un **ciclo** es cada vez que se ejec
 
 En **Plan de pruebas** (`Ctrl+2`):
 
-* Crea, duplica, archiva o elimina planes.
-* Añade o quita casos y **ordénalos** en el orden en que se ejecutarán (o por prioridad).
+* Crea, duplica, archiva o elimina planes. La lista de la izquierda separa **Activos** y **Archivados** y dice de
+  cada plan si tiene un ciclo en curso.
+* Busca casos por ID, título, suite, etiqueta o componente y filtra por suite.
+* Atajos para componer: **Añadir todos**, **Vaciar**, **Solo prioridad alta** y **Ordenar por prioridad**.
+* Reordena con ▲ ▼ (el orden es el de ejecución) y quita con ✕. Debajo, los casos **disponibles** para añadir.
 * **+ Nuevo caso** crea un caso y lo añade al final del plan.
 * La **estimación** de duración usa los tiempos reales del historial de cada caso (3 min por paso si no hay
   datos) y dice de dónde sale.
@@ -30,7 +33,9 @@ el diálogo de arranque:
 |---------|-------------|
 | **Fase** (plan de un issue) | QA, PRE… Se propone la que le toca a la revisión |
 | **Ambiente** (plan suelto) | Texto libre; se propone el último usado |
-| **Casos de este ciclo** | Todos marcados por defecto. Desmarca los que no se prueban esta vez: salen **del ciclo**, no del plan |
+| **Casos de este ciclo** | Todos marcados por defecto (con **Todos** / **Ninguno**). Desmarca los que no se prueban esta vez: salen **del ciclo**, no del plan |
+
+![Arrancar un ciclo](../.gitbook/assets/13-ciclo-arranque.png)
 
 * **Añadir caso…** suma al ciclo casos del proyecto que no están en el plan. Con **«Añadir también al plan»**
   se quedan en el plan para los ciclos siguientes; sin ella, son sólo de este ciclo.
@@ -44,6 +49,9 @@ Un ciclo de un plan que prueba un requerimiento queda anotado en su **issue**, e
 ## Durante el ciclo
 
 * Los casos se ejecutan en el orden del plan. Al **Finalizar caso** pasa al siguiente.
+* Una tarjeta en el plan muestra el **ciclo en curso** con su progreso y **Ver informe**.
+* **+ Nuevo caso** en la pantalla de ejecución crea un caso que va al plan y entra al final del ciclo en curso
+  (ver [Ejecutar pruebas](ejecucion.md#crear-un-caso-sin-salir-de-la-prueba)).
 * Si cambias el plan con el ciclo en marcha, los casos nuevos entran al final de la cola y los quitados salen
   si no se habían empezado.
 

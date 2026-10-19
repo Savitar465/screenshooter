@@ -4,8 +4,10 @@ description: Generar los casos de un plan a partir del requerimiento y sus adjun
 
 # Generar casos con IA
 
-Desde el paso **1 · Preparar el plan de pruebas** de un issue, **Generar casos con IA…** propone casos a
-partir del texto del requerimiento de GESREQ.
+En el detalle de un issue, paso **1 · Plan**, menú **Más ▾ → Generar casos con IA…**. Propone casos a partir
+del texto del requerimiento de GESREQ (su alcance, si la ficha está leída) y de las notas del issue.
+
+![Generar casos con IA](../.gitbook/assets/11e-casos-ia.png)
 
 {% stepper %}
 {% step %}

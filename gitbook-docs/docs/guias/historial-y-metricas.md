@@ -6,16 +6,17 @@ description: Ejecuciones archivadas, informes de ciclo, exportación a Markdown,
 
 ## Historial
 
-La pantalla **Historial** (`Ctrl+4`) lista los **informes de ciclo** y las **ejecuciones sueltas** (las de un
-plan se ven dentro de su informe, o con el filtro «Casos»).
+La pantalla **Historial** (`Ctrl+4`) lista, agrupados por día, los **informes de ciclo** y las **ejecuciones
+sueltas**. Filtros: **Todo**, **Planes**, **Casos** (todas las ejecuciones, también las de un plan) y
+**Métricas**. La búsqueda encuentra por plan, caso o ID.
 
 ![Informe de un ciclo](../.gitbook/assets/07-historial-plan.png)
 
 ### Detalle de una ejecución
 
-Pasos con su veredicto, datos y notas, duración, evidencias, bugs, y con qué está enlazada en Jira y Zephyr.
-
-![Detalle de una ejecución](../.gitbook/assets/08-historial-caso.png)
+Pasos con su veredicto, datos y notas, duración, evidencias (con **Adjuntar…** para añadir más y **Ver
+evidencias** para abrirlas), bugs, y con qué está enlazada en Jira y Zephyr. Desde el editor de un caso, cada
+fila de «Últimas ejecuciones» abre este detalle.
 
 ### Informe de ciclo
 
@@ -33,8 +34,9 @@ Pasos con su veredicto, datos y notas, duración, evidencias, bugs, y con qué e
 
 ## Métricas
 
-El botón de métricas (al pie del rail) abre el panel:
+El botón de métricas (al pie del rail) o el filtro **Métricas** del historial abren el panel:
 
+* **Resumen**: casos, ejecutados, superados, fallidos, bloqueados, tasa de éxito y ciclos.
 * **Tasa de éxito por suite**, a partir de la última ejecución de cada caso.
 * **Evolución entre ciclos**, con un chip por plan.
 

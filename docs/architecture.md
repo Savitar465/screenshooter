@@ -1531,7 +1531,12 @@ QT_QPA_PLATFORM=offscreen QAFLOW_SNAPSHOT_DIR=/tmp/qaflow-shots ./build/qaflow
 ```
 
 Renderiza cada pantalla (incluida una ejecución con un paso fallido, el bug prellenado, el
-informe de un plan, el panel de métricas con dos ciclos y la ventana de ajustes) a PNG y cierra. Usa un directorio de
+informe de un plan, el panel de métricas con dos ciclos y la ventana de ajustes) a PNG y cierra. También
+fotografía los diálogos y ventanas que documenta el GitBook: el tablero en modo lista, la ficha del requerimiento,
+generar casos con IA, el acta, el arranque de un ciclo, el caso nuevo, el alta de proyecto y la ficha de un bug.
+El issue de ejemplo lleva su ficha de GESREQ y los ciclos del plan anotados en su primera revisión, para que esas
+pantallas tengan contenido. Los diálogos que la app abre con `exec()` (el acta) se piden con un `singleShot`
+fuera de la vuelta del temporizador, para que la captura siguiente los encuentre abiertos. Usa un directorio de
 datos, unos ajustes y una carpeta de capturas aislados (`$QAFLOW_SNAPSHOT_DIR/data`, `/config` y
 `/capturas`) para no tocar los reales; el caso que se ejecuta lleva dos evidencias de ejemplo
 dibujadas al vuelo.

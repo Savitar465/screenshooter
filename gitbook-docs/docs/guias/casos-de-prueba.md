@@ -13,8 +13,9 @@ elegido a la derecha.
 
 Hay tres formas:
 
-* **Nuevo caso** (`Ctrl+N`) en la pantalla de casos: crea uno vacío en la suite del caso seleccionado.
+* **+ Nuevo** (`Ctrl+N`) en la pantalla de casos: crea uno vacío en la suite del caso seleccionado.
 * **+ Nuevo caso** en la pantalla del plan: lo crea y lo añade al final del plan.
+* **+ Nuevo caso** en la pantalla de ejecución: lo añade al plan y al ciclo en curso.
 * **Generar casos con IA** desde un issue: ver [Generar casos con IA](casos-con-ia.md).
 
 Todo caso nuevo nace en estado **Listo**, preparado para ejecutarse. Los cambios se guardan solos.
@@ -32,10 +33,14 @@ Todo caso nuevo nace en estado **Listo**, preparado para ejecutarse. Los cambios
 | **Componente** | Módulo del producto |
 | **Pasos** | Acción · Datos de la prueba · Resultado esperado |
 
+![Editor de un caso: un caso en ejecución, con sus pasos de tres campos](../.gitbook/assets/06-casos-en-ejecucion.png)
+
 ### Pasos
 
 Cada paso tiene los tres campos que pide Zephyr: **acción**, **datos de la prueba** (opcional) y **resultado
-esperado**. Los pasos se pueden **insertar** en cualquier posición, **reordenar** y **eliminar**.
+esperado**. Con los botones de cada paso se **reordena** (▲ ▼), se **inserta** otro debajo (+), se **duplica** y
+se **elimina** (✕); **+ Añadir paso** lo añade al final. El lápiz de cada campo lo abre en grande para textos
+largos. **Guardar** confirma el caso (los cambios ya se guardan solos).
 
 ## Últimas ejecuciones
 

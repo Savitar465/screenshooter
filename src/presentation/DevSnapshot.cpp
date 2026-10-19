@@ -2,16 +2,28 @@
 
 #include "application/AppContext.h"
 #include "application/EvidenceService.h"
+#include "application/IssueStore.h"
+#include "application/RunHistoryStore.h"
 #include "application/SettingsStore.h"
 #include "core/models/BugReport.h"
 #include "core/models/IssueLink.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/views/AiCaseGenerationDialog.h"
+#include "presentation/views/BugDetailWindow.h"
+#include "presentation/views/CaseCreateDialog.h"
+#include "presentation/views/CycleStartDialog.h"
+#include "presentation/views/IssuesView.h"
 #include "presentation/views/MainWindow.h"
+#include "presentation/views/ProjectSetupDialog.h"
+#include "presentation/views/QualityRecordDialog.h"
+#include "presentation/views/RequirementWindow.h"
 #include "presentation/views/RunView.h"
 #include "presentation/widgets/AnnotationEditor.h"
 
 #include <QApplication>
+#include <QAction>
 #include <QDir>
+#include <QPushButton>
 #include <QPainter>
 #include <QSettings>
 #include <QTimer>
@@ -123,6 +135,17 @@ void reportBug(AppContext& ctx, const QString& key, const QString& title, const 
     link.resolved = resolved;
     link.createdAt = QDateTime::currentDateTime();
     ctx.bugLedger->recordIssue(link);
+}
+
+// Pulsa el botón (o dispara la acción de menú) de la ventana con ese objectName, si está habilitado.
+void clickButton(MainWindow& window, const char* name) {
+    for (int pass = 0; pass < 8; ++pass) QApplication::processEvents();
+    if (auto* button = window.findChild<QPushButton*>(QString::fromLatin1(name)); button && button->isEnabled()) button->click();
+    else if (auto* action = window.findChild<QAction*>(QString::fromLatin1(name)); action && action->isEnabled()) action->trigger();
+}
+
+void closeNamed(MainWindow& window, const char* name) {
+    if (auto* w = window.findChild<QWidget*>(QString::fromLatin1(name))) w->close();
 }
 
 } // namespace
@@ -256,6 +279,36 @@ void run(MainWindow& window, AppContext& ctx) {
             b.detailUrl = connection + QStringLiteral("/publico.do?id=2026310&bandera=1");
             const QString first = ctx.issues->importRequirements({a, b}, connection).created.value(0);
             ctx.issues->linkPlan(first, QStringLiteral("PL-0001"));
+            // Los ciclos de ese plan son de su primera revisión, como si se hubieran arrancado desde el issue.
+            const IssueStore::RevisionRef ref = ctx.issues->notePlanStarted(QStringLiteral("PL-0001"), QStringLiteral("QA"));
+            for (const auto& cycle : ctx.history->plans())
+                if (cycle.planId == QStringLiteral("PL-0001")) ctx.history->noteCycleRevision(cycle.id, ref.issueId, ref.revision);
+            // La ronda empezó antes que esos ciclos: si no, sus ejecuciones quedarían fuera de ella.
+            ctx.issues->updateIssue(first, [](Issue& i) {
+                if (!i.revisions.isEmpty()) i.revisions.first().startedAt = QDateTime::currentDateTime().addDays(-1);
+            });
+            // Y su ficha de GESREQ ya leída, para que la ventana del requerimiento y la IA tengan de qué hablar.
+            RequirementDetail detail;
+            detail.id = a.id;
+            detail.requestType = QStringLiteral("NUEVA FUNCIONALIDAD");
+            detail.requestingUnit = QStringLiteral("GERENCIA NACIONAL DE TECNOLOGÍAS DE LA INFORMACIÓN");
+            detail.requester = a.requester;
+            detail.priority = a.priority;
+            detail.state = a.states.value(0);
+            detail.systemCode = a.systemCode;
+            detail.description = QStringLiteral(
+                "Permitir aplicar cupones de descuento en el checkout del portal.\n\n"
+                "• El cupón se introduce en el resumen del carrito y se valida al pulsar «Aplicar».\n"
+                "• Un cupón vencido o inexistente muestra un aviso y no cambia el total.\n"
+                "• El descuento se refleja en el total antes de pagar y en el comprobante.\n"
+                "• Sólo un cupón por pedido.");
+            detail.fields = {{QStringLiteral("Servidor"), QStringLiteral("calidad-web-01")},
+                             {QStringLiteral("Esquema"), QStringLiteral("PORTAL_QA")},
+                             {QStringLiteral("Desarrollador"), QStringLiteral("MÉNDEZ SOTO LUIS")}};
+            detail.attachments = {{QStringLiteral("Especificación funcional"), QStringLiteral("especificacion_cupones.docx"), QString()},
+                                  {QStringLiteral("Diseño de pantallas"), QStringLiteral("pantallas_checkout.pdf"), QString()}};
+            detail.url = a.detailUrl;
+            ctx.issues->setRequirementDetail(first, detail);
             ctx.issues->updateIssue(first, [](Issue& i) {
                 i.state = IssueState::Testing;
                 i.notes = QStringLiteral("Probar en calidad con el usuario de pruebas y el cupón QA10.");
@@ -268,10 +321,84 @@ void run(MainWindow& window, AppContext& ctx) {
         }},
         // El detalle de ese issue: la revisión con su stepper y, al lado, el panel con sus datos.
         {"11b-issue-detalle", [&] { window.openIssue(ctx.issues->selectedId()); }},
+        // La misma pantalla en modo lista: todos los issues, también los finalizados.
+        {"11c-issues-lista", [&] {
+            window.navigate(Screen::Issues);
+            clickButton(window, "issuesBack");   // del detalle, al tablero
+            if (auto* issues = window.findChild<IssuesView*>()) issues->setListMode(true);
+        }},
+        // La ficha del requerimiento, en su ventana, abierta desde el detalle del issue.
+        {"11d-requerimiento", [&] {
+            if (auto* issues = window.findChild<IssuesView*>()) issues->setListMode(false);
+            window.openIssue(ctx.issues->selectedId());
+            clickButton(window, "issueShowRequirement");
+            if (auto* req = window.findChild<RequirementWindow*>()) req->resize(1000, 780);
+        }, [&]() -> QWidget* { return window.findChild<RequirementWindow*>(); }},
+        // Generar casos con IA desde el paso del plan.
+        {"11e-casos-ia", [&] {
+            if (auto* req = window.findChild<RequirementWindow*>()) req->close();
+            clickButton(window, "issueGenerateCases");
+            if (auto* ai = window.findChild<AiCaseGenerationDialog*>()) ai->resize(1060, 800);
+            // El acta se abre con exec(): se pide fuera de esta vuelta para que la siguiente la encuentre abierta.
+            QTimer::singleShot(60, &window, [&window]() {
+                if (auto* ai = window.findChild<AiCaseGenerationDialog*>()) ai->close();
+                clickButton(window, "issueGenerateRecord");
+            });
+        }, [&]() -> QWidget* { return window.findChild<AiCaseGenerationDialog*>(); }},
+        // El acta R-213 antes de generarla.
+        {"11f-acta", [&] {
+            if (auto* record = window.findChild<QualityRecordDialog*>()) record->resize(1060, 820);
+        }, [&]() -> QWidget* { return window.findChild<QualityRecordDialog*>(); }},
+        // El arranque de un ciclo: fase de la revisión y casos que entran.
+        {"13-ciclo-arranque", [&] {
+            if (auto* record = window.findChild<QualityRecordDialog*>()) record->reject();
+            CycleStartDialog::Setup setup;
+            setup.planName = QStringLiteral("IS-0001 · Checkout con cupones de descuento");
+            setup.context = QStringLiteral("GREQ 2025175 · revisión 2");
+            setup.environment = QStringLiteral("QA");
+            setup.phases = true;
+            setup.environments = {QStringLiteral("QA"), QStringLiteral("PRE")};
+            setup.blocked.insert(QStringLiteral("PRE"), QStringLiteral("1 caso sin ejecutar"));
+            setup.previousCycle = QStringLiteral("PR-0002");
+            for (const auto& c : ctx.cases->cases()) {
+                if (setup.cases.size() < 4) setup.cases.append({c.id, c.title, c.lastRun.label()});
+                else setup.catalog.append({c.id, c.title, QString()});
+            }
+            auto* dialog = new CycleStartDialog(setup, &window);
+            dialog->setObjectName(QStringLiteral("snapshotCycle"));
+            dialog->resize(720, 640);
+            dialog->show();
+        }, [&]() -> QWidget* { return window.findChild<QWidget*>(QStringLiteral("snapshotCycle")); }},
+        // Un caso nuevo desde la ejecución, para el plan del ciclo en curso.
+        {"14-caso-nuevo", [&] {
+            closeNamed(window, "snapshotCycle");
+            auto* dialog = new CaseCreateDialog(ctx.cases->suites(), QStringLiteral("Se añade al plan «Regresión Sprint 14» y entra al final del ciclo en curso."), &window);
+            dialog->setObjectName(QStringLiteral("snapshotCase"));
+            dialog->show();
+        }, [&]() -> QWidget* { return window.findChild<QWidget*>(QStringLiteral("snapshotCase")); }},
+        // El alta de un proyecto, con sus dos códigos opcionales.
+        {"15-proyecto-nuevo", [&] {
+            closeNamed(window, "snapshotCase");
+            auto* dialog = new ProjectSetupDialog(*ctx.projects, QString(), false, ctx.bugs, ctx.requirements, &window);
+            dialog->setObjectName(QStringLiteral("snapshotProject"));
+            dialog->show();
+        }, [&]() -> QWidget* { return window.findChild<QWidget*>(QStringLiteral("snapshotProject")); }},
+        // La ficha de un bug, en su ventana.
+        {"04c-bug-ficha", [&] {
+            closeNamed(window, "snapshotProject");
+            for (const auto& bug : ctx.bugLedger->issues()) {
+                if (bug.key != QStringLiteral("SHOP-151")) continue;
+                auto* detail = new BugDetailWindow(bug, QStringLiteral("Bloqueo tras 5 intentos fallidos"),
+                                                   QStringLiteral("Introducir 5 veces una contraseña incorrecta"), &window);
+                detail->setObjectName(QStringLiteral("snapshotBug"));
+                detail->show();
+            }
+        }, [&]() -> QWidget* { return window.findChild<QWidget*>(QStringLiteral("snapshotBug")); }},
         // El parte, en su ventana. Se le da su tamaño a mano porque la pantalla virtual con la que
         // se generan las capturas es más pequeña que cualquier monitor.
         {"04b-bug-nuevo", [&] {
             window.reportBug();
+            closeNamed(window, "snapshotBug");
             if (QWidget* bug = window.bugWindow()) bug->resize(1060, 820);
         }, [&] { return window.bugWindow(); }},
         {"05-ajustes", [&] {

@@ -14,15 +14,22 @@ Los cambios **se guardan al momento**; no hay botón de aceptar.
 | Ámbito | Ajustes |
 |--------|---------|
 | **Del proyecto abierto** («Configuración del proyecto») | Código de proyecto Jira, sistema de GESREQ, fases del control de calidad |
-| **Generales** (todos los proyectos) | Idioma, tema, bandeja; conexión con el gestor; Zephyr; conexión con GESREQ; IA; capturas y grabaciones; atajos de la ejecución |
+| **Generales** (todos los proyectos) | Idioma, tema, tamaño, bandeja y actualizaciones; conexión con el gestor; Zephyr; conexión con GESREQ; IA; capturas y grabaciones; atajos de la ejecución |
 
-## Apariencia
+## General
 
 | Ajuste | Valores |
 |--------|---------|
-| **Idioma** | Español, inglés o el del sistema |
-| **Tema** | Oscuro, claro o el del sistema |
-| **Cerrar a la bandeja** | Cerrar la ventana la oculta en la bandeja en vez de salir |
+| **Idioma** | Español, inglés o el del sistema. Se aplica al instante |
+| **Tema** | Oscuro, claro o el del sistema. Se aplica al instante |
+| **Tamaño de la interfaz** | 100 %, 110 %, 125 %, 150 % o 175 %. Se aplica al **reiniciar** QAflow; útil en portátiles o pantallas de alta densidad |
+| **Al cerrar la ventana, seguir en la bandeja del sistema** | Cerrar la ventana la oculta en la bandeja en vez de salir |
+| **Buscar actualizaciones automáticamente** | Una vez al día |
+| **Canal** | **Versiones estables** o **Estables y beta** (las beta traen lo nuevo antes, pero pueden tener fallos) |
+
+El idioma y el tema también se cambian desde el menú **Ver → Tema** y **Ver → Idioma**.
+
+![QAflow en inglés y con tema claro](../.gitbook/assets/11-tema-claro-en.png)
 
 ## Secciones
 

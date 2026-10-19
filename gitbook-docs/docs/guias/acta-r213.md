@@ -10,8 +10,11 @@ resultados. QAflow lo **genera desde cero**, sin plantillas.
 
 ## Generarla
 
-En el detalle del issue, paso **4 · Generar el acta (R-213)**. El diálogo enseña el acta completa, campo a
-campo y corregible, antes de escribir el fichero.
+En el detalle del issue, paso **3 · Acta**, botón **Generar acta…** (o **Regenerar…** si ya existe). El diálogo
+enseña el acta completa, campo a campo y corregible, antes de escribir el fichero, junto con el resultado
+propuesto y por qué.
+
+![El acta antes de generarla](../.gitbook/assets/11f-acta.png)
 
 Si la revisión tuvo **varias ejecuciones** del plan, elige con cuál se levanta el acta (o con todas); el acta
 se rehace al cambiar.

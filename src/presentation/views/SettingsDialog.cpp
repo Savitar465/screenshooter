@@ -32,8 +32,9 @@ SettingsDialog::SettingsDialog(const AppContext& ctx, QWidget* parent)
     // Pie: los ajustes se guardan según se editan, así que sólo hace falta cerrar.
     auto* footer = ui::card("dialog-footer");
     auto* h = ui::hbox(footer, 14, 8);
-    h->addWidget(ui::label(tr("Los cambios se guardan al momento"), "muted-sm"));
-    h->addStretch(1);
+    auto* saved = ui::label(tr("Los cambios se guardan al momento"), "muted-sm");
+    saved->setWordWrap(true);   // con letra ancha (Windows) no ensancha el diálogo
+    h->addWidget(saved, 1);
     auto* close = ui::button(tr("Cerrar"), "primary");
     close->setObjectName(QStringLiteral("settingsClose"));
     close->setDefault(true);

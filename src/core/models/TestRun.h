@@ -130,6 +130,9 @@ struct RunSession {
     /// revisarlos. Sin esto, al restaurar se ejecutarían enteros.
     QHash<QString, QString> resume;
     QHash<QString, QString> review;
+    /// Orden en que se ejecutan los casos del ciclo (el pedido al arrancarlo, con lo que el plan ganó
+    /// después al final): el que sigue al de pantalla es su «siguiente caso». Vacío, el del plan.
+    QStringList order;
 };
 
 } // namespace qaflow

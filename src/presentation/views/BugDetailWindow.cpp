@@ -4,6 +4,8 @@
 
 #include "core/models/BugReport.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/FlowLayout.h"
+#include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QApplication>
@@ -38,7 +40,7 @@ BugDetailWindow::BugDetailWindow(const IssueLink& bug, const QString& caseTitle,
     QVBoxLayout* footer;
     auto* v = ui::scrollingBody(this, 18, 12, &footer);
     m_pills = new QWidget;
-    ui::hbox(m_pills, 0, 6);
+    new FlowLayout(m_pills, 0, 6, 6);   // si no caben en una línea (letra ancha, pantalla chica), siguen debajo
     v->addWidget(m_pills);
 
     m_title = new QLabel;
@@ -59,8 +61,8 @@ BugDetailWindow::BugDetailWindow(const IssueLink& bug, const QString& caseTitle,
     v->addWidget(m_meta);
     v->addStretch(1);
 
-    auto* buttons = new QWidget;
-    auto* bh = ui::hbox(buttons, 0, 8);
+    auto* buttons = new WrapRow(8);   // con letra ancha (Windows) o pantalla chica, uno debajo de otro
+    QBoxLayout* bh = buttons->row();
     auto* copy = ui::button(tr("Copiar clave"), "outline");
     connect(copy, &QPushButton::clicked, this, [this]() { QApplication::clipboard()->setText(m_bug.key); });
     bh->addWidget(copy);
@@ -132,7 +134,7 @@ void BugDetailWindow::setBug(const IssueLink& bug) {
 void BugDetailWindow::refresh() {
     setWindowTitle(m_bug.key.isEmpty() ? tr("Bug") : tr("Bug %1").arg(m_bug.key));
     ui::clearLayout(m_pills->layout());
-    auto* h = static_cast<QHBoxLayout*>(m_pills->layout());
+    QLayout* h = m_pills->layout();
     if (!m_bug.key.isEmpty()) h->addWidget(ui::pill(m_bug.key, theme::tint(theme::Cyan, 30), theme::Cyan));
     const QString classification = BugReport::classificationLabel(m_bug.classification).toUpper();
     if (const QString type = m_bug.issueType.trimmed(); !type.isEmpty())
@@ -144,7 +146,6 @@ void BugDetailWindow::refresh() {
     }
     const QString stateColor = m_bug.resolved ? theme::Green : theme::Amber;
     h->addWidget(ui::pill(m_bug.resolved ? tr("CERRADO") : tr("ABIERTO"), theme::tint(stateColor, 34), stateColor));
-    h->addStretch(1);
 
     m_title->setText(m_bug.title.isEmpty() ? tr("(sin título)") : m_bug.title);
     // De dónde salió: es lo que no se puede leer en el gestor.

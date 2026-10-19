@@ -28,6 +28,7 @@ protected:
     void resizeEvent(QResizeEvent* e) override;
 
 private:
+    int itemWidth() const;
     int columnsFor(int width) const;
     void relayout(int columns);
 
@@ -84,6 +85,29 @@ private:
 
     QString m_settingsKey;
     int m_defaultSideWidth;
+};
+
+/// Fila (de botones, normalmente) en una línea si cabe y, si no, una cosa debajo de otra. Su ancho
+/// mínimo es el de lo más ancho que tiene, así que nunca obliga a su contenedor a ensancharse. Lo que
+/// se le pone va en `row()`, como en un QHBoxLayout (los huecos de `addStretch` incluidos).
+class WrapRow : public QWidget {
+    Q_OBJECT
+public:
+    explicit WrapRow(int spacing = 8, QWidget* parent = nullptr);
+    QBoxLayout* row() const { return m_box; }
+    bool isStacked() const;
+
+    QSize minimumSizeHint() const override;
+
+protected:
+    bool event(QEvent* e) override;
+
+private:
+    /// Lo que mide todo en una línea; lo oculto y los huecos no cuentan.
+    int oneLineWidth() const;
+    void place();
+
+    QBoxLayout* m_box;
 };
 
 /// Avisa con `narrow == true` cuando el ancho de `w` baja de `breakpoint`, y con `false` cuando vuelve

@@ -108,6 +108,7 @@ std::optional<RunSession> JsonRunSessionRepository::read(const QString& path) {
     }
     s.resume = idsFromJson(o["resume"].toObject());
     s.review = idsFromJson(o["review"].toObject());
+    for (const auto& v : o["order"].toArray()) s.order << v.toString();
     return s;
 }
 
@@ -119,7 +120,8 @@ bool JsonRunSessionRepository::write(const QString& path, const RunSession& s) {
     if (!f.open(QIODevice::WriteOnly)) return false;
     f.write(QJsonDocument(QJsonObject{{"run", runToJson(s.run)}, {"queue", QJsonArray::fromStringList(s.queue)}, {"planRunId", s.planRunId},
                                       {"continuesRunId", s.continuesRunId}, {"parked", parked},
-                                      {"resume", idsToJson(s.resume)}, {"review", idsToJson(s.review)}})
+                                      {"resume", idsToJson(s.resume)}, {"review", idsToJson(s.review)},
+                                      {"order", QJsonArray::fromStringList(s.order)}})
                 .toJson(QJsonDocument::Indented));
     return f.commit();
 }

@@ -24,10 +24,16 @@ namespace qaflow {
 
 namespace {
 
+/// La etiqueta, partida en líneas si no cabe: con letra ancha (Windows) no ensancha el acta.
+QLabel* wrapped(QLabel* label) {
+    label->setWordWrap(true);
+    return label;
+}
+
 QWidget* field(const QString& title, QWidget* w) {
     auto* box = new QWidget;
     auto* v = ui::vbox(box, 0, 6);
-    v->addWidget(ui::label(title.toUpper(), "eyebrow"));
+    v->addWidget(wrapped(ui::label(title.toUpper(), "eyebrow")));
     v->addWidget(w);
     return box;
 }
@@ -147,7 +153,7 @@ void QualityRecordDialog::loadRecord(const QualityRecord& record) {
 }
 
 void QualityRecordDialog::buildGeneral(QVBoxLayout* v) {
-    v->addWidget(ui::label(tr("GENERALES"), "eyebrow"));
+    v->addWidget(wrapped(ui::label(tr("GENERALES"), "eyebrow")));
 
     m_system = line(m_record.system, QStringLiteral("recordSystem"));
     m_moduleLink = line(m_record.moduleLink);
@@ -224,7 +230,7 @@ void QualityRecordDialog::buildGeneral(QVBoxLayout* v) {
 }
 
 void QualityRecordDialog::buildSummary(QVBoxLayout* v) {
-    v->addWidget(ui::label(tr("RESUMEN DE OBSERVACIONES"), "eyebrow"));
+    v->addWidget(wrapped(ui::label(tr("RESUMEN DE OBSERVACIONES"), "eyebrow")));
     auto* hint = ui::label(tr("Se cuentan los bugs de esta revisión por su clasificación; las correcciones son las "
                               "observaciones de revisiones anteriores ya cerradas. Se puede corregir a mano."),
                            "muted-sm");
@@ -236,12 +242,12 @@ void QualityRecordDialog::buildSummary(QVBoxLayout* v) {
     g->setContentsMargins(0, 0, 0, 0);
     g->setHorizontalSpacing(12);
     g->setVerticalSpacing(6);
-    g->addWidget(ui::label(tr("TIPO"), "eyebrow"), 0, 0);
-    g->addWidget(ui::label(tr("OBSERVACIONES"), "eyebrow"), 0, 1);
-    g->addWidget(ui::label(tr("CORRECCIONES"), "eyebrow"), 0, 2);
+    g->addWidget(wrapped(ui::label(tr("TIPO"), "eyebrow")), 0, 0);
+    g->addWidget(wrapped(ui::label(tr("OBSERVACIONES"), "eyebrow")), 0, 1);
+    g->addWidget(wrapped(ui::label(tr("CORRECCIONES"), "eyebrow")), 0, 2);
     int row = 1;
     for (const auto& observation : m_record.observations) {
-        auto* name = ui::label(BugReport::classificationLabel(observation.type));
+        auto* name = wrapped(ui::label(BugReport::classificationLabel(observation.type)));
         auto* observations = counter(observation.observations);
         auto* corrections = counter(observation.corrections);
         connect(observations, &QSpinBox::valueChanged, this, [this](int) { refreshTotals(); });
@@ -257,6 +263,7 @@ void QualityRecordDialog::buildSummary(QVBoxLayout* v) {
 
     m_totals = ui::label(QString(), "muted-sm");
     m_totals->setObjectName(QStringLiteral("recordTotals"));
+    m_totals->setWordWrap(true);
     v->addWidget(m_totals);
     refreshTotals();
 }

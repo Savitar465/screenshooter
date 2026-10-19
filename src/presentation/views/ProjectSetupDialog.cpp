@@ -19,7 +19,9 @@ namespace {
 QWidget* field(const QString& title, QWidget* w) {
     auto* box = new QWidget;
     auto* v = ui::vbox(box, 0, 6);
-    v->addWidget(ui::label(title.toUpper(), "eyebrow"));
+    auto* caption = ui::label(title.toUpper(), "eyebrow");
+    caption->setWordWrap(true);   // con letra ancha (Windows) no ensancha el diálogo
+    v->addWidget(caption);
     v->addWidget(w);
     return box;
 }
@@ -42,8 +44,10 @@ ProjectSetupDialog::ProjectSetupDialog(ProjectStore& projects, const QString& sy
 
     QVBoxLayout* footer;
     auto* v = ui::scrollingBody(this, 18, 12, &footer);
-    v->addWidget(ui::label(system.isEmpty() ? tr("Nuevo proyecto")
-                                            : tr("Ningún proyecto trabaja los requerimientos de %1").arg(system), "h2"));
+    auto* heading = ui::label(system.isEmpty() ? tr("Nuevo proyecto") : tr("Ningún proyecto trabaja los requerimientos de %1").arg(system),
+                              "h2");
+    heading->setWordWrap(true);
+    v->addWidget(heading);
     auto* subtitle = ui::label(system.isEmpty()
                                    ? tr("El código de Jira y el sistema de GESREQ son opcionales: se pueden dejar para luego "
                                         "en Ajustes → Configuración del proyecto.")

@@ -19,6 +19,7 @@
 #include "presentation/views/Sidebar.h"
 #include "presentation/views/StatusStrip.h"
 #include "presentation/views/UpdateDialog.h"
+#include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlashOverlay.h"
 #include "presentation/widgets/BusyIndicator.h"
@@ -248,6 +249,16 @@ QWidget* MainWindow::buildNavbar() {
     h->addStretch(1);
     m_navStatus = ui::button(QString(), "chip");
     m_navStatus->setObjectName(QStringLiteral("navbarRunStatus"));
+    // El texto va en una etiqueta que recorta: con letra ancha (Windows) no obliga a ensanchar la ventana.
+    auto* statusRow = ui::hbox(m_navStatus, 0, 0);
+    statusRow->setContentsMargins(10, 4, 10, 4);
+    m_navStatusText = new ElidedLabel;
+    // El chip mide lo que pida el texto, pero puede estrecharse (un botón, si no, no baja de eso).
+    m_navStatusText->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    m_navStatus->setSizePolicy(QSizePolicy::Preferred, m_navStatus->sizePolicy().verticalPolicy());
+    m_navStatusText->setStyleSheet(QStringLiteral("font-size:11.5px;font-weight:600;color:%1;").arg(theme::Muted));
+    m_navStatusText->setAttribute(Qt::WA_TransparentForMouseEvents);
+    statusRow->addWidget(m_navStatusText);
     connect(m_navStatus, &QPushButton::clicked, this, [this]() { navigateInto(Screen::Run); });
     h->addWidget(m_navStatus);
     m_runTarget = new QComboBox;
@@ -340,7 +351,7 @@ void MainWindow::refreshNavbar() {
     m_navStop->setEnabled(executing && !capturing);
     // Cerrar el caso terminado (pasar al siguiente o terminar) se hace al pie de la ejecución.
     m_navStatus->setVisible(executing);
-    m_navStatus->setText(tr("%1 · %2").arg(run.state().caseId, paused ? tr("En pausa")
+    m_navStatusText->setFullText(tr("%1 · %2").arg(run.state().caseId, paused ? tr("En pausa")
                                                                : run.state().finished ? tr("Listo para finalizar") : tr("En ejecución")));
 }
 

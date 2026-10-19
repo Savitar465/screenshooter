@@ -2,6 +2,7 @@
 
 #include "application/UpdateService.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QLocale>
@@ -48,8 +49,9 @@ UpdateDialog::UpdateDialog(UpdateService& updates, const UpdateRelease& release,
     footer->addWidget(m_footer);
 
     // Ofrecer la versión: omitirla, dejarla para luego o ir a por ella.
-    m_offerPage = new QWidget;
-    auto* oh = ui::hbox(m_offerPage, 0, 10);
+    auto* offerRow = new WrapRow(10);
+    m_offerPage = offerRow;
+    auto* oh = offerRow->row();
     auto* skip = ui::button(tr("Omitir esta versión"), "ghost");
     skip->setObjectName(QStringLiteral("updateSkip"));
     skip->setToolTip(tr("No volver a avisar de la %1; sí de las siguientes").arg(release.version.toString()));
@@ -76,8 +78,9 @@ UpdateDialog::UpdateDialog(UpdateService& updates, const UpdateRelease& release,
     m_footer->addWidget(m_offerPage);
 
     // Descargando y comprobando.
-    m_progressPage = new QWidget;
-    auto* ph = ui::hbox(m_progressPage, 0, 10);
+    auto* progressRow = new WrapRow(10);
+    m_progressPage = progressRow;
+    auto* ph = progressRow->row();
     m_progress = new QProgressBar;
     m_progress->setObjectName(QStringLiteral("updateProgress"));
     m_progress->setTextVisible(false);
@@ -103,8 +106,9 @@ UpdateDialog::UpdateDialog(UpdateService& updates, const UpdateRelease& release,
     });
 
     // Descargada y comprobada: reiniciar ya o al cerrar.
-    m_readyPage = new QWidget;
-    auto* rh = ui::hbox(m_readyPage, 0, 10);
+    auto* readyRow = new WrapRow(10);
+    m_readyPage = readyRow;
+    auto* rh = readyRow->row();
     rh->addWidget(ui::label(tr("Descargada y comprobada."), "muted-sm"));
     rh->addStretch(1);
     auto* onExit = ui::button(tr("Al cerrar QAflow"), "ghost");
@@ -121,8 +125,9 @@ UpdateDialog::UpdateDialog(UpdateService& updates, const UpdateRelease& release,
     m_footer->addWidget(m_readyPage);
 
     // Ya instalada (o programada): sólo queda cerrar QAflow.
-    m_scheduledPage = new QWidget;
-    auto* sh = ui::hbox(m_scheduledPage, 0, 10);
+    auto* scheduledRow = new WrapRow(10);
+    m_scheduledPage = scheduledRow;
+    auto* sh = scheduledRow->row();
     sh->addWidget(ui::label(tr("La versión nueva se instala al cerrar QAflow."), "muted-sm"));
     sh->addStretch(1);
     auto* close = ui::button(tr("Cerrar"), "primary");
@@ -162,6 +167,11 @@ void UpdateDialog::refresh() {
             m_manual->setVisible(installable && state == IS::Failed);
             m_footer->setCurrentWidget(m_offerPage);
             break;
+    }
+    // Del pie sólo cuenta la página a la vista: las demás no lo ensanchan ni lo alargan.
+    for (QWidget* page : {m_offerPage, m_progressPage, m_readyPage, m_scheduledPage}) {
+        const QSizePolicy::Policy policy = page == m_footer->currentWidget() ? QSizePolicy::Preferred : QSizePolicy::Ignored;
+        page->setSizePolicy(policy, policy);
     }
 }
 

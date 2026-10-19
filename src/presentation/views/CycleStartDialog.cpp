@@ -3,6 +3,7 @@
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/Ui.h"
+#include "presentation/widgets/WrapCheckBox.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -144,7 +145,7 @@ CycleStartDialog::CycleStartDialog(const Setup& setup, QWidget* parent) : QDialo
         th->addWidget(add);
         v->addWidget(tools);
 
-        m_addToPlan = new QCheckBox(tr("Añadir también al plan los casos añadidos"));
+        m_addToPlan = new WrapCheckBox(tr("Añadir también al plan los casos añadidos"));
         m_addToPlan->setObjectName(QStringLiteral("cycleStartAddToPlan"));
         m_addToPlan->setToolTip(tr("Sin marcar, los añadidos son sólo de este ciclo; marcado, los siguientes ciclos del plan también los tendrán."));
         m_addToPlan->setVisible(false);

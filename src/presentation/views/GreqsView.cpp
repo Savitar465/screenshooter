@@ -59,7 +59,7 @@ GreqsView::GreqsView(const AppContext& ctx, QWidget* tabs, QWidget* parent)
     m_filterText->setObjectName(QStringLiteral("greqsFilter"));
     m_filterText->setPlaceholderText(tr("Filtrar por número, sistema, descripción, solicitante…"));
     m_filterText->setClearButtonEnabled(true);
-    m_filterText->setMinimumWidth(220);
+    m_filterText->setMinimumWidth(160);   // con más, la cabecera no cabe a 900 px con letra ancha (Windows)
     connect(m_filterText, &QLineEdit::textChanged, this, &GreqsView::rebuild);
     hh->addWidget(m_filterText);
 

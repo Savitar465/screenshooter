@@ -28,6 +28,7 @@ struct AppContext;
 struct PlanReport;
 struct UpdateRelease;
 class Sidebar;
+class ElidedLabel;
 class StatusStrip;
 class CasesView;
 class RunView;
@@ -240,6 +241,7 @@ private:
     QPushButton* m_navRun = nullptr;
     QPushButton* m_navStop = nullptr;
     QPushButton* m_navStatus = nullptr;
+    ElidedLabel* m_navStatusText = nullptr;
     QAction* m_actCapture = nullptr;
     QAction* m_actRecord = nullptr;
     QAction* m_actAttach = nullptr;

@@ -12,6 +12,7 @@
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/Ui.h"
+#include "presentation/widgets/WrapCheckBox.h"
 
 #include <QCoreApplication>
 #include <QCheckBox>
@@ -38,6 +39,7 @@ QWidget* field(const QString& title, QWidget* w, QLabel** titleOut = nullptr) {
     auto* box = new QWidget;
     auto* v = ui::vbox(box, 0, 6);
     auto* l = ui::label(title.toUpper(), "eyebrow");
+    l->setWordWrap(true);   // con letra ancha (Windows) no ensancha el diálogo
     v->addWidget(l);
     v->addWidget(w);
     if (titleOut) *titleOut = l;
@@ -62,7 +64,9 @@ QFrame* section(const QString& accent, const QString& title, const QString& subt
     auto* hh = ui::hbox(head, 0, 12);
     auto* text = new QWidget;
     auto* tv = ui::vbox(text, 0, 0);
-    tv->addWidget(ui::label(title, "h2"));
+    auto* heading = ui::label(title, "h2");
+    heading->setWordWrap(true);   // junto al indicador de conexión, con letra ancha (Windows) no cabe en una línea
+    tv->addWidget(heading);
     auto* sub = ui::label(subtitle, "muted");
     sub->setTextFormat(Qt::RichText);
     sub->setWordWrap(true);
@@ -207,7 +211,7 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     m_uiScaleNote->setWordWrap(true);
     m_uiScaleNote->hide();
     gb->addWidget(m_uiScaleNote);
-    m_closeToTray = new QCheckBox(tr("Al cerrar la ventana, seguir en la bandeja del sistema"));
+    m_closeToTray = new WrapCheckBox(tr("Al cerrar la ventana, seguir en la bandeja del sistema"));
     gb->addWidget(m_closeToTray);
     v->addWidget(general);
     connect(m_language, &QComboBox::currentIndexChanged, this, [this](int) {
@@ -235,7 +239,7 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
         // Actualizaciones: como en los IDE de JetBrains, se buscan solas una vez al día.
         auto* urow = new QWidget;
         auto* uh = ui::hbox(urow, 0, 10);
-        m_autoUpdate = new QCheckBox(tr("Buscar actualizaciones automáticamente"));
+        m_autoUpdate = new WrapCheckBox(tr("Buscar actualizaciones automáticamente"));
         m_autoUpdate->setObjectName(QStringLiteral("settingsAutoUpdate"));
         uh->addWidget(m_autoUpdate);
         m_updateChannel = new QComboBox;
@@ -356,7 +360,7 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     m_zephyrBlock = new QWidget;
     auto* zv = ui::vbox(m_zephyrBlock, 0, 10);
     zv->addWidget(ui::label(tr("GESTIÓN DE PRUEBAS"), "eyebrow"));
-    m_zephyr = new QCheckBox(tr("Publicar los ciclos de plan en Zephyr"));
+    m_zephyr = new WrapCheckBox(tr("Publicar los ciclos de plan en Zephyr"));
     m_zephyr->setObjectName(QStringLiteral("settingsZephyr"));
     m_zephyr->setToolTip(tr("Al terminar un ciclo, el informe puede crear en Zephyr el ciclo con sus ejecuciones, el veredicto de cada paso y las evidencias"));
     connect(m_zephyr, &QCheckBox::toggled, this, [this](bool on) {
@@ -582,11 +586,11 @@ SettingsView::SettingsView(const AppContext& ctx, QWidget* parent)
     crow->addWidget(field(tr("GIF · duración máxima"), m_gifMaxSecs));
     crow->addWidget(field(tr("Pantalla"), m_screen));
     cb->addWidget(crow);
-    m_globalShortcut = new QCheckBox(tr("Atajos globales: capturar y avanzar de paso aunque QAflow no tenga el foco"));
+    m_globalShortcut = new WrapCheckBox(tr("Atajos globales: capturar y avanzar de paso aunque QAflow no tenga el foco"));
     cb->addWidget(m_globalShortcut);
-    m_openEditor = new QCheckBox(tr("Abrir el editor de anotaciones después de cada captura"));
+    m_openEditor = new WrapCheckBox(tr("Abrir el editor de anotaciones después de cada captura"));
     cb->addWidget(m_openEditor);
-    m_copyToClipboard = new QCheckBox(tr("Copiar la captura al portapapeles"));
+    m_copyToClipboard = new WrapCheckBox(tr("Copiar la captura al portapapeles"));
     cb->addWidget(m_copyToClipboard);
     m_captureStatus = ui::label(QString(), "muted-sm");
     m_captureStatus->setWordWrap(true);

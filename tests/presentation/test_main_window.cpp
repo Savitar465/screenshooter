@@ -15,6 +15,7 @@
 #include "presentation/views/BugCloseDialog.h"
 #include "presentation/views/BugDialog.h"
 #include "presentation/views/BugView.h"
+#include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/views/CasesView.h"
 #include "presentation/views/IssuesView.h"
@@ -243,7 +244,11 @@ struct WindowFixture {
     QString statusText(const char* name) const {
         auto* b = window->findChild<QPushButton*>(QString::fromLatin1(name));
         QStringList parts;
-        for (auto* l : b->findChildren<QLabel*>()) if (!l->text().isEmpty()) parts << l->text();
+        // El texto que pone, no el recortado al ancho que tenía antes de cambiar.
+        for (auto* l : b->findChildren<QLabel*>()) {
+            const auto* elided = qobject_cast<ElidedLabel*>(l);
+            if (const QString text = elided ? elided->fullText() : l->text(); !text.isEmpty()) parts << text;
+        }
         return parts.join(QStringLiteral(" "));
     }
     /// Filas visibles de la lista de casos.

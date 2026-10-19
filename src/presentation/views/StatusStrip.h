@@ -18,6 +18,8 @@ class RunHistoryStore;
 
 /// Barra inferior con un único indicador para el plan o caso en ejecución y métricas globales.
 /// Cada bloque es clicable y lleva a su pantalla.
+class ElidedLabel;
+
 class StatusStrip : public QFrame {
     Q_OBJECT
 public:
@@ -45,7 +47,7 @@ private:
     RunHistoryStore& m_history;
 
     QFrame* m_runDot;
-    QLabel* m_runText;
+    ElidedLabel* m_runText;
     QLabel* m_rate;
     QLabel* m_rateDetail;
     QLabel* m_trend;

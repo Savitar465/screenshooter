@@ -44,7 +44,7 @@ void RunController::load() {
 }
 
 RunSession RunController::snapshot() const {
-    RunSession s{m_run, m_queue, m_planRunId, m_continuesRunId, m_parked.values(), {}, {}};
+    RunSession s{m_run, m_queue, m_planRunId, m_continuesRunId, m_parked.values(), {}, {}, m_order};
     for (auto it = m_resume.cbegin(); it != m_resume.cend(); ++it) s.resume.insert(it.key(), it->id);
     for (auto it = m_review.cbegin(); it != m_review.cend(); ++it) s.review.insert(it.key(), it->id);
     // Lo transcurrido en este paso se consolida para que al restaurar siga desde aquí.
@@ -60,6 +60,7 @@ RunSession RunController::snapshot() const {
 void RunController::restore(const RunSession& saved) {
     m_run = saved.run;
     m_queue = saved.queue;
+    m_order = saved.order;
     m_planRunId = saved.planRunId;
     m_continuesRunId = saved.continuesRunId;
     m_parked.clear();
@@ -97,6 +98,7 @@ bool RunController::suspendCycle() {
     // La ejecución queda libre: el ciclo sigue abierto en el historial, con su sesión aparcada.
     m_run = RunState{};
     m_queue.clear();
+    m_order.clear();
     m_parked.clear();
     m_resume.clear();
     m_review.clear();
@@ -247,6 +249,7 @@ void RunController::start(const QString& caseId) {
     commitRun(false);
     closePlan();
     m_queue.clear();
+    m_order.clear();
     m_resume.clear();
     m_review.clear();
     begin(caseId);
@@ -262,6 +265,7 @@ void RunController::startSequence(const QStringList& caseIds, const QString& pla
     m_review.clear();
     m_planRunId = m_history.startPlan(planName, caseIds, planId, environment, excluded, added);
     m_queue = caseIds.mid(1);
+    m_order = caseIds;
     begin(caseIds.first());
     changed();
     emit planStarted(m_planRunId, planId);
@@ -296,6 +300,7 @@ bool RunController::continueCycle(const QString& planRunId, const QString& envir
     m_review.clear();
     m_planRunId = planRunId;
     m_queue = caseIds.mid(1);
+    m_order = caseIds;
     begin(caseIds.first());
     changed();
     emit planStarted(m_planRunId, planId);
@@ -330,6 +335,7 @@ bool RunController::runInCycle(const QString& planRunId, const QStringList& case
     m_review = review;
     m_planRunId = planRunId;
     m_queue = ids.mid(1);
+    m_order = ids;
     begin(ids.first());
     changed();
     emit planStarted(m_planRunId, planId);
@@ -376,11 +382,14 @@ RunController::PlanSync RunController::syncPlanCases(const QStringList& planCase
         if (!composition.contains(id) && !sync.removed.contains(id)) composition << id;
     const QString planRunId = m_planRunId;
     m_history.setPlanCases(planRunId, composition);
-    for (const auto& id : sync.removed) m_queue.removeAll(id);
+    // Lo añadido se ejecuta detrás de lo que ya estaba en cola, en el orden del plan.
+    if (m_order.isEmpty()) m_order = before;
+    for (const auto& id : sync.removed) {
+        m_queue.removeAll(id);
+        m_order.removeAll(id);
+    }
     m_queue << sync.added;
-    std::stable_sort(m_queue.begin(), m_queue.end(), [&composition](const QString& a, const QString& b) {
-        return composition.indexOf(a) < composition.indexOf(b);
-    });
+    m_order << sync.added;
     changed();
     emit planCasesChanged(planRunId, sync.added, sync.removed);
     return sync;
@@ -457,8 +466,8 @@ void RunController::setAside() {
     holdStep();
     if (reviewUntouched()) return;   // nada que guardar: el caso sigue como se archivó
     m_parked.insert(m_run.caseId, ParkedRun{m_run, m_continuesRunId});
-    // El que se deja vuelve a la cola en su sitio del plan, para que «Siguiente caso» siga el orden.
-    const QStringList order = planCases();
+    // El que se deja vuelve a la cola en su sitio del ciclo, para que «Siguiente caso» siga el orden.
+    const QStringList order = runOrder();
     m_queue << m_run.caseId;
     std::stable_sort(m_queue.begin(), m_queue.end(), [&order](const QString& a, const QString& b) {
         return order.indexOf(a) < order.indexOf(b);
@@ -622,15 +631,20 @@ void RunController::closePlan() {
     const QString id = m_planRunId;
     m_planRunId.clear();
     m_queue.clear();
+    m_order.clear();
     m_history.finishPlan(id);
     emit planCompleted(id);
+}
+
+QStringList RunController::runOrder() const {
+    return m_order.isEmpty() ? planCases() : m_order;   // una sesión de antes de guardarse el orden
 }
 
 QString RunController::nextCase() const {
     if (m_queue.isEmpty()) return QString();
     // La cola va en el orden del ciclo; lo que queda detrás del caso de pantalla (porque se saltó a éste
     // desde la lista) no es «el siguiente».
-    const QStringList order = planCases();
+    const QStringList order = runOrder();
     const int current = order.indexOf(m_run.caseId);
     if (current < 0) return m_queue.first();
     for (const auto& id : m_queue)

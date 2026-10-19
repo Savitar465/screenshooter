@@ -6,6 +6,7 @@
 #include "application/TestCaseStore.h"
 #include "core/models/Metrics.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QHBoxLayout>
@@ -32,8 +33,13 @@ StatusStrip::StatusStrip(TestCaseStore& cases, PlanStore& plan, RunController& r
     runItem->setObjectName(QStringLiteral("statusRun"));
     m_runDot = ui::dot(theme::Green, 7);
     runBody->addWidget(m_runDot);
-    m_runText = ui::label(QString(), "muted-sm");
-    runBody->addWidget(m_runText);
+    // Recorta en vez de ensanchar la ventana: con letra ancha (Windows) no cabría en una pantalla pequeña.
+    m_runText = new ElidedLabel;
+    // El bloque mide lo que pida el texto, pero puede estrecharse (un botón, si no, no baja de eso).
+    m_runText->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    runItem->setSizePolicy(QSizePolicy::Preferred, runItem->sizePolicy().verticalPolicy());
+    ui::setRole(m_runText, "muted-sm");
+    runBody->addWidget(m_runText, 1);
     m_runBar = new QProgressBar;
     m_runBar->setObjectName(QStringLiteral("statusRunProgress"));
     m_runBar->setTextVisible(false);
@@ -108,13 +114,13 @@ void StatusStrip::refresh() {
     m_runBar->setVisible(planInProgress);
     if (planInProgress) {
         const auto report = m_history.report(runningPlan->id);
-        m_runText->setText(tr("Plan: %1 · ciclo en curso · %2/%3 casos")
+        m_runText->setFullText(tr("Plan: %1 · ciclo en curso · %2/%3 casos")
                               .arg(ui::elide(runningPlan->name, 34)).arg(report.executed).arg(report.total()));
         m_runBar->setValue(report.total() ? report.executed * 100 / report.total() : 0);
     } else {
-        m_runText->setText(running ? tr("%1 · %2 · paso %3 de %4").arg(running->id, ui::elide(running->title, 34)).arg(r.idx + 1).arg(running->steps.size())
+        m_runText->setFullText(running ? tr("%1 · %2 · paso %3 de %4").arg(running->id, ui::elide(running->title, 34)).arg(r.idx + 1).arg(running->steps.size())
                                    : tr("Sin ejecución en curso"));
-        if (m_run.isPaused()) m_runText->setText(m_runText->text() + tr(" · en pausa"));
+        if (m_run.isPaused()) m_runText->setFullText(m_runText->fullText() + tr(" · en pausa"));
     }
     m_runText->setStyleSheet(QStringLiteral("font-size:12px;color:%1;").arg(planInProgress || running ? theme::Text : theme::Muted));
 

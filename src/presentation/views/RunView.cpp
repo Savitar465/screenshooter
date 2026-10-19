@@ -777,6 +777,8 @@ void RunView::refresh() {
     m_verdicts->setVisible(active);
     m_focusVerdicts->setVisible(active);
     m_doneActions->setVisible(hasRun && r.finished);
+    // Una revisión sin cambios no tiene nada que cerrar: se deja eligiendo otro caso de la lista.
+    m_finishCase->setVisible(!m_run.reviewUntouched());
     // En pausa no se marca, no se cambia de paso ni se captura: todo sigue a la vista, apagado.
     const bool paused = hasRun && m_run.isPaused();
     m_verdicts->setEnabled(!paused);

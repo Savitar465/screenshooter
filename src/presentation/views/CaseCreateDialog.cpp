@@ -15,10 +15,18 @@
 namespace qaflow {
 
 namespace {
+/// Título de un campo o una columna, partido en líneas si no cabe: con letra ancha (Windows) no
+/// ensancha el diálogo.
+QLabel* caption(const QString& title) {
+    auto* l = ui::label(title, "eyebrow");
+    l->setWordWrap(true);
+    return l;
+}
+
 QWidget* field(const QString& title, QWidget* w) {
     auto* box = new QWidget;
     auto* v = ui::vbox(box, 0, 6);
-    v->addWidget(ui::label(title.toUpper(), "eyebrow"));
+    v->addWidget(caption(title.toUpper()));
     v->addWidget(w);
     return box;
 }
@@ -135,9 +143,9 @@ void CaseCreateDialog::removeStep(int index) {
 void CaseCreateDialog::rebuildSteps(const QList<TestStep>& steps) {
     ui::clearLayout(m_stepsGrid);
     m_steps.clear();
-    m_stepsGrid->addWidget(ui::label(tr("ACCIÓN"), "eyebrow"), 0, 1);
-    m_stepsGrid->addWidget(ui::label(tr("DATOS DE LA PRUEBA"), "eyebrow"), 0, 2);
-    m_stepsGrid->addWidget(ui::label(tr("RESULTADO ESPERADO"), "eyebrow"), 0, 3);
+    m_stepsGrid->addWidget(caption(tr("ACCIÓN")), 0, 1);
+    m_stepsGrid->addWidget(caption(tr("DATOS DE LA PRUEBA")), 0, 2);
+    m_stepsGrid->addWidget(caption(tr("RESULTADO ESPERADO")), 0, 3);
     for (int i = 0; i < steps.size(); ++i) {
         const int row = i + 1;
         auto* number = ui::label(QString::number(row), "mono-muted");

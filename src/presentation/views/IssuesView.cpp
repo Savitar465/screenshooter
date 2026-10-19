@@ -1692,6 +1692,9 @@ QWidget* sideRow(const QString& name, QWidget* value, QWidget* extra = nullptr) 
     h->setContentsMargins(0, 7, 0, 7);
     h->addWidget(ui::label(name, "muted-sm"));
     h->addStretch(1);
+    // El panel tiene ancho fijo: con letra ancha (Windows) el valor se recorta antes que ensanchar la
+    // tarjeta, que si no calcula su alto para un ancho que no tiene y corta lo de abajo.
+    value->setMinimumWidth(48);
     h->addWidget(value);
     if (extra) h->addWidget(extra);
     return row;

@@ -3,6 +3,7 @@
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/TextArea.h"
 #include "presentation/widgets/Ui.h"
+#include "presentation/widgets/WrapCheckBox.h"
 
 #include <QCheckBox>
 #include <QCoreApplication>
@@ -18,7 +19,9 @@ namespace {
 QWidget* field(const QString& title, QWidget* w) {
     auto* box = new QWidget;
     auto* v = ui::vbox(box, 0, 6);
-    v->addWidget(ui::label(title.toUpper(), "eyebrow"));
+    auto* caption = ui::label(title.toUpper(), "eyebrow");
+    caption->setWordWrap(true);   // con letra ancha (Windows) no ensancha el diálogo
+    v->addWidget(caption);
     v->addWidget(w);
     return box;
 }
@@ -98,7 +101,7 @@ RevisionPublishDialog::RevisionPublishDialog(RevisionPublishService& service, co
     v->addWidget(field(tr("Texto que se envía al gestor y a GESREQ"), m_comment), 1);
 
     if (!m_documentPath.trimmed().isEmpty()) {
-        m_attach = new QCheckBox(tr("Adjuntar el acta %1").arg(QFileInfo(m_documentPath).fileName()));
+        m_attach = new WrapCheckBox(tr("Adjuntar el acta %1").arg(QFileInfo(m_documentPath).fileName()));
         m_attach->setObjectName(QStringLiteral("revisionPublishAttach"));
         m_attach->setChecked(true);
         connect(m_attach, &QCheckBox::toggled, this, [this](bool) { refreshRequirementStep(); });
@@ -142,7 +145,7 @@ void RevisionPublishDialog::buildSteps(QVBoxLayout* v) {
         const int key = static_cast<int>(step.destination);
         auto* row = new QWidget;
         auto* rv = ui::vbox(row, 0, 2);
-        auto* choice = new QCheckBox(title(step.destination));
+        auto* choice = new WrapCheckBox(title(step.destination));
         choice->setObjectName(objectNameFor(step.destination));
         choice->setEnabled(step.available);
         // Lo que ya se hizo en esta revisión viene desmarcado: repetirlo es una decisión, no un descuido.

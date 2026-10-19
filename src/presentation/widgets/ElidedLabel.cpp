@@ -4,6 +4,7 @@
 #include <QTextLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace qaflow {
 
@@ -28,7 +29,9 @@ QSize ElidedLabel::sizeHint() const {
     if (m_maxLines > 1) return QLabel::sizeHint();
     const QSize hint = QLabel::sizeHint();
     const QFontMetrics fm = fontMetrics();
-    return {hint.width() + fm.horizontalAdvance(m_full) - fm.horizontalAdvance(text()), hint.height()};
+    // Por arriba: con el ancho redondeado hacia abajo, `elidedText` recortaría el texto que sí cabe.
+    const int full = int(std::ceil(QFontMetricsF(font()).horizontalAdvance(m_full)));
+    return {hint.width() + full - fm.horizontalAdvance(text()), hint.height()};
 }
 
 QSize ElidedLabel::minimumSizeHint() const { return {0, QLabel::minimumSizeHint().height()}; }

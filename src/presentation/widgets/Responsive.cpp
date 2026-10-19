@@ -27,9 +27,16 @@ void AutoGrid::addWidget(QWidget* w) {
     relayout(std::max(1, m_columns));
 }
 
+int AutoGrid::itemWidth() const {
+    // El pedido, o más si algún elemento no cabe en él (con letra ancha, en Windows).
+    int width = m_minItemWidth;
+    for (const auto* w : m_items) width = std::max(width, w->minimumSizeHint().width());
+    return width;
+}
+
 int AutoGrid::columnsFor(int width) const {
     const int spacing = m_grid->horizontalSpacing();
-    return std::clamp((width + spacing) / (m_minItemWidth + spacing), 1, m_maxColumns);
+    return std::clamp((width + spacing) / (itemWidth() + spacing), 1, m_maxColumns);
 }
 
 void AutoGrid::relayout(int columns) {
@@ -42,7 +49,7 @@ void AutoGrid::relayout(int columns) {
 
 QSize AutoGrid::minimumSizeHint() const {
     // Una sola columna: lo que la rejilla necesita como poco, por estrecho que sea el panel.
-    return {m_minItemWidth, QWidget::minimumSizeHint().height()};
+    return {itemWidth(), QWidget::minimumSizeHint().height()};
 }
 
 void AutoGrid::resizeEvent(QResizeEvent* e) {
@@ -165,6 +172,44 @@ private:
 
 void onBreakpoint(QWidget* w, int breakpoint, std::function<void(bool narrow)> changed) {
     new BreakpointWatcher(w, breakpoint, std::move(changed));
+}
+
+WrapRow::WrapRow(int spacing, QWidget* parent) : QWidget(parent), m_box(new QBoxLayout(QBoxLayout::LeftToRight, this)) {
+    m_box->setContentsMargins(0, 0, 0, 0);
+    m_box->setSpacing(spacing);
+}
+
+bool WrapRow::isStacked() const { return m_box->direction() == QBoxLayout::TopToBottom; }
+
+int WrapRow::oneLineWidth() const {
+    int width = 0, items = 0;
+    for (int i = 0; i < m_box->count(); ++i) {
+        const QLayoutItem* item = m_box->itemAt(i);
+        if (item->isEmpty()) continue;
+        width += item->minimumSize().width();
+        ++items;
+    }
+    const QMargins m = m_box->contentsMargins();
+    return width + std::max(0, items - 1) * m_box->spacing() + m.left() + m.right();
+}
+
+QSize WrapRow::minimumSizeHint() const {
+    int widest = 0;
+    for (int i = 0; i < m_box->count(); ++i)
+        if (const QLayoutItem* item = m_box->itemAt(i); !item->isEmpty()) widest = std::max(widest, item->minimumSize().width());
+    const QMargins m = m_box->contentsMargins();
+    return {widest + m.left() + m.right(), m_box->totalMinimumSize().height()};
+}
+
+void WrapRow::place() {
+    m_box->setDirection(oneLineWidth() <= width() ? QBoxLayout::LeftToRight : QBoxLayout::TopToBottom);
+}
+
+bool WrapRow::event(QEvent* e) {
+    // Al cambiar de ancho, o lo que tiene (un botón que aparece, un texto más largo), se vuelve a mirar
+    // si cabe en una línea. Cambiar de dirección invalida el layout, que se coloca después.
+    if (e->type() == QEvent::Resize || e->type() == QEvent::LayoutRequest) place();
+    return QWidget::event(e);
 }
 
 } // namespace qaflow

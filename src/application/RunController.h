@@ -201,12 +201,15 @@ private:
     void restore(const RunSession& saved);
     /// Aparca el ciclo en curso (ver `pause`). Falso si no se pudo guardar: entonces sigue en curso.
     bool suspendCycle();
+    QStringList runOrder() const;
 
     TestCaseStore& m_store;
     RunHistoryStore& m_history;
     std::shared_ptr<IRunSessionRepository> m_session;
     RunState m_run;
     QStringList m_queue;
+    /// Orden de ejecución del ciclo (ver `RunSession::order`); `runOrder` lo da con el del plan de reserva.
+    QStringList m_order;
     QString m_planRunId;
     /// Ejecuciones que retoman los casos de una continuación, por caso. Se consumen al arrancar cada uno.
     QHash<QString, RunRecord> m_resume;

@@ -67,6 +67,8 @@ signals:
     void submitted(const QString& issueKey);
 
 private:
+    /// El carril de pasos, completo o sólo con sus números cuando el diálogo es estrecho.
+    void fitRail(bool narrow);
     QWidget* buildRail();
     QWidget* buildWhatHappened();
     QWidget* buildContext();
@@ -136,6 +138,9 @@ private:
     QLabel* m_eyebrow;
     QPushButton* m_nav[3];
     QLabel* m_navBadge[3];
+    QWidget* m_navText[3];
+    QWidget* m_rail;
+    QLabel* m_railTitle;
     QLabel* m_context;
     QStackedWidget* m_pages;
     QPushButton* m_back;

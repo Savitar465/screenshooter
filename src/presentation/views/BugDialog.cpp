@@ -8,6 +8,7 @@
 #include "presentation/widgets/AnnotationEditor.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/FlowLayout.h"
+#include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/ImageViewer.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/widgets/TextArea.h"
@@ -15,7 +16,6 @@
 
 #include <QComboBox>
 #include <QCompleter>
-#include <QGridLayout>
 #include <QGuiApplication>
 #include <QLabel>
 #include <QLineEdit>
@@ -36,6 +36,7 @@ QWidget* field(const QString& title, QWidget* w, const QString& titleColor = QSt
     auto* box = new QWidget;
     auto* v = ui::vbox(box, 0, 6);
     auto* l = ui::label(title.toUpper(), "eyebrow");
+    l->setWordWrap(true);   // con letras anchas (Segoe UI) no puede imponer el ancho del diálogo
     if (!titleColor.isEmpty()) l->setStyleSheet(QStringLiteral("color:%1;").arg(titleColor));
     v->addWidget(l);
     v->addWidget(w);
@@ -79,6 +80,12 @@ QScrollArea* pageArea(const QString& title, QVBoxLayout** body) {
     outer->addWidget(ui::label(title, "h2"));
     *body = outer;
     return sa;
+}
+/// Rótulo de sección que parte línea si no cabe, en vez de imponer su ancho al diálogo.
+QLabel* eyebrow(const QString& text) {
+    auto* l = ui::label(text, "eyebrow");
+    l->setWordWrap(true);
+    return l;
 }
 /// Los valores de `text` (separados por comas) que están en `known`, con la ortografía del gestor;
 /// `unknown` recibe los que no. Sin lista conocida todo vale.
@@ -150,6 +157,7 @@ BugDialog::BugDialog(TestCaseStore& cases, SettingsStore& settings, BugReportSer
     mv->addWidget(m_pages, 1);
     mv->addWidget(buildFooter());
     root->addWidget(main, 1);
+    onBreakpoint(this, 980, [this](bool narrow) { fitRail(narrow); });
 
     connect(&m_cases, &TestCaseStore::caseChanged, this, [this](const QString& id) { if (id == m_cases.selectedId()) refreshShots(); });
     connect(&m_settings, &SettingsStore::trackerChanged, this, [this]() { refreshHeader(); refreshTrackerFields(); });
@@ -184,13 +192,15 @@ QWidget* BugDialog::buildRail() {
     auto* rail = ui::card("rail");
     rail->setObjectName(QStringLiteral("bugRail"));
     rail->setFixedWidth(220);
+    m_rail = rail;
     auto* v = ui::vbox(rail, 0, 6);
     v->setContentsMargins(16, 22, 16, 18);
     m_eyebrow = ui::label(QString(), "eyebrow");
     m_eyebrow->setTextFormat(Qt::RichText);
     m_eyebrow->setWordWrap(true);
     v->addWidget(m_eyebrow);
-    v->addWidget(ui::label(tr("Reportar bug"), "h1-sm"));
+    m_railTitle = ui::label(tr("Reportar bug"), "h1-sm");
+    v->addWidget(m_railTitle);
     v->addSpacing(10);
 
     const QString names[3] = {tr("Qué pasó"), tr("Contexto"), tr("Revisar y enviar")};
@@ -199,6 +209,7 @@ QWidget* BugDialog::buildRail() {
         auto* b = ui::button(QString(), "nav");
         b->setObjectName(QStringLiteral("bugNav%1").arg(i));
         b->setAccessibleName(QStringLiteral("%1. %2").arg(i + 1).arg(names[i]));
+        b->setToolTip(QStringLiteral("%1 · %2").arg(names[i], subs[i]));
         b->setMinimumHeight(56);
         auto* h = ui::hbox(b, 0, 10);
         h->setContentsMargins(10, 8, 10, 8);
@@ -208,11 +219,14 @@ QWidget* BugDialog::buildRail() {
         h->addWidget(m_navBadge[i], 0, Qt::AlignTop);
         auto* texts = new QWidget;
         auto* tv = ui::vbox(texts, 0, 2);
-        tv->addWidget(new QLabel(names[i]));
+        auto* name = new QLabel(names[i]);
+        name->setWordWrap(true);
+        tv->addWidget(name);
         auto* sub = ui::label(subs[i], "muted-sm");
         sub->setWordWrap(true);
         tv->addWidget(sub);
         h->addWidget(texts, 1);
+        m_navText[i] = texts;
         for (auto* child : b->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
         connect(b, &QPushButton::clicked, this, [this, i]() { showPage(i); });
         m_nav[i] = b;
@@ -225,6 +239,25 @@ QWidget* BugDialog::buildRail() {
     m_context->setWordWrap(true);
     v->addWidget(m_context);
     return rail;
+}
+
+void BugDialog::fitRail(bool narrow) {
+    // Estrecho (pantallas pequeñas o con zoom), el carril se queda en los números de los pasos —el nombre,
+    // en el tooltip— para dejarle el ancho al formulario.
+    m_rail->setFixedWidth(narrow ? 72 : 220);
+    m_rail->layout()->setContentsMargins(narrow ? 10 : 16, 22, narrow ? 10 : 16, 18);
+    m_eyebrow->setVisible(!narrow);
+    m_railTitle->setVisible(!narrow);
+    m_context->setVisible(!narrow);
+    m_rail->ensurePolished();
+    for (int i = 0; i < 3; ++i) {
+        m_navText[i]->setVisible(!narrow);
+        // Un QPushButton no deja que su layout le pida alto por ancho: con textos que parten línea (más en
+        // Windows, con letras más anchas) se lo damos a mano para el ancho que le deja el carril.
+        const int inner = m_rail->width() - m_rail->layout()->contentsMargins().left() - m_rail->layout()->contentsMargins().right();
+        const int needed = narrow ? 40 : m_nav[i]->layout()->totalHeightForWidth(inner);
+        m_nav[i]->setMinimumHeight(std::max(narrow ? 40 : 56, needed));
+    }
 }
 
 QWidget* BugDialog::buildWhatHappened() {
@@ -243,12 +276,12 @@ QWidget* BugDialog::buildWhatHappened() {
 
     auto* steps = new QWidget;
     auto* sv = ui::vbox(steps, 0, 8);
-    sv->addWidget(ui::label(tr("PASOS PARA REPRODUCIR"), "eyebrow"));
+    sv->addWidget(eyebrow(tr("PASOS PARA REPRODUCIR")));
     auto* rows = new QWidget;
     m_stepRows = ui::vbox(rows, 0, 6);
     sv->addWidget(rows);
     auto* actions = new QWidget;
-    auto* ah = ui::hbox(actions, 0, 8);
+    auto* ah = new FlowLayout(actions, 0, 8, 6);
     auto* add = ui::button(tr("+ Añadir paso"), "dashed");
     add->setObjectName(QStringLiteral("bugAddStep"));
     connect(add, &QPushButton::clicked, this, [this]() { addStepRow(QString(), -1, true); });
@@ -258,7 +291,6 @@ QWidget* BugDialog::buildWhatHappened() {
     import->setToolTip(tr("Sustituye la lista por los pasos del caso, con sus datos de prueba, para editarlos"));
     connect(import, &QPushButton::clicked, this, &BugDialog::importCaseSteps);
     ah->addWidget(import);
-    ah->addStretch(1);
     sv->addWidget(actions);
     auto* hint = ui::label(tr("Los pasos que de verdad llevan al fallo, que pueden no ser los del caso. Enter añade otro."), "muted-sm");
     hint->setWordWrap(true);
@@ -299,27 +331,22 @@ QWidget* BugDialog::buildContext() {
     auto* ev = ui::vbox(env, 0, 6);
     ev->addWidget(field(tr("Entorno"), m_env));
     ev->addWidget(m_envNote);
-    // Dos columnas: caben en una ventana estrecha y el paso, que lleva su acción, tiene sitio.
+    // Hasta dos columnas, y una sola si no caben (ventana estrecha o letra ancha): el paso, que lleva su
+    // acción, tiene sitio.
     for (QComboBox* c : {m_env, m_severity, m_classification, m_linkedStep}) {
         c->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
         c->setMinimumContentsLength(12);
     }
-    auto* meta = new QWidget;
-    auto* mg = new QGridLayout(meta);
-    mg->setContentsMargins(0, 0, 0, 0);
-    mg->setHorizontalSpacing(12);
-    mg->setVerticalSpacing(12);
-    mg->addWidget(env, 0, 0, Qt::AlignTop);
-    mg->addWidget(field(tr("Severidad"), m_severity), 0, 1, Qt::AlignTop);
-    mg->addWidget(field(tr("Clasificación"), m_classification), 1, 0);
-    mg->addWidget(field(tr("Paso vinculado"), m_linkedStep), 1, 1);
-    mg->setColumnStretch(0, 1);
-    mg->setColumnStretch(1, 1);
+    auto* meta = new AutoGrid(200, 2);
+    meta->addWidget(env);
+    meta->addWidget(field(tr("Severidad"), m_severity));
+    meta->addWidget(field(tr("Clasificación"), m_classification));
+    meta->addWidget(field(tr("Paso vinculado"), m_linkedStep));
     v->addWidget(meta);
 
     auto* users = new QWidget;
     auto* uv = ui::vbox(users, 0, 8);
-    uv->addWidget(ui::label(tr("USUARIOS USADOS EN EL SISTEMA"), "eyebrow"));
+    uv->addWidget(eyebrow(tr("USUARIOS USADOS EN EL SISTEMA")));
     auto* rows = new QWidget;
     m_userRows = ui::vbox(rows, 0, 6);
     uv->addWidget(rows);
@@ -370,7 +397,7 @@ QWidget* BugDialog::buildReview() {
     auto* titleCard = ui::card("card-flat");
     auto* tv = ui::vbox(titleCard, 0, 8);
     tv->setContentsMargins(16, 14, 16, 14);
-    tv->addWidget(ui::label(tr("TÍTULO · PROPUESTO CON LO QUE ESCRIBISTE"), "eyebrow"));
+    tv->addWidget(eyebrow(tr("TÍTULO · PROPUESTO CON LO QUE ESCRIBISTE")));
     m_title = new QLineEdit;
     m_title->setObjectName(QStringLiteral("bugTitle"));
     m_title->setPlaceholderText(tr("Resumen corto: qué falla y dónde"));
@@ -383,23 +410,23 @@ QWidget* BugDialog::buildReview() {
     tv->addWidget(suggestions);
     v->addWidget(titleCard);
 
+    // Rótulo y botón en una fila mientras quepan; la nota, debajo, para que nada imponga el ancho.
     auto* trackerHead = new QWidget;
-    auto* th = ui::hbox(trackerHead, 0, 8);
-    th->addWidget(ui::label(tr("CAMPOS DEL GESTOR"), "eyebrow"));
-    m_metaNote = ui::label(QString(), "muted-sm");
-    m_metaNote->setStyleSheet(QStringLiteral("font-size:11px;"));
-    m_metaNote->setWordWrap(true);
-    th->addWidget(m_metaNote, 1);
+    auto* th = new FlowLayout(trackerHead, 0, 8, 6);
+    auto* trackerTitle = ui::label(tr("CAMPOS DEL GESTOR"), "eyebrow");
+    th->addWidget(trackerTitle);
     m_loadMeta = smallButton(tr("Cargar valores del proyecto"), "outline");
     connect(m_loadMeta, &QPushButton::clicked, this, [this]() { loadMetadata(true); });
     th->addWidget(m_loadMeta);
+    trackerTitle->setMinimumHeight(m_loadMeta->sizeHint().height());   // a la altura del botón
     v->addWidget(trackerHead);
+    m_metaNote = ui::label(QString(), "muted-sm");
+    m_metaNote->setStyleSheet(QStringLiteral("font-size:11px;"));
+    m_metaNote->setWordWrap(true);
+    v->addWidget(m_metaNote);
 
-    auto* tf = new QWidget;
-    auto* tg = new QGridLayout(tf);
-    tg->setContentsMargins(0, 0, 0, 0);
-    tg->setHorizontalSpacing(12);
-    tg->setVerticalSpacing(12);
+    // Hasta tres columnas, y menos si no caben.
+    auto* tf = new AutoGrid(170, 3);
     m_issueType = editableCombo(BugReport::defaultIssueType({}));
     m_issueType->setObjectName(QStringLiteral("bugIssueType"));
     connect(m_issueType, &QComboBox::activated, this, [this]() { m_issueTypeEdited = true; refreshUnknownValues(); });
@@ -437,19 +464,18 @@ QWidget* BugDialog::buildReview() {
     m_unknownNote = ui::label(QString(), "warn");
     m_unknownNote->setObjectName(QStringLiteral("bugUnknownValues"));
     m_unknownNote->setWordWrap(true);
-    tg->addWidget(type, 0, 0, Qt::AlignTop);
-    tg->addWidget(field(tr("Prioridad"), m_priority), 0, 1, Qt::AlignTop);
-    tg->addWidget(field(tr("Asignado a"), m_assignee), 0, 2, Qt::AlignTop);
-    tg->addWidget(field(tr("Componentes"), withPicker(m_components, tr("Elegir componentes del proyecto"), [this]() { return m_bugs.metadata().components; })), 1, 0);
-    tg->addWidget(field(tr("Versión afectada"), withPicker(m_versions, tr("Elegir versiones del proyecto"), [this]() { return m_bugs.metadata().versions; })), 1, 1);
-    tg->addWidget(field(tr("Etiquetas"), m_labels), 1, 2);
-    tg->addWidget(m_unknownNote, 2, 0, 1, 3);
-    for (int i = 0; i < 3; ++i) tg->setColumnStretch(i, 1);
+    tf->addWidget(type);
+    tf->addWidget(field(tr("Prioridad"), m_priority));
+    tf->addWidget(field(tr("Asignado a"), m_assignee));
+    tf->addWidget(field(tr("Componentes"), withPicker(m_components, tr("Elegir componentes del proyecto"), [this]() { return m_bugs.metadata().components; })));
+    tf->addWidget(field(tr("Versión afectada"), withPicker(m_versions, tr("Elegir versiones del proyecto"), [this]() { return m_bugs.metadata().versions; })));
+    tf->addWidget(field(tr("Etiquetas"), m_labels));
     for (QComboBox* c : {m_issueType, m_priority, m_assignee}) {
         c->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
         c->setMinimumContentsLength(8);
     }
     v->addWidget(tf);
+    v->addWidget(m_unknownNote);
 
     m_summary = ui::label(QString(), "muted-sm");
     m_summary->setObjectName(QStringLiteral("bugSummary"));

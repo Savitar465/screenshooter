@@ -46,6 +46,8 @@ class QualityRecordService;
 class RevisionPublishService;
 class BugReportService;
 class BugStore;
+class ProgressCells;
+class RequirementWindow;
 class ProjectStore;
 class GreqsView;
 class IssueListView;
@@ -302,6 +304,9 @@ private:
     /// antes de añadirlos. Sin plan, se le crea uno al aceptar.
     void generateCases();
     void loadRequirementDetail();
+    /// Abre (o trae al frente) la ficha completa del requerimiento del issue elegido; si aún no se leyó
+    /// de GESREQ y hay conexión, la lee.
+    void openRequirementWindow();
     /// Resuelve en qué proyecto se prueba el requerimiento y, según sea éste u otro, lo abre o lo pide.
     void startTesting(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt);
     /// Ningún proyecto trabaja el sistema del requerimiento: se elige uno existente o se crea, y allí empiezan.
@@ -425,14 +430,21 @@ private:
     QWidget* m_requirementCard;
     QWidget* m_missing;
     QLabel* m_missingText;
-    QLabel* m_requirementSummary;
-    QPushButton* m_toggleRequirement;
-    QWidget* m_requirementMore;   // la ficha entera, plegada: se abre con `m_toggleRequirement`
-    QLabel* m_requirementInfo;
-    QPushButton* m_loadDetail;
+    QLabel* m_requirementId;
+    // El plazo de QA, lo primero de la tarjeta: cuánto queda, la barra del periodo y sus dos fechas.
+    QWidget* m_deadline;
+    QLabel* m_deadlineValue;
+    QLabel* m_deadlineCaption;
+    ProgressCells* m_deadlineCells;
+    QLabel* m_deadlineFrom;
+    QLabel* m_deadlineUntil;
+    QLabel* m_requirementTitle;
+    QVBoxLayout* m_requirementStates;   // un punto de color y el estado, uno por línea
+    QLabel* m_requirementMeta;          // tipo · prioridad · solicitante, en una línea
+    QPushButton* m_showRequirement;
     QPushButton* m_openRequirement;
-    QLabel* m_detailInfo;
-    QVBoxLayout* m_attachments;
+    /// La ficha completa, en su ventana; una sola, que sigue al issue que se abre.
+    QPointer<RequirementWindow> m_requirementWindow;
     QWidget* m_jiraUncertain;
     QLabel* m_jiraUncertainText;
     QAction* m_publishAction;

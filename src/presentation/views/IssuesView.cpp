@@ -11,11 +11,13 @@
 #include "presentation/views/JiraPublishDialog.h"
 #include "presentation/views/ProjectSetupDialog.h"
 #include "presentation/views/QualityRecordDialog.h"
+#include "presentation/views/RequirementWindow.h"
 #include "presentation/views/RevisionPublishDialog.h"
 #include "presentation/widgets/ChoiceDialog.h"
 #include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/Icons.h"
+#include "presentation/widgets/ProgressCells.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QAction>
@@ -76,7 +78,6 @@ QString verdictColor(Verdict v) {
 }
 
 QString when(const QDateTime& dt) { return dt.isValid() ? dt.toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QStringLiteral("—"); }
-QString day(const QDate& d) { return d.isValid() ? d.toString(QStringLiteral("dd/MM/yyyy")) : QStringLiteral("—"); }
 
 QComboBox* filterBox(const QString& all, const QList<std::pair<QString, int>>& items) {
     auto* b = new QComboBox;
@@ -1963,11 +1964,16 @@ void IssuesView::buildDetail(QVBoxLayout* root) {
     m_nextRevision->setContentsMargins(0, 8, 0, 10);
     data->addWidget(nextRevision);
 
-    // El requerimiento de GESREQ: si sigue en la bandeja y un resumen; la ficha, plegada.
+    // El requerimiento de GESREQ: el plazo de QA arriba, que es lo que más se mira, y lo demás en pocas
+    // líneas; la ficha entera se abre en su ventana.
     QVBoxLayout* requirementBody;
-    auto* requirementCard = sideCard(tr("REQUERIMIENTO"), &requirementBody);
+    QHBoxLayout* requirementHead;
+    auto* requirementCard = sideCard(tr("REQUERIMIENTO"), &requirementBody, &requirementHead);
     requirementCard->setObjectName(QStringLiteral("issueRequirement"));
+    requirementBody->setSpacing(12);
     m_requirementCard = requirementCard;
+    m_requirementId = ui::label(QString(), "mono-muted");
+    requirementHead->addWidget(m_requirementId);
 
     auto* missing = notice(&m_missingText, nullptr, true);
     missing->setObjectName(QStringLiteral("issueMissing"));
@@ -1975,51 +1981,57 @@ void IssuesView::buildDetail(QVBoxLayout* root) {
     m_missingText->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Muted));
     requirementBody->addWidget(missing);
 
-    m_requirementSummary = ui::label(QString(), "muted-sm");
-    m_requirementSummary->setObjectName(QStringLiteral("issueRequirementSummary"));
-    m_requirementSummary->setWordWrap(true);
-    requirementBody->addWidget(m_requirementSummary);
+    m_deadline = ui::card("card-flat");
+    m_deadline->setObjectName(QStringLiteral("issueRequirementDeadline"));
+    auto* dv = ui::vbox(m_deadline, 0, 8);
+    dv->setContentsMargins(14, 12, 14, 12);
+    auto* deadlineTop = new QWidget;
+    auto* dt = ui::hbox(deadlineTop, 0, 8);
+    m_deadlineValue = new QLabel;
+    m_deadlineValue->setObjectName(QStringLiteral("issueRequirementDeadlineValue"));
+    dt->addWidget(m_deadlineValue, 0, Qt::AlignBottom);
+    dt->addStretch(1);
+    m_deadlineCaption = ui::label(QString(), "muted-sm");
+    dt->addWidget(m_deadlineCaption, 0, Qt::AlignBottom);
+    dv->addWidget(deadlineTop);
+    m_deadlineCells = new ProgressCells;
+    dv->addWidget(m_deadlineCells);
+    auto* deadlineDates = new QWidget;
+    auto* dd = ui::hbox(deadlineDates, 0, 8);
+    m_deadlineFrom = ui::label(QString(), "muted-sm");
+    m_deadlineUntil = ui::label(QString(), "muted-sm");
+    dd->addWidget(m_deadlineFrom);
+    dd->addStretch(1);
+    dd->addWidget(m_deadlineUntil);
+    dv->addWidget(deadlineDates);
+    requirementBody->addWidget(m_deadline);
+
+    m_requirementTitle = new QLabel;
+    m_requirementTitle->setObjectName(QStringLiteral("issueRequirementTitle"));
+    m_requirementTitle->setWordWrap(true);
+    m_requirementTitle->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;"));
+    requirementBody->addWidget(m_requirementTitle);
+    auto* states = new QWidget;
+    m_requirementStates = ui::vbox(states, 0, 6);
+    requirementBody->addWidget(states);
+    m_requirementMeta = ui::label(QString(), "muted-sm");
+    m_requirementMeta->setObjectName(QStringLiteral("issueRequirementSummary"));
+    m_requirementMeta->setWordWrap(true);
+    m_requirementMeta->setTextFormat(Qt::RichText);
+    requirementBody->addWidget(m_requirementMeta);
 
     auto* requirementActions = new QWidget;
     auto* ra = new FlowLayout(requirementActions, 0, 6, 6);
-    m_toggleRequirement = smallButton(tr("Ver ficha"), "outline");
-    m_toggleRequirement->setObjectName(QStringLiteral("issueToggleRequirement"));
-    connect(m_toggleRequirement, &QPushButton::clicked, this, [this]() {
-        const bool open = m_requirementMore->isHidden();
-        m_requirementMore->setVisible(open);
-        m_toggleRequirement->setText(open ? tr("Ocultar ficha") : tr("Ver ficha"));
-    });
-    ra->addWidget(m_toggleRequirement);
+    m_showRequirement = smallButton(tr("Ver ficha completa"), "outline", tr("Abre la ficha de GESREQ con todos sus datos en una ventana"));
+    m_showRequirement->setObjectName(QStringLiteral("issueShowRequirement"));
+    connect(m_showRequirement, &QPushButton::clicked, this, &IssuesView::openRequirementWindow);
+    ra->addWidget(m_showRequirement);
     m_openRequirement = smallButton(tr("Abrir en GESREQ"), "ghost", tr("Abre la ficha en el navegador (hace falta haber entrado en GESREQ)"));
     connect(m_openRequirement, &QPushButton::clicked, this, [this]() {
         if (const Issue* issue = selected()) emit openUrlRequested(issue->requirement.data.detailUrl);
     });
     ra->addWidget(m_openRequirement);
     requirementBody->addWidget(requirementActions);
-
-    m_requirementMore = new QWidget;
-    m_requirementMore->setVisible(false);
-    auto* more = ui::vbox(m_requirementMore, 0, 8);
-    m_requirementInfo = new QLabel;
-    m_requirementInfo->setObjectName(QStringLiteral("issueRequirementInfo"));
-    m_requirementInfo->setWordWrap(true);
-    m_requirementInfo->setTextFormat(Qt::RichText);
-    m_requirementInfo->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    more->addWidget(m_requirementInfo);
-    m_loadDetail = smallButton(tr("Cargar ficha"), "ghost", tr("Leer de GESREQ la ficha completa: alcance, secciones y adjuntos"));
-    m_loadDetail->setObjectName(QStringLiteral("issueLoadDetail"));
-    connect(m_loadDetail, &QPushButton::clicked, this, &IssuesView::loadRequirementDetail);
-    more->addWidget(m_loadDetail, 0, Qt::AlignLeft);
-    m_detailInfo = new QLabel;
-    m_detailInfo->setObjectName(QStringLiteral("issueRequirementDetail"));
-    m_detailInfo->setWordWrap(true);
-    m_detailInfo->setTextFormat(Qt::RichText);
-    m_detailInfo->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    more->addWidget(m_detailInfo);
-    auto* attachments = new QWidget;
-    m_attachments = ui::vbox(attachments, 0, 2);
-    more->addWidget(attachments);
-    requirementBody->addWidget(m_requirementMore);
     side->addWidget(requirementCard);
 
     // Las rondas del requerimiento, con la que se ve remarcada: el historial de su control de calidad.
@@ -3054,10 +3066,12 @@ void IssuesView::discardRevision() {
 
 void IssuesView::refreshRequirement(const Issue& issue) {
     m_requirementCard->setVisible(issue.isImported());
-    ui::clearLayout(m_attachments);
     if (!issue.isImported()) return;
     const RequirementLink& link = issue.requirement;
     const ExternalRequirement& r = link.data;
+    const RequirementDetail& d = link.detail;
+    // La ficha abierta sigue al issue que se mira: al cambiar de issue enseña el suyo.
+    if (m_requirementWindow) m_requirementWindow->setRequirement(issue.id, link, m_requirements != nullptr);
 
     // Lo que cambió en GESREQ se da por revisado en cuanto se ve el detalle del issue (sin aviso).
     const bool onScreen = isVisible() && m_pages->currentIndex() == static_cast<int>(Page::Detail);
@@ -3067,58 +3081,91 @@ void IssuesView::refreshRequirement(const Issue& issue) {
     m_missing->setVisible(link.missing);
     m_missingText->setText(tr("Ya no está en tu bandeja de control de calidad (se vio por última vez el %1). El issue y sus pruebas se conservan.")
                                .arg(when(link.fetchedAt)));
+    m_requirementId->setText(QStringLiteral("GREQ %1").arg(r.id));
 
-    QStringList rows;
-    auto row = [&rows](const QString& name, const QString& value) {
-        if (value.trimmed().isEmpty()) return;
-        rows << QStringLiteral("<tr><td style='color:%1;padding-right:14px;'>%2</td><td>%3</td></tr>").arg(theme::Muted, name.toHtmlEscaped(), value.toHtmlEscaped());
-    };
-    QStringList requester;
-    for (const QString& part : {r.requester, r.requestingUnit})
-        if (!part.trimmed().isEmpty()) requester << part;
-    row(tr("Sistema"), r.system);
-    row(tr("Descripción corta"), r.summary);
-    row(tr("Estado en GESREQ"), r.states.join(QStringLiteral(" + ")));
-    row(tr("Prioridad en GESREQ"), r.priority);
-    row(tr("Asignado a QA"), r.assignedFrom.isValid() ? QStringLiteral("%1 – %2").arg(day(r.assignedFrom), day(r.assignedUntil)) : QString());
-    row(tr("Solicitado"), r.requestedOn.isValid() ? day(r.requestedOn) : QString());
-    row(tr("Solicitante"), requester.join(QStringLiteral(" · ")));
-    row(tr("Usuario"), r.user);
-    row(tr("Importado"), tr("%1 · última lectura %2").arg(when(link.importedAt), when(link.fetchedAt)));
-    // En el panel, de un vistazo, quién lo pide y cuándo le toca a QA; lo demás está en la ficha plegada.
-    QStringList summary;
-    if (!requester.isEmpty()) summary << tr("Solicita %1").arg(requester.join(QStringLiteral(" · ")));
-    if (r.assignedFrom.isValid()) summary << tr("QA %1 – %2").arg(day(r.assignedFrom), day(r.assignedUntil));
-    if (!r.states.isEmpty()) summary << r.states.join(QStringLiteral(" + "));
-    m_requirementSummary->setText(summary.join(QStringLiteral("\n")));
-    m_requirementSummary->setVisible(!summary.isEmpty());
-    m_requirementInfo->setText(QStringLiteral("<table cellspacing='0' cellpadding='2'>%1</table>").arg(rows.join(QString())));
+    // El plazo de QA: lo que queda en grande y el periodo en una barra de diez tramos. Fuera de la
+    // bandeja el control ya terminó, así que no hay plazo que vigilar.
+    const QDate today = QDate::currentDate();
+    const auto period = requirement::qaPeriod(r, today);
+    m_deadline->setVisible(period.valid && !link.missing);
+    if (period.valid) {
+        auto days = [](int n) { return n == 1 ? tr("1 día") : tr("%1 días").arg(n); };
+        QString value, caption, color = theme::Text;
+        if (!period.started) {
+            value = days(static_cast<int>(today.daysTo(r.assignedFrom)));
+            caption = tr("para empezar QA");
+            color = theme::Blue;
+        } else if (period.left < 0) {
+            value = tr("Vencido");
+            caption = tr("hace %1").arg(days(-period.left));
+            color = theme::RedSoft;
+        } else if (period.left == 0) {
+            value = tr("Hoy");
+            caption = tr("cierra QA");
+            color = theme::AmberSoft;
+        } else {
+            value = days(period.left);
+            caption = tr("para cerrar QA");
+            color = period.left <= 3 ? theme::AmberSoft : theme::Text;
+        }
+        m_deadlineValue->setText(value);
+        m_deadlineValue->setStyleSheet(QStringLiteral("font-size:24px;font-weight:800;color:%1;").arg(color));
+        m_deadlineCaption->setText(caption);
+        QStringList cells;
+        const int filled = (period.elapsed * 10 + period.total / 2) / period.total;
+        for (int i = 0; i < 10; ++i) cells << (i < filled ? (period.left < 0 ? theme::Red : theme::Amber) : theme::Border);
+        m_deadlineCells->setColors(cells);
+        m_deadlineFrom->setText(r.assignedFrom.toString(QStringLiteral("dd/MM")));
+        m_deadlineUntil->setText(r.assignedUntil.toString(QStringLiteral("dd/MM/yyyy")));
+    }
 
-    const RequirementDetail& d = link.detail;
-    const bool hasDetail = !d.id.isEmpty();
-    m_loadDetail->setVisible(m_requirements != nullptr);
-    if (!m_readingRequirement) m_loadDetail->setText(hasDetail ? tr("Actualizar ficha") : tr("Cargar ficha"));
+    m_requirementTitle->setText(d.reference.trimmed().isEmpty() ? r.summary : d.reference);
+    m_requirementTitle->setVisible(!m_requirementTitle->text().trimmed().isEmpty());
+    ui::clearLayout(m_requirementStates);
+    QStringList states = r.states;
+    if (states.isEmpty() && !d.state.isEmpty()) states << d.state;
+    for (const QString& state : states) {
+        auto* row = new QWidget;
+        auto* h = ui::hbox(row, 0, 8);
+        h->addWidget(ui::dot(requirement::stateColor(state), 8), 0, Qt::AlignVCenter);
+        auto* text = new QLabel(requirement::sentenceCase(state));
+        text->setWordWrap(true);
+        text->setStyleSheet(QStringLiteral("font-size:12.5px;"));
+        h->addWidget(text, 1);
+        m_requirementStates->addWidget(row);
+    }
+
+    // Tipo · prioridad · quién lo pide, en una línea.
+    QStringList meta;
+    if (const QString type = requirement::sentenceCase(d.requestType); !type.isEmpty()) meta << type.toHtmlEscaped();
+    const QString priority = r.priority.trimmed().isEmpty() ? d.priority : r.priority;
+    if (!priority.trimmed().isEmpty())
+        meta << QStringLiteral("<span style='color:%1;font-weight:700;'>%2</span>").arg(requirement::priorityColor(priority), priority.trimmed().toUpper().toHtmlEscaped());
+    const QString requester = r.requester.trimmed().isEmpty() ? d.requester : r.requester;
+    if (!requester.trimmed().isEmpty())
+        meta << (r.requestingUnit.trimmed().isEmpty() ? requester.toHtmlEscaped()
+                                                      : QStringLiteral("%1 (%2)").arg(requester.toHtmlEscaped(), r.requestingUnit.toHtmlEscaped()));
+    m_requirementMeta->setText(meta.join(QStringLiteral(" · ")));
+    m_requirementMeta->setVisible(!meta.isEmpty());
     m_openRequirement->setEnabled(!r.detailUrl.isEmpty());
-    m_detailInfo->setVisible(hasDetail);
-    if (!hasDetail) return;
-    auto multiline = [](const QString& text) { return text.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br>")); };
-    QString html = QStringLiteral("<p style='color:%1;'>%2</p>").arg(theme::Muted, tr("Ficha leída el %1").arg(when(link.detailFetchedAt)));
-    if (!d.requestType.isEmpty() || !d.reference.isEmpty())
-        html += QStringLiteral("<p><b>%1</b> %2</p>").arg(d.requestType.toHtmlEscaped(), d.reference.toHtmlEscaped());
-    if (!d.description.isEmpty()) html += QStringLiteral("<p>%1</p>").arg(multiline(d.description));
-    for (const auto& section : d.sections) {
-        QStringList fields;
-        for (const auto& f : section.fields)
-            if (!f.value.trimmed().isEmpty())
-                fields << QStringLiteral("<span style='color:%1;'>%2:</span> %3").arg(theme::Muted, f.label.toHtmlEscaped(), multiline(f.value));
-        if (!fields.isEmpty()) html += QStringLiteral("<p><b>%1</b><br>%2</p>").arg(section.title.toHtmlEscaped(), fields.join(QStringLiteral("<br>")));
+}
+
+void IssuesView::openRequirementWindow() {
+    const Issue* issue = selected();
+    if (!issue || !issue->isImported()) return;
+    if (!m_requirementWindow) {
+        m_requirementWindow = new RequirementWindow(this);
+        m_requirementWindow->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_requirementWindow, &RequirementWindow::openUrlRequested, this, &IssuesView::openUrlRequested);
+        connect(m_requirementWindow, &RequirementWindow::loadRequested, this, &IssuesView::loadRequirementDetail);
     }
-    m_detailInfo->setText(html);
-    for (const auto& a : d.attachments) {
-        auto* b = smallButton(QStringLiteral("📎 %1 · %2").arg(a.label, a.fileName), "ghost", tr("Abrir en el navegador"));
-        connect(b, &QPushButton::clicked, this, [this, url = a.url]() { emit openUrlRequested(url); });
-        m_attachments->addWidget(b, 0, Qt::AlignLeft);
-    }
+    m_requirementWindow->setRequirement(issue->id, issue->requirement, m_requirements != nullptr);
+    m_requirementWindow->setReading(m_readingRequirement);
+    m_requirementWindow->show();
+    m_requirementWindow->raise();
+    m_requirementWindow->activateWindow();
+    // La primera vez la ficha aún no está: se lee sin tener que pedirlo.
+    if (issue->requirement.detail.id.isEmpty()) loadRequirementDetail();
 }
 
 QMenu* IssuesView::buildJiraMenu() {
@@ -3780,13 +3827,12 @@ void IssuesView::loadRequirementDetail() {
     if (!issue || !issue->isImported() || !m_requirements || m_readingRequirement) return;
     const QString issueId = issue->id;
     m_readingRequirement = true;
-    m_loadDetail->setEnabled(false);
-    m_loadDetail->setText(tr("Leyendo…"));
+    if (m_requirementWindow) m_requirementWindow->setReading(true);
     QPointer<IssuesView> self(this);
     m_requirements->fetchDetail(issue->requirement.data.id, [self, issueId](const RequirementDetailResult& r) {
         if (!self) return;
         self->m_readingRequirement = false;
-        self->m_loadDetail->setEnabled(true);
+        if (self->m_requirementWindow) self->m_requirementWindow->setReading(false);
         if (!r.ok) {
             emit self->toast(tr("No se pudo leer la ficha de GESREQ · %1").arg(r.error), theme::Red);
             self->loadDetail();

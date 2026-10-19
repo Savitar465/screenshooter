@@ -27,6 +27,7 @@
 #include "presentation/views/PlanView.h"
 #include "presentation/views/JiraPublishDialog.h"
 #include "presentation/views/ProjectSetupDialog.h"
+#include "presentation/views/RequirementWindow.h"
 #include "presentation/views/RevisionPublishDialog.h"
 #include "presentation/views/RunView.h"
 #include "presentation/views/Sidebar.h"
@@ -48,6 +49,7 @@
 
 #include <QAction>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDir>
 #include <QFile>
@@ -2447,6 +2449,102 @@ private slots:
         QCOMPARE(started.first().at(1).value<ExternalRequirement>().id, QStringLiteral("2026001"));
         QVERIFY(f.app.issues.issues().isEmpty());   // el issue es del proyecto nuevo, no de éste
         QTRY_VERIFY(!f.window->findChild<ProjectSetupDialog*>());
+        f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
+    }
+
+    // La tarjeta del requerimiento enseña primero el plazo de QA y lo demás en pocas líneas; la ficha
+    // entera ya no se despliega en el panel: se abre en su ventana, que la lee de GESREQ la primera vez.
+    void theRequirementCardShowsTheQaDeadlineAndOpensTheFullFileInItsWindow() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        QVERIFY(projects.setRequirementSystem(projects.activeId(), QStringLiteral("PORTAL WEB")));
+        f.ctx.projects = &projects;
+        f.ctx.projectId = projects.activeId();
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) { r.url = QStringLiteral("http://gesreq.test:7401/greq"); });
+        const QDate today = QDate::currentDate();
+        ExternalRequirement r;
+        r.id = QStringLiteral("2025101");
+        r.systemCode = QStringLiteral("PORTAL WEB");
+        r.system = QStringLiteral("PORTAL WEB-PORTAL");
+        r.summary = QStringLiteral("Formulario de contacto");
+        r.priority = QStringLiteral("ALTA");
+        r.requester = QStringLiteral("PÉREZ GÓMEZ ANA");
+        r.requestingUnit = QStringLiteral("GTE");
+        r.states = {QStringLiteral("CONTROL DE CALIDAD OBSERVADO"), QStringLiteral("CONTROL FUNCIONAL")};
+        r.assignedFrom = today.addDays(-6);
+        r.assignedUntil = today.addDays(4);
+        r.detailUrl = QStringLiteral("http://gesreq.test:7401/greq/publico.do?id=2025101&bandera=1");
+        f.app.requirementSource->inbox = {r};
+        RequirementDetail detail;
+        detail.id = r.id;
+        detail.requestType = QStringLiteral("NUEVA FUNCIONALIDAD");
+        detail.reference = QStringLiteral("Formulario de contacto del portal con validación de correo");
+        detail.description = QStringLiteral("El formulario de contacto debe:\n• Validar el correo.");
+        detail.sections = {
+            {QStringLiteral("Datos Asignado"), {{QStringLiteral("Recurso(s)"), QStringLiteral("ROJAS LUNA PEDRO")}, {QStringLiteral("Ruta SVN"), QStringLiteral("a622704aae38db495c819ea0ce35db9b2749e2bf")}}},
+            {QStringLiteral("Datos Control de Calidad Solicitado"), {{QStringLiteral("Url"), QStringLiteral("http://qa.example.test/portal")}, {QStringLiteral("Esquema"), QString()}}},
+            {QStringLiteral("Datos Control de Calidad Asignado"), {{QStringLiteral("Recurso(s) / PORTAL WEB"), QStringLiteral("SOSA VEGA LUCÍA")}}},
+        };
+        detail.attachments = {{QStringLiteral("Archivo de respaldo inicial"), QStringLiteral("2025101REQ.pdf"), QStringLiteral("http://gesreq.test:7401/greq/docDownload.do?doc=2025101REQ.pdf")}};
+        f.app.requirementSource->details.insert(detail.id, detail);
+
+        f.openGreqs();
+        f.greqAction(r.id)->click();
+        const QString id = f.app.issues.selectedId();
+        QVERIFY(!id.isEmpty());
+        QCOMPARE(f.liveLabel("issueRequirementDeadlineValue")->text(), QStringLiteral("4 días"));
+        const QString meta = f.liveLabel("issueRequirementSummary")->text();
+        QVERIFY2(meta.contains(QStringLiteral("ALTA")) && meta.contains(QStringLiteral("PÉREZ GÓMEZ ANA (GTE)")), qPrintable(meta));
+        QCOMPARE(f.liveLabel("issueRequirementTitle")->text(), r.summary);
+        QVERIFY(!f.window->findChild<RequirementWindow*>());
+
+        // Sin ficha todavía, abrir la ventana la lee; con ella, la tarjeta toma la referencia de GESREQ.
+        f.liveButton(QStringLiteral("issueShowRequirement"))->click();
+        auto* window = f.window->findChild<RequirementWindow*>();
+        QVERIFY(window && window->isVisible());
+        QCOMPARE(window->issueId(), id);
+        QCOMPARE(f.app.issues.find(id)->requirement.detail.id, r.id);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* scope = window->findChild<QLabel*>(QStringLiteral("requirementScope"));
+        QVERIFY(scope);
+        QCOMPARE(scope->text(), detail.description);
+        QCOMPARE(window->findChild<QLabel*>(QStringLiteral("requirementTitle"))->text(), detail.reference);
+        QCOMPARE(window->findChild<QPushButton*>(QStringLiteral("requirementLoad"))->text(), QStringLiteral("Actualizar ficha"));
+        QCOMPARE(f.liveLabel("issueRequirementTitle")->text(), detail.reference);
+        // QA es quien figura en el control de calidad asignado, no el primer recurso (el de desarrollo).
+        QCOMPARE(window->findChild<QLabel*>(QStringLiteral("requirementQaResource"))->text(), QStringLiteral("Sosa Vega Lucía"));
+
+        // Cuatro entradas en el índice; «Dónde probar» reúne la dirección de la aplicación y la ruta SVN
+        // de desarrollo, cada una con su botón de copiar, y la ficha esconde los campos vacíos.
+        QStringList jumps;
+        for (auto* b : window->findChildren<QPushButton*>(QStringLiteral("requirementJump"))) jumps << b->text();
+        QCOMPARE(jumps, (QStringList{QStringLiteral("Qué probar"), QStringLiteral("Dónde probar"), QStringLiteral("Recorrido"), QStringLiteral("Ficha GESREQ")}));
+        auto* where = window->findChild<QFrame*>(QStringLiteral("requirementWhere"));
+        QVERIFY(where);
+        auto copies = where->findChildren<QPushButton*>(QStringLiteral("requirementCopy"));
+        QCOMPARE(copies.size(), 2);
+        copies.last()->click();
+        QCOMPARE(QApplication::clipboard()->text(), QStringLiteral("a622704aae38db495c819ea0ce35db9b2749e2bf"));
+        QVERIFY(window->findChild<QWidget*>(QStringLiteral("requirementJourney")));
+
+        // Los adjuntos y la dirección de GESREQ se abren en el navegador (aquí no se abre ninguno).
+        QObject::disconnect(window, &RequirementWindow::openUrlRequested, nullptr, nullptr);
+        QSignalSpy opened(window, &RequirementWindow::openUrlRequested);
+        auto* attachment = window->findChild<QPushButton*>(QStringLiteral("requirementAttachment"));
+        QVERIFY(attachment);
+        attachment->click();
+        window->findChild<QPushButton*>(QStringLiteral("requirementOpen"))->click();
+        QCOMPARE(opened.count(), 2);
+        QCOMPARE(opened.at(0).at(0).toString(), detail.attachments.first().url);
+        QCOMPARE(opened.at(1).at(0).toString(), r.detailUrl);
+
+        // Volver a pulsar trae la misma ventana, no otra.
+        f.liveButton(QStringLiteral("issueShowRequirement"))->click();
+        QCOMPARE(f.window->findChildren<RequirementWindow*>().size(), 1);
+        window->close();
         f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
     }
 

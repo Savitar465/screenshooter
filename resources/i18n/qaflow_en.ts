@@ -4386,14 +4386,6 @@ Remove it?</translation>
         <translation>QA status</translation>
     </message>
     <message>
-        <source>Cargar ficha</source>
-        <translation>Load record</translation>
-    </message>
-    <message>
-        <source>Leer de GESREQ la ficha completa: alcance, secciones y adjuntos</source>
-        <translation>Read the full record from GESREQ: scope, sections and attachments</translation>
-    </message>
-    <message>
         <source>Abrir en GESREQ</source>
         <translation>Open in GESREQ</translation>
     </message>
@@ -4422,58 +4414,6 @@ Remove it?</translation>
         <translation>It is no longer in your quality control inbox (last seen on %1). The issue and its tests are kept.</translation>
     </message>
     <message>
-        <source>Sistema</source>
-        <translation>System</translation>
-    </message>
-    <message>
-        <source>Descripción corta</source>
-        <translation>Short description</translation>
-    </message>
-    <message>
-        <source>Estado en GESREQ</source>
-        <translation>Status in GESREQ</translation>
-    </message>
-    <message>
-        <source>Prioridad en GESREQ</source>
-        <translation>Priority in GESREQ</translation>
-    </message>
-    <message>
-        <source>Asignado a QA</source>
-        <translation>Assigned to QA</translation>
-    </message>
-    <message>
-        <source>Solicitado</source>
-        <translation>Requested</translation>
-    </message>
-    <message>
-        <source>Solicitante</source>
-        <translation>Requester</translation>
-    </message>
-    <message>
-        <source>Usuario</source>
-        <translation>User</translation>
-    </message>
-    <message>
-        <source>Importado</source>
-        <translation>Imported</translation>
-    </message>
-    <message>
-        <source>%1 · última lectura %2</source>
-        <translation>%1 · last read %2</translation>
-    </message>
-    <message>
-        <source>Actualizar ficha</source>
-        <translation>Refresh record</translation>
-    </message>
-    <message>
-        <source>Ficha leída el %1</source>
-        <translation>Record read on %1</translation>
-    </message>
-    <message>
-        <source>Abrir en el navegador</source>
-        <translation>Open in the browser</translation>
-    </message>
-    <message>
         <source>(sin título)</source>
         <translation>(untitled)</translation>
     </message>
@@ -4500,10 +4440,6 @@ Remove it?</translation>
     <message>
         <source>Vincular plan a %1</source>
         <translation>Link plan to %1</translation>
-    </message>
-    <message>
-        <source>Leyendo…</source>
-        <translation>Reading…</translation>
     </message>
     <message>
         <source>No se pudo leer la ficha de GESREQ · %1</source>
@@ -5504,14 +5440,6 @@ Create another one anyway?</translation>
         <translation>REQUIREMENT</translation>
     </message>
     <message>
-        <source>Ver ficha</source>
-        <translation>View record</translation>
-    </message>
-    <message>
-        <source>Ocultar ficha</source>
-        <translation>Hide record</translation>
-    </message>
-    <message>
         <source>Eliminar issue…</source>
         <translation>Delete issue…</translation>
     </message>
@@ -5578,14 +5506,6 @@ Create another one anyway?</translation>
     <message>
         <source>Aprueba %1 y pasa a %2, u observada</source>
         <translation>Approves %1 and moves to %2, or observed</translation>
-    </message>
-    <message>
-        <source>Solicita %1</source>
-        <translation>Requested by %1</translation>
-    </message>
-    <message>
-        <source>QA %1 – %2</source>
-        <translation>QA %1 – %2</translation>
     </message>
     <message>
         <source>de esta revisión</source>
@@ -6017,6 +5937,46 @@ Create another one anyway?</translation>
         <source>Reanudar este ciclo, en pausa desde el %1</source>
         <translation>Resume this cycle, paused since %1</translation>
     </message>
+    <message>
+        <source>Ver ficha completa</source>
+        <translation>View full record</translation>
+    </message>
+    <message>
+        <source>Abre la ficha de GESREQ con todos sus datos en una ventana</source>
+        <translation>Opens the GESREQ record with all its data in a window</translation>
+    </message>
+    <message>
+        <source>1 día</source>
+        <translation>1 day</translation>
+    </message>
+    <message>
+        <source>%1 días</source>
+        <translation>%1 days</translation>
+    </message>
+    <message>
+        <source>para empezar QA</source>
+        <translation>until QA starts</translation>
+    </message>
+    <message>
+        <source>Vencido</source>
+        <translation>Overdue</translation>
+    </message>
+    <message>
+        <source>hace %1</source>
+        <translation>%1 ago</translation>
+    </message>
+    <message>
+        <source>Hoy</source>
+        <translation>Today</translation>
+    </message>
+    <message>
+        <source>cierra QA</source>
+        <translation>QA closes</translation>
+    </message>
+    <message>
+        <source>para cerrar QA</source>
+        <translation>to close QA</translation>
+    </message>
 </context>
 <context>
     <name>qaflow::JiraPublishDialog</name>
@@ -6380,10 +6340,6 @@ Create another one anyway?</translation>
         <translation>Stop execution</translation>
     </message>
     <message>
-        <source>Finalizar caso</source>
-        <translation>Finish case</translation>
-    </message>
-    <message>
         <source>Proyecto principal</source>
         <translation>Main project</translation>
     </message>
@@ -6706,18 +6662,6 @@ Create another one anyway?</translation>
         <translation>Pause run</translation>
     </message>
     <message>
-        <source>Siguiente caso · quedan %1</source>
-        <translation>Next case · %1 remaining</translation>
-    </message>
-    <message>
-        <source>Terminar plan y ver informe</source>
-        <translation>Finish plan and view report</translation>
-    </message>
-    <message>
-        <source>Finalizar y volver</source>
-        <translation>Finish and go back</translation>
-    </message>
-    <message>
         <source>En pausa</source>
         <translation>Paused</translation>
     </message>
@@ -6792,6 +6736,24 @@ Create another one anyway?</translation>
     <message>
         <source>Descartar</source>
         <translation>Discard</translation>
+    </message>
+    <message>
+        <source>%1 (en pausa, %2/%3 pasos)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 (sin empezar)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Terminar el ciclo %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Quedan casos sin terminar: %1.
+
+Los que están en pausa se archivan con lo marcado (lo pendiente queda N/A) y los no empezados quedan sin ejecutar. ¿Terminar el ciclo?</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -7799,6 +7761,265 @@ Create another one anyway?</translation>
     </message>
 </context>
 <context>
+    <name>qaflow::RequirementWindow</name>
+    <message>
+        <source>Cargar ficha</source>
+        <translation>Load record</translation>
+    </message>
+    <message>
+        <source>Leer de GESREQ la ficha completa: alcance, secciones y adjuntos</source>
+        <translation>Read the full record from GESREQ: scope, sections and attachments</translation>
+    </message>
+    <message>
+        <source>Abrir en GESREQ</source>
+        <translation>Open in GESREQ</translation>
+    </message>
+    <message>
+        <source>Abre la ficha en el navegador (hace falta haber entrado en GESREQ)</source>
+        <translation>Opens the record in the browser (you need to be signed in to GESREQ)</translation>
+    </message>
+    <message>
+        <source>Leyendo…</source>
+        <translation>Reading…</translation>
+    </message>
+    <message>
+        <source>Actualizar ficha</source>
+        <translation>Refresh record</translation>
+    </message>
+    <message>
+        <source>Requerimiento %1</source>
+        <translation>Requirement %1</translation>
+    </message>
+    <message>
+        <source>Ya no está en tu bandeja de control de calidad (se vio por última vez el %1).</source>
+        <translation>No longer in your quality control inbox (last seen on %1).</translation>
+    </message>
+    <message>
+        <source>Prioridad</source>
+        <translation>Priority</translation>
+    </message>
+    <message>
+        <source>Solicita</source>
+        <translation>Requested by</translation>
+    </message>
+    <message>
+        <source>1 día</source>
+        <translation>1 day</translation>
+    </message>
+    <message>
+        <source>%1 días</source>
+        <translation>%1 days</translation>
+    </message>
+    <message>
+        <source>empieza en %1</source>
+        <translation>starts in %1</translation>
+    </message>
+    <message>
+        <source>vencido hace %1</source>
+        <translation>overdue by %1</translation>
+    </message>
+    <message>
+        <source>vence hoy</source>
+        <translation>due today</translation>
+    </message>
+    <message>
+        <source>falta 1 día</source>
+        <translation>1 day left</translation>
+    </message>
+    <message>
+        <source>faltan %1 días</source>
+        <translation>%1 days left</translation>
+    </message>
+    <message>
+        <source>Usuario</source>
+        <translation>User</translation>
+    </message>
+    <message>
+        <source>%1 · abrir en el navegador</source>
+        <translation>%1 · open in the browser</translation>
+    </message>
+    <message>
+        <source>Ficha leída el %1</source>
+        <translation>Record read on %1</translation>
+    </message>
+    <message>
+        <source>Ficha sin leer de GESREQ</source>
+        <translation>Record not read from GESREQ yet</translation>
+    </message>
+    <message>
+        <source>Todavía no se leyó la ficha de GESREQ.</source>
+        <translation>The GESREQ record has not been read yet.</translation>
+    </message>
+    <message>
+        <source>Sistema</source>
+        <translation>System</translation>
+    </message>
+    <message>
+        <source>Solicitado</source>
+        <translation>Requested</translation>
+    </message>
+    <message>
+        <source>Importado</source>
+        <translation>Imported</translation>
+    </message>
+    <message>
+        <source>%1 · última lectura %2</source>
+        <translation>%1 · last read %2</translation>
+    </message>
+    <message>
+        <source>Bandeja</source>
+        <translation>Inbox</translation>
+    </message>
+    <message>
+        <source>Copiar «%1»</source>
+        <translation>Copy “%1”</translation>
+    </message>
+    <message>
+        <source>Copiar</source>
+        <translation>Copy</translation>
+    </message>
+    <message>
+        <source>Plazo QA</source>
+        <translation>QA deadline</translation>
+    </message>
+    <message>
+        <source>Prioridad · tipo</source>
+        <translation>Priority · type</translation>
+    </message>
+    <message>
+        <source>QA asignado a</source>
+        <translation>QA assigned to</translation>
+    </message>
+    <message>
+        <source>Adjuntos · %1</source>
+        <translation>Attachments · %1</translation>
+    </message>
+    <message>
+        <source>Qué probar</source>
+        <translation>What to test</translation>
+    </message>
+    <message>
+        <source>Todavía no se leyó la ficha de GESREQ: el alcance, dónde probar y los adjuntos llegan al pulsar «Cargar ficha».</source>
+        <translation>The GESREQ record hasn't been read yet: the scope, where to test and the attachments arrive when you press “Load record”.</translation>
+    </message>
+    <message>
+        <source>La ficha no trae el alcance.</source>
+        <translation>The record has no scope.</translation>
+    </message>
+    <message>
+        <source>Entrega</source>
+        <translation>Delivery</translation>
+    </message>
+    <message>
+        <source>Indicaciones para QA</source>
+        <translation>Notes for QA</translation>
+    </message>
+    <message>
+        <source>Notas de desarrollo</source>
+        <translation>Development notes</translation>
+    </message>
+    <message>
+        <source>Aplicación</source>
+        <translation>Application</translation>
+    </message>
+    <message>
+        <source>Servidor</source>
+        <translation>Server</translation>
+    </message>
+    <message>
+        <source>Base de datos</source>
+        <translation>Database</translation>
+    </message>
+    <message>
+        <source>Esquema</source>
+        <translation>Schema</translation>
+    </message>
+    <message>
+        <source>Usuario BD</source>
+        <translation>DB user</translation>
+    </message>
+    <message>
+        <source>Tablas</source>
+        <translation>Tables</translation>
+    </message>
+    <message>
+        <source>Usuario aplicación</source>
+        <translation>Application user</translation>
+    </message>
+    <message>
+        <source>Usuario control funcional</source>
+        <translation>Functional check user</translation>
+    </message>
+    <message>
+        <source>Ruta SVN</source>
+        <translation>SVN path</translation>
+    </message>
+    <message>
+        <source>Dónde probar</source>
+        <translation>Where to test</translation>
+    </message>
+    <message>
+        <source>Aceptado</source>
+        <translation>Accepted</translation>
+    </message>
+    <message>
+        <source>observado el %1</source>
+        <translation>observed on %1</translation>
+    </message>
+    <message>
+        <source>Desarrollo</source>
+        <translation>Development</translation>
+    </message>
+    <message>
+        <source>Control funcional</source>
+        <translation>Functional check</translation>
+    </message>
+    <message>
+        <source>vencido</source>
+        <translation>overdue</translation>
+    </message>
+    <message>
+        <source>en curso</source>
+        <translation>in progress</translation>
+    </message>
+    <message>
+        <source>por empezar</source>
+        <translation>not started</translation>
+    </message>
+    <message>
+        <source>Control de calidad</source>
+        <translation>Quality control</translation>
+    </message>
+    <message>
+        <source>Recorrido</source>
+        <translation>Journey</translation>
+    </message>
+    <message>
+        <source>Ficha GESREQ</source>
+        <translation>GESREQ record</translation>
+    </message>
+    <message>
+        <source>General</source>
+        <translation>General</translation>
+    </message>
+    <message>
+        <source>1 dato</source>
+        <translation>1 field</translation>
+    </message>
+    <message>
+        <source>%1 datos</source>
+        <translation>%1 fields</translation>
+    </message>
+    <message>
+        <source>%1 · 1 vacío oculto</source>
+        <translation>%1 · 1 empty one hidden</translation>
+    </message>
+    <message>
+        <source>%1 · %2 vacíos ocultos</source>
+        <translation>%1 · %2 empty ones hidden</translation>
+    </message>
+</context>
+<context>
     <name>qaflow::RevisionPublishDialog</name>
     <message>
         <source>Publicar los planes y sus casos en Zephyr</source>
@@ -8222,14 +8443,6 @@ Create another one anyway?</translation>
     <message>
         <source>Reportar bug</source>
         <translation>Report bug</translation>
-    </message>
-    <message>
-        <source>← Último paso</source>
-        <translation>← Last step</translation>
-    </message>
-    <message>
-        <source>Reabre el último paso para cambiar su veredicto</source>
-        <translation>Reopens the last step to change its verdict</translation>
     </message>
     <message>
         <source>Repetir</source>
@@ -8698,6 +8911,38 @@ Press “Capture” or drop a file on the window.</translation>
     <message>
         <source>%1 · TERMINADA · EN PAUSA</source>
         <translation>%1 · FINISHED · PAUSED</translation>
+    </message>
+    <message>
+        <source>Finalizar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Siguiente caso →</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Archiva este caso y pasa a %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Terminar revisión</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Terminar ciclo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Archiva este caso y termina el ciclo; quedan %1 caso(s) sin terminar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Archiva este caso y termina el ciclo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Archiva la ejecución y vuelve a los casos</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

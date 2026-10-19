@@ -205,3 +205,10 @@ QTableWidget#issueListTable::item { padding: 0 8px; border: none; }
 QTableWidget#issueListTable QHeaderView { background: transparent; border: none; }
 QTableWidget#issueListTable QTableCornerButton::section { background: transparent; border: none; }
 QTableWidget#issueListTable QHeaderView::section { background: @panel; color: @muted; border: none; border-bottom: 1px solid @tint(muted,80); padding: 7px 8px; font-size: 11px; font-weight: 700; }
+QFrame#requirementRail { background: @elevated; border: none; border-right: 1px solid @border; }
+QFrame#requirementBar { background: @panel; border: none; border-bottom: 1px solid @border; }
+QPushButton#requirementJump { background: transparent; color: @muted; border: none; border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+QPushButton#requirementJump:hover { color: @text; }
+QPushButton#requirementJump[current="true"] { background: @tint(blue,36); color: @text; font-weight: 600; }
+QPushButton#requirementCopy { background: transparent; border: none; border-radius: 6px; padding: 0; }
+QPushButton#requirementCopy:hover { background: @tint(blue,24); }

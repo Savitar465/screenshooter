@@ -226,6 +226,16 @@ void drawClose(QPainter& p) {
     p.drawLine(QPointF(17, 7), QPointF(7, 17));
 }
 
+void drawCopy(QPainter& p) {
+    p.drawRoundedRect(QRectF(9, 9, 11, 11), 2, 2);
+    QPainterPath back;
+    back.moveTo(5, 15);
+    back.lineTo(5, 6);
+    back.quadTo(5, 4, 7, 4);
+    back.lineTo(15, 4);
+    p.drawPath(back);
+}
+
 void drawChevronRight(QPainter& p) {
     p.drawLine(QPointF(10, 6.5), QPointF(15.5, 12));
     p.drawLine(QPointF(15.5, 12), QPointF(10, 17.5));
@@ -274,6 +284,7 @@ QPixmap pixmap(Glyph g, const QString& color, int size) {
         case Glyph::Close: drawClose(p); break;
         case Glyph::ChevronRight: drawChevronRight(p); break;
         case Glyph::ChevronDown: drawChevronDown(p); break;
+        case Glyph::Copy: drawCopy(p); break;
     }
     return pm;
 }

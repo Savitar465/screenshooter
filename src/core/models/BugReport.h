@@ -76,6 +76,9 @@ struct BugReport {
     /// Tipo que se propone para un bug entre los que tiene el proyecto (`available`, con la ortografía
     /// del gestor): «Bug», «Error», «Defecto»… el primero que exista. Sin lista, «Bug».
     static QString defaultIssueType(const QStringList& available);
+    /// Tipos que «Traer de Jira» busca entre los del proyecto (`available`): los de bug que tenga
+    /// (`defaultIssueType` y sus equivalentes) y los de mejora. Sin lista, `jiraIssueTypes()`.
+    static QStringList trackedIssueTypes(const QStringList& available);
     /// Título propuesto a partir de lo que pasó: la primera frase del resultado actual, recortada, con
     /// la suite delante ("[Facturación] Error 500 al emitir"). Vacío si no hay resultado actual.
     static QString titleFromActual(const QString& suite, const QString& actual);

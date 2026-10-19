@@ -79,15 +79,34 @@ QString BugReport::environmentLabel(const QString& environment) {
     return environment;
 }
 
+namespace {
+/// Nombres con los que las instancias llaman a un bug, del preferido al último.
+const QStringList& bugTypeNames() {
+    static const QStringList names{QStringLiteral("Bug"), QStringLiteral("Error"), QStringLiteral("Defecto"), QStringLiteral("Defect")};
+    return names;
+}
+} // namespace
+
 QString BugReport::defaultIssueType(const QStringList& available) {
     if (available.isEmpty()) return QStringLiteral("Bug");
     // Cada instancia lo llama a su manera: se toma el nombre tal y como lo tiene el proyecto.
-    for (const QString& wanted : QStringList{QStringLiteral("Bug"), QStringLiteral("Error"), QStringLiteral("Defecto"), QStringLiteral("Defect")})
+    for (const QString& wanted : bugTypeNames())
         for (const auto& t : available)
             if (t.trimmed().compare(wanted, Qt::CaseInsensitive) == 0) return t.trimmed();
     for (const auto& t : available)
         if (!isImprovement(t)) return t.trimmed();
     return available.first().trimmed();
+}
+
+QStringList BugReport::trackedIssueTypes(const QStringList& available) {
+    if (available.isEmpty()) return jiraIssueTypes();
+    // Sólo nombres que el proyecto tiene: Jira rechaza la búsqueda entera si uno no existe.
+    QStringList out;
+    const auto add = [&out](const QString& t) { if (!t.trimmed().isEmpty() && !out.contains(t.trimmed(), Qt::CaseInsensitive)) out << t.trimmed(); };
+    add(defaultIssueType(available));
+    for (const auto& t : available)
+        if (bugTypeNames().contains(t.trimmed(), Qt::CaseInsensitive) || isImprovement(t)) add(t);
+    return out;
 }
 
 QString BugReport::titleFromActual(const QString& suite, const QString& actual) {

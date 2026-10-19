@@ -469,7 +469,7 @@ private slots:
         });
         JiraClient client;
         TrackerIssueList out; bool done = false;
-        client.searchProjectBugs(jiraSettings(server.baseUrl()), 0, 50, [&](const TrackerIssueList& r) { out = r; done = true; });
+        client.searchProjectBugs(jiraSettings(server.baseUrl()), {}, 0, 50, [&](const TrackerIssueList& r) { out = r; done = true; });
         QTRY_VERIFY(done);
         QVERIFY(out.ok);
         QCOMPARE(out.issues.size(), 1);
@@ -495,6 +495,20 @@ private slots:
         QCOMPARE(out.nextStart, -1);   // no queda nada por detrás
     }
 
+    // Con los tipos del proyecto, el JQL los busca con su nombre (y comillas escapadas).
+    void jiraSearchesTheIssueTypesItIsGiven() {
+        FakeHttpServer server;
+        server.route("GET", "/rest/api/2/search", [](const HttpRequest&) { return HttpResponse::json(200, "{\"total\":0,\"issues\":[]}"); });
+        JiraClient client;
+        TrackerIssueList out; bool done = false;
+        client.searchProjectBugs(jiraSettings(server.baseUrl()), {QStringLiteral("Error"), QStringLiteral("Mejora \"QA\"")}, 0, 50,
+                                 [&](const TrackerIssueList& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        const QString path = QUrl::fromPercentEncoding(server.requests[0].path);
+        QVERIFY2(path.contains(QStringLiteral("issuetype in (\"Error\", \"Mejora \\\"QA\\\"\")")), qPrintable(path));
+    }
+
     // Si esta instancia no llama así a sus tipos, el 400 de Jira se explica con los que se buscaron.
     void jiraSearchExplainsARejectedIssueTypeFilter() {
         FakeHttpServer server;
@@ -503,7 +517,7 @@ private slots:
         });
         JiraClient client;
         TrackerIssueList out; bool done = false;
-        client.searchProjectBugs(jiraSettings(server.baseUrl()), 0, 50, [&](const TrackerIssueList& r) { out = r; done = true; });
+        client.searchProjectBugs(jiraSettings(server.baseUrl()), {}, 0, 50, [&](const TrackerIssueList& r) { out = r; done = true; });
         QTRY_VERIFY(done);
         QVERIFY(!out.ok);
         QVERIFY2(out.error.contains(BugReport::jiraIssueTypes().join(QStringLiteral(" o "))), qPrintable(out.error));
@@ -522,7 +536,7 @@ private slots:
         });
         JiraClient client;
         TrackerIssueList out; bool done = false;
-        client.searchProjectBugs(jiraSettings(server.baseUrl()), 0, 2, [&](const TrackerIssueList& r) { out = r; done = true; });
+        client.searchProjectBugs(jiraSettings(server.baseUrl()), {}, 0, 2, [&](const TrackerIssueList& r) { out = r; done = true; });
         QTRY_VERIFY(done);
         QCOMPARE(out.issues.size(), 2);
         QCOMPARE(out.total, 3);
@@ -530,7 +544,7 @@ private slots:
         QVERIFY(out.hasMore());
 
         done = false;
-        client.searchProjectBugs(jiraSettings(server.baseUrl()), out.nextStart, 2, [&](const TrackerIssueList& r) { out = r; done = true; });
+        client.searchProjectBugs(jiraSettings(server.baseUrl()), {}, out.nextStart, 2, [&](const TrackerIssueList& r) { out = r; done = true; });
         QTRY_VERIFY(done);
         QCOMPARE(out.issues.size(), 1);
         QCOMPARE(out.issues[0].key, QStringLiteral("SHOP-3"));
@@ -623,7 +637,7 @@ private slots:
         // Y el gestor que no sabe responde por el camino corto, sin red.
         TrackerIssueList out;
         bool done = false;
-        router.searchProjectBugs(github, 0, 10, [&](const TrackerIssueList& r) { out = r; done = true; });
+        router.searchProjectBugs(github, {}, 0, 10, [&](const TrackerIssueList& r) { out = r; done = true; });
         QVERIFY(done);
         QVERIFY(!out.ok);
         QVERIFY(!out.error.isEmpty());

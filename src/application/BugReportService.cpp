@@ -253,7 +253,16 @@ void BugReportService::importFromTracker(int startAt, std::function<void(const I
         done(refused);
         return;
     }
-    m_tracker->searchProjectBugs(m_settings.tracker(), startAt, kImportPage, [this, done](const TrackerIssueList& list) {
+    // Se buscan los tipos con el nombre que tiene el proyecto («Error», «Mejora»…): un nombre que el
+    // proyecto no tiene hace que Jira rechace la búsqueda entera. Sin sus tipos, los de serie.
+    loadMetadata(false, [this, startAt, done](const MetadataResult& meta) {
+        const QStringList types = BugReport::trackedIssueTypes(meta.ok ? meta.metadata.issueTypes : QStringList{});
+        searchPage(types, startAt, done);
+    });
+}
+
+void BugReportService::searchPage(const QStringList& issueTypes, int startAt, std::function<void(const ImportResult&)> done) {
+    m_tracker->searchProjectBugs(m_settings.tracker(), issueTypes, startAt, kImportPage, [this, done](const TrackerIssueList& list) {
         ImportResult out;
         if (!list.ok) { out.error = list.error; done(out); return; }
         out.ok = true;

@@ -144,6 +144,7 @@ private:
     IssueLink linkFor(const BugReport& bug, const IssueResult& r) const;
     void retryNext(QList<QString> ids, RetryResult acc, std::function<void(const RetryResult&)> done);
     void refreshNext(QStringList keys, RefreshResult acc, std::function<void(const RefreshResult&)> done);
+    void searchPage(const QStringList& issueTypes, int startAt, std::function<void(const ImportResult&)> done);
     void closeNext(QStringList keys, CloseResult acc, std::function<void(const CloseResult&)> done);
 
     std::shared_ptr<IIssueTracker> m_tracker;

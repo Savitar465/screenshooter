@@ -28,7 +28,8 @@ public:
     void fetchIssue(const TrackerSettings& s, const QString& key, std::function<void(const TrackerIssueInfo&)> done) override;
     void updateIssue(const TrackerSettings& s, const QString& key, const TrackerIssueDraft& draft, std::function<void(const IssueResult&)> done) override;
     bool canSearchIssues(const TrackerSettings& s) const override;
-    void searchProjectBugs(const TrackerSettings& s, int startAt, int max, std::function<void(const TrackerIssueList&)> done) override;
+    void searchProjectBugs(const TrackerSettings& s, const QStringList& issueTypes, int startAt, int max,
+                           std::function<void(const TrackerIssueList&)> done) override;
     bool canCommentIssues(const TrackerSettings& s) const override;
     void commentIssue(const TrackerSettings& s, const QString& key, const QString& body, const QStringList& attachments,
                       std::function<void(const IssueResult&)> done) override;

@@ -174,8 +174,12 @@ public:
 
     bool canSearchIssues(const TrackerSettings&) const override { return searchesIssues; }
 
-    void searchProjectBugs(const TrackerSettings& s, int startAt, int max, std::function<void(const TrackerIssueList&)> done) override {
+    QList<QStringList> issueSearchTypes;            // los tipos que se pidieron en cada búsqueda
+
+    void searchProjectBugs(const TrackerSettings& s, const QStringList& issueTypes, int startAt, int max,
+                           std::function<void(const TrackerIssueList&)> done) override {
         ++issueSearchCalls;
+        issueSearchTypes << issueTypes;
         issueSearchStarts << startAt;
         if (mode == Mode::NetworkDown) {
             TrackerIssueList f;

@@ -103,6 +103,17 @@ private slots:
         QCOMPARE(BugReport::defaultIssueType({QStringLiteral("Improvement"), QStringLiteral("Incidencia")}), QStringLiteral("Incidencia"));
     }
 
+    /// Lo que «Traer de Jira» busca: los tipos de bug y de mejora que el proyecto tiene, con su nombre.
+    void trackedIssueTypesAreTheProjectOnes() {
+        QCOMPARE(BugReport::trackedIssueTypes({}), BugReport::jiraIssueTypes());
+        QCOMPARE(BugReport::trackedIssueTypes({QStringLiteral("Tarea"), QStringLiteral("error"), QStringLiteral("Mejora")}),
+                 (QStringList{QStringLiteral("error"), QStringLiteral("Mejora")}));
+        QCOMPARE(BugReport::trackedIssueTypes({QStringLiteral("Bug"), QStringLiteral("Defect"), QStringLiteral("Improvement"), QStringLiteral("Story")}),
+                 (QStringList{QStringLiteral("Bug"), QStringLiteral("Defect"), QStringLiteral("Improvement")}));
+        // Sin ninguno conocido, el que se propone al reportar: es con el que se crean.
+        QCOMPARE(BugReport::trackedIssueTypes({QStringLiteral("Incidencia"), QStringLiteral("Historia")}), QStringList{QStringLiteral("Incidencia")});
+    }
+
     void titleFromActualTakesTheFirstSentence() {
         QCOMPARE(BugReport::titleFromActual(QStringLiteral("Facturación"), QStringLiteral("aparece «Error 500» al emitir. Luego se cuelga.\nMás")),
                  QStringLiteral("[Facturación] Aparece «Error 500» al emitir"));

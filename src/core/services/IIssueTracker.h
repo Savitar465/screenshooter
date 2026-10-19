@@ -172,9 +172,11 @@ public:
     /// reportó desde este equipo. Sólo Jira, por ahora.
     virtual bool canSearchIssues(const TrackerSettings& s) const { Q_UNUSED(s); return false; }
     /// Una página de los bugs que QAflow creó en el proyecto configurado, del más reciente al más
-    /// antiguo: `max` como mucho, empezando por el que hace `startAt` (0 = el primero).
-    virtual void searchProjectBugs(const TrackerSettings& s, int startAt, int max, std::function<void(const TrackerIssueList&)> done) {
-        Q_UNUSED(s); Q_UNUSED(startAt); Q_UNUSED(max);
+    /// antiguo: `max` como mucho, empezando por el que hace `startAt` (0 = el primero). `issueTypes`
+    /// son los tipos que se buscan, con el nombre que les da el proyecto (`BugReport::trackedIssueTypes`).
+    virtual void searchProjectBugs(const TrackerSettings& s, const QStringList& issueTypes, int startAt, int max,
+                                   std::function<void(const TrackerIssueList&)> done) {
+        Q_UNUSED(s); Q_UNUSED(issueTypes); Q_UNUSED(startAt); Q_UNUSED(max);
         TrackerIssueList out;
         out.error = QCoreApplication::translate("core", "Este gestor no sabe buscar los bugs de QAflow");
         done(out);

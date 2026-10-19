@@ -397,7 +397,8 @@ void JiraClient::fetchIssue(const TrackerSettings& s, const QString& key, std::f
     });
 }
 
-void JiraClient::searchProjectBugs(const TrackerSettings& s, int startAt, int max, std::function<void(const TrackerIssueList&)> done) {
+void JiraClient::searchProjectBugs(const TrackerSettings& s, const QStringList& issueTypes, int startAt, int max,
+                                   std::function<void(const TrackerIssueList&)> done) {
     TrackerIssueList fail;
     if (const QString missing = missingCredentials(s); !missing.isEmpty()) { fail.error = missing; done(fail); return; }
     const QString project = s.project.trimmed();
@@ -407,15 +408,17 @@ void JiraClient::searchProjectBugs(const TrackerSettings& s, int startAt, int ma
         return;
     }
     // Los bugs que crea QAflow llevan siempre su etiqueta: eso es lo que los distingue de los que
-    // abre cualquier otro en el mismo proyecto. Y de los suyos, los que se siguen aquí: errores y mejoras.
+    // abre cualquier otro en el mismo proyecto. Y de los suyos, los que se siguen aquí: errores y mejoras,
+    // con el nombre que les da el proyecto.
+    const QStringList types = issueTypes.isEmpty() ? BugReport::jiraIssueTypes() : issueTypes;
     QStringList quoted;
-    for (const auto& t : BugReport::jiraIssueTypes()) quoted << QLatin1Char('"') + t + QLatin1Char('"');
+    for (const auto& t : types) quoted << QLatin1Char('"') + QString(t).replace(QLatin1Char('"'), QStringLiteral("\\\"")) + QLatin1Char('"');
     const QString jql = QStringLiteral("project = \"%1\" AND labels = qaflow AND issuetype in (%2) ORDER BY created DESC")
                             .arg(project, quoted.join(QStringLiteral(", ")));
     const QString path = QStringLiteral("/rest/api/2/search?jql=%1&startAt=%2&maxResults=%3&fields=summary,status,created,labels,issuetype")
                              .arg(QString::fromUtf8(QUrl::toPercentEncoding(jql)), QString::number(std::max(0, startAt)),
                                   QString::number(std::clamp(max, 1, 100)));
-    get(request(s, path), [s, startAt, done](const Response& r) {
+    get(request(s, path), [s, types, startAt, done](const Response& r) {
         if (!r.ok) {
             TrackerIssueList f;
             f.error = errorFor(s, r);
@@ -423,7 +426,7 @@ void JiraClient::searchProjectBugs(const TrackerSettings& s, int startAt, int ma
             // mensaje de Jira no se entiende si no se sabe de dónde salen esos nombres.
             if (r.status == 400)
                 f.error = QCoreApplication::translate("infrastructure", "Jira rechazó la búsqueda de incidencias de tipo %1 · %2")
-                              .arg(BugReport::jiraIssueTypes().join(QStringLiteral(" o ")), f.error);
+                              .arg(types.join(QStringLiteral(" o ")), f.error);
             done(f);
             return;
         }

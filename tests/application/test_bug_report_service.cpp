@@ -289,6 +289,21 @@ private slots:
         QVERIFY(!f.tracker->comments.last().isEmpty());
     }
 
+    /// «Traer de Jira» busca los tipos con el nombre que les da el proyecto: uno donde el bug se llama
+    /// «Error» y la mejora «Mejora» no tiene «Bug» ni «Improvement», y Jira rechazaría la búsqueda.
+    void importSearchesTheIssueTypesOfTheProject() {
+        AppFixture f;
+        f.tracker->metadataToReturn.issueTypes = {QStringLiteral("Tarea"), QStringLiteral("Error"), QStringLiteral("Mejora"), QStringLiteral("Epic")};
+        BugReportService::ImportResult r;
+        f.bugs.importFromTracker(0, [&](const BugReportService::ImportResult& x) { r = x; });
+        QVERIFY(r.ok);
+        QCOMPARE(f.tracker->issueSearchTypes.last(), (QStringList{QStringLiteral("Error"), QStringLiteral("Mejora")}));
+        // La página siguiente no vuelve a preguntar los tipos: ya están.
+        const int calls = f.tracker->metadataCalls;
+        f.bugs.importFromTracker(50, [&](const BugReportService::ImportResult& x) { r = x; });
+        QCOMPARE(f.tracker->metadataCalls, calls);
+    }
+
     /// La pantalla de bugs trae del gestor los que creó QAflow: los que ya están se actualizan con
     /// lo que diga hoy Jira y los que no (reportados desde otro equipo) entran en el libro, con su
     /// caso sacado de las etiquetas.
@@ -318,6 +333,7 @@ private slots:
         QVERIFY(f.bugs.canImportFromTracker());
         f.bugs.importFromTracker(0, [&](const BugReportService::ImportResult& x) { r = x; });
         QVERIFY(r.ok);
+        QCOMPARE(f.tracker->issueSearchTypes.last(), BugReport::jiraIssueTypes());   // el proyecto no dijo sus tipos
         QCOMPARE(r.updated, 1);
         QCOMPARE(r.imported, 1);
         QCOMPARE(r.total, 2);

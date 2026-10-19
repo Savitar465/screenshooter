@@ -37,6 +37,9 @@ namespace {
 constexpr int kInspectorWidth = 380;
 constexpr int kFilmCardWidth = 156;   // miniatura de la tira bajo el visor
 constexpr int kActionHeight = 40;     // alto de los botones del pie: veredictos, capturar, bug, flechas
+// Lo que se desplaza en el inspector cede hasta este alto (el de un QScrollArea, 68 px, se suma a las
+// pestañas y al pie y, con la letra de macOS, la ventana no bajaba de 420 px).
+constexpr int kScrollMinHeight = 32;
 
 QString resultColor(StepResult r) {
     switch (r) {
@@ -555,6 +558,7 @@ QWidget* RunView::buildInspector() {
     QVBoxLayout* listLayout;
     m_stepsScroll = ui::scrollArea(&list, &listLayout);
     m_stepsScroll->setObjectName(QStringLiteral("stepsScroll"));
+    m_stepsScroll->setMinimumHeight(kScrollMinHeight);
     m_stepsLayout = listLayout;
     m_stepsLayout->setSpacing(4);
     m_stepsLayout->addStretch(1);
@@ -571,6 +575,7 @@ QWidget* RunView::buildInspector() {
     QVBoxLayout* bugsLayout;
     auto* bugsScroll = ui::scrollArea(&bugsList, &bugsLayout);
     bugsScroll->setObjectName(QStringLiteral("bugsScroll"));
+    bugsScroll->setMinimumHeight(kScrollMinHeight);
     m_bugsLayout = bugsLayout;
     m_bugsLayout->setSpacing(8);
     m_bugsEmpty = ui::label(tr("Todavía no se ha reportado ningún bug de este caso.\nAl reportar uno queda aquí, con el paso del que salió."), "muted-sm");
@@ -595,6 +600,7 @@ QWidget* RunView::buildInspector() {
     QVBoxLayout* casesLayout;
     m_casesScroll = ui::scrollArea(&casesList, &casesLayout);
     m_casesScroll->setObjectName(QStringLiteral("casesScroll"));
+    m_casesScroll->setMinimumHeight(kScrollMinHeight);
     m_casesLayout = casesLayout;
     m_casesLayout->setSpacing(4);
     m_casesLayout->addStretch(1);
@@ -629,6 +635,7 @@ QWidget* RunView::buildStepPage() {
     QVBoxLayout* dv;
     auto* sheetScroll = ui::scrollArea(&sheet, &dv);
     sheetScroll->setObjectName(QStringLiteral("stepSheet"));
+    sheetScroll->setMinimumHeight(kScrollMinHeight);
     dv->setSpacing(14);
     dv->setContentsMargins(0, 4, 8, 12);
     auto* counterRow = new QWidget;

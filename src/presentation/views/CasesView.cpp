@@ -198,6 +198,7 @@ QWidget* CasesView::buildListPane() {
 
     QWidget* content;
     auto* sa = ui::scrollArea(&content, &m_listLayout);
+    sa->setMinimumHeight(32);   // con la cabecera de filtros encima, el mínimo de un QScrollArea (68 px) pesa en una ventana baja
     m_listLayout->setContentsMargins(10, 0, 10, 16);
     m_listLayout->setSpacing(4);
     v->addWidget(sa, 1);

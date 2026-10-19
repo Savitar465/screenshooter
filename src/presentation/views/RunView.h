@@ -75,6 +75,8 @@ signals:
     void reportBugRequested(int stepIndex);
     /// Escribir un caso nuevo para el plan del ciclo en curso (y que entre en él).
     void newCaseRequested();
+    /// Cerrar el caso terminado: se archiva y se pasa al siguiente del ciclo, o se termina.
+    void finishRequested();
     void toast(const QString& message, const QString& color);
     /// El modo foco cambió: la ventana esconde (o recupera) su rail, su barra y su barra de estado.
     void focusModeChanged(bool on);
@@ -211,7 +213,7 @@ private:
     // Inspector: el pie
     QWidget* m_verdicts;
     QWidget* m_doneActions;
-    QPushButton* m_reopen;
+    QPushButton* m_finishCase;   // «Siguiente caso» o «Terminar revisión», con el caso terminado
     QPushButton* m_capture;
     QLabel* m_captureShortcut;
     QPushButton* m_reportBug;

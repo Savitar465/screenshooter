@@ -279,10 +279,6 @@ QWidget* MainWindow::buildNavbar() {
     m_navStop->setAccessibleName(tr("Detener ejecución"));
     connect(m_navStop, &QPushButton::clicked, this, &MainWindow::stopRun);
     h->addWidget(m_navStop);
-    m_navFinish = ui::button(tr("Finalizar caso"), "primary");
-    m_navFinish->setObjectName(QStringLiteral("navbarFinish"));
-    connect(m_navFinish, &QPushButton::clicked, this, &MainWindow::finishRun);
-    h->addWidget(m_navFinish);
     return bar;
 }
 
@@ -342,13 +338,7 @@ void MainWindow::refreshNavbar() {
     m_navRun->setToolTip(runTip);
     m_navRun->setAccessibleName(!executing ? tr("Ejecutar selección") : paused ? tr("Reanudar ejecución") : tr("Pausar ejecución"));
     m_navStop->setEnabled(executing && !capturing);
-    // Cerrar el caso terminado: pasa al siguiente o termina el plan. Una revisión no se cierra aquí: se
-    // deja eligiendo otro caso de la lista, o con ■, que pregunta si guardar la corrección.
-    m_navFinish->setVisible(executing && run.state().finished && !run.isReviewing());
-    m_navFinish->setEnabled(!capturing && !paused);
-    m_navFinish->setText(run.queuedCount() > 0 ? tr("Siguiente caso · quedan %1").arg(run.queuedCount())
-                         : !run.planRunId().isEmpty() ? tr("Terminar plan y ver informe")
-                                                      : tr("Finalizar y volver"));
+    // Cerrar el caso terminado (pasar al siguiente o terminar) se hace al pie de la ejecución.
     m_navStatus->setVisible(executing);
     m_navStatus->setText(tr("%1 · %2").arg(run.state().caseId, paused ? tr("En pausa")
                                                                : run.state().finished ? tr("Listo para finalizar") : tr("En ejecución")));
@@ -979,6 +969,7 @@ void MainWindow::wireRun() {
     connect(m_run, &RunView::captureRequested, this, &MainWindow::captureScreen);
     connect(m_run, &RunView::reportBugRequested, this, &MainWindow::reportBug);
     connect(m_run, &RunView::newCaseRequested, this, &MainWindow::createCaseForRun);
+    connect(m_run, &RunView::finishRequested, this, &MainWindow::finishRun);
     // El modo foco deja la evidencia sola: la ventana esconde su marco mientras dura.
     connect(m_run, &RunView::focusModeChanged, this, [this](bool on) {
         m_sidebar->setVisible(!on);
@@ -1269,6 +1260,21 @@ void MainWindow::finishRun() {
         return;
     }
     const QString planRunId = m_ctx.run->planRunId();
+    // Sin un caso detrás del de pantalla se termina el ciclo; si quedan otros atrás, sin terminar, se pregunta.
+    if (!planRunId.isEmpty() && m_ctx.run->nextCase().isEmpty() && m_ctx.run->queuedCount() > 0) {
+        QStringList pending;
+        for (const auto& id : m_ctx.run->planCases()) {
+            if (!m_ctx.run->isQueued(id)) continue;
+            const RunState* parked = m_ctx.run->parkedRun(id);
+            pending << (parked ? tr("%1 (en pausa, %2/%3 pasos)").arg(id).arg(parked->markedCount()).arg(parked->results.size())
+                               : tr("%1 (sin empezar)").arg(id));
+        }
+        if (QMessageBox::question(this, tr("Terminar el ciclo %1").arg(planRunId),
+                                  tr("Quedan casos sin terminar: %1.\n\nLos que están en pausa se archivan con lo marcado (lo "
+                                     "pendiente queda N/A) y los no empezados quedan sin ejecutar. ¿Terminar el ciclo?")
+                                      .arg(pending.join(QStringLiteral(", ")))) != QMessageBox::Yes)
+            return;
+    }
     if (m_ctx.run->finish()) {
         showToast(tr("Siguiente caso del plan · quedan %1").arg(m_ctx.run->queuedCount() + 1), theme::Green);
         return;

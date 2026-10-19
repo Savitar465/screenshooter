@@ -140,8 +140,13 @@ public:
     bool reviewCase(const QString& caseId);
     /// Corrige (o pone) el veredicto de un paso desde la lista, sin moverse de sitio.
     void setResult(int index, StepResult result);
-    /// Cierra la ejecución archivándola —con lo marcado hasta ahora si quedan pasos pendientes—.
-    /// Devuelve true si arrancó el siguiente caso de la cola.
+    /// Caso de la cola que va detrás del de pantalla en el orden del ciclo: al que lleva «Siguiente
+    /// caso». Vacío si el de pantalla es el último por hacer (aunque queden atrás otros sin terminar).
+    QString nextCase() const;
+    /// Cierra la ejecución archivándola —con lo marcado hasta ahora si quedan pasos pendientes— y pasa
+    /// al siguiente caso (`nextCase`). Sin siguiente se termina el ciclo, aunque queden casos atrás: los
+    /// aparcados se archivan con lo marcado (como al detenerlo guardando) y los no empezados quedan sin
+    /// ejecutar. Devuelve true si arrancó el siguiente caso.
     bool finish();
     /// Detiene la ejecución y cierra su ciclo. `keepProgress` archiva lo hecho: el caso en pantalla y
     /// los aparcados con lo que tengan marcado (lo pendiente, N/A; una revisión sin cambios, nada). Sin

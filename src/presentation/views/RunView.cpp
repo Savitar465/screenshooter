@@ -682,16 +682,18 @@ QWidget* RunView::buildFooter() {
     // Mismo hueco cuando la ejecución ya ha terminado.
     m_doneActions = new QWidget;
     auto* dh = ui::hbox(m_doneActions, 0, 8);
-    m_reopen = ui::button(tr("← Último paso"), "outline");
-    m_reopen->setMinimumHeight(kActionHeight);
-    m_reopen->setToolTip(tr("Reabre el último paso para cambiar su veredicto"));
-    connect(m_reopen, &QPushButton::clicked, this, [this]() { m_run.back(); });
-    dh->addWidget(m_reopen, 1);
     auto* repeat = ui::button(tr("Repetir"), "outline");
+    repeat->setObjectName(QStringLiteral("runRepeat"));
     repeat->setMinimumHeight(kActionHeight);
     repeat->setToolTip(tr("Vuelve a ejecutar el caso desde el primer paso"));
     connect(repeat, &QPushButton::clicked, this, [this]() { m_run.restart(); });
     dh->addWidget(repeat, 1);
+    // Cerrar el caso terminado: lleva al siguiente del ciclo o, si éste es el último, termina.
+    m_finishCase = ui::button(tr("Finalizar"), "primary");
+    m_finishCase->setObjectName(QStringLiteral("runFinishCase"));
+    m_finishCase->setMinimumHeight(kActionHeight);
+    connect(m_finishCase, &QPushButton::clicked, this, &RunView::finishRequested);
+    dh->addWidget(m_finishCase, 1);
     v->addWidget(m_doneActions);
 
     // Capturar, el bug (en cualquier momento de la ejecución, no sólo al terminarla: el paso que
@@ -863,7 +865,21 @@ void RunView::refresh() {
         m_expected->setText(summary);
         m_focusCounter->setText(tr("TERMINADA"));
         m_focusAction->setFullText(QStringLiteral("%1 · %2").arg(text, summary));
-        m_reopen->setVisible(r.markedCount() > 0);
+        // «Siguiente caso» sólo si hay uno detrás de éste; si no, se termina (aunque queden otros atrás).
+        const QString next = m_run.nextCase();
+        const PlanRun* cycle = m_run.planRunId().isEmpty() ? nullptr : m_history.findPlan(m_run.planRunId());
+        if (!next.isEmpty()) {
+            m_finishCase->setText(tr("Siguiente caso →"));
+            m_finishCase->setToolTip(tr("Archiva este caso y pasa a %1").arg(next));
+        } else if (cycle) {
+            m_finishCase->setText(m_run.isReviewing() || !cycle->issueId.isEmpty() ? tr("Terminar revisión") : tr("Terminar ciclo"));
+            m_finishCase->setToolTip(m_run.queuedCount() > 0
+                                         ? tr("Archiva este caso y termina el ciclo; quedan %1 caso(s) sin terminar").arg(m_run.queuedCount())
+                                         : tr("Archiva este caso y termina el ciclo"));
+        } else {
+            m_finishCase->setText(tr("Finalizar"));
+            m_finishCase->setToolTip(tr("Archiva la ejecución y vuelve a los casos"));
+        }
     }
     m_stepsTab->setText(tr("Pasos · %1").arg(total));
 
@@ -1251,11 +1267,8 @@ void RunView::refreshCases() {
     // Lo que ya se archivó en este ciclo: la última ejecución de cada caso, con su veredicto.
     QHash<QString, RunRecord> archived;
     for (const auto& run : m_history.runsForPlan(m_run.planRunId())) archived.insert(run.caseId, run);
-    int done = 0;
-    // El que se está revisando ya cuenta: está archivado, sólo se mira (o se corrige).
-    for (const auto& id : cases)
-        if (archived.contains(id) && (id != m_run.state().caseId || m_run.isReviewing()) && !m_run.isQueued(id)) ++done;
-    m_casesTab->setText(tr("Casos · %1/%2").arg(done).arg(cases.size()));
+    // En qué caso del ciclo se está, no cuántos van hechos: al saltar de uno a otro es lo que orienta.
+    m_casesTab->setText(tr("Casos · %1/%2").arg(cases.indexOf(m_run.state().caseId) + 1).arg(cases.size()));
 
     QWidget* currentCard = nullptr;
     for (const auto& id : cases) {

@@ -626,14 +626,35 @@ void RunController::closePlan() {
     emit planCompleted(id);
 }
 
+QString RunController::nextCase() const {
+    if (m_queue.isEmpty()) return QString();
+    // La cola va en el orden del ciclo; lo que queda detrás del caso de pantalla (porque se saltó a éste
+    // desde la lista) no es «el siguiente».
+    const QStringList order = planCases();
+    const int current = order.indexOf(m_run.caseId);
+    if (current < 0) return m_queue.first();
+    for (const auto& id : m_queue)
+        if (order.indexOf(id) > current || order.indexOf(id) < 0) return id;
+    return QString();
+}
+
 bool RunController::finish() {
     if (m_run.caseId.isEmpty() || m_run.paused) return false;
+    const QString next = nextCase();
     commitRun(true);
-    if (!m_queue.isEmpty()) {
-        enterCase(m_queue.takeFirst());
+    if (!next.isEmpty()) {
+        m_queue.removeAll(next);
+        enterCase(next);
         changed();
         return true;
     }
+    // Sin siguiente se termina el ciclo: lo que se dejó a medias atrás se archiva con lo marcado.
+    for (const auto& p : std::as_const(m_parked)) {
+        m_run = p.run;
+        m_continuesRunId = p.continuesRunId;
+        commitRun(true);
+    }
+    m_parked.clear();
     m_run = RunState{};
     closePlan();
     changed();

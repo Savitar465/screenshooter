@@ -965,7 +965,7 @@ private slots:
         f.window->navigate(Screen::Run);
         f.app.run.mark(StepResult::Pass);
         QTRY_VERIFY(casesTab->isVisible());
-        QCOMPARE(casesTab->text(), QStringLiteral("Casos · 0/3"));
+        QCOMPARE(casesTab->text(), QStringLiteral("Casos · 1/3"));   // en qué caso se está
         casesTab->click();
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         auto* target = f.window->findChild<QFrame*>(QStringLiteral("caseCard-TC-107"));
@@ -1044,9 +1044,8 @@ private slots:
         QTRY_COMPARE(f.app.run.state().caseId, QStringLiteral("TC-104"));
         QVERIFY(f.app.run.isReviewing());
         QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("runStepTab"))->isChecked());
-        // Una revisión no tiene botón propio para cerrarla: ni en la pantalla ni en la barra de herramientas.
-        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("runFinish")));
-        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("navbarFinish"))->isHidden());
+        // Sin cambios no está terminada: no hay nada que cerrar todavía.
+        QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("runFinishCase"))->isHidden());
         // El caso revisado enseña lo suyo: su captura, y ni la de TC-103 ni su bug.
         QTRY_VERIFY(shotIds().contains(901));
         QVERIFY(!shotIds().contains(902));
@@ -1585,8 +1584,8 @@ private slots:
         auto* targets = f.window->findChild<QComboBox*>(QStringLiteral("runTargetSelector"));
         auto* run = f.window->findChild<QPushButton*>(QStringLiteral("navbarRun"));
         auto* stop = f.window->findChild<QPushButton*>(QStringLiteral("navbarStop"));
-        auto* finish = f.window->findChild<QPushButton*>(QStringLiteral("navbarFinish"));
-        QVERIFY(targets && run && stop && finish);
+        QVERIFY(targets && run && stop);
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("navbarFinish")));   // se cierra al pie de la ejecución
         QVERIFY(run->isEnabled());
         QVERIFY(!stop->isEnabled());
         targets->setCurrentIndex(targets->findData(QStringLiteral("case:TC-103")));
@@ -1603,8 +1602,10 @@ private slots:
         run->click();
         QVERIFY(!f.app.run.isPaused());
         f.app.run.mark(StepResult::Pass);
+        auto* finish = f.window->findChild<QPushButton*>(QStringLiteral("runFinishCase"));
+        QVERIFY(finish);
         QVERIFY(!finish->isHidden());
-        QCOMPARE(finish->text(), QStringLiteral("Finalizar y volver"));
+        QCOMPARE(finish->text(), QStringLiteral("Finalizar"));
         finish->click();
         QVERIFY(f.app.run.state().caseId.isEmpty());
         QVERIFY(run->isEnabled());

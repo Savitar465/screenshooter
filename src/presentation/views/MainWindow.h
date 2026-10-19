@@ -239,7 +239,6 @@ private:
     QTimer* m_actionsRefresh = nullptr;   // agrupa las ediciones de un caso tecla a tecla (ver updateActions)
     QPushButton* m_navRun = nullptr;
     QPushButton* m_navStop = nullptr;
-    QPushButton* m_navFinish = nullptr;
     QPushButton* m_navStatus = nullptr;
     QAction* m_actCapture = nullptr;
     QAction* m_actRecord = nullptr;

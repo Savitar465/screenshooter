@@ -81,6 +81,23 @@ private slots:
         QVERIFY(!store.findPending(id));
     }
 
+    /// Los usuarios del último parte van delante, sin repetirse (da igual cómo se escriban) y sin pasar
+    /// del máximo; un parte sin usuarios no toca la lista.
+    void recentUsersKeepTheLastOnesFirst() {
+        BugStore store(std::make_shared<MemoryBugRepository>());
+        store.load();
+        store.rememberUsers({TestUser{QStringLiteral("qa.cajero"), QStringLiteral("Cajero")}, TestUser{QStringLiteral(" "), QStringLiteral("x")}});
+        store.rememberUsers({TestUser{QStringLiteral("qa.admin"), {}}, TestUser{QStringLiteral("QA.Cajero"), QStringLiteral("Supervisor")}});
+        QCOMPARE(store.recentUsers().size(), 2);
+        QCOMPARE(store.recentUsers()[0].user, QStringLiteral("qa.admin"));
+        QCOMPARE(store.recentUsers()[1].role, QStringLiteral("Supervisor"));   // el último rol con el que se usó
+        store.rememberUsers({});
+        QCOMPARE(store.recentUsers().size(), 2);
+        for (int i = 0; i < BugStore::kRecentUsers + 3; ++i) store.rememberUsers({TestUser{QStringLiteral("u%1").arg(i), {}}});
+        QCOMPARE(store.recentUsers().size(), BugStore::kRecentUsers);
+        QCOMPARE(store.recentUsers().first().user, QStringLiteral("u%1").arg(BugStore::kRecentUsers + 2));
+    }
+
     void ledgerRoundTripsThroughRepository() {
         auto repo = std::make_shared<MemoryBugRepository>();
         {

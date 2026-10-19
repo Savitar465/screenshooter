@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSaveFile>
 
 namespace qaflow {
@@ -15,12 +16,34 @@ namespace {
 QString iso(const QDateTime& dt) { return dt.isValid() ? dt.toString(Qt::ISODate) : QString(); }
 QStringList strings(const QJsonValue& v) { QStringList out; for (const auto& x : v.toArray()) out << x.toString(); return out; }
 
+QJsonArray usersToJson(const QList<TestUser>& users) {
+    QJsonArray out;
+    for (const auto& u : users) out.append(QJsonObject{{"user", u.user}, {"role", u.role}});
+    return out;
+}
+QList<TestUser> usersFromJson(const QJsonValue& v) {
+    QList<TestUser> out;
+    for (const auto& x : v.toArray()) out << TestUser{x.toObject()["user"].toString(), x.toObject()["role"].toString()};
+    return out;
+}
+/// Los pasos son una lista; los partes guardados antes eran un texto con una línea por paso ("1. abrir").
+QStringList stepsFromJson(const QJsonValue& v) {
+    if (v.isArray()) return strings(v);
+    static const QRegularExpression number(QStringLiteral("^\\s*\\d+[.)]\\s*"));
+    QStringList out;
+    for (QString line : v.toString().split(QLatin1Char('\n'))) {
+        line.remove(number);
+        if (!line.trimmed().isEmpty()) out << line.trimmed();
+    }
+    return out;
+}
+
 QJsonObject reportToJson(const BugReport& b) {
     return QJsonObject{
         {"title", b.title}, {"severity", b.severity}, {"classification", b.classification}, {"environment", b.environment},
         {"linkedCaseId", b.linkedCaseId}, {"linkedStep", b.linkedStep}, {"linkedStoryKey", b.linkedStoryKey},
         {"linkedRunId", b.linkedRunId}, {"linkedPlanRunId", b.linkedPlanRunId},
-        {"stepsToReproduce", b.stepsToReproduce}, {"expected", b.expected}, {"actual", b.actual},
+        {"stepsToReproduce", QJsonArray::fromStringList(b.stepsToReproduce)}, {"testUsers", usersToJson(b.testUsers)}, {"expected", b.expected}, {"actual", b.actual},
         {"attachmentPaths", QJsonArray::fromStringList(b.attachmentPaths)},
         {"issueType", b.issueType}, {"priority", b.priority}, {"assigneeId", b.assigneeId}, {"assigneeName", b.assigneeName},
         {"components", QJsonArray::fromStringList(b.components)}, {"affectsVersions", QJsonArray::fromStringList(b.affectsVersions)},
@@ -39,7 +62,8 @@ BugReport reportFromJson(const QJsonObject& o) {
     b.linkedStoryKey = o["linkedStoryKey"].toString();
     b.linkedRunId = o["linkedRunId"].toString();
     b.linkedPlanRunId = o["linkedPlanRunId"].toString();
-    b.stepsToReproduce = o["stepsToReproduce"].toString();
+    b.stepsToReproduce = stepsFromJson(o["stepsToReproduce"]);
+    b.testUsers = usersFromJson(o["testUsers"]);
     b.expected = o["expected"].toString();
     b.actual = o["actual"].toString();
     b.attachmentPaths = strings(o["attachmentPaths"]);
@@ -110,6 +134,7 @@ std::optional<BugLedger> JsonBugRepository::loadLedger() {
     const auto o = doc.object();
     for (const auto& v : o["issues"].toArray()) l.issues.append(issueFromJson(v.toObject()));
     for (const auto& v : o["pending"].toArray()) l.pending.append(pendingFromJson(v.toObject()));
+    l.recentUsers = usersFromJson(o["recentUsers"]);
     return l;
 }
 
@@ -120,7 +145,7 @@ bool JsonBugRepository::saveLedger(const BugLedger& ledger) {
     QDir().mkpath(QFileInfo(m_path).absolutePath());
     QSaveFile f(m_path);
     if (!f.open(QIODevice::WriteOnly)) return false;
-    f.write(QJsonDocument(QJsonObject{{"issues", issues}, {"pending", pending}}).toJson(QJsonDocument::Indented));
+    f.write(QJsonDocument(QJsonObject{{"issues", issues}, {"pending", pending}, {"recentUsers", usersToJson(ledger.recentUsers)}}).toJson(QJsonDocument::Indented));
     return f.commit();
 }
 

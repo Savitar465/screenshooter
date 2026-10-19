@@ -30,7 +30,38 @@ private slots:
         QCOMPARE(d.linkedRunId, f.run.state().runId);   // de qué pruebas sale el bug
         QCOMPARE(d.linkedPlanRunId, f.run.planRunId());
         QCOMPARE(d.priority, QStringLiteral("Medium"));   // severidad Mayor por defecto
-        QVERIFY(d.stepsToReproduce.startsWith(QStringLiteral("1. ")));
+        // Los pasos para reproducir no son los del caso: se escriben (o se importan) en el parte.
+        QVERIFY(d.stepsToReproduce.isEmpty());
+        QCOMPARE(f.bugs.caseSteps().size(), 4);
+        QVERIFY(!f.bugs.caseSteps().first().startsWith(QStringLiteral("1.")));
+        QCOMPARE(d.environment, BugReport().environment);   // sin ciclo, el de siempre
+    }
+
+    /// El ambiente del parte es el del ciclo en el que se está probando, aunque no sea de los de serie.
+    void draftTakesTheEnvironmentOfTheCycle() {
+        AppFixture f;
+        f.run.startSequence({QStringLiteral("TC-104")}, QStringLiteral("Regresión"), QString(), QStringLiteral("PRE"));
+        f.run.mark(StepResult::Fail);
+        const BugReport d = f.bugs.draftFromCurrentContext();
+        QCOMPARE(d.environment, QStringLiteral("PRE"));
+        QCOMPARE(f.bugs.cycleEnvironment(), QStringLiteral("PRE"));
+        QCOMPARE(f.bugs.cycleName(), QStringLiteral("Regresión"));
+    }
+
+    /// El título se propone con lo escrito: primero el que sale del resultado actual, después el del paso.
+    void titleSuggestionsComeFromTheActualResultAndTheStep() {
+        AppFixture f;
+        f.store.select(QStringLiteral("TC-104"));
+        f.run.start(QStringLiteral("TC-104"));
+        f.run.mark(StepResult::Fail);
+        BugReport b = f.bugs.draftFromCurrentContext();
+        b.actual = QStringLiteral("el total no cambia. Nada más");
+        const QStringList titles = f.bugs.titleSuggestions(b);
+        QCOMPARE(titles.size(), 2);
+        QCOMPARE(titles[0], QStringLiteral("[Checkout] El total no cambia"));
+        QVERIFY(titles[1].contains(QStringLiteral("Falla en paso 1")));
+        b.actual.clear();
+        QCOMPARE(f.bugs.titleSuggestions(b).size(), 1);
     }
 
     /// Un paso bloqueado da un parte bloqueante, y quien lo abre puede pedir otro paso distinto
@@ -64,6 +95,7 @@ private slots:
         f.run.mark(StepResult::Fail);
         BugReport b = f.bugs.draftFromCurrentContext();
         b.title = QStringLiteral("Falla el cupón"); b.actual = QStringLiteral("no descuenta");
+        b.testUsers = {TestUser{QStringLiteral("qa.cajero"), QStringLiteral("Cajero")}};
         BugReportService::SubmitResult out;
         f.bugs.submit(b, [&](const BugReportService::SubmitResult& r) { out = r; });
         QVERIFY(out.ok);
@@ -80,6 +112,7 @@ private slots:
         QCOMPARE(l.title, QStringLiteral("Falla el cupón"));
         QCOMPARE(f.bugLedger.issuesForCase(QStringLiteral("TC-104")).size(), 1);
         QVERIFY(f.bugLedger.pending().isEmpty());
+        QCOMPARE(f.bugs.recentUsers(), b.testUsers);   // se proponen en el próximo parte
     }
 
     void networkFailureQueuesTheBug() {

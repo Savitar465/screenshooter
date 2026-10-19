@@ -38,6 +38,10 @@ public:
     int queuedCount() const { return m_queue.size(); }
     /// Id de la ejecución de plan en curso (vacío si el caso se ejecuta suelto).
     QString planRunId() const { return m_planRunId; }
+    /// Ambiente en el que se prueba el ciclo en curso ("QA", "PRE"…); vacío sin ciclo o si no se indicó.
+    QString planEnvironment() const;
+    /// Nombre del ciclo en curso; vacío si el caso se ejecuta suelto.
+    QString planName() const;
     /// Ejecución fallada o bloqueada que retoma la que está en curso; vacío si el caso se ejecuta entero.
     QString continuesRunId() const { return m_continuesRunId; }
     /// Casos de la continuación que todavía no se han retomado (los que siguen en la cola).

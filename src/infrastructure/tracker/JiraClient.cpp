@@ -127,8 +127,36 @@ void JiraClient::createIssue(const TrackerSettings& s, const BugReport& bug, std
         if (!versions.isEmpty()) fields["versions"] = versions;
     }
 
-    postJson(request(s, QStringLiteral("/rest/api/2/issue")), QJsonDocument(QJsonObject{{"fields", fields}}), [this, s, bug, done](const Response& r) {
-        if (!r.ok) { IssueResult f; f.error = errorFor(s, r); f.retryable = r.retryable; done(f); return; }
+    postIssue(s, bug, fields, false, std::move(done));
+}
+
+void JiraClient::postIssue(const TrackerSettings& s, const BugReport& bug, QJsonObject fields, bool retried,
+                           std::function<void(const IssueResult&)> done) {
+    postJson(request(s, QStringLiteral("/rest/api/2/issue")), QJsonDocument(QJsonObject{{"fields", fields}}), [this, s, bug, fields, retried, done](const Response& r) mutable {
+        if (!r.ok) {
+            // Jira dice qué campo rechaza en `errors`; si todos son de los que el bug puede no llevar,
+            // se reintenta sin ellos. Las etiquetas no: sin «qaflow» el bug no vuelve con «Traer de Jira».
+            static const QStringList optional{QStringLiteral("components"), QStringLiteral("versions"), QStringLiteral("priority"),
+                                              QStringLiteral("assignee")};
+            const QJsonObject errors = r.json.object()[QStringLiteral("errors")].toObject();
+            QStringList dropped;
+            bool onlyOptional = !errors.isEmpty();
+            for (auto it = errors.begin(); it != errors.end(); ++it) {
+                if (optional.contains(it.key()) && fields.contains(it.key())) dropped << QStringLiteral("%1: %2").arg(it.key(), it.value().toString());
+                else onlyOptional = false;
+            }
+            if (r.status == 400 && !retried && onlyOptional && !dropped.isEmpty()) {
+                for (auto it = errors.begin(); it != errors.end(); ++it) fields.remove(it.key());
+                postIssue(s, bug, fields, true, [dropped, done](IssueResult res) {
+                    if (res.ok)
+                        res.warning = QCoreApplication::translate("infrastructure", "%1 se creó sin lo que Jira rechazó · %2")
+                                          .arg(res.key, dropped.join(QStringLiteral(" · ")));
+                    done(res);
+                });
+                return;
+            }
+            IssueResult f; f.error = errorFor(s, r); f.retryable = r.retryable; done(f); return;
+        }
         IssueResult res;
         res.ok = true;
         res.key = r.json.object()[QStringLiteral("key")].toString();

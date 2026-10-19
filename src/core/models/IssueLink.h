@@ -50,6 +50,9 @@ struct PendingBug {
 struct BugLedger {
     QList<IssueLink> issues;
     QList<PendingBug> pending;
+    /// Usuarios del sistema con los que se reportó últimamente, el más reciente primero: el parte los
+    /// propone para no escribirlos cada vez.
+    QList<TestUser> recentUsers;
 };
 
 } // namespace qaflow

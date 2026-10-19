@@ -129,6 +129,16 @@ bool RunController::resumeCycle(const QString& planRunId) {
     return true;
 }
 
+QString RunController::planEnvironment() const {
+    const PlanRun* plan = m_planRunId.isEmpty() ? nullptr : m_history.findPlan(m_planRunId);
+    return plan ? plan->environment.trimmed() : QString();
+}
+
+QString RunController::planName() const {
+    const PlanRun* plan = m_planRunId.isEmpty() ? nullptr : m_history.findPlan(m_planRunId);
+    return plan ? plan->name : QString();
+}
+
 QStringList RunController::planCases() const {
     const PlanRun* plan = m_planRunId.isEmpty() ? nullptr : m_history.findPlan(m_planRunId);
     return plan ? plan->caseIds : QStringList{};

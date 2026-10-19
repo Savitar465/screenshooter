@@ -5,6 +5,16 @@
 
 namespace qaflow {
 
+/// Usuario del sistema probado con el que se vio el fallo: quien lo reproduzca necesita entrar igual.
+/// Sin contraseñas: sólo el usuario y su rol o perfil.
+struct TestUser {
+    QString user;
+    QString role;
+
+    bool isEmpty() const { return user.trimmed().isEmpty(); }
+    bool operator==(const TestUser& o) const { return user == o.user && role == o.role; }
+};
+
 /// Defecto a crear en el gestor de incidencias. Los campos de la parte superior son comunes;
 /// los de "Campos del gestor" se mapean a campos reales de Jira / GitHub / GitLab / Azure DevOps.
 struct BugReport {
@@ -13,7 +23,8 @@ struct BugReport {
     /// Clasificación del formulario de control de calidad (R-213): A Funcionamiento/Lógica, B Datos,
     /// C Estético/Forma, D Recomendaciones, E Vulnerabilidades. Es lo que cuenta el acta por tipo.
     QString classification = QStringLiteral("A");
-    QString environment = QStringLiteral("Staging"); // Staging, QA, Producción
+    /// Ambiente de las pruebas: el del ciclo en curso si lo hay ("QA", "PRE"…), si no uno de `environments()`.
+    QString environment = QStringLiteral("Staging");
     QString linkedCaseId;
     /// Paso del caso en el que se vio el fallo (1..N); 0 = del caso entero. Es lo que permite colgar el
     /// defecto del paso que le corresponde al publicar la ejecución en Zephyr.
@@ -23,7 +34,10 @@ struct BugReport {
     /// pruebas concretas y no del caso en abstracto. Vacíos si no hay ninguna ejecución en curso.
     QString linkedRunId;
     QString linkedPlanRunId;
-    QString stepsToReproduce;
+    /// Pasos que de verdad llevan al fallo, uno por elemento. No son los del caso: el camino que dio con
+    /// el bug puede no ser el que describe el caso.
+    QStringList stepsToReproduce;
+    QList<TestUser> testUsers;   // usuarios del sistema con los que se probó
     QString expected;
     QString actual;
     QStringList attachmentPaths;
@@ -59,6 +73,12 @@ struct BugReport {
     static QString environmentLabel(const QString& environment);
     /// "A · Funcionamiento/Lógica", para los combos de la interfaz.
     static QString classificationLabel(const QString& classification);
+    /// Tipo que se propone para un bug entre los que tiene el proyecto (`available`, con la ortografía
+    /// del gestor): «Bug», «Error», «Defecto»… el primero que exista. Sin lista, «Bug».
+    static QString defaultIssueType(const QStringList& available);
+    /// Título propuesto a partir de lo que pasó: la primera frase del resultado actual, recortada, con
+    /// la suite delante ("[Facturación] Error 500 al emitir"). Vacío si no hay resultado actual.
+    static QString titleFromActual(const QString& suite, const QString& actual);
     /// Prioridad de Jira sugerida a partir de la severidad ("Bloqueante" → "Highest"…).
     static QString jiraPriorityFor(const QString& severity);
 

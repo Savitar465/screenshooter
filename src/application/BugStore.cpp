@@ -71,6 +71,25 @@ void BugStore::forgetIssue(const QString& key) {
     if (m_ledger.issues.size() != before) persist();
 }
 
+// ---- Usuarios recientes -------------------------------------------------------------------
+
+void BugStore::rememberUsers(const QList<TestUser>& users) {
+    QList<TestUser> merged;
+    const auto known = [&merged](const QString& user) {
+        return std::any_of(merged.cbegin(), merged.cend(), [&](const TestUser& m) { return m.user.compare(user, Qt::CaseInsensitive) == 0; });
+    };
+    for (const auto& u : users) {
+        const TestUser clean{u.user.trimmed(), u.role.trimmed()};
+        if (!clean.isEmpty() && !known(clean.user)) merged << clean;
+    }
+    if (merged.isEmpty()) return;
+    for (const auto& u : m_ledger.recentUsers) if (!known(u.user)) merged << u;
+    merged = merged.mid(0, kRecentUsers);
+    if (merged == m_ledger.recentUsers) return;
+    m_ledger.recentUsers = merged;
+    persist();
+}
+
 // ---- Pendientes ----------------------------------------------------------------------------
 
 const PendingBug* BugStore::findPending(const QString& id) const {

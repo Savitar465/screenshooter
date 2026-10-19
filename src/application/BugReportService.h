@@ -27,6 +27,17 @@ public:
     /// `stepIndex` (0-based) o, con -1, el fallo o bloqueo que haya visto la ejecución en curso.
     /// Un paso bloqueado trae la severidad en "Bloqueante".
     BugReport draftFromCurrentContext(int stepIndex = -1) const;
+    /// Pasos del caso seleccionado tal y como se reproducirían, con sus datos de prueba. El parte no los
+    /// trae solos (el camino que dio con el bug puede ser otro): se importan si se quiere partir de ellos.
+    QStringList caseSteps() const;
+    /// Títulos que se proponen para el parte con lo ya escrito: el que sale del resultado actual y el
+    /// del paso en el que falló. Sin repetir y sin vacíos, el mejor primero.
+    QStringList titleSuggestions(const BugReport& bug) const;
+    /// Nombre del ciclo en curso y el ambiente en el que se prueba; vacíos si el caso va suelto.
+    QString cycleName() const;
+    QString cycleEnvironment() const;
+    /// Usuarios del sistema usados en los últimos partes del proyecto.
+    QList<TestUser> recentUsers() const;
 
     struct SubmitResult {
         bool ok = false;         // creado en el gestor
@@ -35,6 +46,8 @@ public:
         QString url;
         QString error;
         int attachmentsUploaded = 0;
+        /// Creado, pero no del todo como se pidió (el gestor rechazó un campo opcional…).
+        QString warning;
     };
     /// Envía el bug. Si el fallo es de red o del servidor, lo deja en la cola de pendientes.
     void submit(const BugReport& bug, std::function<void(const SubmitResult&)> done);
@@ -126,6 +139,8 @@ signals:
     void metadataChanged();
 
 private:
+    /// "[Suite] Falla en paso N: acción" del paso `linkedStep` del caso del parte; vacío sin paso.
+    QString stepTitle(const BugReport& bug) const;
     IssueLink linkFor(const BugReport& bug, const IssueResult& r) const;
     void retryNext(QList<QString> ids, RetryResult acc, std::function<void(const RetryResult&)> done);
     void refreshNext(QStringList keys, RefreshResult acc, std::function<void(const RefreshResult&)> done);

@@ -70,6 +70,11 @@ private:
     QString m_linkType;    // el elegido; vacío mientras no se haya preguntado
     QString m_linkTypeFor; // instancia para la que vale
     QNetworkRequest request(const TrackerSettings& s, const QString& path) const;
+    /// Da de alta el issue con esos campos. Si Jira rechaza alguno de los opcionales (un componente
+    /// que el proyecto no tiene, un campo que no está en su pantalla de alta…), lo crea sin ellos una
+    /// vez y lo deja dicho en `warning`: perder el bug entero por un componente es peor.
+    void postIssue(const TrackerSettings& s, const BugReport& bug, QJsonObject fields, bool retried,
+                   std::function<void(const IssueResult&)> done);
     /// `GET /user/assignable/search` con el texto buscado: Jira Server filtra por `username` y Cloud por `query`.
     static QString assignableSearchPath(const TrackerSettings& s, const QString& query, int maxResults);
     /// Convierte la respuesta de usuarios de Jira en asignables (id = accountId en Cloud, name en Server).

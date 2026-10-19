@@ -12,7 +12,7 @@ BugReport sample() {
     b.title = QStringLiteral("t");
     b.actual = QStringLiteral("se rompe");
     b.expected = QStringLiteral("funciona");
-    b.stepsToReproduce = QStringLiteral("1. abrir\n2. pagar");
+    b.stepsToReproduce = {QStringLiteral("abrir"), QStringLiteral("pagar")};
     b.linkedCaseId = QStringLiteral("TC-104");
     b.environment = QStringLiteral("QA");
     b.severity = QStringLiteral("Crítica");
@@ -77,6 +77,40 @@ private slots:
         QVERIFY(md.contains(QStringLiteral("### Pasos para reproducir\n1. abrir\n2. pagar")));
         QVERIFY(md.contains(QStringLiteral("### Capturas\n![cap](/uploads/x/cap.png)")));
         QVERIFY(!sample().markdownDescription().contains(QStringLiteral("### Capturas")));
+    }
+
+    /// Los pasos van como lista numerada de cada gestor, y los usuarios usados, en su sección.
+    void stepsAndTestUsersTravelInEveryDescription() {
+        BugReport b = sample();
+        b.stepsToReproduce << QStringLiteral("  ");   // una fila vacía no cuenta
+        b.testUsers = {TestUser{QStringLiteral("qa.cajero"), QStringLiteral("Cajero")}, TestUser{QStringLiteral("qa.admin"), {}}};
+        QVERIFY(b.jiraDescription().contains(QStringLiteral("h3. Pasos para reproducir\n# abrir\n# pagar\n\n")));
+        QVERIFY(b.jiraDescription().contains(QStringLiteral("h3. Usuarios utilizados\n* qa.cajero (Cajero)\n* qa.admin\n")));
+        QVERIFY(b.markdownDescription().contains(QStringLiteral("### Usuarios utilizados\n- qa.cajero (Cajero)\n- qa.admin")));
+        QVERIFY(b.htmlDescription().contains(QStringLiteral("<h3>Pasos para reproducir</h3><ol><li>abrir</li><li>pagar</li></ol>")));
+        QVERIFY(b.htmlDescription().contains(QStringLiteral("<ul><li>qa.cajero (Cajero)</li><li>qa.admin</li></ul>")));
+        b.testUsers.clear();
+        b.stepsToReproduce.clear();
+        QVERIFY(!b.jiraDescription().contains(QStringLiteral("Usuarios utilizados")));
+        QVERIFY(b.jiraDescription().contains(QStringLiteral("h3. Pasos para reproducir\n—")));
+    }
+
+    /// Cada proyecto llama al bug a su manera: se propone el que tiene, con su ortografía.
+    void defaultIssueTypeIsTheOneTheProjectHas() {
+        QCOMPARE(BugReport::defaultIssueType({}), QStringLiteral("Bug"));
+        QCOMPARE(BugReport::defaultIssueType({QStringLiteral("Tarea"), QStringLiteral("error"), QStringLiteral("Mejora")}), QStringLiteral("error"));
+        QCOMPARE(BugReport::defaultIssueType({QStringLiteral("Historia"), QStringLiteral("Bug")}), QStringLiteral("Bug"));
+        QCOMPARE(BugReport::defaultIssueType({QStringLiteral("Improvement"), QStringLiteral("Incidencia")}), QStringLiteral("Incidencia"));
+    }
+
+    void titleFromActualTakesTheFirstSentence() {
+        QCOMPARE(BugReport::titleFromActual(QStringLiteral("Facturación"), QStringLiteral("aparece «Error 500» al emitir. Luego se cuelga.\nMás")),
+                 QStringLiteral("[Facturación] Aparece «Error 500» al emitir"));
+        QCOMPARE(BugReport::titleFromActual(QString(), QStringLiteral("  la versión 2.3 no carga  ")), QStringLiteral("La versión 2.3 no carga"));
+        QVERIFY(BugReport::titleFromActual(QStringLiteral("S"), QStringLiteral("   ")).isEmpty());
+        const QString longOne = BugReport::titleFromActual(QString(), QString(QStringLiteral("palabra ")).repeated(20));
+        QVERIFY(longOne.size() <= 91);
+        QVERIFY(longOne.endsWith(QStringLiteral("…")));
     }
 
     void htmlDescriptionEscapesAndBreaksLines() {

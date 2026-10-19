@@ -1,8 +1,26 @@
 #include "BugReport.h"
 
 #include <QCoreApplication>
+#include <QRegularExpression>
 
 namespace qaflow {
+
+namespace {
+/// "qa.operador (Operador)", o sólo el usuario si no se dijo el rol.
+QString userLine(const TestUser& u) {
+    return u.role.trimmed().isEmpty() ? u.user.trimmed() : QStringLiteral("%1 (%2)").arg(u.user.trimmed(), u.role.trimmed());
+}
+QStringList filled(const QStringList& lines) {
+    QStringList out;
+    for (const auto& l : lines) if (!l.trimmed().isEmpty()) out << l.trimmed();
+    return out;
+}
+QList<TestUser> filled(const QList<TestUser>& users) {
+    QList<TestUser> out;
+    for (const auto& u : users) if (!u.isEmpty()) out << u;
+    return out;
+}
+} // namespace
 
 QStringList BugReport::severities() {
     return {QStringLiteral("Bloqueante"), QStringLiteral("Crítica"), QStringLiteral("Mayor"), QStringLiteral("Menor"), QStringLiteral("Trivial")};
@@ -61,6 +79,30 @@ QString BugReport::environmentLabel(const QString& environment) {
     return environment;
 }
 
+QString BugReport::defaultIssueType(const QStringList& available) {
+    if (available.isEmpty()) return QStringLiteral("Bug");
+    // Cada instancia lo llama a su manera: se toma el nombre tal y como lo tiene el proyecto.
+    for (const QString& wanted : QStringList{QStringLiteral("Bug"), QStringLiteral("Error"), QStringLiteral("Defecto"), QStringLiteral("Defect")})
+        for (const auto& t : available)
+            if (t.trimmed().compare(wanted, Qt::CaseInsensitive) == 0) return t.trimmed();
+    for (const auto& t : available)
+        if (!isImprovement(t)) return t.trimmed();
+    return available.first().trimmed();
+}
+
+QString BugReport::titleFromActual(const QString& suite, const QString& actual) {
+    // La primera frase (o línea) de lo que pasó, sin el punto final: es lo que se lee en un listado.
+    static const QRegularExpression sentenceEnd(QStringLiteral("[.!?;](\\s|$)"));
+    const QString firstLine = actual.trimmed().section(QLatin1Char('\n'), 0, 0).simplified();
+    const QRegularExpressionMatch m = sentenceEnd.match(firstLine);
+    QString text = (m.hasMatch() ? firstLine.left(m.capturedStart()) : firstLine).trimmed();
+    if (text.isEmpty()) return {};
+    constexpr int kMax = 90;
+    if (text.size() > kMax) text = text.left(kMax).section(QLatin1Char(' '), 0, -2).trimmed() + QStringLiteral("…");
+    text[0] = text[0].toUpper();
+    return suite.trimmed().isEmpty() ? text : QStringLiteral("[%1] %2").arg(suite.trimmed(), text);
+}
+
 QString BugReport::jiraPriorityFor(const QString& severity) {
     if (severity == QStringLiteral("Bloqueante")) return QStringLiteral("Highest");
     if (severity == QStringLiteral("Crítica")) return QStringLiteral("High");
@@ -77,7 +119,14 @@ QString BugReport::jiraDescription() const {
     d += QCoreApplication::translate("core", "h3. Clasificación\n%1\n\n").arg(classificationLabel(classification));
     d += QCoreApplication::translate("core", "h3. Caso vinculado\n%1\n\n").arg(linkedCaseId.isEmpty() ? QStringLiteral("—") : linkedCaseId);
     if (!linkedStoryKey.isEmpty()) d += QCoreApplication::translate("core", "h3. Historia relacionada\n%1\n\n").arg(linkedStoryKey);
-    d += QCoreApplication::translate("core", "h3. Pasos para reproducir\n%1\n\n").arg(stepsToReproduce);
+    if (const QList<TestUser> users = filled(testUsers); !users.isEmpty()) {
+        QStringList lines;
+        for (const auto& u : users) lines << QStringLiteral("* ") + userLine(u);
+        d += QCoreApplication::translate("core", "h3. Usuarios utilizados\n%1\n\n").arg(lines.join(QLatin1Char('\n')));
+    }
+    QStringList steps;
+    for (const auto& st : filled(stepsToReproduce)) steps << QStringLiteral("# ") + st;
+    d += QCoreApplication::translate("core", "h3. Pasos para reproducir\n%1\n\n").arg(steps.isEmpty() ? QStringLiteral("—") : steps.join(QLatin1Char('\n')));
     d += QCoreApplication::translate("core", "h3. Resultado esperado\n%1\n\n").arg(expected);
     d += QCoreApplication::translate("core", "h3. Resultado actual\n%1\n").arg(actual);
     return d;
@@ -89,7 +138,14 @@ QString BugReport::markdownDescription(const QStringList& attachmentLinks) const
                 .arg(environmentLabel(environment), severityLabel(severity), classificationLabel(classification));
     out << QCoreApplication::translate("core", "**Caso vinculado:** %1").arg(linkedCaseId.isEmpty() ? QStringLiteral("—") : linkedCaseId);
     if (!linkedStoryKey.isEmpty()) out << QCoreApplication::translate("core", "**Historia relacionada:** %1").arg(linkedStoryKey);
-    out << QString() << QCoreApplication::translate("core", "### Pasos para reproducir") << stepsToReproduce;
+    if (const QList<TestUser> users = filled(testUsers); !users.isEmpty()) {
+        out << QString() << QCoreApplication::translate("core", "### Usuarios utilizados");
+        for (const auto& u : users) out << QStringLiteral("- ") + userLine(u);
+    }
+    out << QString() << QCoreApplication::translate("core", "### Pasos para reproducir");
+    const QStringList steps = filled(stepsToReproduce);
+    for (int i = 0; i < steps.size(); ++i) out << QStringLiteral("%1. %2").arg(i + 1).arg(steps[i]);
+    if (steps.isEmpty()) out << QStringLiteral("—");
     out << QString() << QCoreApplication::translate("core", "### Resultado esperado") << expected;
     out << QString() << QCoreApplication::translate("core", "### Resultado actual") << actual;
     if (!attachmentLinks.isEmpty()) {
@@ -106,7 +162,14 @@ QString BugReport::htmlDescription() const {
                  .arg(esc(environmentLabel(environment)), esc(severityLabel(severity)), esc(classificationLabel(classification)));
     d += QCoreApplication::translate("core", "<p><b>Caso vinculado:</b> %1</p>").arg(linkedCaseId.isEmpty() ? QStringLiteral("—") : esc(linkedCaseId));
     if (!linkedStoryKey.isEmpty()) d += QCoreApplication::translate("core", "<p><b>Historia relacionada:</b> %1</p>").arg(esc(linkedStoryKey));
-    d += QCoreApplication::translate("core", "<h3>Pasos para reproducir</h3><p>%1</p>").arg(esc(stepsToReproduce));
+    if (const QList<TestUser> users = filled(testUsers); !users.isEmpty()) {
+        QString items;
+        for (const auto& u : users) items += QStringLiteral("<li>%1</li>").arg(esc(userLine(u)));
+        d += QCoreApplication::translate("core", "<h3>Usuarios utilizados</h3><ul>%1</ul>").arg(items);
+    }
+    QString steps;
+    for (const auto& st : filled(stepsToReproduce)) steps += QStringLiteral("<li>%1</li>").arg(esc(st));
+    d += QCoreApplication::translate("core", "<h3>Pasos para reproducir</h3>%1").arg(steps.isEmpty() ? QStringLiteral("<p>—</p>") : QStringLiteral("<ol>%1</ol>").arg(steps));
     d += QCoreApplication::translate("core", "<h3>Resultado esperado</h3><p>%1</p>").arg(esc(expected));
     d += QCoreApplication::translate("core", "<h3>Resultado actual</h3><p>%1</p>").arg(esc(actual));
     return d;

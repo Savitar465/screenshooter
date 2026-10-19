@@ -380,7 +380,7 @@ private slots:
     void jiraContentRejectionIsNotRetryable() {
         FakeHttpServer server;
         server.route("POST", "/rest/api/2/issue", [](const HttpRequest&) {
-            return HttpResponse::json(400, "{\"errorMessages\":[],\"errors\":{\"components\":\"Component name 'X' is not valid\"}}");
+            return HttpResponse::json(400, "{\"errorMessages\":[],\"errors\":{\"issuetype\":\"Specify a valid issue type\"}}");
         });
         JiraClient client;
         BugReport bug; bug.title = QStringLiteral("t"); bug.actual = QStringLiteral("a");
@@ -390,7 +390,35 @@ private slots:
         QVERIFY(!out.ok);
         QVERIFY(!out.retryable);
         QVERIFY(out.error.contains(QStringLiteral("HTTP 400")));
-        QVERIFY(out.error.contains(QStringLiteral("components: Component name 'X' is not valid")));
+        QVERIFY(out.error.contains(QStringLiteral("issuetype: Specify a valid issue type")));
+        QCOMPARE(server.requests.size(), 1);   // el tipo no es opcional: no se reintenta sin él
+    }
+
+    /// Un componente que el proyecto no tiene (o un campo fuera de su pantalla de alta) no hace perder
+    /// el bug: se crea sin él y se avisa.
+    void jiraCreatesTheIssueWithoutTheOptionalFieldsItRejects() {
+        FakeHttpServer server;
+        int posts = 0;
+        server.route("POST", "/rest/api/2/issue", [&posts](const HttpRequest&) {
+            if (++posts == 1)
+                return HttpResponse::json(400, "{\"errorMessages\":[],\"errors\":{\"components\":\"Component name 'Carrito' is not valid\"}}");
+            return HttpResponse::json(201, "{\"key\":\"SHOP-150\"}");
+        });
+        JiraClient client;
+        BugReport bug; bug.title = QStringLiteral("t"); bug.actual = QStringLiteral("a");
+        bug.components = {QStringLiteral("Carrito")};
+        bug.affectsVersions = {QStringLiteral("2.3")};
+        IssueResult out; bool done = false;
+        client.createIssue(jiraSettings(server.baseUrl()), bug, [&](const IssueResult& r) { out = r; done = true; });
+        QTRY_VERIFY(done);
+        QVERIFY(out.ok);
+        QCOMPARE(out.key, QStringLiteral("SHOP-150"));
+        QVERIFY(out.warning.contains(QStringLiteral("Component name 'Carrito' is not valid")));
+        QCOMPARE(server.requests.size(), 2);
+        const QJsonObject retried = bodyOf(server.requests[1])[QStringLiteral("fields")].toObject();
+        QVERIFY(!retried.contains(QStringLiteral("components")));
+        QVERIFY(retried.contains(QStringLiteral("versions")));   // lo que Jira no rechazó sigue yendo
+        QVERIFY(retried.contains(QStringLiteral("labels")));
     }
 
     void serverErrorAndConnectionRefusedAreRetryable() {

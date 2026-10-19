@@ -1201,7 +1201,11 @@ private slots:
         // El parte se abre en su ventana: la ejecución se queda en pantalla, detrás.
         QVERIFY(f.bugDialog());
         QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Run));
-        QCOMPARE(f.window->findChild<QLineEdit*>(QStringLiteral("bugTitle"))->text().contains(QStringLiteral("paso 1")), true);
+        // El título no viene hecho: se propone al llegar al último paso, con lo ya escrito.
+        auto* title = f.window->findChild<QLineEdit*>(QStringLiteral("bugTitle"));
+        QVERIFY(title->text().isEmpty());
+        f.bugDialog()->showPage(BugDialog::Review);
+        QCOMPARE(title->text().contains(QStringLiteral("paso 1")), true);
         f.bugDialog()->reject();              // se deja el parte y se sigue probando
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
 
@@ -1289,8 +1293,15 @@ private slots:
         QCOMPARE(step->currentData().toInt(), 2);          // el paso que falló, ya elegido
         step->setCurrentIndex(step->findData(3));          // y se puede corregir a mano
 
+        // Se envía desde el último paso del asistente.
+        auto* next = f.window->findChild<QPushButton*>(QStringLiteral("bugNext"));
+        QVERIFY(next);
+        next->click();
+        next->click();
+        QCOMPARE(f.bugDialog()->page(), static_cast<int>(BugDialog::Review));
         auto* title = f.window->findChild<QLineEdit*>(QStringLiteral("bugTitle"));
         QVERIFY(title && !title->text().isEmpty());
+        QVERIFY(title->text().startsWith(QStringLiteral("[Checkout] El total no cambia")));   // del resultado actual
         auto* send = f.window->findChild<QPushButton*>(QStringLiteral("bugSubmit"));
         QVERIFY(send);
         QTRY_VERIFY(send->isVisible() && send->width() > 0);
@@ -1482,6 +1493,65 @@ private slots:
         QTest::mouseClick(retry, Qt::LeftButton);
         QVERIFY(!f.app.store.hasUnsavedChanges());
         QTRY_VERIFY(f.toastText().contains(QStringLiteral("Guardado")));
+    }
+
+    /// El parte es un asistente: los pasos para reproducir se escriben como lista (empieza vacía, no son
+    /// los del caso), el ambiente sale del ciclo, los usuarios usados se recuerdan, el tipo es el que
+    /// tiene el proyecto y a Jira no van componentes que el proyecto no tenga.
+    void theBugWizardCollectsWhatTheTesterWrites() {
+        WindowFixture f;
+        f.app.tracker->metadataToReturn.issueTypes = {QStringLiteral("Tarea"), QStringLiteral("Error")};
+        f.app.tracker->metadataToReturn.components = {QStringLiteral("Pagos")};
+        f.app.bugs.loadMetadata(true, [](const MetadataResult&) {});
+        f.app.run.startSequence({QStringLiteral("TC-104")}, QStringLiteral("Regresión"), QString(), QStringLiteral("PRE"));
+        f.app.run.setNote(QStringLiteral("no descuenta"));
+        f.app.run.mark(StepResult::Fail);
+        f.window->reportBug();
+        BugDialog* dialog = f.bugDialog();
+        QVERIFY(dialog);
+        QCOMPARE(dialog->page(), static_cast<int>(BugDialog::WhatHappened));
+
+        // Pasos: una fila vacía; Enter abre la siguiente; importar trae los del caso.
+        auto steps = [dialog]() { return dialog->findChildren<QLineEdit*>(QStringLiteral("bugReproStep")); };
+        QCOMPARE(steps().size(), 1);
+        QVERIFY(steps().first()->text().isEmpty());
+        steps().first()->setText(QStringLiteral("abrir el carrito"));
+        QTest::keyClick(steps().first(), Qt::Key_Return);
+        QCOMPARE(steps().size(), 2);
+        steps().last()->setText(QStringLiteral("aplicar el cupón"));
+        dialog->findChild<QPushButton*>(QStringLiteral("bugImportSteps"))->click();
+        QCOMPARE(steps().size(), 4);
+        dialog->findChild<QPushButton*>(QStringLiteral("bugAddStep"))->click();
+        QCOMPARE(steps().size(), 5);
+
+        // Contexto: el ambiente del ciclo y un usuario.
+        dialog->showPage(BugDialog::Context);
+        auto* env = dialog->findChild<QComboBox*>(QStringLiteral("bugEnvironment"));
+        QCOMPARE(env->currentText(), QStringLiteral("PRE"));
+        QVERIFY(dialog->findChild<QLabel*>(QStringLiteral("bugEnvironmentNote"))->text().contains(QStringLiteral("Regresión")));
+        dialog->findChild<QPushButton*>(QStringLiteral("bugAddUser"))->click();
+        dialog->findChild<QLineEdit*>(QStringLiteral("bugUserName"))->setText(QStringLiteral("qa.cajero"));
+        dialog->findChild<QLineEdit*>(QStringLiteral("bugUserRole"))->setText(QStringLiteral("Cajero"));
+
+        // Revisar: el tipo del proyecto y el componente del caso, que el proyecto no tiene, avisado.
+        dialog->showPage(BugDialog::Review);
+        QCOMPARE(dialog->findChild<QComboBox*>(QStringLiteral("bugIssueType"))->currentText(), QStringLiteral("Error"));
+        QCOMPARE(dialog->findChild<QLineEdit*>(QStringLiteral("bugComponents"))->text(), QStringLiteral("Carrito"));
+        QVERIFY(dialog->findChild<QLabel*>(QStringLiteral("bugUnknownValues"))->text().contains(QStringLiteral("«Carrito»")));
+        QCOMPARE(dialog->findChild<QLineEdit*>(QStringLiteral("bugTitle"))->text(), QStringLiteral("[Checkout] No descuenta"));
+        dialog->findChild<QPushButton*>(QStringLiteral("bugSubmit"))->click();
+        QTRY_COMPARE(f.app.tracker->created.size(), 1);
+        const BugReport& sent = f.app.tracker->created.first();
+        QCOMPARE(sent.issueType, QStringLiteral("Error"));
+        QVERIFY(sent.components.isEmpty());
+        QCOMPARE(sent.environment, QStringLiteral("PRE"));
+        QCOMPARE(sent.stepsToReproduce.size(), 4);   // la fila vacía no cuenta
+        QCOMPARE(sent.testUsers, (QList<TestUser>{TestUser{QStringLiteral("qa.cajero"), QStringLiteral("Cajero")}}));
+        QCOMPARE(f.app.bugs.recentUsers().size(), 1);
+
+        // El próximo parte lo propone como atajo.
+        f.window->reportBug();
+        QTRY_VERIFY(f.bugDialog() && f.bugDialog()->findChild<QPushButton*>(QStringLiteral("bugRecentUser")));
     }
 
     // El campo "Asignado a" busca las personas en el gestor según se escribe, sin pisar el texto.
@@ -4188,6 +4258,19 @@ private slots:
             {"actualización", [&]() -> QDialog* { return new UpdateDialog(updates, release, QString(), parent); }},
             {"ajustes", [&]() -> QDialog* { return new SettingsDialog(f.ctx, parent); }},
             {"bug", [&]() -> QDialog* { auto* d = new BugDialog(f.app.store, f.app.settings, f.app.bugs, f.evidence, parent); d->loadDraft(); return d; }},
+            // Cada paso del asistente es su propia página: se mira cada una.
+            {"bug · contexto", [&]() -> QDialog* {
+                auto* d = new BugDialog(f.app.store, f.app.settings, f.app.bugs, f.evidence, parent);
+                d->loadDraft();
+                d->showPage(BugDialog::Context);
+                return d;
+            }},
+            {"bug · revisar", [&]() -> QDialog* {
+                auto* d = new BugDialog(f.app.store, f.app.settings, f.app.bugs, f.evidence, parent);
+                d->loadDraft();
+                d->showPage(BugDialog::Review);
+                return d;
+            }},
             {"ficha del bug", [&]() -> QDialog* { return new BugDetailWindow(bug, QStringLiteral("Login"), QStringLiteral("Pulsar Entrar"), parent); }},
             {"cerrar bug", [&]() -> QDialog* { return new BugCloseDialog(bug.key, true, parent); }},
             {"nuevo caso", [&]() -> QDialog* { return new CaseCreateDialog({QStringLiteral("Auth")}, QStringLiteral("Se añade al plan"), parent); }},

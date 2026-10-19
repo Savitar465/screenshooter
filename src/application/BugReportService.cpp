@@ -31,16 +31,8 @@ BugReport BugReportService::draftFromCurrentContext(int stepIndex) const {
 
     b.linkedCaseId = c->id;
     b.linkedStoryKey = c->jiraKey;
+    // Es una propuesta: si el proyecto del gestor no tiene ese componente, el parte lo descarta.
     b.components = c->component.isEmpty() ? QStringList{} : QStringList{c->component};
-    QStringList lines;
-    for (int i = 0; i < c->steps.size(); ++i) {
-        // Con qué datos se probó el paso: sin ellos el bug no se reproduce.
-        const QString data = c->steps[i].data.trimmed();
-        lines << (data.isEmpty() ? QStringLiteral("%1. %2").arg(i + 1).arg(c->steps[i].action)
-                                 : tr("%1. %2 · Datos: %3").arg(i + 1).arg(c->steps[i].action, data));
-    }
-    b.stepsToReproduce = lines.join(QLatin1Char('\n'));
-
     const RunState& r = m_run.state();
     // El paso del que se reporta: el que pide quien abre el parte (el que tiene en pantalla) y, si
     // no dice ninguno, el fallo o bloqueo que haya visto la ejecución.
@@ -50,6 +42,8 @@ BugReport BugReportService::draftFromCurrentContext(int stepIndex) const {
     if (sameCase) {
         b.linkedRunId = r.runId;
         b.linkedPlanRunId = m_run.planRunId();
+        // El ambiente es el del ciclo en el que se está probando; sin ciclo se queda el de siempre.
+        if (const QString env = m_run.planEnvironment(); !env.isEmpty()) b.environment = env;
     }
     const int idx = !sameCase ? -1 : stepIndex >= 0 ? std::min(stepIndex, static_cast<int>(c->steps.size()) - 1)
                                                     : r.reportableStepIndex();
@@ -60,8 +54,7 @@ BugReport BugReportService::draftFromCurrentContext(int stepIndex) const {
         // Un paso bloqueado da un bug bloqueante: es lo que impide seguir probando.
         const bool blocked = r.isMarked(idx) && r.results[idx].result == StepResult::Block;
         if (blocked) b.severity = QStringLiteral("Bloqueante");
-        b.title = blocked ? tr("[%1] Bloqueo en paso %2: %3").arg(c->suite).arg(idx + 1).arg(step.action)
-                          : tr("[%1] Falla en paso %2: %3").arg(c->suite).arg(idx + 1).arg(step.action);
+        b.title = stepTitle(b);
         b.expected = step.expected;
         b.actual = idx == r.idx ? r.note : idx < r.results.size() ? r.results[idx].note : QString();
     }
@@ -69,6 +62,41 @@ BugReport BugReportService::draftFromCurrentContext(int stepIndex) const {
     b.priority = BugReport::jiraPriorityFor(b.severity);
     return b;
 }
+
+QStringList BugReportService::caseSteps() const {
+    QStringList lines;
+    const TestCase* c = m_cases.selected();
+    if (!c) return lines;
+    for (const auto& step : c->steps) {
+        // Con qué datos se probó el paso: sin ellos el bug no se reproduce.
+        const QString data = step.data.trimmed();
+        lines << (data.isEmpty() ? step.action : tr("%1 · Datos: %2").arg(step.action, data));
+    }
+    return lines;
+}
+
+QString BugReportService::stepTitle(const BugReport& bug) const {
+    const TestCase* c = m_cases.find(bug.linkedCaseId);
+    if (!c || bug.linkedStep < 1 || bug.linkedStep > c->steps.size()) return {};
+    const int idx = bug.linkedStep - 1;
+    const RunState& r = m_run.state();
+    const bool blocked = r.caseId == c->id && r.isMarked(idx) && r.results[idx].result == StepResult::Block;
+    return blocked ? tr("[%1] Bloqueo en paso %2: %3").arg(c->suite).arg(idx + 1).arg(c->steps[idx].action)
+                   : tr("[%1] Falla en paso %2: %3").arg(c->suite).arg(idx + 1).arg(c->steps[idx].action);
+}
+
+QStringList BugReportService::titleSuggestions(const BugReport& bug) const {
+    const TestCase* c = m_cases.find(bug.linkedCaseId);
+    QStringList out;
+    for (const QString& t : {BugReport::titleFromActual(c ? c->suite : QString(), bug.actual), stepTitle(bug)})
+        if (!t.trimmed().isEmpty() && !out.contains(t)) out << t;
+    return out;
+}
+
+QString BugReportService::cycleName() const { return m_run.planName(); }
+QString BugReportService::cycleEnvironment() const { return m_run.planEnvironment(); }
+
+QList<TestUser> BugReportService::recentUsers() const { return m_bugs.recentUsers(); }
 
 IssueLink BugReportService::linkFor(const BugReport& bug, const IssueResult& r) const {
     IssueLink l;
@@ -93,6 +121,9 @@ void BugReportService::submit(const BugReport& bug, std::function<void(const Sub
         SubmitResult out;
         out.error = r.error;
         out.attachmentsUploaded = r.attachmentsUploaded;
+        out.warning = r.warning;
+        // Creado o en cola, el parte ya está hecho: sus usuarios se proponen la próxima vez.
+        if (r.ok || r.retryable) m_bugs.rememberUsers(bug.testUsers);
         if (r.ok) {
             out.ok = true;
             out.key = r.key;

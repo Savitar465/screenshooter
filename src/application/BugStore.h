@@ -38,6 +38,12 @@ public:
     void markAttempt(const QString& id, const QString& error);
     void removePending(const QString& id);
 
+    // Usuarios del sistema usados en los últimos partes
+    const QList<TestUser>& recentUsers() const { return m_ledger.recentUsers; }
+    /// Los pone los primeros de los recientes (sin repetir usuario) y se queda con `kRecentUsers`.
+    void rememberUsers(const QList<TestUser>& users);
+    static constexpr int kRecentUsers = 8;
+
     /// Escribe el libro en disco. Falso (y `saveFailed`) si no se pudo.
     bool save();
 

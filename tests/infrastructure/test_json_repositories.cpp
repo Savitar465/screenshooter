@@ -237,7 +237,10 @@ private slots:
         PendingBug p;
         p.id = QStringLiteral("Q-0001"); p.report.title = QStringLiteral("Pendiente"); p.report.actual = QStringLiteral("x");
         p.report.attachmentPaths = {QStringLiteral("/tmp/a.png")}; p.createdAt = l.createdAt; p.lastError = QStringLiteral("Host not found"); p.attempts = 2;
+        p.report.stepsToReproduce = {QStringLiteral("abrir"), QStringLiteral("pagar")};
+        p.report.testUsers = {TestUser{QStringLiteral("qa.cajero"), QStringLiteral("Cajero")}};
         ledger.pending << p;
+        ledger.recentUsers = {TestUser{QStringLiteral("qa.cajero"), QStringLiteral("Cajero")}, TestUser{QStringLiteral("qa.admin"), {}}};
         QVERIFY(repo.saveLedger(ledger));
         const auto loaded = repo.loadLedger();
         QVERIFY(loaded);
@@ -250,6 +253,23 @@ private slots:
         QCOMPARE(loaded->pending[0].id, QStringLiteral("Q-0001"));
         QCOMPARE(loaded->pending[0].attempts, 2);
         QCOMPARE(loaded->pending[0].report.attachmentPaths, QStringList{QStringLiteral("/tmp/a.png")});
+        QCOMPARE(loaded->pending[0].report.stepsToReproduce, (QStringList{QStringLiteral("abrir"), QStringLiteral("pagar")}));
+        QCOMPARE(loaded->pending[0].report.testUsers, p.report.testUsers);
+        QCOMPARE(loaded->recentUsers, ledger.recentUsers);
+    }
+
+    /// Los partes encolados antes de que los pasos fueran una lista los guardaban como texto numerado.
+    void bugLedgerReadsStepsSavedAsText() {
+        QTemporaryDir dir;
+        QFile f(dir.filePath(QStringLiteral("bugs.json")));
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        const QJsonObject report{{"title", "t"}, {"actual", "a"}, {"stepsToReproduce", QStringLiteral("1. abrir\n2) pagar · Datos: 3\n\n")}};
+        f.write(QJsonDocument(QJsonObject{{"issues", QJsonArray{}}, {"pending", QJsonArray{QJsonObject{{"id", "Q-0001"}, {"report", report}}}}}).toJson());
+        f.close();
+        const auto loaded = JsonBugRepository(dir.path()).loadLedger();
+        QVERIFY(loaded);
+        QCOMPARE(loaded->pending[0].report.stepsToReproduce, (QStringList{QStringLiteral("abrir"), QStringLiteral("pagar · Datos: 3")}));
+        QVERIFY(loaded->recentUsers.isEmpty());
     }
 
     void saveFailsWhenDirectoryIsNotWritable() {

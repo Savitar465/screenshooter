@@ -118,7 +118,6 @@ TestCase CaseCreateDialog::testCase() const {
     c.title = m_title->text().trimmed();
     c.suite = m_suite->currentText().trimmed();
     c.priority = static_cast<Priority>(m_priority->currentData().toInt());
-    // Se crea para ejecutarlo ya: listo, no en borrador.
     c.status = CaseStatus::Listo;
     c.preconditions = m_preconditions->toPlainText().trimmed();
     c.steps = currentSteps(true);

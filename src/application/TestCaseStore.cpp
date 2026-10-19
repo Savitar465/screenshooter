@@ -128,7 +128,7 @@ QString TestCaseStore::createCase() {
     const QStringList existing = suites();
     c.suite = cur && !cur->suite.isEmpty() ? cur->suite : existing.isEmpty() ? QStringLiteral("General") : existing.first();
     c.priority = Priority::Media;
-    c.status = CaseStatus::Borrador;
+    c.status = CaseStatus::Listo;
     c.steps.append(TestStep{});
     m_cases.append(c);
     scheduleSave();
@@ -144,7 +144,7 @@ QString TestCaseStore::duplicateCase(const QString& id) {
     TestCase c = *src;
     c.id = nextCaseId();
     c.title = src->title.trimmed().isEmpty() ? QString() : src->title + tr(" (copia)");
-    c.status = CaseStatus::Borrador;
+    c.status = CaseStatus::Listo;
     c.lastRun = LastRun{};
     c.shots.clear();
     // Justo después del original, para que se vea de dónde sale.

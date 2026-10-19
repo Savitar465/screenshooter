@@ -215,7 +215,7 @@ ParseResult parseResponse(const QString& response) {
             continue;
         }
         c.priority = priorityOf(text(field(o, {"priority", "prioridad"})));
-        c.status = CaseStatus::Borrador;
+        c.status = CaseStatus::Listo;
         c.preconditions = text(field(o, {"preconditions", "precondiciones", "precondicion", "prerequisites", "prerequisitos", "requisitos"}));
         c.component = text(field(o, {"component", "componente", "modulo", "module"}));
         c.suite = text(field(o, {"suite"}));

@@ -6,7 +6,7 @@
 // Datos de ejemplo útiles (ver SeedData.cpp):
 //   TC-101 Autenticación · Alta  · 3 pasos · Pasó       TC-105 Checkout · Media · 2 pasos · Pasó
 //   TC-102 Autenticación · Alta  · 2 pasos · Falló      TC-106 Perfil · Baja · 2 pasos
-//   TC-103 Autenticación · Media · 1 paso  · Borrador   TC-107 Notificaciones · Baja · 1 paso · Borrador
+//   TC-103 Autenticación · Media · 1 paso            TC-107 Notificaciones · Baja · 1 paso
 //   TC-104 Checkout · Alta · 4 pasos · Pasó (seleccionado al cargar)
 //   Plan PL-0001 "Regresión Sprint 14": TC-101, TC-102, TC-104, TC-105 (11 pasos)
 //   Gestor: Jira falso (FakeIssueTracker) en https://acme.atlassian.net, proyecto SHOP, conectado.

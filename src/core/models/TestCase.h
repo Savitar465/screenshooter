@@ -8,7 +8,7 @@
 namespace qaflow {
 
 enum class Priority { Alta, Media, Baja };
-enum class CaseStatus { Listo, Borrador, Obsoleto };
+enum class CaseStatus { Listo, Obsoleto };
 enum class RunOutcome { None, Passed, Failed, Blocked };
 
 /// Valores canónicos (se persisten y viajan en JSON/CSV): "Alta", "Listo"… No traducir.
@@ -65,7 +65,7 @@ struct TestCase {
     QString title;
     QString suite;
     Priority priority = Priority::Media;
-    CaseStatus status = CaseStatus::Borrador;
+    CaseStatus status = CaseStatus::Listo;
     LastRun lastRun;
     QString preconditions;
     QList<TestStep> steps;
@@ -87,7 +87,6 @@ struct TestCase {
     QString latestEvidenceRunId() const;
     /// Sin paso asignado, dentro de la ejecución en curso.
     int unassignedShots() const;
-    bool readyToBeMarkedListo() const;
     /// Texto en el que buscan los filtros (id, título, suite, etiquetas, componente, historia, Test).
     QString searchText() const;
 };

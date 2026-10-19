@@ -45,7 +45,7 @@ QList<TestCase> sampleCases() {
              "Usuario registrado.", {
                  {"Introducir contraseña incorrecta 5 veces", "qa.demo@ejemplo.com / clave erronea", "Mensaje de cuenta bloqueada temporalmente"},
                  {"Intentar con la contraseña correcta", "qa.demo@ejemplo.com / Qa2026!", "Sigue bloqueado durante 15 min"}}),
-        make("TC-103", "Recuperar contraseña por correo", "Autenticación", Priority::Media, CaseStatus::Borrador, RunOutcome::None, 0, "", {
+        make("TC-103", "Recuperar contraseña por correo", "Autenticación", Priority::Media, CaseStatus::Listo, RunOutcome::None, 0, "", {
                  {"Pulsar \"¿Olvidaste tu contraseña?\"", "", "Se muestra formulario de correo"}}),
         make("TC-104", "Pago con tarjeta y cupón de descuento aplicado", "Checkout", Priority::Alta, CaseStatus::Listo, RunOutcome::Passed, 1,
              "Carrito con 2 productos. Cupón QA10 activo (10 %). Tarjeta de prueba 4242.", {
@@ -60,7 +60,7 @@ QList<TestCase> sampleCases() {
         make("TC-106", "Cambiar avatar de perfil", "Perfil", Priority::Baja, CaseStatus::Listo, RunOutcome::None, 0, "Sesión iniciada.", {
                  {"Subir imagen PNG", "avatar-2mb.png", "Vista previa y guardado correcto"},
                  {"Subir imagen demasiado grande", "avatar-12mb.png", "Error claro de tamaño máximo"}}),
-        make("TC-107", "Preferencias de notificaciones por correo", "Notificaciones", Priority::Baja, CaseStatus::Borrador, RunOutcome::None, 0, "", {
+        make("TC-107", "Preferencias de notificaciones por correo", "Notificaciones", Priority::Baja, CaseStatus::Listo, RunOutcome::None, 0, "", {
                  {"Desactivar \"Novedades\" y guardar", "", "Preferencia persistida tras recargar"}}),
     };
     // Metadatos de ejemplo: etiquetas, componente e historia enlazada.

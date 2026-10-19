@@ -23,7 +23,7 @@ class TextArea;
 ///
 /// Nada sale del equipo sin que el usuario lo vea: el texto del requerimiento se revisa y se edita antes
 /// de copiar el prompt. Y nada entra en el proyecto sin revisarlo: la respuesta se lee en una lista de
-/// casos con su vista previa, se eligen los que valen y sólo entonces se añaden, en Borrador y con la
+/// casos con su vista previa, se eligen los que valen y sólo entonces se añaden, Listos y con la
 /// etiqueta `ai::generatedTag()`, para terminar de pulirlos en la pantalla de casos.
 class AiCaseGenerationDialog : public QDialog {
     Q_OBJECT

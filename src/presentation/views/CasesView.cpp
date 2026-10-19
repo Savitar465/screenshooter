@@ -34,7 +34,6 @@ namespace {
 QString statusColor(CaseStatus s) {
     switch (s) {
         case CaseStatus::Listo: return theme::Green;
-        case CaseStatus::Borrador: return theme::Amber;
         case CaseStatus::Obsoleto: return theme::Muted;
     }
     return theme::Muted;
@@ -167,7 +166,6 @@ QWidget* CasesView::buildListPane() {
     auto* ch = ui::hbox(combos, 0, 6);
     // Cada opción lleva el valor del enum como dato: el texto se traduce, el filtro no.
     m_statusFilter = filterBox(tr("Estado"), {{label(CaseStatus::Listo), static_cast<int>(CaseStatus::Listo)},
-                                              {label(CaseStatus::Borrador), static_cast<int>(CaseStatus::Borrador)},
                                               {label(CaseStatus::Obsoleto), static_cast<int>(CaseStatus::Obsoleto)}});
     m_priorityFilter = filterBox(tr("Prioridad"), {{label(Priority::Alta), static_cast<int>(Priority::Alta)},
                                                    {label(Priority::Media), static_cast<int>(Priority::Media)},
@@ -337,9 +335,7 @@ QWidget* CasesView::buildEditor() {
     connect(save, &QPushButton::clicked, this, [this]() {
         const TestCase* c = m_store.selected();
         if (!c) return;
-        const QString id = c->id;
-        m_store.updateCase(id, [](TestCase& tc) { if (tc.status == CaseStatus::Borrador && tc.readyToBeMarkedListo()) tc.status = CaseStatus::Listo; });
-        emit toast(tr("%1 guardado").arg(id), theme::Green);
+        emit toast(tr("%1 guardado").arg(c->id), theme::Green);
     });
     auto* more = ui::button(QStringLiteral("⋯"), "outline");
     more->setToolTip(tr("Más acciones"));
@@ -352,7 +348,7 @@ QWidget* CasesView::buildEditor() {
     more->setMenu(menu);
     auto* clone = ui::button(tr("Clonar"), "outline");
     clone->setObjectName(QStringLiteral("cloneCase"));
-    clone->setToolTip(tr("Crear una copia de este caso con sus pasos, en Borrador y sin ejecuciones (Ctrl+D)"));
+    clone->setToolTip(tr("Crear una copia de este caso con sus pasos, sin ejecuciones (Ctrl+D)"));
     connect(clone, &QPushButton::clicked, this, &CasesView::duplicateSelected);
     auto* actions = new QWidget;
     auto* ah = ui::hbox(actions, 0, 12);
@@ -384,7 +380,7 @@ QWidget* CasesView::buildEditor() {
     m_priorityBox = new QComboBox;
     for (auto p : {Priority::Alta, Priority::Media, Priority::Baja}) m_priorityBox->addItem(label(p), static_cast<int>(p));
     m_statusBox = new QComboBox;
-    for (auto st : {CaseStatus::Listo, CaseStatus::Borrador, CaseStatus::Obsoleto}) m_statusBox->addItem(label(st), static_cast<int>(st));
+    for (auto st : {CaseStatus::Listo, CaseStatus::Obsoleto}) m_statusBox->addItem(label(st), static_cast<int>(st));
     m_lastRun = new QLabel;
     m_lastRun->setStyleSheet(QStringLiteral("font-weight:600;padding:5px 0;"));
     connect(m_suiteBox, &QComboBox::currentTextChanged, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.suite = t; }); }); });

@@ -44,7 +44,7 @@ private slots:
         CaseFilter f;
         f.suite = QStringLiteral("Perfil");     QVERIFY(!f.matches(c));
         f.suite = QStringLiteral("Checkout");   QVERIFY(f.matches(c));
-        f.status = CaseStatus::Borrador;        QVERIFY(!f.matches(c));
+        f.status = CaseStatus::Obsoleto;        QVERIFY(!f.matches(c));
         f.status = CaseStatus::Listo;           QVERIFY(f.matches(c));
         f.priority = Priority::Baja;            QVERIFY(!f.matches(c));
         f.priority = Priority::Alta;            QVERIFY(f.matches(c));

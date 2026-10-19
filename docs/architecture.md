@@ -310,8 +310,8 @@ de estilos de la aplicación y Qt repinta el árbol entero de las dos ventanas.
   duración, cuántas evidencias dejó y de qué plan salió— y cada fila abre sus resultados en el
   historial (`openRunRequested` → `HistoryView::showRun()`), que es donde están sus pasos con su
   veredicto, sus evidencias y con qué está enlazada en Jira y Zephyr.
-* **Duplicar** copia contenido y metadatos, no capturas ni resultado; el nuevo caso queda en
-  Borrador justo después del original.
+* **Duplicar** copia contenido y metadatos, no capturas ni resultado; el nuevo caso queda
+  Listo justo después del original. No hay estado Borrador: un caso nace Listo y sólo pasa a Obsoleto a mano (los guardados como «Borrador» se cargan Listos).
 * **Deshacer**: borrar un caso, un paso o una captura guarda una instantánea de la lista
   (`pushUndo`). `undo()` la restaura mientras no haya otra mutación ni pasen 20 s; después
   `commitUndo()` emite `filesReleased()` con los ficheros de capturas que ya nadie referencia y

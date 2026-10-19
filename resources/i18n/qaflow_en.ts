@@ -311,10 +311,6 @@
         <translation>&lt;p&gt;&lt;b&gt;Related story:&lt;/b&gt; %1&lt;/p&gt;</translation>
     </message>
     <message>
-        <source>&lt;h3&gt;Pasos para reproducir&lt;/h3&gt;&lt;p&gt;%1&lt;/p&gt;</source>
-        <translation>&lt;h3&gt;Steps to reproduce&lt;/h3&gt;&lt;p&gt;%1&lt;/p&gt;</translation>
-    </message>
-    <message>
         <source>&lt;h3&gt;Resultado esperado&lt;/h3&gt;&lt;p&gt;%1&lt;/p&gt;</source>
         <translation>&lt;h3&gt;Expected result&lt;/h3&gt;&lt;p&gt;%1&lt;/p&gt;</translation>
     </message>
@@ -437,10 +433,6 @@
     <message>
         <source>Listo</source>
         <translation>Ready</translation>
-    </message>
-    <message>
-        <source>Borrador</source>
-        <translation>Draft</translation>
     </message>
     <message>
         <source>Obsoleto</source>
@@ -867,6 +859,25 @@
     <message>
         <source>sin casos en su plan</source>
         <translation>no cases in its plan</translation>
+    </message>
+    <message>
+        <source>h3. Usuarios utilizados
+%1
+
+</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>### Usuarios utilizados</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;h3&gt;Usuarios utilizados&lt;/h3&gt;&lt;ul&gt;%1&lt;/ul&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>&lt;h3&gt;Pasos para reproducir&lt;/h3&gt;%1</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1466,6 +1477,10 @@
         <source>No se pudo guardar %1: %2</source>
         <translation>Could not save %1: %2</translation>
     </message>
+    <message>
+        <source>%1 se creó sin lo que Jira rechazó · %2</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>qaflow</name>
@@ -1479,10 +1494,6 @@
     <message>
         <source>Generar casos con IA</source>
         <translation>Generate cases with AI</translation>
-    </message>
-    <message>
-        <source>Copia el prompt, pégalo en ChatGPT u otra IA y trae aquí su respuesta. Los casos que elijas se añaden %1 en Borrador y con la etiqueta «%2».</source>
-        <translation>Copy the prompt, paste it into ChatGPT or another AI and bring its answer back here. The cases you choose are added %1 as Draft and with the label “%2”.</translation>
     </message>
     <message>
         <source>Texto del requerimiento</source>
@@ -1589,10 +1600,6 @@
         <translation>“Generate with AI” sends this prompt to %1 with your key. Review the text first: it is all that leaves this computer.</translation>
     </message>
     <message>
-        <source>Genera los casos con la IA configurada, o copia el prompt para usar otra. Los casos que elijas se añaden %1 en Borrador y con la etiqueta «%2».</source>
-        <translation>Generate the cases with the configured AI, or copy the prompt to use another one. The cases you choose are added %1 as Draft and with the label “%2”.</translation>
-    </message>
-    <message>
         <source>Generando…</source>
         <translation>Generating…</translation>
     </message>
@@ -1623,6 +1630,14 @@
     <message>
         <source>Añadir %1 caso(s)</source>
         <translation>Add %1 case(s)</translation>
+    </message>
+    <message>
+        <source>Copia el prompt, pégalo en ChatGPT u otra IA y trae aquí su respuesta. Los casos que elijas se añaden %1 Listos y con la etiqueta «%2».</source>
+        <translation>Copy the prompt, paste it into ChatGPT or another AI and bring its answer back here. The cases you choose are added %1 as Ready and with the label “%2”.</translation>
+    </message>
+    <message>
+        <source>Genera los casos con la IA configurada, o copia el prompt para usar otra. Los casos que elijas se añaden %1 Listos y con la etiqueta «%2».</source>
+        <translation>Generate the cases with the configured AI, or copy the prompt to use another one. The cases you choose are added %1 as Ready and with the label “%2”.</translation>
     </message>
 </context>
 <context>
@@ -1924,10 +1939,6 @@
         <translation>Short summary: what fails and where</translation>
     </message>
     <message>
-        <source>Título</source>
-        <translation>Title</translation>
-    </message>
-    <message>
         <source>Tipo de observación del acta de control de calidad (R-213)</source>
         <translation>Finding type of the quality control record (R-213)</translation>
     </message>
@@ -1946,14 +1957,6 @@
     <message>
         <source>Entorno</source>
         <translation>Environment</translation>
-    </message>
-    <message>
-        <source>Caso vinculado</source>
-        <translation>Linked test case</translation>
-    </message>
-    <message>
-        <source>Paso</source>
-        <translation>Step</translation>
     </message>
     <message>
         <source>CAMPOS DEL GESTOR</source>
@@ -2008,20 +2011,12 @@
         <translation>Labels</translation>
     </message>
     <message>
-        <source>Pasos para reproducir</source>
-        <translation>Steps to reproduce</translation>
-    </message>
-    <message>
         <source>Qué ocurrió realmente</source>
         <translation>What actually happened</translation>
     </message>
     <message>
         <source>Resultado esperado</source>
         <translation>Expected result</translation>
-    </message>
-    <message>
-        <source>Resultado actual</source>
-        <translation>Actual result</translation>
     </message>
     <message>
         <source>+ Capturar pantalla</source>
@@ -2042,10 +2037,6 @@
     <message>
         <source>Cancelar</source>
         <translation>Cancel</translation>
-    </message>
-    <message>
-        <source>NUEVO DEFECTO · DESTINO %1 &lt;span style=&quot;color:%2;font-family:monospace&quot;&gt;%3&lt;/span&gt;</source>
-        <translation>NEW DEFECT · TARGET %1 &lt;span style=&quot;color:%2;font-family:monospace&quot;&gt;%3&lt;/span&gt;</translation>
     </message>
     <message>
         <source>(sin proyecto)</source>
@@ -2151,6 +2142,210 @@
         <source>Ya hay una captura o una grabación en curso</source>
         <translation>A capture or a recording is already in progress</translation>
     </message>
+    <message>
+        <source>Carga los valores del proyecto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Qué pasó</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Contexto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Revisar y enviar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Resultado y pasos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Entorno, usuarios, evidencia</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Título y campos del gestor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>¿Qué pasó?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Resultado actual *</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PASOS PARA REPRODUCIR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>+ Añadir paso</source>
+        <translation type="unfinished">+ Add step</translation>
+    </message>
+    <message>
+        <source>Importar pasos del caso</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sustituye la lista por los pasos del caso, con sus datos de prueba, para editarlos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Los pasos que de verdad llevan al fallo, que pueden no ser los del caso. Enter añade otro.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Contexto de la prueba</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dónde se probó</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paso vinculado</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>USUARIOS USADOS EN EL SISTEMA</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>+ Añadir usuario</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Usuario y rol o perfil, sin contraseñas. Se recuerdan para los próximos partes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TÍTULO · PROPUESTO CON LO QUE ESCRIBISTE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Elegir componentes del proyecto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Elegir versiones del proyecto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Atrás</source>
+        <translation type="unfinished">Back</translation>
+    </message>
+    <message>
+        <source>Siguiente</source>
+        <translation type="unfinished">Next</translation>
+    </message>
+    <message>
+        <source>NUEVO DEFECTO · %1 &lt;span style=&quot;color:%2;font-family:monospace&quot;&gt;%3&lt;/span&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Caso &lt;span style=&quot;font-family:monospace;color:%1&quot;&gt;%2&lt;/span&gt;%3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ciclo %1 · entorno &lt;b style=&quot;color:%2&quot;&gt;%3&lt;/b&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Entorno &lt;b&gt;%1&lt;/b&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 paso</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 pasos</source>
+        <translation type="unfinished">%1 steps</translation>
+    </message>
+    <message>
+        <source>%1 usuario</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 usuarios</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 adjunto</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 adjuntos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>El parte lleva: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tomado del ciclo en curso</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tomado del ciclo «%1»</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sin ciclo en curso: indica dónde se probó</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 no existe en %2: no se enviará</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 no existen en %2: no se enviarán</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>«%1» no es un tipo de %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Acción que hiciste</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Quitar paso</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Paso %1</source>
+        <translation type="unfinished">Step %1</translation>
+    </message>
+    <message>
+        <source>El caso no tiene pasos que importar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Usuario</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rol / perfil</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rol o perfil</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Quitar usuario</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Añadir al parte</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>qaflow::BugReportService</name>
@@ -2165,10 +2360,6 @@
     <message>
         <source>[%1] Bloqueo en paso %2: %3</source>
         <translation>[%1] Blocked at step %2: %3</translation>
-    </message>
-    <message>
-        <source>%1. %2 · Datos: %3</source>
-        <translation>%1. %2 · Data: %3</translation>
     </message>
     <message>
         <source>El gestor configurado no sabe buscar los bugs de QAflow</source>
@@ -2197,6 +2388,10 @@
     <message>
         <source>%1: no se pudo dejar el comentario · %2</source>
         <translation>%1: the comment couldn&apos;t be added · %2</translation>
+    </message>
+    <message>
+        <source>%1 · Datos: %2</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2762,10 +2957,6 @@
         <translation>Clone</translation>
     </message>
     <message>
-        <source>Crear una copia de este caso con sus pasos, en Borrador y sin ejecuciones (Ctrl+D)</source>
-        <translation>Create a copy of this case with its steps, as Draft and without runs (Ctrl+D)</translation>
-    </message>
-    <message>
         <source>Precondiciones</source>
         <translation>Preconditions</translation>
     </message>
@@ -2804,6 +2995,10 @@
     <message>
         <source>Todas las suites</source>
         <translation>All suites</translation>
+    </message>
+    <message>
+        <source>Crear una copia de este caso con sus pasos, sin ejecuciones (Ctrl+D)</source>
+        <translation>Create a copy of this case with its steps, without runs (Ctrl+D)</translation>
     </message>
 </context>
 <context>
@@ -5191,10 +5386,6 @@ Create another one anyway?</translation>
         <translation>The AI is no longer available</translation>
     </message>
     <message>
-        <source>%1 caso(s) generados en Borrador y añadidos a %2: revísalos antes de ejecutarlos</source>
-        <translation>%1 case(s) generated as Draft and added to %2: review them before running them</translation>
-    </message>
-    <message>
         <source>▦ Tablero</source>
         <translation>▦ Board</translation>
     </message>
@@ -5976,6 +6167,10 @@ Create another one anyway?</translation>
     <message>
         <source>para cerrar QA</source>
         <translation>to close QA</translation>
+    </message>
+    <message>
+        <source>%1 caso(s) generados y añadidos a %2: revísalos antes de ejecutarlos</source>
+        <translation>%1 case(s) generated and added to %2: review them before running them</translation>
     </message>
 </context>
 <context>
@@ -7900,7 +8095,7 @@ Los que están en pausa se archivan con lo marcado (lo pendiente queda N/A) y lo
     </message>
     <message>
         <source>Todavía no se leyó la ficha de GESREQ: el alcance, dónde probar y los adjuntos llegan al pulsar «Cargar ficha».</source>
-        <translation>The GESREQ record hasn't been read yet: the scope, where to test and the attachments arrive when you press “Load record”.</translation>
+        <translation>The GESREQ record hasn&apos;t been read yet: the scope, where to test and the attachments arrive when you press “Load record”.</translation>
     </message>
     <message>
         <source>La ficha no trae el alcance.</source>

@@ -50,7 +50,7 @@ public:
 
     // Mutaciones de caso
     QString createCase();
-    /// Copia sin capturas ni resultado de ejecución, en estado Borrador. Devuelve el id nuevo.
+    /// Copia sin capturas ni resultado de ejecución, en estado Listo. Devuelve el id nuevo.
     QString duplicateCase(const QString& id);
     void removeCase(const QString& id);
     void updateCase(const QString& id, const std::function<void(TestCase&)>& mutate);

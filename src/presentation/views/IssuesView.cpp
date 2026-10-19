@@ -3816,7 +3816,7 @@ void IssuesView::generateCases() {
         if (planId.isEmpty()) planId = ensurePlan(issueId);
         const QStringList ids = m_cases.addCases(chosen);
         m_plans.addCases(planId, ids);
-        emit toast(tr("%1 caso(s) generados en Borrador y añadidos a %2: revísalos antes de ejecutarlos").arg(ids.size()).arg(planId),
+        emit toast(tr("%1 caso(s) generados y añadidos a %2: revísalos antes de ejecutarlos").arg(ids.size()).arg(planId),
                    theme::Green);
     });
     dialog->open();

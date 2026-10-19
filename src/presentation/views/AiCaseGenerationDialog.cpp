@@ -58,7 +58,7 @@ AiCaseGenerationDialog::AiCaseGenerationDialog(const ai::GenerationRequest& requ
     v->addWidget(ui::label(tr("Generar casos con IA"), "h2"));
     m_target = target;
     m_intro = ui::label(tr("Copia el prompt, pégalo en ChatGPT u otra IA y trae aquí su respuesta. Los casos que elijas se añaden %1 "
-                           "en Borrador y con la etiqueta «%2».")
+                           "Listos y con la etiqueta «%2».")
                             .arg(target, ai::generatedTag()),
                         "muted-sm");
     m_intro->setWordWrap(true);
@@ -272,7 +272,7 @@ void AiCaseGenerationDialog::setGenerator(const QString& destination, Generator 
                                .arg(destination));
     if (on)
         m_intro->setText(tr("Genera los casos con la IA configurada, o copia el prompt para usar otra. Los casos que elijas se añaden %1 "
-                            "en Borrador y con la etiqueta «%2».")
+                            "Listos y con la etiqueta «%2».")
                              .arg(m_target, ai::generatedTag()));
     // Con IA configurada, generar es lo principal; copiar queda para usar otra.
     ui::setRole(m_copy, on ? "outline" : "primary");

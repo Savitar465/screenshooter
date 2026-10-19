@@ -23,17 +23,6 @@ private slots:
 
     // ---- TestCase ----------------------------------------------------------------------
 
-    void readyToBeMarkedListoNeedsTitleAndCompleteSteps() {
-        TestCase c;
-        QVERIFY(!c.readyToBeMarkedListo());
-        c.title = QStringLiteral("x");
-        QVERIFY(!c.readyToBeMarkedListo());            // sin pasos
-        c.steps.append(TestStep{QStringLiteral("a"), QString(), QString()});
-        QVERIFY(!c.readyToBeMarkedListo());            // paso incompleto
-        c.steps[0].expected = QStringLiteral("b");
-        QVERIFY(c.readyToBeMarkedListo());
-    }
-
     void screenshotKindFollowsTheExtension() {
         const Screenshot png{1, 0, QStringLiteral("cap_001.png"), QStringLiteral("/x/cap_001.png")};
         QVERIFY(png.isImage());
@@ -76,9 +65,10 @@ private slots:
 
     void priorityAndStatusRoundTripThroughStrings() {
         for (auto p : {Priority::Alta, Priority::Media, Priority::Baja}) QCOMPARE(static_cast<int>(priorityFromString(toString(p))), static_cast<int>(p));
-        for (auto s : {CaseStatus::Listo, CaseStatus::Borrador, CaseStatus::Obsoleto}) QCOMPARE(static_cast<int>(statusFromString(toString(s))), static_cast<int>(s));
+        for (auto s : {CaseStatus::Listo, CaseStatus::Obsoleto}) QCOMPARE(static_cast<int>(statusFromString(toString(s))), static_cast<int>(s));
         QCOMPARE(static_cast<int>(priorityFromString(QStringLiteral("???"))), static_cast<int>(Priority::Media));   // valor por defecto
-        QCOMPARE(static_cast<int>(statusFromString(QString())), static_cast<int>(CaseStatus::Borrador));
+        QCOMPARE(static_cast<int>(statusFromString(QString())), static_cast<int>(CaseStatus::Listo));
+        QCOMPARE(static_cast<int>(statusFromString(QStringLiteral("Borrador"))), static_cast<int>(CaseStatus::Listo));   // datos antiguos
     }
 };
 

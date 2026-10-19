@@ -16,7 +16,6 @@ QString toString(Priority p) {
 QString toString(CaseStatus s) {
     switch (s) {
         case CaseStatus::Listo: return QStringLiteral("Listo");
-        case CaseStatus::Borrador: return QStringLiteral("Borrador");
         case CaseStatus::Obsoleto: return QStringLiteral("Obsoleto");
     }
     return {};
@@ -34,7 +33,6 @@ QString label(Priority p) {
 QString label(CaseStatus s) {
     switch (s) {
         case CaseStatus::Listo: return QCoreApplication::translate("core", "Listo");
-        case CaseStatus::Borrador: return QCoreApplication::translate("core", "Borrador");
         case CaseStatus::Obsoleto: return QCoreApplication::translate("core", "Obsoleto");
     }
     return {};
@@ -56,10 +54,10 @@ Priority priorityFromString(const QString& s) {
     return Priority::Media;
 }
 
+// Ya no hay estado Borrador: los casos guardados con él (y cualquier valor desconocido) se cargan Listos.
 CaseStatus statusFromString(const QString& s) {
-    if (s.compare(QStringLiteral("Listo"), Qt::CaseInsensitive) == 0) return CaseStatus::Listo;
     if (s.compare(QStringLiteral("Obsoleto"), Qt::CaseInsensitive) == 0) return CaseStatus::Obsoleto;
-    return CaseStatus::Borrador;
+    return CaseStatus::Listo;
 }
 
 QString LastRun::label(const QDateTime& now) const {
@@ -127,12 +125,6 @@ QStringList parseTags(const QString& text) {
         if (!t.isEmpty() && !out.contains(t, Qt::CaseInsensitive)) out << t;
     }
     return out;
-}
-
-bool TestCase::readyToBeMarkedListo() const {
-    if (title.trimmed().isEmpty() || steps.isEmpty()) return false;
-    for (const auto& s : steps) if (!s.isComplete()) return false;
-    return true;
 }
 
 } // namespace qaflow

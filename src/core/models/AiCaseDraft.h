@@ -30,7 +30,7 @@ QString generatedTag();
 
 struct ParseResult {
     bool ok = false;
-    /// Casos leídos, sin id (lo asigna el store al guardarlos), en Borrador y con `generatedTag()`.
+    /// Casos leídos, sin id (lo asigna el store al guardarlos), Listos y con `generatedTag()`.
     QList<TestCase> cases;
     /// Lo que se leyó pero hay que revisar: casos descartados, pasos sin resultado esperado…
     QStringList warnings;

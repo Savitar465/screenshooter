@@ -62,7 +62,7 @@ private slots:
         QVERIFY(c->title.endsWith(QStringLiteral("(copia)")));
         QCOMPARE(c->steps.size(), 4);
         QCOMPARE(c->suite, QStringLiteral("Checkout"));
-        QCOMPARE(static_cast<int>(c->status), static_cast<int>(CaseStatus::Borrador));
+        QCOMPARE(static_cast<int>(c->status), static_cast<int>(CaseStatus::Listo));
         QCOMPARE(static_cast<int>(c->lastRun.outcome), static_cast<int>(RunOutcome::None));
         QVERIFY(c->shots.isEmpty());
         QCOMPARE(f.store.cases()[4].id, id);   // justo después del original (índice 3)

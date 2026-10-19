@@ -71,7 +71,7 @@ private slots:
         QVERIFY(c.id.isEmpty());
         QCOMPARE(c.title, QStringLiteral("Alta de tránsito"));
         QCOMPARE(toString(c.priority), toString(Priority::Alta));
-        QCOMPARE(toString(c.status), toString(CaseStatus::Borrador));
+        QCOMPARE(toString(c.status), toString(CaseStatus::Listo));
         QCOMPARE(c.preconditions, QStringLiteral("Usuario operador"));
         QCOMPARE(c.component, QStringLiteral("Registro"));
         QCOMPARE(c.tags, (QStringList{ai::generatedTag(), QStringLiteral("positivo")}));

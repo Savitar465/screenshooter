@@ -1,6 +1,5 @@
 #include "FlowLayout.h"
 
-#include <QTimer>
 #include <QWidget>
 
 namespace qaflow {
@@ -26,18 +25,7 @@ int FlowLayout::heightForWidth(int width) const { return doLayout(QRect(0, 0, wi
 
 void FlowLayout::setGeometry(const QRect& rect) {
     QLayout::setGeometry(rect);
-    const int needed = doLayout(rect, false);
-    // Menos alto del que ocupan las líneas: algún contenedor de más arriba se quedó con el alto por ancho de
-    // antes de que algo pasara a otra línea (en Windows no siempre se le pide volver a medir) y lo de abajo
-    // asomaría. Se invalida la medida de toda la cadena, después de esta pasada y una vez por tamaño para no
-    // dar vueltas si de verdad no hay más sitio.
-    QWidget* owner = parentWidget();
-    if (owner && needed > rect.height() && QSize(rect.width(), needed) != m_remeasured) {
-        m_remeasured = QSize(rect.width(), needed);
-        QTimer::singleShot(0, owner, [owner]() {
-            for (QWidget* w = owner; w && !w->isWindow(); w = w->parentWidget()) w->updateGeometry();
-        });
-    }
+    doLayout(rect, false);
 }
 
 QSize FlowLayout::sizeHint() const { return minimumSize(); }

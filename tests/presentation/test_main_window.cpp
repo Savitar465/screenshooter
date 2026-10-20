@@ -109,6 +109,26 @@ QString overflowReport(QScrollArea* area) {
     return out;
 }
 
+/// Explica por qué `w` no cabe a lo alto: de él hacia arriba (hasta el scroll), la altura que tiene cada
+/// contenedor frente a la que pide para su ancho, y los hermanos del que se corta con la suya.
+QString heightReport(QWidget* w) {
+    const auto describe = [](QWidget* q) {
+        const QMargins m = q->contentsMargins();
+        return QStringLiteral("%1#%2 y=%3 %4x%5 hfw=%6 min=%7 sh=%8 márgenes=%9/%10")
+            .arg(QString::fromLatin1(q->metaObject()->className()).remove(QStringLiteral("qaflow::")), q->objectName())
+            .arg(q->y()).arg(q->width()).arg(q->height())
+            .arg(q->hasHeightForWidth() ? q->heightForWidth(q->width()) : -1)
+            .arg(q->minimumSizeHint().height()).arg(q->sizeHint().height()).arg(m.top()).arg(m.bottom());
+    };
+    QString out;
+    if (QWidget* p = w->parentWidget())
+        for (QWidget* sibling : p->findChildren<QWidget*>(Qt::FindDirectChildrenOnly))
+            if (sibling->isVisible()) out += QStringLiteral("\n    · ") + describe(sibling);
+    for (QWidget* q = w->parentWidget(); q && q->objectName() != QLatin1String("qt_scrollarea_viewport"); q = q->parentWidget())
+        out += QStringLiteral("\n    ↑ ") + describe(q);
+    return out;
+}
+
 /// Encoge su ventana a `area` al llegar el Show, como el filtro de ScreenFit pero con una pantalla
 /// simulada: con el tamaño que le da show() y antes de que exista la ventana nativa (con un gestor de
 /// ventanas real, encoger una ya mapeada llega tarde y vuelve a su tamaño de antes).
@@ -162,7 +182,7 @@ QStringList clippedWidgets(QWidget* root, Qt::Orientations directions = Qt::Vert
             const auto* wrapped = qobject_cast<QLabel*>(w);
             const int missing = wrapped && wrapped->wordWrap() ? std::min(w->heightForWidth(w->width()), w->maximumHeight()) - w->height()
                               : w->hasHeightForWidth() ? 0 : effectiveMinimum(w, Qt::Vertical) - w->height();
-            if (below > 1) problems << QStringLiteral("asoma %1 px por abajo").arg(below);
+            if (below > 1) problems << QStringLiteral("asoma %1 px por abajo").arg(below) + heightReport(w);
             if (missing > 1) problems << QStringLiteral("le faltan %1 px de alto").arg(missing);
         }
         if (directions & Qt::Horizontal) {

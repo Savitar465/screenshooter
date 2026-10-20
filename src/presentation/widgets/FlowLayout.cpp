@@ -25,7 +25,14 @@ int FlowLayout::heightForWidth(int width) const { return doLayout(QRect(0, 0, wi
 
 void FlowLayout::setGeometry(const QRect& rect) {
     QLayout::setGeometry(rect);
-    doLayout(rect, false);
+    const int needed = doLayout(rect, false);
+    // Menos alto del que ocupan las líneas: el contenedor midió con un alto por ancho viejo (en Windows
+    // la caché no siempre se invalida al pasar un elemento a otra línea) y lo de abajo asomaría. Se le
+    // pide que vuelva a medir, una vez por tamaño para no dar vueltas si de verdad no hay más sitio.
+    if (needed > rect.height() && QSize(rect.width(), needed) != m_remeasured) {
+        m_remeasured = QSize(rect.width(), needed);
+        if (QWidget* w = parentWidget()) w->updateGeometry();
+    }
 }
 
 QSize FlowLayout::sizeHint() const { return minimumSize(); }

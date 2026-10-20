@@ -31,6 +31,7 @@ private:
     QList<QLayoutItem*> m_items;
     int m_hSpace;
     int m_vSpace;
+    QSize m_remeasured;   // el último tamaño con el que se pidió al contenedor volver a medir
 };
 
 } // namespace qaflow

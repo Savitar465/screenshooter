@@ -1704,6 +1704,9 @@ QWidget* sideRow(const QString& name, QWidget* value, QWidget* extra = nullptr) 
 /// Bloque del panel lateral: una tarjeta con su título arriba.
 QFrame* sideCard(const QString& title, QVBoxLayout** body, QHBoxLayout** head = nullptr) {
     auto* card = ui::card("card");
+    // El panel tiene ancho fijo: si algo de la tarjeta pidiera más ancho mínimo, el layout la mediría a ese
+    // ancho (con menos líneas) y le daría menos alto del que ocupa (pasa con la letra ancha de Windows).
+    card->setSizePolicy(QSizePolicy::Ignored, card->sizePolicy().verticalPolicy());
     auto* v = ui::vbox(card, 0, 8);
     v->setContentsMargins(16, 12, 16, 14);
     if (!title.isEmpty()) {

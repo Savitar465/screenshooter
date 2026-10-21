@@ -3263,6 +3263,18 @@
 <context>
     <name>qaflow::GreqsView</name>
     <message>
+        <source>Ver ficha</source>
+        <translation>View record</translation>
+    </message>
+    <message>
+        <source>Abre la ficha de GESREQ con todos sus datos en una ventana</source>
+        <translation>Opens the GESREQ record with all its data in a window</translation>
+    </message>
+    <message>
+        <source>No se pudo leer la ficha de GESREQ · %1</source>
+        <translation>Could not read the GESREQ record · %1</translation>
+    </message>
+    <message>
         <source>Filtrar por número, sistema, descripción, solicitante…</source>
         <translation>Filter by number, system, description, requester…</translation>
     </message>
@@ -4504,6 +4516,10 @@ Remove it?</translation>
 </context>
 <context>
     <name>qaflow::IssuesView</name>
+    <message>
+        <source>Estado en GESREQ</source>
+        <translation>Status in GESREQ</translation>
+    </message>
     <message>
         <source>Issues</source>
         <translation>Issues</translation>
@@ -6222,6 +6238,10 @@ Create another one anyway?</translation>
 </context>
 <context>
     <name>qaflow::MainWindow</name>
+    <message>
+        <source>QAflow %1 · Equipo Calidad</source>
+        <translation>QAflow %1 · Quality Team</translation>
+    </message>
     <message>
         <source>Ejecución de %1 recuperada de la sesión anterior</source>
         <translation>Run of %1 recovered from the previous session</translation>
@@ -7957,6 +7977,10 @@ Los que están en pausa se archivan con lo marcado (lo pendiente queda N/A) y lo
 </context>
 <context>
     <name>qaflow::RequirementWindow</name>
+    <message>
+        <source>Sin issue · última lectura %1</source>
+        <translation>No issue · last read %1</translation>
+    </message>
     <message>
         <source>Cargar ficha</source>
         <translation>Load record</translation>
@@ -9833,10 +9857,6 @@ Press “Capture” or drop a file on the window.</translation>
     <message>
         <source>%1 casos</source>
         <translation>%1 cases</translation>
-    </message>
-    <message>
-        <source>QAflow %1 · Equipo Calidad</source>
-        <translation>QAflow %1 · Quality Team</translation>
     </message>
     <message>
         <source>Métricas · tasa de éxito por suite y evolución entre ciclos</source>

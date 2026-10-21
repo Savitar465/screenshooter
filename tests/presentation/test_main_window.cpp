@@ -18,6 +18,7 @@
 #include "presentation/widgets/ElidedLabel.h"
 #include "presentation/widgets/ShotCard.h"
 #include "presentation/views/CasesView.h"
+#include "presentation/views/GreqsView.h"
 #include "presentation/views/IssuesView.h"
 #include "presentation/views/CycleStartDialog.h"
 #include "presentation/views/HistoryView.h"
@@ -327,14 +328,52 @@ private slots:
         }
     }
 
-    void opensOnCasesAndSidebarNavigates() {
+    void opensOnIssuesAndSidebarNavigates() {
         WindowFixture f;
-        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Casos));
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Issues));
         QVERIFY(f.nav(Screen::Historial));
         QTest::mouseClick(f.nav(Screen::Historial), Qt::LeftButton);
         QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Historial));
         QTest::mouseClick(f.nav(Screen::Bug), Qt::LeftButton);
         QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Bug));
+    }
+
+    // Estando dentro de un issue, el botón de Issues del rail vuelve al tablero, no al issue abierto.
+    void theIssuesRailButtonGoesBackToTheBoard() {
+        WindowFixture f;
+        const QString id = f.app.issues.createIssue(QStringLiteral("Cupones de descuento"));
+        f.window->openIssue(id);
+        auto* title = f.window->findChild<QLineEdit*>(QStringLiteral("issueTitle"));
+        QVERIFY(title && title->isVisibleTo(f.window.get()));
+        QTest::mouseClick(f.nav(Screen::Issues), Qt::LeftButton);
+        QCOMPARE(f.window->currentScreen(), Screen::Issues);
+        QVERIFY(!title->isVisibleTo(f.window.get()));
+        QCOMPARE(f.app.issues.selectedId(), id);   // el issue sigue elegido: sólo se sale de él
+    }
+
+    // El plazo de QA cuenta días hábiles: los sábados y domingos no suman.
+    void theQaPeriodSkipsWeekends() {
+        const QDate monday(2026, 10, 19), friday(2026, 10, 23), saturday(2026, 10, 24), nextMonday(2026, 10, 26);
+        QCOMPARE(requirement::workingDaysTo(monday, friday), 4);
+        QCOMPARE(requirement::workingDaysTo(friday, nextMonday), 1);
+        QCOMPARE(requirement::workingDaysTo(saturday, nextMonday), 1);
+        QCOMPARE(requirement::workingDaysTo(nextMonday, friday), -1);
+        QCOMPARE(requirement::workingDaysTo(monday, monday.addDays(14)), 10);
+
+        ExternalRequirement r;
+        r.assignedFrom = friday;
+        r.assignedUntil = nextMonday.addDays(1);   // viernes a martes: tres días hábiles
+        auto p = requirement::qaPeriod(r, saturday);
+        QVERIFY(p.valid && p.started);
+        QCOMPARE(p.total, 3);
+        QCOMPARE(p.elapsed, 1);
+        QCOMPARE(p.left, 2);
+        p = requirement::qaPeriod(r, monday);
+        QVERIFY(!p.started);
+        QCOMPARE(p.untilStart, 4);
+        // Vencido un viernes, el sábado ya está vencido.
+        r.assignedUntil = friday;
+        QVERIFY(requirement::qaPeriod(r, saturday).left < 0);
     }
 
     void fileMenuOpensSettingsInItsOwnWindow() {
@@ -345,7 +384,7 @@ private slots:
         QWidget* dialog = f.window->settingsWindow();
         QVERIFY(dialog);
         QVERIFY(dialog->isWindow());
-        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Casos));   // la pantalla no cambia
+        QCOMPARE(static_cast<int>(f.window->currentScreen()), static_cast<int>(Screen::Issues));   // la pantalla no cambia
         // Los ajustes se guardan al momento: el tema elegido en la ventana llega al store.
         auto* theme = dialog->findChild<QComboBox*>(QStringLiteral("settingsTheme"));
         theme->setCurrentIndex(theme->findData(static_cast<int>(AppTheme::Light)));
@@ -2541,6 +2580,64 @@ private slots:
         f.window.reset();   // antes que el catálogo, al que la ventana sigue conectada
     }
 
+    // Desde GREQS se ve la ficha de un requerimiento sin tener que crear su issue, en la misma ventana que
+    // la del issue. Y en el issue, uno que salió de la bandeja dice en qué estado quedó (leído de su ficha),
+    // sin el aviso de que ya no está.
+    void greqsShowsTheFileAndTheIssueTellsTheStateOfOneThatLeftTheInbox() {
+        WindowFixture f;
+        ProjectStore projects(std::make_shared<testing::MemoryProjectRepository>());
+        QVERIFY(projects.load());
+        QVERIFY(projects.setRequirementSystem(projects.activeId(), QStringLiteral("PORTAL WEB")));
+        f.ctx.projects = &projects;
+        f.ctx.projectId = projects.activeId();
+        f.window = std::make_unique<MainWindow>(f.ctx);
+        f.window->show();
+        f.app.settings.updateRequirementSource([](RequirementSourceSettings& r) { r.url = QStringLiteral("http://gesreq.test:7401/greq"); });
+        ExternalRequirement r;
+        r.id = QStringLiteral("2025101");
+        r.systemCode = QStringLiteral("PORTAL WEB");
+        r.system = QStringLiteral("PORTAL WEB-PORTAL");
+        r.summary = QStringLiteral("Formulario de contacto");
+        r.states = {QStringLiteral("CONTROL DE CALIDAD ASIGNADO")};
+        f.app.requirementSource->inbox = {r};
+        RequirementDetail detail;
+        detail.id = r.id;
+        detail.reference = QStringLiteral("Formulario de contacto del portal");
+        detail.description = QStringLiteral("Validar el correo.");
+        detail.state = QStringLiteral("CONTROL DE CALIDAD ASIGNADO");
+        f.app.requirementSource->details.insert(detail.id, detail);
+
+        f.openGreqs();
+        QVERIFY(f.app.issues.issues().isEmpty());
+        f.liveButton(QStringLiteral("greqDetail-%1").arg(r.id))->click();
+        auto* window = f.window->findChild<RequirementWindow*>(QStringLiteral("greqsRequirementWindow"));
+        QVERIFY(window && window->isVisible());
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QCOMPARE(window->findChild<QLabel*>(QStringLiteral("requirementScope"))->text(), detail.description);   // la leyó al abrirse
+        QVERIFY(f.app.issues.issues().isEmpty());   // ver la ficha no crea nada
+        window->close();
+
+        // Con issue, al salir de la bandeja la tarjeta enseña el estado en que quedó según su ficha.
+        f.greqAction(r.id)->click();
+        const QString id = f.app.issues.selectedId();
+        QVERIFY(!id.isEmpty());
+        f.app.requirementSource->details[r.id].state = QStringLiteral("CONTROL DE CALIDAD CONFORME");
+        f.app.requirementSource->inbox.clear();
+        f.openGreqs();
+        f.window->findChild<GreqsView*>()->reload();
+        QVERIFY(f.app.issues.find(id)->requirement.missing);
+        f.window->openIssue(id);
+        QTRY_COMPARE(f.app.issues.find(id)->requirement.detail.state, QStringLiteral("CONTROL DE CALIDAD CONFORME"));
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        auto* state = f.window->findChild<QWidget*>(QStringLiteral("issueRequirementState"));
+        QVERIFY(state && state->isVisibleTo(f.window.get()));
+        QStringList texts;
+        for (auto* l : state->findChildren<QLabel*>()) texts << l->text();
+        QVERIFY2(texts.contains(QStringLiteral("Control de calidad conforme")), qPrintable(texts.join(QStringLiteral(" | "))));
+        QVERIFY(!f.window->findChild<QWidget*>(QStringLiteral("issueMissing")));
+        f.window.reset();
+    }
+
     // La tarjeta del requerimiento enseña primero el plazo de QA y lo demás en pocas líneas; la ficha
     // entera ya no se despliega en el panel: se abre en su ventana, que la lee de GESREQ la primera vez.
     void theRequirementCardShowsTheQaDeadlineAndOpensTheFullFileInItsWindow() {
@@ -2584,7 +2681,9 @@ private slots:
         f.greqAction(r.id)->click();
         const QString id = f.app.issues.selectedId();
         QVERIFY(!id.isEmpty());
-        QCOMPARE(f.liveLabel("issueRequirementDeadlineValue")->text(), QStringLiteral("4 días"));
+        // Los días son hábiles: según el día de hoy, el fin de semana cae o no dentro de esos cuatro.
+        const int left = requirement::workingDaysTo(today, r.assignedUntil);
+        QCOMPARE(f.liveLabel("issueRequirementDeadlineValue")->text(), left == 1 ? QStringLiteral("1 día") : QStringLiteral("%1 días").arg(left));
         const QString meta = f.liveLabel("issueRequirementSummary")->text();
         QVERIFY2(meta.contains(QStringLiteral("ALTA")) && meta.contains(QStringLiteral("PÉREZ GÓMEZ ANA (GTE)")), qPrintable(meta));
         QCOMPARE(f.liveLabel("issueRequirementTitle")->text(), r.summary);
@@ -3289,12 +3388,12 @@ private slots:
     // seis vistas, que es lo que hacía que cambiar de proyecto bloqueara la interfaz casi un segundo.
     void screensAreBuiltTheFirstTimeTheyAreOpened() {
         WindowFixture f;
-        QVERIFY(f.window->findChild<CasesView*>());        // la pantalla en la que arranca, sí
-        QVERIFY(!f.window->findChild<IssuesView*>());
+        QVERIFY(f.window->findChild<IssuesView*>());       // la pantalla en la que arranca, sí
+        QVERIFY(!f.window->findChild<CasesView*>());
         QVERIFY(!f.window->findChild<HistoryView*>());
 
-        f.window->navigate(Screen::Issues);
-        QVERIFY(f.window->findChild<IssuesView*>());
+        f.window->navigate(Screen::Casos);
+        QVERIFY(f.window->findChild<CasesView*>());
         QVERIFY(!f.window->findChild<HistoryView*>());     // las que no se han abierto siguen sin construirse
 
         // Y lo que se abre en profundidad también la construye: nadie tiene que saber si ya existía.

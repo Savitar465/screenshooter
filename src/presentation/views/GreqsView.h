@@ -4,6 +4,8 @@
 #include "core/models/Requirement.h"
 
 #include <QDateTime>
+#include <QHash>
+#include <QPointer>
 #include <QWidget>
 #include <optional>
 
@@ -19,6 +21,7 @@ struct AppContext;
 class IssueStore;
 class ProjectStore;
 class RequirementSourceService;
+class RequirementWindow;
 
 /// Pestaña «GREQS» de la pantalla de issues: la bandeja de control de calidad del usuario en GESREQ, con
 /// lo que ya tiene issue (y en qué proyecto) y lo que no. Sustituye a «Consultar GESREQ»: desde aquí se
@@ -40,6 +43,9 @@ public:
     void reload();
     /// Busca un GREQ por su número: en la bandeja o, si no está asignado al usuario, en su ficha.
     void findRequirement(const QString& number);
+    /// Abre la ficha de ese requerimiento en su ventana (la misma que la del issue), leyéndola de GESREQ
+    /// si todavía no se tiene.
+    void showRequirement(const ExternalRequirement& requirement);
 
 signals:
     void toast(const QString& message, const QString& color);
@@ -49,6 +55,7 @@ signals:
     void startTestingRequested(const ExternalRequirement& requirement, const QString& connection, const QDateTime& fetchedAt);
     /// Seguir con el issue que ya tiene un requerimiento, en el proyecto que sea.
     void openIssueRequested(const QString& projectId, const QString& issueId);
+    void openUrlRequested(const QString& url);
 
 protected:
     void showEvent(QShowEvent* e) override;
@@ -62,6 +69,11 @@ private:
     /// Una fila: el requerimiento, dónde está su issue (o que no lo tiene) y la acción que toca.
     QWidget* row(const ExternalRequirement& requirement, bool assigned);
     void setLoading(bool on);
+    /// Lo que se sabe del requerimiento para su ficha: la fila leída y, si ya se leyó, la ficha (la de
+    /// esta pantalla o la de su issue).
+    RequirementLink linkFor(const ExternalRequirement& requirement) const;
+    /// Lee de GESREQ la ficha del requerimiento que enseña la ventana.
+    void loadShownDetail();
 
     IssueStore& m_issues;
     IssueDirectory* m_directory;
@@ -87,6 +99,12 @@ private:
     QLineEdit* m_number;
     QPushButton* m_find;
     QVBoxLayout* m_list;
+
+    // La ventana de la ficha y las fichas leídas desde aquí, por número de GREQ.
+    QPointer<RequirementWindow> m_window;
+    ExternalRequirement m_shown;
+    QHash<QString, QPair<RequirementDetail, QDateTime>> m_details;
+    bool m_readingDetail = false;
 };
 
 } // namespace qaflow

@@ -104,6 +104,8 @@ public:
     /// del tablero). Se recuerda entre sesiones.
     void setListMode(bool list);
     bool isListMode() const { return m_listMode; }
+    /// Vuelve al tablero (o la lista) de issues, aunque haya uno abierto.
+    void showBoard();
     /// Abre el detalle de ese issue del proyecto.
     void openIssue(const QString& issueId);
     /// Abre en este proyecto el issue desde el que se prueba ese requerimiento, creándolo si es la primera
@@ -303,7 +305,8 @@ private:
     /// Genera casos para el plan del issue con una IA externa (prompt copiado, respuesta pegada), revisados
     /// antes de añadirlos. Sin plan, se le crea uno al aceptar.
     void generateCases();
-    void loadRequirementDetail();
+    /// Lee la ficha de GESREQ del issue elegido. `quiet`: sin avisos (la lectura no la pidió nadie).
+    void loadRequirementDetail(bool quiet = false);
     /// Abre (o trae al frente) la ficha completa del requerimiento del issue elegido; si aún no se leyó
     /// de GESREQ y hay conexión, la lee.
     void openRequirementWindow();
@@ -383,6 +386,7 @@ private:
     bool m_selfEdit = false;
     bool m_loadingDetail = false;
     bool m_readingRequirement = false;
+    QSet<QString> m_stateChecked;   // issues fuera de la bandeja cuya ficha ya se releyó en esta sesión
     bool m_publishing = false;
 
     // La cabecera del tablero: lo que se ve (izquierda) y la búsqueda con los filtros (derecha), en una fila
@@ -428,8 +432,6 @@ private:
     QLabel* m_phaseTrack;
     QPushButton* m_phasesButton;
     QWidget* m_requirementCard;
-    QWidget* m_missing;
-    QLabel* m_missingText;
     QLabel* m_requirementId;
     // El plazo de QA, lo primero de la tarjeta: cuánto queda, la barra del periodo y sus dos fechas.
     QWidget* m_deadline;

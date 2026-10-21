@@ -238,6 +238,7 @@ IssuesView::IssuesView(const AppContext& ctx, QWidget* parent)
     connect(m_greqs, &GreqsView::toast, this, &IssuesView::toast);
     connect(m_greqs, &GreqsView::settingsRequested, this, &IssuesView::settingsRequested);
     connect(m_greqs, &GreqsView::startTestingRequested, this, &IssuesView::startTesting);
+    connect(m_greqs, &GreqsView::openUrlRequested, this, &IssuesView::openUrlRequested);
     connect(m_greqs, &GreqsView::openIssueRequested, this, [this](const QString& projectId, const QString& issueId) {
         if (projectId == m_projectId) openIssue(issueId);
         else openElsewhere(projectId, issueId);
@@ -430,6 +431,10 @@ void IssuesView::setListMode(bool list) {
 void IssuesView::showGreqs() {
     m_pages->setCurrentWidget(m_greqs);
     m_greqs->ensureLoaded();
+}
+
+void IssuesView::showBoard() {
+    showDetail(false);
 }
 
 void IssuesView::openIssue(const QString& issueId) {
@@ -1978,12 +1983,6 @@ void IssuesView::buildDetail(QVBoxLayout* root) {
     m_requirementId = ui::label(QString(), "mono-muted");
     requirementHead->addWidget(m_requirementId);
 
-    auto* missing = notice(&m_missingText, nullptr, true);
-    missing->setObjectName(QStringLiteral("issueMissing"));
-    m_missing = missing;
-    m_missingText->setStyleSheet(QStringLiteral("color:%1;").arg(theme::Muted));
-    requirementBody->addWidget(missing);
-
     m_deadline = ui::card("card-flat");
     m_deadline->setObjectName(QStringLiteral("issueRequirementDeadline"));
     auto* dv = ui::vbox(m_deadline, 0, 8);
@@ -2014,8 +2013,14 @@ void IssuesView::buildDetail(QVBoxLayout* root) {
     m_requirementTitle->setWordWrap(true);
     m_requirementTitle->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;"));
     requirementBody->addWidget(m_requirementTitle);
+    // En qué estado está en GESREQ, con su nombre: es lo que dice si el control sigue, se observó o terminó.
     auto* states = new QWidget;
-    m_requirementStates = ui::vbox(states, 0, 6);
+    states->setObjectName(QStringLiteral("issueRequirementState"));
+    auto* stateBox = ui::vbox(states, 0, 6);
+    stateBox->addWidget(ui::label(tr("Estado en GESREQ"), "muted-sm"));
+    auto* stateList = new QWidget;
+    m_requirementStates = ui::vbox(stateList, 0, 6);
+    stateBox->addWidget(stateList);
     requirementBody->addWidget(states);
     m_requirementMeta = ui::label(QString(), "muted-sm");
     m_requirementMeta->setObjectName(QStringLiteral("issueRequirementSummary"));
@@ -3081,9 +3086,15 @@ void IssuesView::refreshRequirement(const Issue& issue) {
     if (onScreen && !link.changes.isEmpty())
         // Después del refresco: dar por revisado vuelve a pintar el detalle.
         QTimer::singleShot(0, this, [this, id = issue.id]() { m_issues.acknowledgeChanges(id); });
-    m_missing->setVisible(link.missing);
-    m_missingText->setText(tr("Ya no está en tu bandeja de control de calidad (se vio por última vez el %1). El issue y sus pruebas se conservan.")
-                               .arg(when(link.fetchedAt)));
+    // Fuera de la bandeja, el estado de la última lectura ya no vale: se lee la ficha (una vez por sesión)
+    // para saber en qué estado quedó.
+    const bool staleDetail = !link.detailFetchedAt.isValid() || link.detailFetchedAt <= link.fetchedAt;
+    if (onScreen && link.missing && staleDetail && m_requirements && !m_stateChecked.contains(issue.id)) {
+        m_stateChecked.insert(issue.id);
+        QTimer::singleShot(0, this, [this, id = issue.id]() {
+            if (const Issue* current = selected(); current && current->id == id) loadRequirementDetail(true);
+        });
+    }
     m_requirementId->setText(QStringLiteral("GREQ %1").arg(r.id));
 
     // El plazo de QA: lo que queda en grande y el periodo en una barra de diez tramos. Fuera de la
@@ -3095,7 +3106,7 @@ void IssuesView::refreshRequirement(const Issue& issue) {
         auto days = [](int n) { return n == 1 ? tr("1 día") : tr("%1 días").arg(n); };
         QString value, caption, color = theme::Text;
         if (!period.started) {
-            value = days(static_cast<int>(today.daysTo(r.assignedFrom)));
+            value = days(period.untilStart);
             caption = tr("para empezar QA");
             color = theme::Blue;
         } else if (period.left < 0) {
@@ -3126,7 +3137,7 @@ void IssuesView::refreshRequirement(const Issue& issue) {
     m_requirementTitle->setVisible(!m_requirementTitle->text().trimmed().isEmpty());
     ui::clearLayout(m_requirementStates);
     QStringList states = r.states;
-    if (states.isEmpty() && !d.state.isEmpty()) states << d.state;
+    if ((states.isEmpty() || (link.missing && !staleDetail)) && !d.state.isEmpty()) states = {d.state};
     for (const QString& state : states) {
         auto* row = new QWidget;
         auto* h = ui::hbox(row, 0, 8);
@@ -3137,6 +3148,7 @@ void IssuesView::refreshRequirement(const Issue& issue) {
         h->addWidget(text, 1);
         m_requirementStates->addWidget(row);
     }
+    m_requirementStates->parentWidget()->parentWidget()->setVisible(!states.isEmpty());
 
     // Tipo · prioridad · quién lo pide, en una línea.
     QStringList meta;
@@ -3160,7 +3172,7 @@ void IssuesView::openRequirementWindow() {
         m_requirementWindow = new RequirementWindow(this);
         m_requirementWindow->setAttribute(Qt::WA_DeleteOnClose);
         connect(m_requirementWindow, &RequirementWindow::openUrlRequested, this, &IssuesView::openUrlRequested);
-        connect(m_requirementWindow, &RequirementWindow::loadRequested, this, &IssuesView::loadRequirementDetail);
+        connect(m_requirementWindow, &RequirementWindow::loadRequested, this, [this]() { loadRequirementDetail(); });
     }
     m_requirementWindow->setRequirement(issue->id, issue->requirement, m_requirements != nullptr);
     m_requirementWindow->setReading(m_readingRequirement);
@@ -3825,24 +3837,24 @@ void IssuesView::generateCases() {
     dialog->open();
 }
 
-void IssuesView::loadRequirementDetail() {
+void IssuesView::loadRequirementDetail(bool quiet) {
     const Issue* issue = selected();
     if (!issue || !issue->isImported() || !m_requirements || m_readingRequirement) return;
     const QString issueId = issue->id;
     m_readingRequirement = true;
     if (m_requirementWindow) m_requirementWindow->setReading(true);
     QPointer<IssuesView> self(this);
-    m_requirements->fetchDetail(issue->requirement.data.id, [self, issueId](const RequirementDetailResult& r) {
+    m_requirements->fetchDetail(issue->requirement.data.id, [self, issueId, quiet](const RequirementDetailResult& r) {
         if (!self) return;
         self->m_readingRequirement = false;
         if (self->m_requirementWindow) self->m_requirementWindow->setReading(false);
         if (!r.ok) {
-            emit self->toast(tr("No se pudo leer la ficha de GESREQ · %1").arg(r.error), theme::Red);
+            if (!quiet) emit self->toast(tr("No se pudo leer la ficha de GESREQ · %1").arg(r.error), theme::Red);
             self->loadDetail();
             return;
         }
         self->m_issues.setRequirementDetail(issueId, r.detail, r.fetchedAt.isValid() ? r.fetchedAt : QDateTime::currentDateTime());
-        emit self->toast(tr("Ficha del requerimiento %1 actualizada").arg(r.detail.id), theme::Green);
+        if (!quiet) emit self->toast(tr("Ficha del requerimiento %1 actualizada").arg(r.detail.id), theme::Green);
     });
 }
 

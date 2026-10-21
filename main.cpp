@@ -19,6 +19,7 @@
 #include "presentation/theme/Theme.h"
 #include "presentation/views/WorkspaceWindow.h"
 #include "presentation/widgets/ScreenFit.h"
+#include "presentation/widgets/Ui.h"
 #include "presentation/widgets/WheelGuard.h"
 
 #include <QApplication>
@@ -98,6 +99,8 @@ int main(int argc, char* argv[]) {
     QApplication::setApplicationName(QStringLiteral("QAflow"));
     QApplication::setOrganizationName(QStringLiteral("QAflow"));
     QApplication::setApplicationVersion(QStringLiteral(QAFLOW_VERSION));
+    // El de todas las ventanas, también las que se abren antes que el proyecto (y el de la barra de tareas).
+    QApplication::setWindowIcon(qaflow::ui::appIcon());
     qaflow::theme::applyBaseLook();
     // La rueda desplaza la pantalla; no cambia combos ni spin boxes al pasar por encima.
     qaflow::WheelGuard::install();

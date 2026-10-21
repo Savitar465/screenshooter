@@ -9,7 +9,6 @@
 #include "presentation/theme/Theme.h"
 #include "presentation/widgets/Ui.h"
 
-#include <QApplication>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -36,16 +35,6 @@ Sidebar::Sidebar(TestCaseStore& cases, PlanStore& plan, RunController& run, RunH
     ui::vbox(this, 0, 0)->addWidget(scroll);
     v->setContentsMargins(0, 14, 0, 14);
     v->setSpacing(4);
-
-    // Marca
-    auto* logo = new QLabel(QStringLiteral("QA"));
-    logo->setFixedSize(kButtonSize, kButtonSize);
-    logo->setAlignment(Qt::AlignCenter);
-    logo->setToolTip(tr("QAflow %1 · Equipo Calidad").arg(QApplication::applicationVersion()));
-    logo->setStyleSheet(QStringLiteral("background:%1;border:1px solid %2;border-radius:10px;color:%3;font-weight:800;font-size:13px;")
-                            .arg(theme::tint(theme::Green, 46), theme::tint(theme::Green, 115), theme::Green));
-    v->addWidget(logo, 0, Qt::AlignHCenter);
-    v->addSpacing(10);
 
     // Los issues, primero: son el punto de entrada para organizar las pruebas de cada requerimiento.
     v->addWidget(navButton(Screen::Issues, icons::Glyph::Issues, theme::Cyan, tr("Issues"), QStringLiteral("Ctrl+6")), 0, Qt::AlignHCenter);

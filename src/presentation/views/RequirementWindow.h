@@ -20,13 +20,17 @@ namespace qaflow {
 namespace requirement {
 
 /// Cómo va el periodo asignado a QA visto desde `today`. `left` < 0: ya venció; `started` falso: aún no empieza.
+/// Todos los días son hábiles: sábados y domingos no cuentan.
 struct QaPeriod {
     bool valid = false;
     bool started = false;
-    int total = 0;     // días del periodo, ambos incluidos
-    int elapsed = 0;   // días ya transcurridos, entre 0 y `total`
-    int left = 0;      // días hasta el último del periodo
+    int total = 0;        // días del periodo, ambos incluidos (al menos 1)
+    int elapsed = 0;      // días ya transcurridos, entre 0 y `total`
+    int left = 0;         // días hasta el último del periodo
+    int untilStart = 0;   // días hasta el primero, si aún no empieza
 };
+/// Días hábiles (de lunes a viernes) de `from` a `to`, sin contar `from`: negativo si `to` es anterior.
+int workingDaysTo(const QDate& from, const QDate& to);
 QaPeriod qaPeriod(const ExternalRequirement& r, const QDate& today);
 
 /// Color del estado de GESREQ: observado en ámbar, conforme en verde, el resto en azul.

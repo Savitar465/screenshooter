@@ -366,6 +366,10 @@ target_link_libraries(qaflow_presentation PUBLIC qaflow_application Qt6::Widgets
 
 # ---- Ejecutable (raíz de composición) ---------------------------------------
 qt_add_executable(qaflow main.cpp src/bootstrap/ProjectSession.cpp src/bootstrap/ProjectSession.h resources/resources.qrc)
+if (WIN32)
+    # El icono del .exe: es el que enseñan el Explorador, el acceso directo del instalador y la barra de tareas.
+    target_sources(qaflow PRIVATE packaging/windows/qaflow.rc)
+endif ()
 target_link_libraries(qaflow PRIVATE qaflow_presentation qaflow_infrastructure qaflow_warnings)
 target_compile_definitions(qaflow PRIVATE QAFLOW_VERSION="${QAFLOW_VERSION}")
 # Para los scripts de empaquetado (build-appimage.sh) y la comprobación del CI.

@@ -34,6 +34,7 @@
 #include <QCompleter>
 #include <QSignalBlocker>
 #include <QInputDialog>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPointer>
 #include <QPushButton>
@@ -96,7 +97,7 @@ MainWindow::MainWindow(AppContext& ctx, QWidget* parent) : QMainWindow(parent), 
         const QString id = m_ctx.run->state().caseId;
         QTimer::singleShot(0, this, [this, id]() { showToast(tr("Ejecución de %1 recuperada de la sesión anterior").arg(id), theme::Blue); });
     } else {
-        navigate(Screen::Casos);
+        navigate(Screen::Issues);
     }
 }
 
@@ -189,6 +190,12 @@ QWidget* MainWindow::buildNavbar() {
     auto* bar = ui::card("card");
     bar->setObjectName(QStringLiteral("ideNavbar"));
     auto* h = ui::hbox(bar, 12, 8);
+    // La marca: el logo de la aplicación junto a su nombre.
+    auto* logo = new QLabel;
+    logo->setObjectName(QStringLiteral("navbarLogo"));
+    logo->setPixmap(ui::appIcon().pixmap(QSize(22, 22), devicePixelRatioF()));
+    logo->setToolTip(tr("QAflow %1 · Equipo Calidad").arg(QApplication::applicationVersion()));
+    h->addWidget(logo);
     h->addWidget(ui::label(QStringLiteral("QAflow"), "h1-sm"));
     m_projects = new QComboBox;
     m_projects->setObjectName(QStringLiteral("projectSelector"));
@@ -750,7 +757,10 @@ void MainWindow::buildMenus() {
         {Screen::Historial, tr("&Historial"), Qt::Key_4}, {Screen::Bug, tr("&Bugs"), Qt::Key_5}};
     auto* screenGroup = new QActionGroup(this);
     for (const auto& [screen, label, key] : screens) {
-        auto* a = view->addAction(label, QKeySequence(Qt::CTRL | key), this, [this, screen]() { navigate(screen); });
+        auto* a = view->addAction(label, QKeySequence(Qt::CTRL | key), this, [this, screen]() {
+            navigate(screen);
+            if (screen == Screen::Issues) issuesView()->showBoard();
+        });
         a->setCheckable(true);
         screenGroup->addAction(a);
         m_screenActions[screen] = a;
@@ -1084,7 +1094,11 @@ void MainWindow::openTrackerIssue(const QString& key) {
 
 void MainWindow::wireSignals() {
     // El rail deja camino de vuelta: «atrás» regresa a la pantalla desde la que se saltó.
-    connect(m_sidebar, &Sidebar::navigate, this, &MainWindow::navigateInto);
+    // El botón de Issues lleva siempre al tablero, también desde dentro de un issue.
+    connect(m_sidebar, &Sidebar::navigate, this, [this](Screen s) {
+        navigateInto(s);
+        if (s == Screen::Issues) issuesView()->showBoard();
+    });
     connect(m_sidebar, &Sidebar::metricsRequested, this, &MainWindow::showMetrics);
     connect(m_status, &StatusStrip::navigate, this, &MainWindow::navigate);
     connect(m_status, &StatusStrip::metricsRequested, this, &MainWindow::showMetrics);

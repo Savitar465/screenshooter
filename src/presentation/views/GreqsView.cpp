@@ -2,6 +2,7 @@
 
 #include "application/AppContext.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/views/RequirementWindow.h"
 #include "presentation/widgets/FlowLayout.h"
 #include "presentation/widgets/Ui.h"
 
@@ -360,9 +361,67 @@ QWidget* GreqsView::row(const ExternalRequirement& r, bool assigned) {
     }
     action->setObjectName(QStringLiteral("greqAction-%1").arg(r.id));
     sv->addWidget(action, 0, Qt::AlignRight);
+    auto* detail = smallButton(tr("Ver ficha"), "ghost", tr("Abre la ficha de GESREQ con todos sus datos en una ventana"));
+    detail->setObjectName(QStringLiteral("greqDetail-%1").arg(r.id));
+    connect(detail, &QPushButton::clicked, this, [this, r]() { showRequirement(r); });
+    sv->addWidget(detail, 0, Qt::AlignRight);
     sv->addStretch(1);
     h->addWidget(side, 0, Qt::AlignTop);
     return card;
+}
+
+RequirementLink GreqsView::linkFor(const ExternalRequirement& requirement) const {
+    RequirementLink link;
+    link.data = requirement;
+    link.connection = m_requirements ? m_requirements->connection() : QString();
+    link.fetchedAt = m_fetchedAt;
+    if (const auto cached = m_details.constFind(requirement.id); cached != m_details.constEnd()) {
+        link.detail = cached->first;
+        link.detailFetchedAt = cached->second;
+    } else if (const auto issue = issueFor(requirement.id); issue && !issue->issue.requirement.detail.id.isEmpty()) {
+        link.detail = issue->issue.requirement.detail;
+        link.detailFetchedAt = issue->issue.requirement.detailFetchedAt;
+        link.importedAt = issue->issue.requirement.importedAt;
+    }
+    return link;
+}
+
+void GreqsView::showRequirement(const ExternalRequirement& requirement) {
+    if (!m_window) {
+        m_window = new RequirementWindow(this);
+        m_window->setObjectName(QStringLiteral("greqsRequirementWindow"));
+        m_window->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_window, &RequirementWindow::openUrlRequested, this, &GreqsView::openUrlRequested);
+        connect(m_window, &RequirementWindow::loadRequested, this, &GreqsView::loadShownDetail);
+    }
+    m_shown = requirement;
+    const RequirementLink link = linkFor(requirement);
+    m_window->setRequirement(requirement.id, link, m_requirements != nullptr);
+    m_window->setReading(m_readingDetail);
+    m_window->show();
+    m_window->raise();
+    m_window->activateWindow();
+    // La primera vez la ficha aún no está: se lee sin tener que pedirlo.
+    if (link.detail.id.isEmpty()) loadShownDetail();
+}
+
+void GreqsView::loadShownDetail() {
+    if (!m_requirements || m_readingDetail || m_shown.id.isEmpty()) return;
+    m_readingDetail = true;
+    if (m_window) m_window->setReading(true);
+    QPointer<GreqsView> self(this);
+    m_requirements->fetchDetail(m_shown.id, [self, id = m_shown.id](const RequirementDetailResult& r) {
+        if (!self) return;
+        self->m_readingDetail = false;
+        if (self->m_window) self->m_window->setReading(false);
+        if (!r.ok) {
+            emit self->toast(tr("No se pudo leer la ficha de GESREQ · %1").arg(r.error), theme::Red);
+            return;
+        }
+        self->m_details.insert(id, {r.detail, r.fetchedAt.isValid() ? r.fetchedAt : QDateTime::currentDateTime()});
+        // Si mientras tanto se abrió otro, la ventana sigue con el suyo.
+        if (self->m_window && self->m_shown.id == id) self->m_window->setRequirement(id, self->linkFor(self->m_shown), true);
+    });
 }
 
 } // namespace qaflow

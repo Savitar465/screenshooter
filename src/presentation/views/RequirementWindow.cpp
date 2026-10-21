@@ -37,14 +37,29 @@ QString plain(const QString& text) {
 
 namespace requirement {
 
+int workingDaysTo(const QDate& from, const QDate& to) {
+    if (!from.isValid() || !to.isValid()) return 0;
+    if (to < from) return -workingDaysTo(to, from);
+    // Semanas enteras de cinco días y, del resto, los que no caen en fin de semana.
+    const int days = static_cast<int>(from.daysTo(to));
+    int count = days / 7 * 5;
+    for (int i = 1, day = from.dayOfWeek(); i <= days % 7; ++i)
+        if ((day + i - 1) % 7 + 1 < Qt::Saturday) ++count;
+    return count;
+}
+
 QaPeriod qaPeriod(const ExternalRequirement& r, const QDate& today) {
     QaPeriod p;
     if (!r.assignedFrom.isValid() || !r.assignedUntil.isValid() || r.assignedUntil < r.assignedFrom) return p;
     p.valid = true;
     p.started = today >= r.assignedFrom;
-    p.total = static_cast<int>(r.assignedFrom.daysTo(r.assignedUntil)) + 1;
-    p.elapsed = std::clamp(static_cast<int>(r.assignedFrom.daysTo(today)) + 1, 0, p.total);
-    p.left = static_cast<int>(today.daysTo(r.assignedUntil));
+    const QDate dayBefore = r.assignedFrom.addDays(-1);
+    p.total = std::max(workingDaysTo(dayBefore, r.assignedUntil), 1);
+    p.elapsed = std::clamp(workingDaysTo(dayBefore, today), 0, p.total);
+    p.left = workingDaysTo(today, r.assignedUntil);
+    // Vencido el viernes, el sábado ya está vencido aunque no haya pasado ningún día hábil.
+    if (today > r.assignedUntil) p.left = std::min(p.left, -1);
+    if (!p.started) p.untilStart = std::max(workingDaysTo(today, r.assignedFrom), 1);
     return p;
 }
 
@@ -418,7 +433,7 @@ void RequirementWindow::buildRail() {
         QString left;
         QString color = theme::Muted;
         if (m_link.missing) left.clear();
-        else if (!period.started) left = tr("empieza en %1").arg(days(static_cast<int>(QDate::currentDate().daysTo(r.assignedFrom))));
+        else if (!period.started) left = tr("empieza en %1").arg(days(period.untilStart));
         else if (period.left < 0) {
             left = tr("vencido hace %1").arg(days(-period.left));
             color = theme::RedSoft;
@@ -750,7 +765,8 @@ void RequirementWindow::buildRecord(bool hasDetail) {
                              {tr("Sistema"), r.system},
                              {tr("Usuario"), r.user},
                              {tr("Solicitado"), r.requestedOn.isValid() ? day(r.requestedOn) : QString()},
-                             {tr("Importado"), tr("%1 · última lectura %2").arg(when(m_link.importedAt), when(m_link.fetchedAt))},
+                             {tr("Importado"), m_link.importedAt.isValid() ? tr("%1 · última lectura %2").arg(when(m_link.importedAt), when(m_link.fetchedAt))
+                                                                           : tr("Sin issue · última lectura %1").arg(when(m_link.fetchedAt))},
                          });
     const QString data = shown == 1 ? tr("1 dato") : tr("%1 datos").arg(shown);
     if (hidden == 0) note->setText(data);

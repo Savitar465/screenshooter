@@ -565,6 +565,7 @@ void MainWindow::createCaseForRun() {
         const QStringList ids = m_ctx.cases->addCases({dialog->testCase()});
         // Añadirlo al plan basta: el ciclo en curso sigue a su plan (lo mete en la cola y en Zephyr).
         if (!ids.isEmpty() && m_ctx.plan->find(planId)) m_ctx.plan->addCases(planId, ids);
+        if (dialog->createAnother()) QTimer::singleShot(0, this, &MainWindow::createCaseForRun);
     });
     dialog->open();
 }

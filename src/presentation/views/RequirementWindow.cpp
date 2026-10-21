@@ -406,8 +406,10 @@ void RequirementWindow::buildRail() {
     title->setStyleSheet(QStringLiteral("font-size:16px;font-weight:700;"));
     m_rail->addWidget(title);
 
+    // Fuera de la bandeja vale el estado de la ficha, si se leyó después de la última vez que se vio allí.
+    const bool freshDetail = m_link.detailFetchedAt.isValid() && m_link.detailFetchedAt > m_link.fetchedAt;
     QStringList states = r.states;
-    if (states.isEmpty() && !d.state.isEmpty()) states << d.state;
+    if ((states.isEmpty() || (m_link.missing && freshDetail)) && !d.state.isEmpty()) states = {d.state};
     if (!states.isEmpty()) {
         auto* list = new QWidget;
         auto* lv = ui::vbox(list, 0, 6);
@@ -419,11 +421,6 @@ void RequirementWindow::buildRail() {
             lv->addWidget(row);
         }
         m_rail->addWidget(list);
-    }
-    if (m_link.missing) {
-        auto* gone = wrapped(tr("Ya no está en tu bandeja de control de calidad (se vio por última vez el %1).").arg(when(m_link.fetchedAt)), "muted-sm");
-        gone->setStyleSheet(QStringLiteral("color:%1;").arg(theme::AmberSoft));
-        m_rail->addWidget(gone);
     }
 
     auto* facts = new QWidget;

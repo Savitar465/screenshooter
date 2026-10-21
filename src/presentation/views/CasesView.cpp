@@ -6,18 +6,17 @@
 #include "application/RunHistoryStore.h"
 #include "application/TestCaseStore.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/views/CaseForm.h"
 #include "presentation/widgets/EvidenceActions.h"
 #include "presentation/widgets/Responsive.h"
 #include "presentation/widgets/ShotCard.h"
-#include "presentation/widgets/TextArea.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QComboBox>
 #include <QCompleter>
 #include <QDir>
 #include <QFileDialog>
-#include <QGridLayout>
-#include <QInputDialog>
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -31,26 +30,19 @@
 namespace qaflow {
 
 namespace {
-QString statusColor(CaseStatus s) {
-    switch (s) {
-        case CaseStatus::Listo: return theme::Green;
-        case CaseStatus::Obsoleto: return theme::Muted;
-    }
-    return theme::Muted;
-}
 QString lastRunColor(const LastRun& lr) {
     if (lr.outcome == RunOutcome::Passed) return theme::Green;
     if (lr.outcome == RunOutcome::Failed) return theme::Red;
     if (lr.outcome == RunOutcome::Blocked) return theme::Amber;
     return theme::Muted;
 }
-QWidget* fieldCell(const QString& title, QWidget* field) {
-    auto* cell = ui::card("grid-cell");
-    auto* v = ui::vbox(cell, 12, 5);
-    v->setContentsMargins(14, 12, 14, 12);
-    v->addWidget(ui::label(title.toUpper(), "eyebrow"));
-    v->addWidget(field);
-    return cell;
+QString priorityColor(Priority p) {
+    switch (p) {
+        case Priority::Alta: return theme::RedSoft;
+        case Priority::Media: return theme::AmberSoft;
+        case Priority::Baja: return theme::Muted;
+    }
+    return theme::Muted;
 }
 QComboBox* filterBox(const QString& all, const QList<std::pair<QString, int>>& items) {
     auto* b = new QComboBox;
@@ -105,10 +97,12 @@ QWidget* CasesView::buildListPane() {
 
     auto* head = new QWidget;
     auto* hv = ui::vbox(head, 16, 10);
-    hv->setContentsMargins(16, 18, 16, 12);
+    hv->setContentsMargins(16, 18, 16, 10);
     auto* titleRow = new QWidget;
     auto* th = ui::hbox(titleRow, 0, 6);
-    th->addWidget(ui::label(tr("Casos"), "h1-sm"), 1);
+    th->addWidget(ui::label(tr("Casos"), "h1-sm"));
+    m_total = ui::label(QString(), "muted");
+    th->addWidget(m_total, 1, Qt::AlignBottom);
     auto* newBtn = smallButton(tr("+ Nuevo"), "primary");
     connect(newBtn, &QPushButton::clicked, this, [this]() { m_store.createCase(); });
     th->addWidget(newBtn);
@@ -125,12 +119,28 @@ QWidget* CasesView::buildListPane() {
     th->addWidget(more);
     hv->addWidget(titleRow);
 
+    // Búsqueda siempre a la vista; los filtros, plegados tras su botón.
+    auto* searchRow = new QWidget;
+    auto* sh = ui::hbox(searchRow, 0, 6);
     m_search = new QLineEdit;
     m_search->setObjectName(QStringLiteral("caseSearch"));
-    m_search->setPlaceholderText(tr("Buscar por título, ID, etiqueta, componente…"));
+    m_search->setPlaceholderText(tr("Buscar casos…"));
+    m_search->setToolTip(tr("Busca por título, ID, suite, etiqueta o componente"));
     m_search->setClearButtonEnabled(true);
     connect(m_search, &QLineEdit::textChanged, this, [this](const QString& t) { m_filter.text = t; refreshList(); });
-    hv->addWidget(m_search);
+    sh->addWidget(m_search, 1);
+    m_filtersButton = smallButton(tr("Filtros"), "outline", tr("Filtrar por suite, estado, prioridad o última ejecución"));
+    m_filtersButton->setObjectName(QStringLiteral("caseFiltersToggle"));
+    m_filtersButton->setCheckable(true);
+    sh->addWidget(m_filtersButton);
+    hv->addWidget(searchRow);
+
+    m_filtersPanel = new QWidget;
+    m_filtersPanel->setObjectName(QStringLiteral("caseFilters"));
+    auto* fv = ui::vbox(m_filtersPanel, 0, 6);
+    m_filtersPanel->setVisible(false);
+    connect(m_filtersButton, &QPushButton::toggled, m_filtersPanel, &QWidget::setVisible);
+    hv->addWidget(m_filtersPanel);
 
     // Suite: desplegable con búsqueda en vez de una fila de botones, que con muchas suites no cabe.
     m_suiteFilter = new QComboBox;
@@ -159,7 +169,7 @@ QWidget* CasesView::buildListPane() {
         if (target != m_suiteFilter->currentIndex()) m_suiteFilter->setCurrentIndex(target);
         else m_suiteFilter->setEditText(m_suiteFilter->itemText(target));
     });
-    hv->addWidget(m_suiteFilter);
+    fv->addWidget(m_suiteFilter);
 
     // Filtros por estado, prioridad y última ejecución
     auto* combos = new QWidget;
@@ -189,9 +199,20 @@ QWidget* CasesView::buildListPane() {
     ch->addWidget(m_statusFilter, 1);
     ch->addWidget(m_priorityFilter, 1);
     ch->addWidget(m_outcomeFilter, 1);
-    hv->addWidget(combos);
+    fv->addWidget(combos);
+    auto* countRow = new QWidget;
+    auto* ch2 = ui::hbox(countRow, 0, 6);
     m_listCount = ui::label(QString(), "muted-sm");
-    hv->addWidget(m_listCount);
+    ch2->addWidget(m_listCount, 1);
+    auto* clear = ui::button(tr("Quitar filtros"), "text-link");
+    clear->setObjectName(QStringLiteral("caseClearFilters"));
+    connect(clear, &QPushButton::clicked, this, [this]() {
+        m_search->clear();
+        for (auto* box : {m_suiteFilter, m_statusFilter, m_priorityFilter, m_outcomeFilter}) box->setCurrentIndex(0);
+    });
+    ch2->addWidget(clear);
+    hv->addWidget(countRow);
+    countRow->setObjectName(QStringLiteral("caseCountRow"));
     v->addWidget(head);
 
     QWidget* content;
@@ -215,79 +236,89 @@ void CasesView::refreshSuites() {
         for (const auto& s : suites) m_suiteFilter->addItem(s, s);
         m_suiteFilter->setCurrentIndex(m_filter.suite.isEmpty() ? 0 : std::max(0, m_suiteFilter->findData(m_filter.suite)));
     }
-    if (m_suiteBox) {
-        const QString cur = m_suiteBox->currentText();
-        m_suiteBox->blockSignals(true);
-        m_suiteBox->clear();
-        m_suiteBox->addItems(suites);
-        if (!cur.isEmpty() && !suites.contains(cur)) m_suiteBox->addItem(cur);
-        m_suiteBox->setCurrentText(cur);
-        m_suiteBox->blockSignals(false);
-    }
+    if (m_form) m_form->setSuites(suites);
 }
 
 void CasesView::refreshList() {
     m_listRefresh->stop();
     ui::clearLayout(m_listLayout);
     const QString runningId = m_run.isRunning() ? m_run.state().caseId : QString();
-    int shown = 0;
 
+    // Agrupados por suite, en el orden en que aparecen: la suite ya no se repite en cada fila.
+    QStringList order;
+    QHash<QString, QList<const TestCase*>> groups;
     for (const auto& c : m_store.cases()) {
         if (!m_filter.matches(c)) continue;
-        ++shown;
+        if (!groups.contains(c.suite)) order << c.suite;
+        groups[c.suite] << &c;
+    }
+    int shown = 0;
+    for (const QString& suite : order) {
+        const auto& cases = groups[suite];
+        auto* header = ui::label(QStringLiteral("%1  ·  %2").arg(suite.isEmpty() ? tr("Sin suite") : suite).arg(cases.size()), "muted-sm");
+        header->setStyleSheet(QStringLiteral("font-weight:700;"));
+        header->setContentsMargins(6, shown == 0 ? 2 : 12, 6, 4);
+        header->setWordWrap(true);
+        m_listLayout->addWidget(header);
 
-        auto* row = ui::button(QString(), "row");
-        ui::setFlag(row, "running", c.id == runningId);
-        ui::setFlag(row, "active", c.id == m_store.selectedId() && c.id != runningId);
-        auto* v = ui::vbox(row, 0, 4);
-        v->setContentsMargins(12, 10, 12, 10);
+        for (const TestCase* tc : cases) {
+            const TestCase& c = *tc;
+            ++shown;
+            auto* row = ui::button(QString(), "row");
+            ui::setFlag(row, "running", c.id == runningId);
+            ui::setFlag(row, "active", c.id == m_store.selectedId() && c.id != runningId);
+            auto* v = ui::vbox(row, 0, 3);
+            v->setContentsMargins(10, 8, 10, 8);
 
-        auto* top = new QWidget;
-        auto* th = ui::hbox(top, 0, 8);
-        th->addWidget(ui::label(c.id, "mono-muted"));
-        th->addWidget(ui::label(QStringLiteral("· %1").arg(c.suite.isEmpty() ? tr("sin suite") : c.suite), "mono-muted"));
-        th->addStretch(1);
-        const auto pill = theme::priorityPill(toString(c.priority));
-        th->addWidget(ui::pill(label(c.priority), pill.bg, pill.fg));
-        v->addWidget(top);
+            auto* top = new QWidget;
+            auto* th = ui::hbox(top, 0, 8);
+            auto* title = new QLabel(c.title.isEmpty() ? tr("(sin título)") : c.title);
+            title->setWordWrap(true);
+            // Que un título largo se parta en líneas en vez de ensanchar la lista.
+            title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+            title->setStyleSheet(QStringLiteral("font-size:13px;font-weight:600;color:%1;")
+                                     .arg(c.status == CaseStatus::Obsoleto ? theme::Muted : theme::Text));
+            th->addWidget(title, 1);
+            th->addWidget(ui::dot(lastRunColor(c.lastRun), 8), 0, Qt::AlignTop);
+            v->addWidget(top);
 
-        auto* title = new QLabel(c.title.isEmpty() ? tr("(sin título)") : c.title);
-        title->setWordWrap(true);
-        title->setStyleSheet(QStringLiteral("font-size:13.5px;font-weight:600;color:%1;").arg(theme::Text));
-        v->addWidget(title);
+            auto* bottom = new QWidget;
+            auto* bh = ui::hbox(bottom, 0, 6);
+            bh->addWidget(ui::label(c.id, "mono-muted"));
+            bh->addWidget(ui::label(c.steps.size() == 1 ? tr("· 1 paso") : tr("· %1 pasos").arg(c.steps.size()), "muted-sm"));
+            bh->addStretch(1);
+            if (c.id == runningId) {
+                auto* badge = ui::pill(tr("● EN EJECUCIÓN"), theme::Green, theme::Bg);
+                badge->setStyleSheet(badge->styleSheet() + QStringLiteral("font-size:10.5px;font-weight:800;"));
+                bh->addWidget(badge);
+            } else if (c.status == CaseStatus::Obsoleto) {
+                bh->addWidget(ui::label(label(c.status), "muted-sm"));
+            }
+            if (c.id != runningId) {   // en ejecución, la marca ocupa su sitio
+                auto* prio = ui::label(label(c.priority));
+                prio->setStyleSheet(QStringLiteral("font-size:11.5px;font-weight:700;color:%1;").arg(priorityColor(c.priority)));
+                bh->addWidget(prio);
+            }
+            v->addWidget(bottom);
 
-        auto* bottom = new QWidget;
-        auto* bh = ui::hbox(bottom, 0, 8);
-        auto* status = new QLabel(tr("%1 · %2 pasos").arg(label(c.status)).arg(c.steps.size()));
-        status->setStyleSheet(QStringLiteral("font-size:11.5px;font-weight:600;color:%1;").arg(statusColor(c.status)));
-        bh->addWidget(status, 1);
-        if (c.id == runningId) {
-            auto* badge = ui::pill(tr("● EN EJECUCIÓN"), theme::Green, theme::Bg);
-            badge->setStyleSheet(badge->styleSheet() + QStringLiteral("font-size:10.5px;font-weight:800;"));
-            bh->addWidget(badge);
+            // Lo que ya no se pinta en la fila (última ejecución, componente, etiquetas), en su tooltip.
+            QStringList tip{tr("Última ejecución: %1").arg(c.lastRun.label())};
+            if (!c.component.isEmpty()) tip << tr("Componente: %1").arg(c.component);
+            if (!c.tags.isEmpty()) tip << tr("Etiquetas: %1").arg(c.tags.join(QStringLiteral(", ")));
+            row->setToolTip(tip.join(QLatin1Char('\n')));
+
+            for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+            const QString id = c.id;
+            connect(row, &QPushButton::clicked, this, [this, id]() { m_store.select(id); });
+            row->setContextMenuPolicy(Qt::CustomContextMenu);
+            connect(row, &QWidget::customContextMenuRequested, this, [this, row, id](const QPoint& pos) {
+                QMenu menu(row);
+                menu.addAction(tr("Clonar caso"), this, [this, id]() { m_store.select(id); duplicateSelected(); });
+                menu.addAction(tr("Eliminar caso…"), this, [this, id]() { m_store.select(id); removeSelected(); });
+                menu.exec(row->mapToGlobal(pos));
+            });
+            m_listLayout->addWidget(row);
         }
-        v->addWidget(bottom);
-
-        if (!c.tags.isEmpty() || !c.component.isEmpty()) {
-            QStringList bits;
-            if (!c.component.isEmpty()) bits << c.component;
-            for (const auto& t : c.tags) bits << QLatin1Char('#') + t;
-            auto* meta = ui::label(ui::elide(bits.join(QStringLiteral("  ")), 48), "muted-sm");
-            meta->setStyleSheet(QStringLiteral("font-size:11px;"));
-            v->addWidget(meta);
-        }
-
-        for (auto* child : row->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
-        const QString id = c.id;
-        connect(row, &QPushButton::clicked, this, [this, id]() { m_store.select(id); });
-        row->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(row, &QWidget::customContextMenuRequested, this, [this, row, id](const QPoint& pos) {
-            QMenu menu(row);
-            menu.addAction(tr("Clonar caso"), this, [this, id]() { m_store.select(id); duplicateSelected(); });
-            menu.addAction(tr("Eliminar caso…"), this, [this, id]() { m_store.select(id); removeSelected(); });
-            menu.exec(row->mapToGlobal(pos));
-        });
-        m_listLayout->addWidget(row);
     }
     if (shown == 0) {
         auto* e = ui::label(m_store.cases().isEmpty() ? tr("No hay casos. Crea uno o importa un archivo.") : tr("Ningún caso coincide con los filtros."), "muted");
@@ -295,9 +326,18 @@ void CasesView::refreshList() {
         e->setContentsMargins(8, 8, 8, 8);
         m_listLayout->addWidget(e);
     }
-    m_listCount->setText(m_filter.isEmpty() ? tr("%1 casos").arg(shown)
-                                            : tr("%1 de %2 casos").arg(shown).arg(m_store.cases().size()));
+    m_total->setText(QString::number(m_store.cases().size()));
+    m_listCount->setText(tr("%1 de %2 casos").arg(shown).arg(m_store.cases().size()));
+    refreshFilterButton();
     m_listLayout->addStretch(1);
+}
+
+void CasesView::refreshFilterButton() {
+    const int active = int(!m_filter.suite.isEmpty()) + int(m_filter.status.has_value()) + int(m_filter.priority.has_value())
+                       + int(m_filter.outcome.has_value());
+    m_filtersButton->setText(active ? tr("Filtros · %1").arg(active) : tr("Filtros"));
+    ui::setFlag(m_filtersButton, "active", active > 0);
+    m_listCount->parentWidget()->setVisible(!m_filter.isEmpty());
 }
 
 // ---- Editor --------------------------------------------------------------------------------
@@ -310,158 +350,64 @@ QWidget* CasesView::buildEditor() {
     sa->setMinimumWidth(380);
     // El editor se adapta al ancho; si algo aun así no cabe, se desplaza en vez de cortarse.
     sa->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    outer->setContentsMargins(24, 28, 24, 28);
+    outer->setContentsMargins(32, 24, 32, 32);
     m_editor = new QWidget;
     m_editor->setMaximumWidth(860);
-    auto* v = ui::vbox(m_editor, 0, 20);
-    outer->addWidget(m_editor, 0, Qt::AlignTop);
+    auto* v = ui::vbox(m_editor, 0, 14);
+    // Centrado con huecos a los lados y no con alineación: alineado, el layout lo mide a un ancho y lo
+    // coloca a otro, y los campos que crecen con su texto se quedan sin el alto que piden.
+    auto* center = new QHBoxLayout;
+    center->addStretch(0);
+    center->addWidget(m_editor, 1);
+    center->addStretch(0);
+    outer->addLayout(center);
+    outer->addStretch(1);
 
-    // Cabecera: id + título + acciones
+    // Cabecera: id, que se guarda solo, y las acciones. El título es el primer campo del formulario.
     auto* head = new QWidget;
-    auto* hh = ui::hbox(head, 0, 12);
-    auto* titleBlock = new QWidget;
-    auto* tv = ui::vbox(titleBlock, 0, 0);
+    auto* hh = ui::hbox(head, 0, 10);
     m_idLabel = ui::label(QString(), "eyebrow-mono");
-    tv->addWidget(m_idLabel);
-    m_title = new QLineEdit;
-    m_title->setProperty("role", QStringLiteral("title"));
-    m_title->setPlaceholderText(tr("Título del caso"));
-    connect(m_title, &QLineEdit::textEdited, this, [this](const QString& t) {
-        edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.title = t; }); });
-    });
-    tv->addWidget(m_title);
-    hh->addWidget(titleBlock, 1);
-    auto* save = ui::button(tr("Guardar"), "outline");
-    connect(save, &QPushButton::clicked, this, [this]() {
-        const TestCase* c = m_store.selected();
-        if (!c) return;
-        emit toast(tr("%1 guardado").arg(c->id), theme::Green);
-    });
-    auto* more = ui::button(QStringLiteral("⋯"), "outline");
-    more->setToolTip(tr("Más acciones"));
-    more->setFixedWidth(40);
+    hh->addWidget(m_idLabel);
+    auto* saved = ui::label(tr("✓ Guardado"), "muted-sm");
+    saved->setToolTip(tr("Los cambios se guardan solos mientras escribes"));
+    hh->addWidget(saved);
+    hh->addStretch(1);
+    auto* clone = smallButton(tr("Clonar"), "outline", tr("Crear una copia de este caso con sus pasos, sin ejecuciones (Ctrl+D)"));
+    clone->setObjectName(QStringLiteral("cloneCase"));
+    connect(clone, &QPushButton::clicked, this, &CasesView::duplicateSelected);
+    hh->addWidget(clone);
+    auto* more = smallButton(QStringLiteral("⋯"), "outline", tr("Más acciones"));
+    more->setStyleSheet(QStringLiteral("padding:6px 8px;font-size:13px;border-radius:8px;"));
+    more->setFixedWidth(32);
     auto* menu = new QMenu(more);
     menu->addAction(tr("Clonar caso"), this, &CasesView::duplicateSelected);
     menu->addAction(tr("Ver historial de ejecuciones"), this, [this]() { if (!m_store.selectedId().isEmpty()) emit historyRequested(m_store.selectedId()); });
     menu->addSeparator();
     menu->addAction(tr("Eliminar caso…"), this, &CasesView::removeSelected);
     more->setMenu(menu);
-    auto* clone = ui::button(tr("Clonar"), "outline");
-    clone->setObjectName(QStringLiteral("cloneCase"));
-    clone->setToolTip(tr("Crear una copia de este caso con sus pasos, sin ejecuciones (Ctrl+D)"));
-    connect(clone, &QPushButton::clicked, this, &CasesView::duplicateSelected);
-    auto* actions = new QWidget;
-    auto* ah = ui::hbox(actions, 0, 12);
-    ah->addWidget(clone);
-    ah->addWidget(save);
-    ah->addWidget(more);
-    hh->addWidget(actions, 0, Qt::AlignTop);
+    hh->addWidget(more);
     v->addWidget(head);
-    // Si el editor es estrecho, las acciones bajan debajo del título en vez de comérselo.
-    onBreakpoint(sa->viewport(), 600, [hh, actions](bool narrow) {
-        hh->setDirection(narrow ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
-        hh->setAlignment(actions, narrow ? Qt::AlignLeft : Qt::AlignTop);
-    });
 
-    // Metadatos
-    auto* meta = new QWidget;
-    m_metaGrid = new QGridLayout(meta);
-    m_metaGrid->setContentsMargins(0, 0, 0, 0);
-    m_metaGrid->setSpacing(6);
-    auto* suiteRow = new QWidget;
-    auto* srh = ui::hbox(suiteRow, 0, 4);
-    m_suiteBox = new QComboBox;
-    srh->addWidget(m_suiteBox, 1);
-    auto* addSuite = ui::button(QStringLiteral("+"), "icon-move");
-    addSuite->setToolTip(tr("Nueva suite"));
-    addSuite->setFixedWidth(24);
-    connect(addSuite, &QPushButton::clicked, this, &CasesView::newSuite);
-    srh->addWidget(addSuite);
-    m_priorityBox = new QComboBox;
-    for (auto p : {Priority::Alta, Priority::Media, Priority::Baja}) m_priorityBox->addItem(label(p), static_cast<int>(p));
-    m_statusBox = new QComboBox;
-    for (auto st : {CaseStatus::Listo, CaseStatus::Obsoleto}) m_statusBox->addItem(label(st), static_cast<int>(st));
-    m_lastRun = new QLabel;
-    m_lastRun->setStyleSheet(QStringLiteral("font-weight:600;padding:5px 0;"));
-    connect(m_suiteBox, &QComboBox::currentTextChanged, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.suite = t; }); }); });
-    connect(m_priorityBox, &QComboBox::currentIndexChanged, this, [this](int) {
-        const auto p = static_cast<Priority>(m_priorityBox->currentData().toInt());
-        edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.priority = p; }); });
-    });
-    connect(m_statusBox, &QComboBox::currentIndexChanged, this, [this](int) {
-        const auto st = static_cast<CaseStatus>(m_statusBox->currentData().toInt());
-        edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.status = st; }); });
-    });
-    m_metaCells << fieldCell(tr("Suite"), suiteRow) << fieldCell(tr("Prioridad"), m_priorityBox)
-                << fieldCell(tr("Estado"), m_statusBox) << fieldCell(tr("Última ejecución"), m_lastRun);
-
-    m_component = new QLineEdit;
-    m_component->setPlaceholderText(tr("p. ej. Carrito"));
-    connect(m_component, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.component = t.trimmed(); }); }); });
-    m_tags = new QLineEdit;
-    m_tags->setPlaceholderText(tr("regresión, smoke…"));
-    m_tags->setToolTip(tr("Etiquetas separadas por comas"));
-    connect(m_tags, &QLineEdit::textEdited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.tags = parseTags(t); }); }); });
-    // Ni la historia de Jira ni el Test de Zephyr se enseñan aquí: el requerimiento es del issue y
-    // lo que se enlaza son las ejecuciones, que se ven en el historial. El caso sólo lo guarda.
-    m_metaCells << fieldCell(tr("Componente"), m_component) << fieldCell(tr("Etiquetas"), m_tags);
-    v->addWidget(meta);
-
-    // Precondiciones
-    auto* preBlock = new QWidget;
-    auto* pv = ui::vbox(preBlock, 0, 8);
-    pv->addWidget(ui::label(tr("PRECONDICIONES"), "eyebrow"));
-    m_pre = new TextArea(2);
-    m_pre->setProperty("role", QStringLiteral("panel"));
-    m_pre->setPlaceholderText(tr("Estado inicial del sistema, datos de prueba, cuenta…"));
-    m_pre->enableMarkupEditor(tr("Precondiciones"));
-    connect(m_pre, &TextArea::edited, this, [this](const QString& t) { edit([&]() { m_store.updateCase(m_store.selectedId(), [&](TestCase& c) { c.preconditions = t; }); }); });
-    pv->addWidget(m_pre);
-    v->addWidget(preBlock);
-
-    // Pasos
-    auto* stepsBlock = new QWidget;
-    auto* sv = ui::vbox(stepsBlock, 0, 8);
-    auto* stepsHead = new QWidget;
-    auto* sh = ui::hbox(stepsHead, 0, 8);
-    m_stepsHeader = ui::label(QString(), "eyebrow");
-    m_stepsHeader->setWordWrap(true);   // en un editor estrecho parte en líneas en vez de ensancharlo
-    sh->addWidget(m_stepsHeader, 1);
-    auto* addStep = ui::button(tr("+ Añadir paso"), "dashed");
-    connect(addStep, &QPushButton::clicked, this, [this]() { m_store.addStep(m_store.selectedId()); });
-    sh->addWidget(addStep);
-    sv->addWidget(stepsHead);
-    auto* cols = m_stepColumns = new QWidget;
-    auto* cg = new QGridLayout(cols);
-    cg->setContentsMargins(4, 0, 4, 0);
-    cg->setHorizontalSpacing(8);
-    cg->addWidget(ui::label(QStringLiteral("#"), "eyebrow"), 0, 0);
-    cg->addWidget(ui::label(tr("ACCIÓN"), "eyebrow"), 0, 1);
-    // Los datos de la prueba van en medio, como en el paso de Zephyr (acción · datos · resultado).
-    cg->addWidget(ui::label(tr("DATOS DE LA PRUEBA"), "eyebrow"), 0, 2);
-    cg->addWidget(ui::label(tr("RESULTADO ESPERADO"), "eyebrow"), 0, 3);
-    cg->setColumnMinimumWidth(0, 28);
-    cg->setColumnMinimumWidth(4, 88);
-    cg->setColumnStretch(1, 1);
-    cg->setColumnStretch(2, 1);
-    cg->setColumnStretch(3, 1);
-    sv->addWidget(cols);
-    auto* stepsList = new QWidget;
-    m_stepsLayout = ui::vbox(stepsList, 0, 8);
-    sv->addWidget(stepsList);
-    v->addWidget(stepsBlock);
-
-    // Las evidencias no están aquí: son de cada ejecución y se ven en su ficha del historial.
+    // Título, propiedades, precondiciones y pasos: el mismo formulario que el del caso nuevo.
+    // Ni la historia de Jira ni el Test de Zephyr se enseñan aquí: el requerimiento es del issue y lo
+    // que se enlaza son las ejecuciones, que se ven en el historial. El caso sólo lo guarda.
+    // Las evidencias tampoco: son de cada ejecución y se ven en su ficha del historial.
+    m_form = new CaseForm(m_store, CaseForm::Options{});
+    v->addWidget(m_form);
 
     // Últimas ejecuciones
     auto* histBlock = new QWidget;
-    auto* hv2 = ui::vbox(histBlock, 0, 8);
+    auto* hv2 = ui::vbox(histBlock, 0, 6);
+    hv2->setContentsMargins(0, 10, 0, 0);
     auto* histHead = new QWidget;
     auto* hhh = ui::hbox(histHead, 0, 8);
-    m_historyHeader = ui::label(QString(), "eyebrow");
-    m_historyHeader->setWordWrap(true);
-    hhh->addWidget(m_historyHeader, 1);
-    auto* all = smallButton(tr("Ver historial"), "outline");
+    hhh->addWidget(ui::label(tr("Últimas ejecuciones"), "h3"));
+    m_historyCount = ui::label(QString(), "muted");
+    hhh->addWidget(m_historyCount);
+    m_lastRun = ui::label(QString());
+    m_lastRun->setWordWrap(true);
+    hhh->addWidget(m_lastRun, 1);
+    auto* all = ui::button(tr("Ver historial ›"), "text-link");
     connect(all, &QPushButton::clicked, this, [this]() { if (!m_store.selectedId().isEmpty()) emit historyRequested(m_store.selectedId()); });
     hhh->addWidget(all);
     hv2->addWidget(histHead);
@@ -471,143 +417,27 @@ QWidget* CasesView::buildEditor() {
     v->addWidget(histBlock);
     // Se mira el ancho visible y no el del editor: éste no baja de lo que pide su contenido.
     onBreakpoint(sa->viewport(), 680, [this, outer](bool narrow) {
-        outer->setContentsMargins(narrow ? 14 : 24, 28, narrow ? 14 : 24, 28);
-        setNarrow(narrow);
+        outer->setContentsMargins(narrow ? 14 : 32, 24, narrow ? 14 : 32, 32);
+        m_form->setNarrow(narrow);
     });
     return sa;
-}
-
-void CasesView::setNarrow(bool narrow) {
-    m_narrow = narrow;
-    placeMeta();
-    m_stepColumns->setVisible(!narrow);
-    if (m_stepsLayout) refreshSteps();   // durante la construcción aún no hay pasos que rehacer
-}
-
-void CasesView::placeMeta() {
-    // Ancho: suite · prioridad · estado · última ejecución, y debajo componente · etiquetas (que ocupa
-    // el resto). Estrecho: de dos en dos, para que ningún desplegable quede aplastado.
-    for (auto* cell : m_metaCells) m_metaGrid->removeWidget(cell);
-    const int columns = m_narrow ? 2 : 4;
-    for (int i = 0; i < 4; ++i) m_metaGrid->addWidget(m_metaCells[i], i / columns, i % columns);
-    const int last = 4 / columns;
-    m_metaGrid->addWidget(m_metaCells[4], last, 0);
-    m_metaGrid->addWidget(m_metaCells[5], last, 1, 1, columns - 1);
-    for (int i = 0; i < 4; ++i) m_metaGrid->setColumnStretch(i, i < columns ? 1 : 0);
-}
-
-void CasesView::edit(const std::function<void()>& mutation) {
-    if (m_selfEdit) return;
-    m_selfEdit = true;
-    mutation();
-    m_selfEdit = false;
 }
 
 void CasesView::loadEditor() {
     const TestCase* c = m_store.selected();
     m_editor->setVisible(c != nullptr);
     if (!c) return;
-    m_selfEdit = true;
     m_idLabel->setText(c->id);
-    if (m_title->text() != c->title) { m_title->setText(c->title); m_title->setCursorPosition(0); }
-    if (!c->suite.isEmpty() && m_suiteBox->findText(c->suite) < 0) m_suiteBox->addItem(c->suite);
-    m_suiteBox->setCurrentText(c->suite);
-    m_priorityBox->setCurrentIndex(std::max(0, m_priorityBox->findData(static_cast<int>(c->priority))));
-    m_statusBox->setCurrentIndex(std::max(0, m_statusBox->findData(static_cast<int>(c->status))));
-    m_lastRun->setText(c->lastRun.label());
-    m_lastRun->setStyleSheet(QStringLiteral("font-weight:600;padding:5px 0;color:%1;").arg(lastRunColor(c->lastRun)));
-    if (m_component->text() != c->component) m_component->setText(c->component);
-    if (parseTags(m_tags->text()) != c->tags) m_tags->setText(c->tags.join(QStringLiteral(", ")));
-    m_pre->setTextSilently(c->preconditions);
-    m_selfEdit = false;
-    refreshSteps();
+    m_form->load();
+    refreshLastRun();
     refreshHistory();
 }
 
-void CasesView::refreshSteps() {
+void CasesView::refreshLastRun() {
     const TestCase* c = m_store.selected();
     if (!c) return;
-    m_stepsHeader->setText(tr("PASOS · %1").arg(c->steps.size()));
-    ui::clearLayout(m_stepsLayout);
-    const QString id = c->id;
-    const int n = c->steps.size();
-    for (int i = 0; i < n; ++i) {
-        auto* row = ui::card("card");
-        row->setStyleSheet(QStringLiteral("QFrame[role=\"card\"]{border-radius:10px;}"));
-        auto* g = new QGridLayout(row);
-        g->setContentsMargins(8, 8, 8, 8);
-        g->setHorizontalSpacing(8);
-        auto* num = ui::label(QStringLiteral("%1").arg(i + 1, 2, 10, QLatin1Char('0')), "mono-muted");
-        num->setAlignment(Qt::AlignCenter);
-        num->setFixedWidth(28);
-        auto* action = new TextArea(2);
-        action->setPlaceholderText(tr("Qué hace el tester…"));
-        action->setTextSilently(c->steps[i].action);
-        action->enableMarkupEditor(tr("Paso %1 · Acción").arg(i + 1));
-        connect(action, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.action = t; }); }); });
-        auto* data = new TextArea(2);
-        data->setPlaceholderText(tr("Con qué datos…"));
-        data->setToolTip(tr("Datos de la prueba: usuario, importe, archivo… Es el campo «data» del paso de Zephyr."));
-        data->setTextSilently(c->steps[i].data);
-        data->enableMarkupEditor(tr("Paso %1 · Datos de la prueba").arg(i + 1));
-        connect(data, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.data = t; }); }); });
-        auto* expected = new TextArea(2);
-        expected->setPlaceholderText(tr("Qué debe ocurrir…"));
-        expected->setTextSilently(c->steps[i].expected);
-        expected->enableMarkupEditor(tr("Paso %1 · Resultado esperado").arg(i + 1));
-        connect(expected, &TextArea::edited, this, [this, id, i](const QString& t) { edit([&]() { m_store.updateStep(id, i, [&](TestStep& s) { s.expected = t; }); }); });
-        const std::pair<QString, TextArea*> fields[] = {
-            {tr("ACCIÓN"), action}, {tr("DATOS DE LA PRUEBA"), data}, {tr("RESULTADO ESPERADO"), expected}};
-
-        // Reordenar / insertar / eliminar
-        auto* tools = new QWidget;
-        auto* tg = new QGridLayout(tools);
-        tg->setContentsMargins(0, 0, 0, 0);
-        tg->setSpacing(2);
-        auto* up = ui::button(QStringLiteral("▲"), "icon-move");
-        up->setToolTip(tr("Subir paso"));
-        up->setEnabled(i > 0);
-        connect(up, &QPushButton::clicked, this, [this, id, i]() { m_store.moveStep(id, i, -1); });
-        auto* down = ui::button(QStringLiteral("▼"), "icon-move");
-        down->setToolTip(tr("Bajar paso"));
-        down->setEnabled(i < n - 1);
-        connect(down, &QPushButton::clicked, this, [this, id, i]() { m_store.moveStep(id, i, +1); });
-        auto* insert = ui::button(QStringLiteral("+"), "icon-move");
-        insert->setToolTip(tr("Insertar paso debajo"));
-        connect(insert, &QPushButton::clicked, this, [this, id, i]() { m_store.insertStep(id, i + 1); });
-        auto* cloneStep = ui::button(QStringLiteral("⧉"), "icon-move");
-        cloneStep->setToolTip(tr("Clonar paso debajo"));
-        connect(cloneStep, &QPushButton::clicked, this, [this, id, i]() { m_store.duplicateStep(id, i); });
-        auto* remove = ui::button(QStringLiteral("×"), "icon");
-        remove->setToolTip(tr("Eliminar paso (se puede deshacer)"));
-        connect(remove, &QPushButton::clicked, this, [this, id, i]() { m_store.removeStep(id, i); });
-        for (auto* b : {up, down, insert, cloneStep}) b->setFixedSize(26, 22);
-        remove->setFixedSize(26, 22);
-        tg->addWidget(up, 0, 0);
-        tg->addWidget(down, 0, 1);
-        tg->addWidget(remove, 0, 2);
-        tg->addWidget(insert, 1, 0);
-        tg->addWidget(cloneStep, 1, 1);
-        if (m_narrow) {
-            // Estrecho: los tres campos uno debajo de otro, cada uno con su título (no hay columnas).
-            g->setVerticalSpacing(4);
-            for (int f = 0; f < 3; ++f) {
-                g->addWidget(ui::label(fields[f].first, "eyebrow"), 2 * f, 1);
-                g->addWidget(fields[f].second, 2 * f + 1, 1);
-            }
-            g->addWidget(num, 0, 0, 6, 1, Qt::AlignTop);
-            g->addWidget(tools, 0, 2, 6, 1, Qt::AlignTop);
-            g->setColumnStretch(1, 1);
-        } else {
-            g->addWidget(num, 0, 0);
-            for (int f = 0; f < 3; ++f) {
-                g->addWidget(fields[f].second, 0, f + 1);
-                g->setColumnStretch(f + 1, 1);
-            }
-            g->addWidget(tools, 0, 4, Qt::AlignTop);
-        }
-        m_stepsLayout->addWidget(row);
-    }
+    m_lastRun->setText(QStringLiteral("· %1").arg(c->lastRun.label()));
+    m_lastRun->setStyleSheet(QStringLiteral("font-weight:600;color:%1;").arg(lastRunColor(c->lastRun)));
 }
 
 void CasesView::refreshHistory() {
@@ -615,7 +445,7 @@ void CasesView::refreshHistory() {
     const TestCase* c = m_store.selected();
     if (!c) return;
     const auto runs = m_history.runsForCase(c->id);
-    m_historyHeader->setText(tr("ÚLTIMAS EJECUCIONES · %1").arg(runs.size()));
+    m_historyCount->setText(QString::number(runs.size()));
     if (runs.isEmpty()) {
         // Que parta en líneas: si no, su ancho entero es el mínimo del editor y lo saca por la derecha.
         auto* none = ui::label(tr("Este caso todavía no se ha ejecutado."), "muted-sm");
@@ -648,19 +478,13 @@ void CasesView::refreshHistory() {
 
 void CasesView::onCaseChanged(const QString& id) {
     refreshSuites();
-    if (m_selfEdit) m_listRefresh->start();
+    // Mientras se escribe en el formulario la lista se rehace una vez al parar, no en cada tecla.
+    if (m_form->isEditing()) m_listRefresh->start();
     else refreshList();
     if (id != m_store.selectedId()) return;
-    if (m_selfEdit) {
-        // Edición desde este mismo editor: no reconstruir campos con foco; sólo derivados.
-        const TestCase* c = m_store.selected();
-        if (c) {
-            m_stepsHeader->setText(tr("PASOS · %1").arg(c->steps.size()));
-            m_lastRun->setText(c->lastRun.label());
-        }
-        return;
-    }
-    loadEditor();
+    // Un cambio del propio formulario no lo rehace (perdería el campo con foco); sólo lo derivado.
+    if (m_form->isEditing()) refreshLastRun();
+    else loadEditor();
 }
 
 // ---- Acciones ------------------------------------------------------------------------------
@@ -668,17 +492,6 @@ void CasesView::onCaseChanged(const QString& id) {
 void CasesView::focusSearch() {
     m_search->setFocus(Qt::ShortcutFocusReason);
     m_search->selectAll();
-}
-
-void CasesView::newSuite() {
-    const TestCase* c = m_store.selected();
-    if (!c) return;
-    bool ok = false;
-    const QString name = QInputDialog::getText(this, tr("Nueva suite"), tr("Nombre de la suite:"), QLineEdit::Normal, QString(), &ok).trimmed();
-    if (!ok || name.isEmpty()) return;
-    const QString id = c->id;
-    m_store.updateCase(id, [&](TestCase& tc) { tc.suite = name; });
-    emit toast(tr("%1 movido a la suite \"%2\"").arg(id, name), theme::Green);
 }
 
 void CasesView::duplicateSelected() {

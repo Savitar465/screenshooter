@@ -211,12 +211,14 @@ private:
     void startCardDrag(QPushButton* card);
     /// Resalta la columna sobre la que se arrastra una tarjeta (o la deja como estaba).
     void styleWell(int column, bool hot);
+    /// Pliega una columna del tablero a una franja estrecha, o la despliega; `remember` lo guarda.
+    void setColumnCollapsed(int column, bool collapsed, bool remember = true);
 
     // ---- Vista general: los issues de los demás proyectos ------------------------------------------
     /// La columna de un issue de otro proyecto. De él sólo se tiene lo guardado (no sus planes ni sus
     /// ciclos), así que va por su estado de QA y por cómo se cerró su última revisión.
     static Column foreignColumnOf(const Issue& issue);
-    QWidget* foreignCard(const IssueDirectory::Entry& entry, Column column);
+    QWidget* foreignCard(const IssueDirectory::Entry& entry);
     /// El panel de un issue de otro proyecto: lo que guarda y cómo seguir con él.
     void refreshForeignDrawer(const IssueDirectory::Entry& entry);
     void showForeignMenu(const QString& projectId, const QString& issueId, const QPoint& globalPos);
@@ -415,6 +417,9 @@ private:
     QFrame* m_wells[kColumns];
     QPoint m_dragStart;   // dónde se pulsó la tarjeta que quizá se arrastre
     QLabel* m_columnCounts[kColumns];
+    QWidget* m_columnBodies[kColumns] = {};       // la columna desplegada
+    QPushButton* m_columnStrips[kColumns] = {};   // la misma, plegada
+    QLabel* m_stripCounts[kColumns] = {};
     QWidget* m_drawer;
     QSplitter* m_boardSplit;   // tablero | panel del issue: el borde se arrastra
     QVBoxLayout* m_drawerLayout;   // se rehace en cada refresco

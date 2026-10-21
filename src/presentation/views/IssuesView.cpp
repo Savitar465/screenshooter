@@ -39,6 +39,8 @@
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPainter>
+#include <cmath>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
@@ -343,9 +345,8 @@ bool IssuesView::eventFilter(QObject* watched, QEvent* event) {
             }
             case QEvent::Enter:
             case QEvent::Leave: {
-                // Con el ratón encima, la tarjeta enseña sus acciones; la elegida las enseña siempre.
+                // Con el ratón encima, la tarjeta enseña su menú; la elegida lo enseña siempre.
                 const bool show = event->type() == QEvent::Enter || id == m_issues.selectedId();
-                if (auto* idle = watched->findChild<QWidget*>(QStringLiteral("cardIdle"))) idle->setVisible(!show);
                 if (auto* actions = watched->findChild<QWidget*>(QStringLiteral("cardActions"))) actions->setVisible(show);
                 break;
             }
@@ -530,24 +531,68 @@ IssuesView::Column IssuesView::columnOf(const Issue& issue, const RevisionSnapsh
 namespace {
 struct ColumnInfo {
     QString name;
-    QString hint;
     QString color;
 };
 
 ColumnInfo columnInfo(IssuesView::Column c) {
     switch (c) {
-        case IssuesView::Column::Pending: return {IssuesView::tr("PENDIENTE"), IssuesView::tr("Sin plan todavía"), theme::Muted};
-        case IssuesView::Column::Preparing: return {IssuesView::tr("EN PREPARACIÓN"), IssuesView::tr("Plan en composición"), theme::Violet};
-        case IssuesView::Column::Testing: return {IssuesView::tr("EN PRUEBAS"), IssuesView::tr("Ejecutándose, sin fallos"), theme::Blue};
+        case IssuesView::Column::Pending: return {IssuesView::tr("PENDIENTE"), theme::Muted};
+        case IssuesView::Column::Preparing: return {IssuesView::tr("EN PREPARACIÓN"), theme::Violet};
+        case IssuesView::Column::Testing: return {IssuesView::tr("EN PRUEBAS"), theme::Blue};
         case IssuesView::Column::Broken:
-            return {IssuesView::tr("FALLIDO / BLOQUEADO"), IssuesView::tr("Casos rotos o revisión observada: volver a probar"), theme::Red};
-        case IssuesView::Column::Done: return {IssuesView::tr("FINALIZADO"), IssuesView::tr("Revisión cerrada conforme"), theme::Green};
+            return {IssuesView::tr("FALLIDO / BLOQUEADO"), theme::Red};
+        case IssuesView::Column::Done: return {IssuesView::tr("FINALIZADO"), theme::Green};
     }
     return {};
 }
 
-/// Largo máximo del texto de una etiqueta de la tarjeta (el sistema, el proyecto): así cabe en la columna.
-constexpr int kMaxCardTag = 18;
+/// Ancho de una columna desplegada del tablero, como mínimo: lo que necesitan las etiquetas de la tarjeta.
+constexpr int kColumnMinWidth = 210;
+
+/// Etiqueta de la tarjeta: en una línea si cabe y, si no, partida en varias en vez de recortada.
+class TagLabel : public QLabel {
+public:
+    explicit TagLabel(const QString& text) : QLabel(text) {
+        setWordWrap(true);
+        setAlignment(Qt::AlignCenter);
+        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    }
+    // Lo natural es el texto entero en una línea; la fila de etiquetas la estrecha (y crece hacia abajo)
+    // cuando no cabe. Un QLabel que parte líneas propondría un ancho menor y partiría aun cabiendo.
+    QSize sizeHint() const override {
+        const QMargins m = contentsMargins();
+        const int text = int(std::ceil(QFontMetricsF(font()).horizontalAdvance(this->text())));
+        return {text + m.left() + m.right(), fontMetrics().height() + m.top() + m.bottom()};
+    }
+    QSize minimumSizeHint() const override { return {contentsMargins().left() + contentsMargins().right() + 8, sizeHint().height()}; }
+};
+
+/// El nombre de una columna plegada, de arriba abajo.
+class VerticalLabel : public QWidget {
+public:
+    VerticalLabel(const QString& text, const QString& color) : m_text(text), m_color(color) {
+        QFont f = font();
+        f.setPixelSize(11);
+        f.setBold(true);
+        setFont(f);
+    }
+    QSize sizeHint() const override { return {fontMetrics().height(), fontMetrics().horizontalAdvance(m_text) + 4}; }
+    QSize minimumSizeHint() const override { return sizeHint(); }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.setRenderHint(QPainter::TextAntialiasing);
+        p.setPen(QColor(m_color));
+        p.translate(width(), 0);
+        p.rotate(90);
+        p.drawText(QRect(0, 0, height(), width()), Qt::AlignCenter, m_text);
+    }
+
+private:
+    QString m_text;
+    QString m_color;
+};
 
 /// El título de la tarjeta, resumido: dos líneas como mucho, recortadas al ancho de la columna (entero en
 /// el tooltip de la tarjeta y en el panel).
@@ -560,6 +605,16 @@ QLabel* cardTitle(const QString& text, const QString& color) {
     return title;
 }
 
+/// La revisión y su fase, arriba a la derecha de la tarjeta: se recorta si la tarjeta es estrecha en vez
+/// de ensancharla.
+QLabel* cardRevision(const QString& text) {
+    auto* rev = new ElidedLabel(text);
+    rev->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    rev->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    rev->setStyleSheet(QStringLiteral("color:%1;font-weight:700;font-size:10.5px;").arg(theme::Cyan));
+    return rev;
+}
+
 /// Las etiquetas de la tarjeta en una fila que salta de línea cuando no caben, en vez de recortarse.
 QWidget* cardTags(const QList<QLabel*>& tags) {
     auto* row = new QWidget;
@@ -569,9 +624,32 @@ QWidget* cardTags(const QList<QLabel*>& tags) {
     return row;
 }
 
-/// Una etiqueta de la tarjeta, con su texto acortado si es largo.
+/// Una etiqueta de la tarjeta, siempre entera: si no cabe en una línea, salta a la siguiente.
 QLabel* cardTag(const QString& text, const QString& bg, const QString& fg) {
-    return ui::pill(ui::elide(text, kMaxCardTag), bg, fg);
+    auto* tag = new TagLabel(text.simplified());
+    tag->setProperty("role", QStringLiteral("pill"));
+    tag->setStyleSheet(QStringLiteral("background:%1;color:%2;").arg(bg, fg));
+    return tag;
+}
+
+/// Los estados vigentes del requerimiento en GESREQ: los de la bandeja o, si ya salió de ella y se leyó
+/// la ficha después, el de la ficha.
+QStringList requirementStates(const RequirementLink& link) {
+    const bool staleDetail = !link.detailFetchedAt.isValid() || link.detailFetchedAt <= link.fetchedAt;
+    QStringList states = link.data.states;
+    if ((states.isEmpty() || (link.missing && !staleDetail)) && !link.detail.state.isEmpty()) states = {link.detail.state};
+    return states;
+}
+
+/// Una etiqueta por cada estado del requerimiento en GESREQ, con su color.
+QList<QLabel*> stateTags(const Issue& issue) {
+    QList<QLabel*> tags;
+    if (!issue.isImported()) return tags;
+    for (const QString& state : requirementStates(issue.requirement)) {
+        const QString color = requirement::stateColor(state);
+        tags << cardTag(requirement::sentenceCase(state), theme::tint(color, 38), color);
+    }
+    return tags;
 }
 
 /// Barra fina con lo que salió de los casos de la ronda: superados, fallidos, bloqueados y el resto.
@@ -738,28 +816,31 @@ void IssuesView::buildBoard(QVBoxLayout* root) {
     columns->setStyleSheet(QStringLiteral("background:transparent;"));
     columnsScroll->setWidget(columns);
     auto* ch = ui::hbox(columns, 0, 8);
+    const QStringList collapsed = QSettings().value(QStringLiteral("issues/collapsedColumns")).toStringList();
     for (int i = 0; i < kColumns; ++i) {
         const ColumnInfo info = columnInfo(static_cast<Column>(i));
         auto* column = new QWidget;
-        column->setMinimumWidth(160);
+        column->setObjectName(QStringLiteral("issueColumn-%1").arg(i));
+        column->setMinimumWidth(kColumnMinWidth);
+        m_columnBodies[i] = column;
         auto* cv = ui::vbox(column, 0, 6);
         auto* top = new QWidget;
         auto* th = ui::hbox(top, 0, 8);
-        th->setContentsMargins(4, 0, 4, 0);
+        th->setContentsMargins(4, 0, 0, 0);
         th->addWidget(ui::dot(info.color, 8));
         auto* name = ui::label(info.name, "eyebrow");
         name->setStyleSheet(QStringLiteral("color:%1;letter-spacing:0.3px;").arg(theme::TextSoft));
         th->addWidget(name);
         m_columnCounts[i] = ui::label(QString(), "muted-sm");
         th->addWidget(m_columnCounts[i], 1);
+        auto* fold = smallButton(QStringLiteral("‹"), "ghost", tr("Plegar la columna para dejar sitio a las demás"));
+        fold->setObjectName(QStringLiteral("issueColumnFold-%1").arg(i));
+        fold->setFixedSize(24, 22);
+        connect(fold, &QPushButton::clicked, this, [this, i]() { setColumnCollapsed(i, true); });
+        th->addWidget(fold);
         cv->addWidget(top);
-        // Dos líneas para todas: así las columnas empiezan a la misma altura aunque una explique más.
-        auto* hint = ui::label(info.hint, "muted-sm");
-        hint->setWordWrap(true);
-        hint->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-        hint->setContentsMargins(4, 0, 4, 0);
-        hint->setFixedHeight(2 * hint->fontMetrics().lineSpacing() + 2);
-        cv->addWidget(hint);
+        // Lo bastante ancha para su cabecera entera, aunque el nombre sea largo.
+        column->setMinimumWidth(std::max(kColumnMinWidth, top->sizeHint().width()));
 
         auto* well = new QFrame;
         well->setObjectName(QStringLiteral("issueBoardColumn-%1").arg(i));
@@ -779,7 +860,33 @@ void IssuesView::buildBoard(QVBoxLayout* root) {
         wv->addWidget(sa);
         cv->addWidget(well, 1);
         ch->addWidget(column, 1);
+
+        // Plegada, la columna es una franja estrecha con su color, su recuento y su nombre de arriba abajo:
+        // un clic la despliega y las tarjetas se pueden soltar en ella igual.
+        auto* strip = ui::button(QString(), "board-card");
+        strip->setObjectName(QStringLiteral("issueColumnStrip-%1").arg(i));
+        strip->setToolTip(tr("%1 · clic para desplegar la columna").arg(info.name));
+        strip->setFixedWidth(34);
+        strip->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+        strip->setProperty("boardColumn", i);
+        strip->setAcceptDrops(true);
+        strip->installEventFilter(this);
+        auto* sv = ui::vbox(strip, 0, 8);
+        sv->setContentsMargins(0, 10, 0, 10);
+        sv->addWidget(ui::dot(info.color, 8), 0, Qt::AlignHCenter);
+        m_stripCounts[i] = ui::label(QString(), "muted-sm");
+        m_stripCounts[i]->setAlignment(Qt::AlignHCenter);
+        sv->addWidget(m_stripCounts[i]);
+        sv->addWidget(new VerticalLabel(info.name, theme::TextSoft), 0, Qt::AlignHCenter);
+        sv->addStretch(1);
+        for (auto* child : strip->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+        connect(strip, &QPushButton::clicked, this, [this, i]() { setColumnCollapsed(i, false); });
+        m_columnStrips[i] = strip;
+        ch->addWidget(strip);
+        setColumnCollapsed(i, collapsed.contains(QString::number(i)), false);
     }
+    // Con todas plegadas, las franjas quedan a la izquierda en vez de repartirse el ancho.
+    ch->addStretch(0);
     // La lista ocupa el sitio de las columnas: mismos filtros y mismo panel del issue a la derecha.
     m_list->setObjectName(QStringLiteral("issueListView"));
     connect(m_list, &IssueListView::issueSelected, this, [this](const QString& projectId, const QString& issueId) {
@@ -843,21 +950,43 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     th->addWidget(ui::label(issue.isImported() ? issue.requirement.data.id : issue.id, "mono-muted"));
     th->addStretch(1);
     if (!issue.revisions.isEmpty()) {
-        auto* rev = ui::label(tr("REV %1 · %2").arg(s.number).arg(s.phaseApproved ? s.upcoming : s.phase), "muted-sm");
-        rev->setStyleSheet(QStringLiteral("color:%1;font-weight:700;font-size:10.5px;").arg(theme::Cyan));
-        th->addWidget(rev);
+        th->addWidget(cardRevision(tr("REV %1 · %2").arg(s.number).arg(s.phaseApproved ? s.upcoming : s.phase)));
     }
+    // El «⋯» de su menú, en la tarjeta elegida o con el ratón encima; oculto conserva su sitio, así que
+    // la tarjeta no salta al pasar por encima.
+    const bool active = issue.id == m_issues.selectedId();
+    auto* more = smallButton(QStringLiteral("⋯"), "ghost", tr("Más acciones"));
+    more->setObjectName(QStringLiteral("issueCardMore-%1").arg(issue.id));
+    more->setFixedSize(30, 22);
+    QSizePolicy keep = more->sizePolicy();
+    keep.setRetainSizeWhenHidden(true);
+    more->setSizePolicy(keep);
+    connect(more, &QPushButton::clicked, this, [this, more, id = issue.id]() {
+        showCardMenu(id, more->mapToGlobal(QPoint(0, more->height())));
+    });
+    auto* actions = new QWidget;
+    actions->setObjectName(QStringLiteral("cardActions"));
+    ui::hbox(actions, 0, 0)->addWidget(more);
+    if (!active) actions->hide();
+    QSizePolicy keepActions = actions->sizePolicy();
+    keepActions.setRetainSizeWhenHidden(true);
+    actions->setSizePolicy(keepActions);
+    th->addWidget(actions);
     v->addWidget(top);
 
     v->addWidget(cardTitle(issue.title, theme::Text));
 
     if (s.progress.cases > 0) v->addWidget(resultBar(s.progress));
 
-    // Las etiquetas: el sistema y lo que avisa (casos rotos, cambios en GESREQ o que el requerimiento
-    // salió de la bandeja).
+    // Las etiquetas: el proyecto de QAflow, el estado en GESREQ y lo que avisa (pausa, casos rotos,
+    // cambios en GESREQ).
     QList<QLabel*> tags;
-    if (issue.isImported() && !issue.requirement.data.systemCode.isEmpty())
-        tags << cardTag(issue.requirement.data.systemCode, theme::tint(theme::Muted, 26), theme::Muted);
+    if (const QString project = projectName(m_projectId); !project.isEmpty()) {
+        auto* projectPill = cardTag(project, theme::tint(theme::Violet, 30), theme::Violet);
+        projectPill->setObjectName(QStringLiteral("issueCardProject-%1").arg(issue.id));
+        tags << projectPill;
+    }
+    tags << stateTags(issue);
     // Su ejecución está en pausa: lo primero que hay que saber al volver a él.
     if (pausedSince(issue).isValid()) {
         auto* paused = cardTag(tr("EN PAUSA"), theme::tint(theme::Amber, 46), theme::AmberSoft);
@@ -869,32 +998,15 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     if (s.progress.blocked > 0)
         tags << cardTag(tr("%n BLOQUEADO(S)", nullptr, s.progress.blocked), theme::tint(theme::Amber, 46), theme::AmberSoft);
     if (!issue.requirement.changes.isEmpty()) tags << cardTag(tr("CAMBIOS"), theme::tint(theme::Amber, 46), theme::AmberSoft);
-    if (issue.requirement.missing) tags << cardTag(tr("FUERA DE LA BANDEJA"), theme::tint(theme::Muted, 38), theme::Muted);
-    if (!tags.isEmpty()) v->addWidget(cardTags(tags));
+    v->addWidget(cardTags(tags));
 
-    // La última fila dice qué le toca y su clave en el gestor; en la tarjeta elegida o con el ratón
-    // encima, lo cambia por el botón que lo hace y el «⋯» de su menú. Las dos ocupan lo mismo, así que
-    // la tarjeta no salta al pasar por encima.
-    const NextAction next = nextActionOf(issue, s, column);
-    const bool active = issue.id == m_issues.selectedId();
-    auto* bottom = new QWidget;
-    bottom->setFixedHeight(26);
-    auto* bs = ui::hbox(bottom, 0, 0);
-    auto* idle = new QWidget;
-    idle->setObjectName(QStringLiteral("cardIdle"));
-    auto* ih = ui::hbox(idle, 0, 6);
-    auto* nextLabel = ui::label(next.hint, "muted-sm");
-    nextLabel->setObjectName(QStringLiteral("issueCardNext-%1").arg(issue.id));
-    ih->addWidget(nextLabel, 1);
-    if (issue.isPublished()) ih->addWidget(ui::label(issue.publication.key, "mono-muted"));
-    if (active) idle->hide();
-    bs->addWidget(idle, 1);
-    v->addWidget(bottom);
-
-    auto* actions = new QWidget;
-    actions->setObjectName(QStringLiteral("cardActions"));
-    auto* ah = ui::hbox(actions, 0, 6);
+    // La tarjeta elegida enseña al pie el botón de lo siguiente que toca. Reanudar no va aquí: se hace
+    // desde su menú o desde el panel del issue.
+    const NextAction next = active && !pausedSince(issue).isValid() ? nextActionOf(issue, s, column) : NextAction{};
+    QWidget* bottom = nullptr;
     if (next.run) {
+        bottom = new QWidget;
+        auto* ah = ui::hbox(bottom, 0, 6);
         auto* go = smallButton(next.shortButton, "primary", next.title);
         go->setObjectName(QStringLiteral("issueCardAction-%1").arg(issue.id));
         // Estilo propio y completo: dentro de otro botón (la tarjeta) el del rol no llega a pintar el fondo.
@@ -903,25 +1015,20 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
                               .arg(theme::Blue, theme::OnAccent, theme::TextSoft));
         connect(go, &QPushButton::clicked, this, [go, run = next.run]() { run(go); });
         ah->addWidget(go);
-    } else {
-        ah->addWidget(ui::label(next.hint, "muted-sm"));
+        ah->addStretch(1);
+        v->addWidget(bottom);
     }
-    ah->addStretch(1);
-    auto* more = smallButton(QStringLiteral("⋯"), "ghost", tr("Más acciones"));
-    more->setObjectName(QStringLiteral("issueCardMore-%1").arg(issue.id));
-    more->setFixedWidth(30);
-    connect(more, &QPushButton::clicked, this, [this, more, id = issue.id]() {
-        showCardMenu(id, more->mapToGlobal(QPoint(0, more->height())));
-    });
-    ah->addWidget(more);
-    if (!active) actions->hide();
-    bs->addWidget(actions, 1);
 
     // El resto no atiende al ratón: el clic, el doble clic y el arrastre son de la tarjeta. Los botones sí,
-    // y por eso ni ellos ni la fila que los contiene se tocan: un widget transparente al ratón lo es con
-    // todos sus hijos. Esa fila deja pasar a la tarjeta los clics que no caen en un botón.
-    for (auto* child : card->findChildren<QWidget*>())
-        if (child != bottom && child != actions && !actions->isAncestorOf(child)) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+    // y por eso ni ellos ni las filas que los contienen se tocan: un widget transparente al ratón lo es con
+    // todos sus hijos. Esas filas dejan pasar a la tarjeta los clics que no caen en un botón.
+    const QList<QWidget*> rows = {top, actions, bottom};
+    for (auto* child : card->findChildren<QWidget*>()) {
+        const bool interactive = std::any_of(rows.begin(), rows.end(), [child, top](QWidget* row) {
+            return row && (child == row || (row != top && row->isAncestorOf(child)));
+        });
+        if (!interactive) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+    }
 
     card->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(card, &QWidget::customContextMenuRequested, this, [this, card, id = issue.id](const QPoint& pos) {
@@ -1174,6 +1281,16 @@ void IssuesView::startCardDrag(QPushButton* card) {
     if (guard) guard->setDown(false);
 }
 
+void IssuesView::setColumnCollapsed(int column, bool collapsed, bool remember) {
+    m_columnBodies[column]->setVisible(!collapsed);
+    m_columnStrips[column]->setVisible(collapsed);
+    if (!remember) return;
+    QStringList folded;
+    for (int i = 0; i < kColumns; ++i)
+        if (m_columnStrips[i]->isVisibleTo(m_columnStrips[i]->parentWidget())) folded << QString::number(i);
+    QSettings().setValue(QStringLiteral("issues/collapsedColumns"), folded);
+}
+
 void IssuesView::styleWell(int column, bool hot) {
     QFrame* well = m_wells[column];
     const bool broken = static_cast<Column>(column) == Column::Broken;
@@ -1184,6 +1301,10 @@ void IssuesView::styleWell(int column, bool hot) {
         border = theme::Blue;
     }
     well->setStyleSheet(QStringLiteral("QFrame#%1{background:%2;border:1px solid %3;border-radius:12px;}").arg(well->objectName(), bg, border));
+    // Plegada, lo que se resalta al arrastrar es su franja.
+    if (QPushButton* strip = m_columnStrips[column])
+        strip->setStyleSheet(hot ? QStringLiteral("QPushButton#%1{background:%2;border:1px solid %3;}").arg(strip->objectName(), bg, border)
+                                 : QString());
 }
 
 void IssuesView::refreshList() {
@@ -1230,12 +1351,19 @@ void IssuesView::refreshList() {
         const Column column = foreignColumnOf(entry.issue);
         const int i = static_cast<int>(column);
         ++counts[i];
-        m_columns[i]->addWidget(foreignCard(entry, column));
+        m_columns[i]->addWidget(foreignCard(entry));
     }
     if (olderDone > 0) {
-        auto* older = smallButton(tr("%n finalizado(s) anterior(es) · Ver en la lista", nullptr, olderDone), "ghost",
-                                  tr("Los finalizados hace más de %n día(s) sólo se ven en la lista", nullptr, kDoneDaysOnBoard));
+        // El texto salta de línea en vez de ensanchar la columna (y recortar sus tarjetas).
+        auto* older = smallButton(QString(), "ghost", tr("Los finalizados hace más de %n día(s) sólo se ven en la lista", nullptr, kDoneDaysOnBoard));
         older->setObjectName(QStringLiteral("issueBoardOlderDone"));
+        older->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        auto* olderText = ui::label(tr("%n finalizado(s) anterior(es) · Ver en la lista", nullptr, olderDone), "muted-sm");
+        olderText->setObjectName(QStringLiteral("issueBoardOlderDoneText"));
+        olderText->setWordWrap(true);
+        olderText->setAlignment(Qt::AlignCenter);
+        olderText->setAttribute(Qt::WA_TransparentForMouseEvents);
+        ui::vbox(older, 0, 0)->addWidget(olderText);
         connect(older, &QPushButton::clicked, this, [this]() {
             m_list->sortByFinished();
             setListMode(true);
@@ -1244,6 +1372,7 @@ void IssuesView::refreshList() {
     }
     for (int i = 0; i < kColumns; ++i) {
         m_columnCounts[i]->setText(QString::number(counts[i]));
+        m_stripCounts[i]->setText(QString::number(counts[i]));
         m_columns[i]->addStretch(1);
     }
     m_boardEmpty->setText(emptyText);
@@ -1506,7 +1635,7 @@ std::optional<IssueDirectory::Entry> IssuesView::selectedForeign() const {
     return std::nullopt;
 }
 
-QWidget* IssuesView::foreignCard(const IssueDirectory::Entry& entry, Column column) {
+QWidget* IssuesView::foreignCard(const IssueDirectory::Entry& entry) {
     const Issue& issue = entry.issue;
     const QString project = projectName(entry.projectId);
     auto* card = ui::button(QString(), "board-card");
@@ -1529,11 +1658,8 @@ QWidget* IssuesView::foreignCard(const IssueDirectory::Entry& entry, Column colu
     if (!issue.revisions.isEmpty()) {
         // De otro proyecto no se tienen sus fases: se enseña la que guardó la ronda, si la tiene.
         const QString phase = issue.revisions.last().phase;
-        auto* rev = ui::label(phase.isEmpty() ? tr("REV %1").arg(issue.currentRevisionNumber())
-                                              : tr("REV %1 · %2").arg(issue.currentRevisionNumber()).arg(phase),
-                              "muted-sm");
-        rev->setStyleSheet(QStringLiteral("color:%1;font-weight:700;font-size:10.5px;").arg(theme::Cyan));
-        th->addWidget(rev);
+        th->addWidget(cardRevision(phase.isEmpty() ? tr("REV %1").arg(issue.currentRevisionNumber())
+                                                   : tr("REV %1 · %2").arg(issue.currentRevisionNumber()).arg(phase)));
     }
     v->addWidget(top);
 
@@ -1545,17 +1671,9 @@ QWidget* IssuesView::foreignCard(const IssueDirectory::Entry& entry, Column colu
     auto* projectPill = cardTag(project, theme::tint(theme::Violet, 30), theme::Violet);
     projectPill->setObjectName(QStringLiteral("issueForeignProject-%1-%2").arg(entry.projectId, issue.id));
     tags << projectPill;
-    if (issue.isImported() && !issue.requirement.data.systemCode.isEmpty())
-        tags << cardTag(issue.requirement.data.systemCode, theme::tint(theme::Muted, 26), theme::Muted);
+    tags << stateTags(issue);
     if (!issue.requirement.changes.isEmpty()) tags << cardTag(tr("CAMBIOS"), theme::tint(theme::Amber, 46), theme::AmberSoft);
-    if (issue.requirement.missing) tags << cardTag(tr("FUERA DE LA BANDEJA"), theme::tint(theme::Muted, 38), theme::Muted);
     v->addWidget(cardTags(tags));
-
-    auto* bottom = new QWidget;
-    auto* bh = ui::hbox(bottom, 0, 6);
-    bh->addWidget(ui::label(column == Column::Broken ? tr("Revisión observada") : label(issue.state), "muted-sm"), 1);
-    if (issue.isPublished()) bh->addWidget(ui::label(issue.publication.key, "mono-muted"));
-    v->addWidget(bottom);
 
     for (auto* child : card->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
     card->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -3136,8 +3254,7 @@ void IssuesView::refreshRequirement(const Issue& issue) {
     m_requirementTitle->setText(d.reference.trimmed().isEmpty() ? r.summary : d.reference);
     m_requirementTitle->setVisible(!m_requirementTitle->text().trimmed().isEmpty());
     ui::clearLayout(m_requirementStates);
-    QStringList states = r.states;
-    if ((states.isEmpty() || (link.missing && !staleDetail)) && !d.state.isEmpty()) states = {d.state};
+    const QStringList states = requirementStates(link);
     for (const QString& state : states) {
         auto* row = new QWidget;
         auto* h = ui::hbox(row, 0, 8);

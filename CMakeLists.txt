@@ -349,6 +349,8 @@ add_library(qaflow_presentation STATIC
         src/presentation/views/BugCloseDialog.cpp
         src/presentation/views/CaseCreateDialog.h
         src/presentation/views/CaseCreateDialog.cpp
+        src/presentation/views/CaseForm.h
+        src/presentation/views/CaseForm.cpp
         src/presentation/views/PlanView.h
         src/presentation/views/PlanView.cpp
         src/presentation/views/SettingsView.h

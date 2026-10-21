@@ -9,9 +9,7 @@ class QLabel;
 class QLineEdit;
 class QComboBox;
 class QVBoxLayout;
-class QGridLayout;
 class QPushButton;
-class QLayout;
 class QTimer;
 
 namespace qaflow {
@@ -21,7 +19,7 @@ class RunController;
 class RunHistoryStore;
 class CaseTransferService;
 class EvidenceService;
-class TextArea;
+class CaseForm;
 
 /// Pantalla "Casos de prueba": lista filtrable a la izquierda y editor del caso a la derecha.
 class CasesView : public QWidget {
@@ -46,20 +44,15 @@ signals:
 private:
     QWidget* buildListPane();
     QWidget* buildEditor();
-    /// Recoloca el editor según su ancho: estrecho, los metadatos van de dos en dos y los campos de
-    /// cada paso uno debajo de otro en vez de en columnas.
-    void setNarrow(bool narrow);
-    void placeMeta();
     /// Rehace los desplegables de suites sólo si ha cambiado la lista de suites.
     void refreshSuites();
     void refreshList();
+    /// El botón «Filtros» dice cuántos hay puestos, y el recuento de la lista sólo se ve con alguno.
+    void refreshFilterButton();
     void loadEditor();
-    void refreshSteps();
+    void refreshLastRun();
     void refreshHistory();
     void onCaseChanged(const QString& id);
-    void edit(const std::function<void()>& mutation);
-
-    void newSuite();
 
     TestCaseStore& m_store;
     RunController& m_run;
@@ -67,36 +60,26 @@ private:
     CaseTransferService& m_transfer;
     EvidenceService& m_evidence;
     CaseFilter m_filter;
-    bool m_selfEdit = false;
-    bool m_narrow = false;   // editor estrecho (ver setNarrow)
 
     // lista
     QLineEdit* m_search = nullptr;
+    QPushButton* m_filtersButton = nullptr;
+    QWidget* m_filtersPanel = nullptr;     // suite, estado, prioridad y ejecución: plegados tras «Filtros»
     QComboBox* m_suiteFilter = nullptr;   // con búsqueda: puede haber muchas suites
     QStringList m_knownSuites;            // las que hay en los desplegables
     QComboBox* m_statusFilter = nullptr;
     QComboBox* m_priorityFilter = nullptr;
     QComboBox* m_outcomeFilter = nullptr;
     QLabel* m_listCount = nullptr;
+    QLabel* m_total = nullptr;
     QVBoxLayout* m_listLayout = nullptr;
     QTimer* m_listRefresh = nullptr;   // agrupa los refrescos de la lista mientras se escribe en el editor
     // editor
     QWidget* m_editor = nullptr;
     QLabel* m_idLabel = nullptr;
-    QLineEdit* m_title = nullptr;
-    QComboBox* m_suiteBox = nullptr;
-    QComboBox* m_priorityBox = nullptr;
-    QComboBox* m_statusBox = nullptr;
+    CaseForm* m_form = nullptr;
+    QLabel* m_historyCount = nullptr;
     QLabel* m_lastRun = nullptr;
-    QGridLayout* m_metaGrid = nullptr;
-    QList<QWidget*> m_metaCells;   // suite, prioridad, estado, última ejecución, componente, etiquetas
-    QLineEdit* m_component = nullptr;
-    QLineEdit* m_tags = nullptr;
-    TextArea* m_pre = nullptr;
-    QLabel* m_stepsHeader = nullptr;
-    QWidget* m_stepColumns = nullptr;   // títulos de las columnas de los pasos; se esconden si van apilados
-    QVBoxLayout* m_stepsLayout = nullptr;
-    QLabel* m_historyHeader = nullptr;
     QVBoxLayout* m_historyLayout = nullptr;
 };
 

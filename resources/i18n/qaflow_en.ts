@@ -2563,72 +2563,12 @@
         <translation>New test case</translation>
     </message>
     <message>
-        <source>Qué se prueba: «Pago con cupón vencido»</source>
-        <translation>What is tested: “Payment with an expired coupon”</translation>
-    </message>
-    <message>
-        <source>Título</source>
-        <translation>Title</translation>
-    </message>
-    <message>
-        <source>Suite</source>
-        <translation>Suite</translation>
-    </message>
-    <message>
-        <source>Prioridad</source>
-        <translation>Priority</translation>
-    </message>
-    <message>
-        <source>Estado inicial del sistema, datos de prueba, cuenta…</source>
-        <translation>Initial system state, test data, account…</translation>
-    </message>
-    <message>
-        <source>Precondiciones</source>
-        <translation>Preconditions</translation>
-    </message>
-    <message>
-        <source>+ Añadir paso</source>
-        <translation>+ Add step</translation>
-    </message>
-    <message>
         <source>Cancelar</source>
         <translation>Cancel</translation>
     </message>
     <message>
         <source>Crear caso</source>
         <translation>Create case</translation>
-    </message>
-    <message>
-        <source>ACCIÓN</source>
-        <translation>ACTION</translation>
-    </message>
-    <message>
-        <source>DATOS DE LA PRUEBA</source>
-        <translation>TEST DATA</translation>
-    </message>
-    <message>
-        <source>RESULTADO ESPERADO</source>
-        <translation>EXPECTED RESULT</translation>
-    </message>
-    <message>
-        <source>Qué se hace…</source>
-        <translation>What is done…</translation>
-    </message>
-    <message>
-        <source>Con qué datos…</source>
-        <translation>With which data…</translation>
-    </message>
-    <message>
-        <source>Qué tiene que pasar…</source>
-        <translation>What has to happen…</translation>
-    </message>
-    <message>
-        <source>Quitar el paso</source>
-        <translation>Remove the step</translation>
-    </message>
-    <message>
-        <source>PASOS · %1</source>
-        <translation>STEPS · %1</translation>
     </message>
     <message>
         <source>Ponle un título al caso</source>
@@ -2641,6 +2581,165 @@
     <message>
         <source>Cada paso necesita su acción</source>
         <translation>Each step needs its action</translation>
+    </message>
+    <message>
+        <source>Crear otro después</source>
+        <translation>Create another after this</translation>
+    </message>
+    <message>
+        <source>Al crearlo se abre otro caso nuevo vacío</source>
+        <translation>After creating it, a new empty case opens</translation>
+    </message>
+    <message>
+        <source>✓ Listo para crear · 1 paso</source>
+        <translation>✓ Ready to create · 1 step</translation>
+    </message>
+    <message>
+        <source>✓ Listo para crear · %1 pasos</source>
+        <translation>✓ Ready to create · %1 steps</translation>
+    </message>
+</context>
+<context>
+    <name>qaflow::CaseForm</name>
+    <message>
+        <source>Título del caso: qué se prueba</source>
+        <translation>Case title: what is tested</translation>
+    </message>
+    <message>
+        <source>Título del caso</source>
+        <translation>Case title</translation>
+    </message>
+    <message>
+        <source>Nueva suite</source>
+        <translation>New suite</translation>
+    </message>
+    <message>
+        <source>Suite</source>
+        <translation>Suite</translation>
+    </message>
+    <message>
+        <source>Prioridad</source>
+        <translation>Priority</translation>
+    </message>
+    <message>
+        <source>Estado</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>p. ej. Carrito</source>
+        <translation>e.g. Cart</translation>
+    </message>
+    <message>
+        <source>Módulo o componente del producto</source>
+        <translation>Product module or component</translation>
+    </message>
+    <message>
+        <source>Componente</source>
+        <translation>Component</translation>
+    </message>
+    <message>
+        <source>regresión, smoke…</source>
+        <translation>regression, smoke…</translation>
+    </message>
+    <message>
+        <source>Etiquetas separadas por comas</source>
+        <translation>Comma-separated tags</translation>
+    </message>
+    <message>
+        <source>Etiquetas</source>
+        <translation>Tags</translation>
+    </message>
+    <message>
+        <source>Precondiciones</source>
+        <translation>Preconditions</translation>
+    </message>
+    <message>
+        <source>Estado inicial del sistema, datos de prueba, cuenta…</source>
+        <translation>Initial system state, test data, account…</translation>
+    </message>
+    <message>
+        <source>Pasos</source>
+        <translation>Steps</translation>
+    </message>
+    <message>
+        <source>+ Añadir paso</source>
+        <translation>+ Add step</translation>
+    </message>
+    <message>
+        <source>o Ctrl+Intro desde un paso</source>
+        <translation>or Ctrl+Enter from a step</translation>
+    </message>
+    <message>
+        <source>Nombre de la suite:</source>
+        <translation>Suite name:</translation>
+    </message>
+    <message>
+        <source>Qué hace el tester…</source>
+        <translation>What the tester does…</translation>
+    </message>
+    <message>
+        <source>Paso %1 · Acción</source>
+        <translation>Step %1 · Action</translation>
+    </message>
+    <message>
+        <source>Con qué datos (opcional)…</source>
+        <translation>With which data (optional)…</translation>
+    </message>
+    <message>
+        <source>Paso %1 · Datos de la prueba</source>
+        <translation>Step %1 · Test data</translation>
+    </message>
+    <message>
+        <source>Datos de la prueba: usuario, importe, archivo… Es el campo «data» del paso de Zephyr.</source>
+        <translation>Test data: user, amount, file… It is the “data” field of the Zephyr step.</translation>
+    </message>
+    <message>
+        <source>Qué debe ocurrir…</source>
+        <translation>What should happen…</translation>
+    </message>
+    <message>
+        <source>Paso %1 · Resultado esperado</source>
+        <translation>Step %1 · Expected result</translation>
+    </message>
+    <message>
+        <source>Datos</source>
+        <translation>Data</translation>
+    </message>
+    <message>
+        <source>Resultado esperado</source>
+        <translation>Expected result</translation>
+    </message>
+    <message>
+        <source>Mover, insertar, clonar o eliminar el paso</source>
+        <translation>Move, insert, clone or delete the step</translation>
+    </message>
+    <message>
+        <source>Subir</source>
+        <translation>Move up</translation>
+    </message>
+    <message>
+        <source>Bajar</source>
+        <translation>Move down</translation>
+    </message>
+    <message>
+        <source>Insertar paso debajo</source>
+        <translation>Insert step below</translation>
+    </message>
+    <message>
+        <source>Clonar paso</source>
+        <translation>Clone step</translation>
+    </message>
+    <message>
+        <source>Eliminar paso (se puede deshacer)</source>
+        <translation>Delete step (can be undone)</translation>
+    </message>
+    <message>
+        <source>Eliminar paso</source>
+        <translation>Delete step</translation>
+    </message>
+    <message>
+        <source>Arrastra para mover el paso</source>
+        <translation>Drag to move the step</translation>
     </message>
 </context>
 <context>
@@ -2705,10 +2804,6 @@
         <translation>Export all to Markdown…</translation>
     </message>
     <message>
-        <source>Buscar por título, ID, etiqueta, componente…</source>
-        <translation>Search by title, ID, tag, component…</translation>
-    </message>
-    <message>
         <source>Estado</source>
         <translation>Status</translation>
     </message>
@@ -2719,10 +2814,6 @@
     <message>
         <source>Ejecución</source>
         <translation>Execution</translation>
-    </message>
-    <message>
-        <source>sin suite</source>
-        <translation>no suite</translation>
     </message>
     <message>
         <source>(sin título)</source>
@@ -2741,24 +2832,8 @@
         <translation>No test case matches the filters.</translation>
     </message>
     <message>
-        <source>%1 casos</source>
-        <translation>%1 cases</translation>
-    </message>
-    <message>
         <source>%1 de %2 casos</source>
         <translation>%1 of %2 cases</translation>
-    </message>
-    <message>
-        <source>Título del caso</source>
-        <translation>Test case title</translation>
-    </message>
-    <message>
-        <source>Guardar</source>
-        <translation>Save</translation>
-    </message>
-    <message>
-        <source>%1 guardado</source>
-        <translation>%1 saved</translation>
     </message>
     <message>
         <source>Más acciones</source>
@@ -2773,108 +2848,12 @@
         <translation>Delete case…</translation>
     </message>
     <message>
-        <source>Nueva suite</source>
-        <translation>New suite</translation>
-    </message>
-    <message>
-        <source>Suite</source>
-        <translation>Suite</translation>
-    </message>
-    <message>
-        <source>Última ejecución</source>
-        <translation>Last run</translation>
-    </message>
-    <message>
-        <source>p. ej. Carrito</source>
-        <translation>e.g. Cart</translation>
-    </message>
-    <message>
-        <source>regresión, smoke…</source>
-        <translation>regression, smoke…</translation>
-    </message>
-    <message>
-        <source>Etiquetas separadas por comas</source>
-        <translation>Comma-separated tags</translation>
-    </message>
-    <message>
-        <source>Componente</source>
-        <translation>Component</translation>
-    </message>
-    <message>
-        <source>Etiquetas</source>
-        <translation>Tags</translation>
-    </message>
-    <message>
-        <source>PRECONDICIONES</source>
-        <translation>PRECONDITIONS</translation>
-    </message>
-    <message>
-        <source>Estado inicial del sistema, datos de prueba, cuenta…</source>
-        <translation>Initial system state, test data, account…</translation>
-    </message>
-    <message>
-        <source>+ Añadir paso</source>
-        <translation>+ Add step</translation>
-    </message>
-    <message>
-        <source>ACCIÓN</source>
-        <translation>ACTION</translation>
-    </message>
-    <message>
-        <source>RESULTADO ESPERADO</source>
-        <translation>EXPECTED RESULT</translation>
-    </message>
-    <message>
-        <source>Ver historial</source>
-        <translation>View history</translation>
-    </message>
-    <message>
-        <source>PASOS · %1</source>
-        <translation>STEPS · %1</translation>
-    </message>
-    <message>
-        <source>Qué hace el tester…</source>
-        <translation>What the tester does…</translation>
-    </message>
-    <message>
-        <source>Qué debe ocurrir…</source>
-        <translation>What should happen…</translation>
-    </message>
-    <message>
-        <source>Subir paso</source>
-        <translation>Move step up</translation>
-    </message>
-    <message>
-        <source>Bajar paso</source>
-        <translation>Move step down</translation>
-    </message>
-    <message>
-        <source>Insertar paso debajo</source>
-        <translation>Insert step below</translation>
-    </message>
-    <message>
-        <source>Eliminar paso (se puede deshacer)</source>
-        <translation>Delete step (can be undone)</translation>
-    </message>
-    <message>
-        <source>ÚLTIMAS EJECUCIONES · %1</source>
-        <translation>LATEST RUNS · %1</translation>
-    </message>
-    <message>
         <source>Este caso todavía no se ha ejecutado.</source>
         <translation>This test case has not been run yet.</translation>
     </message>
     <message>
         <source>Ejecución suelta</source>
         <translation>Standalone run</translation>
-    </message>
-    <message>
-        <source>Nombre de la suite:</source>
-        <translation>Suite name:</translation>
-    </message>
-    <message>
-        <source>%1 movido a la suite &quot;%2&quot;</source>
-        <translation>%1 moved to the &quot;%2&quot; suite</translation>
     </message>
     <message>
         <source>Se eliminará el caso con sus %1 pasos</source>
@@ -2925,10 +2904,6 @@
         <translation>Export cases</translation>
     </message>
     <message>
-        <source>%1 · %2 pasos</source>
-        <translation>%1 · %2 steps</translation>
-    </message>
-    <message>
         <source> y las %1 evidencias de sus ejecuciones (los ficheros se borran del disco)</source>
         <translation> and the %1 pieces of evidence from its executions (the files are deleted from disk)</translation>
     </message>
@@ -2937,44 +2912,12 @@
         <translation>See the results of this execution</translation>
     </message>
     <message>
-        <source>DATOS DE LA PRUEBA</source>
-        <translation>TEST DATA</translation>
-    </message>
-    <message>
-        <source>Con qué datos…</source>
-        <translation>With which data…</translation>
-    </message>
-    <message>
-        <source>Datos de la prueba: usuario, importe, archivo… Es el campo «data» del paso de Zephyr.</source>
-        <translation>Test data: user, amount, file… It is the «data» field of the Zephyr step.</translation>
-    </message>
-    <message>
         <source>Clonar caso</source>
         <translation>Clone case</translation>
     </message>
     <message>
         <source>Clonar</source>
         <translation>Clone</translation>
-    </message>
-    <message>
-        <source>Precondiciones</source>
-        <translation>Preconditions</translation>
-    </message>
-    <message>
-        <source>Paso %1 · Acción</source>
-        <translation>Step %1 · Action</translation>
-    </message>
-    <message>
-        <source>Paso %1 · Datos de la prueba</source>
-        <translation>Step %1 · Test data</translation>
-    </message>
-    <message>
-        <source>Paso %1 · Resultado esperado</source>
-        <translation>Step %1 · Expected result</translation>
-    </message>
-    <message>
-        <source>Clonar paso debajo</source>
-        <translation>Clone step below</translation>
     </message>
     <message>
         <source>%1 clonado como %2</source>
@@ -2999,6 +2942,70 @@
     <message>
         <source>Crear una copia de este caso con sus pasos, sin ejecuciones (Ctrl+D)</source>
         <translation>Create a copy of this case with its steps, without runs (Ctrl+D)</translation>
+    </message>
+    <message>
+        <source>Buscar casos…</source>
+        <translation>Search cases…</translation>
+    </message>
+    <message>
+        <source>Busca por título, ID, suite, etiqueta o componente</source>
+        <translation>Search by title, ID, suite, tag or component</translation>
+    </message>
+    <message>
+        <source>Filtros</source>
+        <translation>Filters</translation>
+    </message>
+    <message>
+        <source>Filtrar por suite, estado, prioridad o última ejecución</source>
+        <translation>Filter by suite, status, priority or last run</translation>
+    </message>
+    <message>
+        <source>Quitar filtros</source>
+        <translation>Clear filters</translation>
+    </message>
+    <message>
+        <source>Sin suite</source>
+        <translation>No suite</translation>
+    </message>
+    <message>
+        <source>· 1 paso</source>
+        <translation>· 1 step</translation>
+    </message>
+    <message>
+        <source>· %1 pasos</source>
+        <translation>· %1 steps</translation>
+    </message>
+    <message>
+        <source>Última ejecución: %1</source>
+        <translation>Last run: %1</translation>
+    </message>
+    <message>
+        <source>Componente: %1</source>
+        <translation>Component: %1</translation>
+    </message>
+    <message>
+        <source>Etiquetas: %1</source>
+        <translation>Tags: %1</translation>
+    </message>
+    <message>
+        <source>Filtros · %1</source>
+        <translation>Filters · %1</translation>
+    </message>
+    <message>
+        <source>✓ Guardado</source>
+        <translation>✓ Saved</translation>
+    </message>
+    <message>
+        <source>Los cambios se guardan solos mientras escribes</source>
+        <translation>Changes are saved automatically as you type</translation>
+    </message>
+    <message>
+        <source>Últimas ejecuciones</source>
+        <translation>Latest runs</translation>
+    </message>
+    <message>
+        <source>Ver historial ›</source>
+        <translation>View history ›</translation>
     </message>
 </context>
 <context>
@@ -4619,10 +4626,6 @@ Remove it?</translation>
     <message>
         <source>Sin publicar en Jira</source>
         <translation>Not published in Jira</translation>
-    </message>
-    <message>
-        <source>Ya no está en tu bandeja de control de calidad (se vio por última vez el %1). El issue y sus pruebas se conservan.</source>
-        <translation>It is no longer in your quality control inbox (last seen on %1). The issue and its tests are kept.</translation>
     </message>
     <message>
         <source>(sin título)</source>
@@ -8010,10 +8013,6 @@ Los que están en pausa se archivan con lo marcado (lo pendiente queda N/A) y lo
         <translation>Requirement %1</translation>
     </message>
     <message>
-        <source>Ya no está en tu bandeja de control de calidad (se vio por última vez el %1).</source>
-        <translation>No longer in your quality control inbox (last seen on %1).</translation>
-    </message>
-    <message>
         <source>Prioridad</source>
         <translation>Priority</translation>
     </message>
@@ -8332,10 +8331,6 @@ Los que están en pausa se archivan con lo marcado (lo pendiente queda N/A) y lo
         <translation>GESREQ</translation>
     </message>
     <message>
-        <source>Activa Zephyr en Ajustes para publicar los ciclos</source>
-        <translation>Enable Zephyr in Settings to publish the cycles</translation>
-    </message>
-    <message>
         <source>La revisión no tiene ningún ciclo de plan ejecutado</source>
         <translation>The revision has no plan cycle executed</translation>
     </message>
@@ -8540,10 +8535,6 @@ Los que están en pausa se archivan con lo marcado (lo pendiente queda N/A) y lo
         <translation>Zephyr · %1 cycle(s) of the issue plan</translation>
     </message>
     <message>
-        <source>Activa Zephyr en Ajustes para subir el plan</source>
-        <translation>Enable Zephyr in Settings to upload the plan</translation>
-    </message>
-    <message>
         <source>El issue ya no existe</source>
         <translation>The issue no longer exists</translation>
     </message>
@@ -8565,6 +8556,14 @@ Los que están en pausa se archivan con lo marcado (lo pendiente queda N/A) y lo
     <message>
         <source>Zephyr · el plan ya estaba en «%1»</source>
         <translation>Zephyr · the plan was already in “%1”</translation>
+    </message>
+    <message>
+        <source>Zephyr necesita Jira como gestor para publicar los ciclos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zephyr necesita Jira como gestor para subir el plan</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -9413,72 +9412,12 @@ Press “Capture” or drop a file on the window.</translation>
         <translation>⚠ %1 · stored %2. Install a keyring (secret-tool / libsecret on Linux) to encrypt it.</translation>
     </message>
     <message>
-        <source>GESTIÓN DE PRUEBAS</source>
-        <translation>TEST MANAGEMENT</translation>
-    </message>
-    <message>
-        <source>Publicar los ciclos de plan en Zephyr</source>
-        <translation>Publish plan cycles to Zephyr</translation>
-    </message>
-    <message>
-        <source>Al terminar un ciclo, el informe puede crear en Zephyr el ciclo con sus ejecuciones, el veredicto de cada paso y las evidencias</source>
-        <translation>When a cycle ends, its report can create the Zephyr cycle with its executions, each step&apos;s verdict and the evidence</translation>
-    </message>
-    <message>
-        <source>Sin programar (Unscheduled)</source>
-        <translation>Unscheduled</translation>
-    </message>
-    <message>
-        <source>Versión del proyecto a la que van los ciclos; vacío los deja sin programar</source>
-        <translation>Project version the cycles go to; leave it empty for Unscheduled</translation>
-    </message>
-    <message>
-        <source>Probar Zephyr</source>
-        <translation>Test Zephyr</translation>
-    </message>
-    <message>
-        <source>Versión del proyecto</source>
-        <translation>Project version</translation>
-    </message>
-    <message>
-        <source>Zephyr for Jira: los ciclos y sus ejecuciones se crean en la misma instancia con estas credenciales.</source>
-        <translation>Zephyr for Jira: cycles and their executions are created on the same instance with these credentials.</translation>
-    </message>
-    <message>
-        <source>Probando…</source>
-        <translation>Testing…</translation>
-    </message>
-    <message>
-        <source>Zephyr responde · %1</source>
-        <translation>Zephyr answered · %1</translation>
-    </message>
-    <message>
-        <source>No se pudo hablar con Zephyr · %1</source>
-        <translation>Could not reach Zephyr · %1</translation>
-    </message>
-    <message>
-        <source>Tipo de incidencia con el que se crean los Tests; vacío usa «Test», el que instala Zephyr</source>
-        <translation>Issue type the Tests are created with; empty uses “Test”, the one Zephyr installs</translation>
-    </message>
-    <message>
-        <source>Tipo de incidencia del Test</source>
-        <translation>Test issue type</translation>
-    </message>
-    <message>
-        <source>Cada caso publica su ejecución sobre el issue de tipo Test que tiene enlazado; el que aún no lo tenga lo estrena a partir del caso (título, precondiciones y pasos) y su clave se guarda en el campo «Test de Zephyr».</source>
-        <translation>Each case publishes its execution on the Test issue it is linked to; the one with none yet gets a brand-new Test made from the case (title, preconditions and steps) and its key is saved in the “Zephyr Test” field.</translation>
-    </message>
-    <message>
         <source>Este código pertenece al proyecto actual. Los demás ajustes son generales.</source>
         <translation>This code belongs to the current project. All other settings are shared.</translation>
     </message>
     <message>
         <source>Ajuste general para todos los proyectos</source>
         <translation>Shared setting for all projects</translation>
-    </message>
-    <message>
-        <source> Los ajustes de conexión y Zephyr se comparten entre todos los proyectos.</source>
-        <translation> Connection and Zephyr settings are shared across all projects.</translation>
     </message>
     <message>
         <source>Configuración del proyecto</source>
@@ -9780,6 +9719,10 @@ Press “Capture” or drop a file on the window.</translation>
         <source>Las versiones nuevas se instalan solas (%1).</source>
         <translation>New versions install themselves (%1).</translation>
     </message>
+    <message>
+        <source> Los ajustes de conexión se comparten entre todos los proyectos.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>qaflow::ShotCard</name>
@@ -9992,10 +9935,6 @@ Press “Capture” or drop a file on the window.</translation>
         <translation>Integration not available</translation>
     </message>
     <message>
-        <source>Activa Zephyr en Ajustes para publicar los ciclos</source>
-        <translation>Turn Zephyr on in Settings to publish cycles</translation>
-    </message>
-    <message>
         <source>Este informe no está publicado en Zephyr: publícalo primero</source>
         <translation>This report is not published to Zephyr: publish it first</translation>
     </message>
@@ -10048,10 +9987,6 @@ Continues cycle %1: only its failed and blocked cases</translation>
         <translation>%1 · %2</translation>
     </message>
     <message>
-        <source>Activa Zephyr en Ajustes para crear los Tests</source>
-        <translation>Enable Zephyr in Settings to create the Tests</translation>
-    </message>
-    <message>
         <source>El issue ya no existe</source>
         <translation>The issue no longer exists</translation>
     </message>
@@ -10070,6 +10005,14 @@ Continues cycle %1: only its failed and blocked cases</translation>
     <message>
         <source>El plan del issue no tiene casos que subir</source>
         <translation>The issue plan has no cases to upload</translation>
+    </message>
+    <message>
+        <source>Zephyr necesita Jira como gestor para crear los Tests</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Zephyr necesita Jira como gestor para publicar los ciclos</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

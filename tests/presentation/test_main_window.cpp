@@ -885,8 +885,14 @@ private slots:
     void suiteFilterIsSearchable() {
         WindowFixture f;
         f.window->navigate(Screen::Casos);
+        // Los filtros están plegados tras su botón.
+        auto* toggle = f.window->findChild<QPushButton*>(QStringLiteral("caseFiltersToggle"));
+        QVERIFY(toggle);
         auto* suites = f.window->findChild<QComboBox*>(QStringLiteral("caseSuiteFilter"));
         QVERIFY(suites);
+        QVERIFY(!suites->isVisible());
+        toggle->click();
+        QVERIFY(suites->isVisible());
         QVERIFY(suites->isEditable());
         QCOMPARE(suites->currentIndex(), 0);   // todas
         QTRY_COMPARE(f.visibleCaseRows(), 7);
@@ -918,7 +924,7 @@ private slots:
         const auto rowsBefore = list->findChildren<QPushButton*>();
         auto* editor = f.window->findChild<QWidget*>(QStringLiteral("caseEditorScroll"));
         QVERIFY(editor);
-        auto* step = editor->findChildren<TextArea*>().value(1);   // la acción del primer paso (0 = precondiciones)
+        auto* step = editor->findChild<TextArea*>(QStringLiteral("caseAction-1"));   // la acción del primer paso
         QVERIFY(step);
         step->setFocus();
         QTest::keyClicks(step, QStringLiteral("abc"));
@@ -2923,7 +2929,8 @@ private slots:
         // El pie de la columna lo dice y lleva a la lista, con los finalizados más recientes primero.
         auto* older = f.liveButton(QStringLiteral("issueBoardOlderDone"));
         QVERIFY(older);
-        QVERIFY2(older->text().contains(QStringLiteral("1 finalizado")), qPrintable(older->text()));
+        const QString olderText = older->findChild<QLabel*>(QStringLiteral("issueBoardOlderDoneText"))->text();
+        QVERIFY2(olderText.contains(QStringLiteral("1 finalizado")), qPrintable(olderText));
         older->click();
         QVERIFY(view->isListMode());
         QVERIFY(f.window->findChild<QPushButton*>(QStringLiteral("issueViewList"))->isChecked());
@@ -3450,11 +3457,11 @@ private slots:
         QVERIFY(dialog);
         auto* accept = dialog->findChild<QPushButton*>(QStringLiteral("caseCreateAccept"));
         QVERIFY(!accept->isEnabled());   // sin título ni pasos
-        dialog->findChild<QLineEdit*>(QStringLiteral("caseCreateTitle"))->setText(QStringLiteral("Pago con cupón vencido"));
+        dialog->findChild<TextArea*>(QStringLiteral("caseTitle"))->setPlainText(QStringLiteral("Pago con cupón vencido"));
         QVERIFY(!accept->isEnabled());   // falta la acción
-        dialog->findChild<TextArea*>(QStringLiteral("caseCreateAction-1"))->setPlainText(QStringLiteral("Aplicar el cupón QA-OLD"));
-        dialog->findChild<TextArea*>(QStringLiteral("caseCreateExpected-1"))->setPlainText(QStringLiteral("Avisa que venció"));
-        dialog->findChild<QPushButton*>(QStringLiteral("caseCreateAddStep"))->click();   // uno vacío: no cuenta
+        dialog->findChild<TextArea*>(QStringLiteral("caseAction-1"))->setPlainText(QStringLiteral("Aplicar el cupón QA-OLD"));
+        dialog->findChild<TextArea*>(QStringLiteral("caseExpected-1"))->setPlainText(QStringLiteral("Avisa que venció"));
+        dialog->findChild<QPushButton*>(QStringLiteral("caseAddStep"))->click();   // uno vacío: no cuenta
         QVERIFY(accept->isEnabled());
         accept->click();
 
@@ -3465,6 +3472,159 @@ private slots:
         QCOMPARE(created.steps.first().expected, QStringLiteral("Avisa que venció"));
         QVERIFY(created.status == CaseStatus::Listo);
         QVERIFY(f.app.plans.orderedCaseIds(planId).contains(created.id));
+    }
+
+    // El caso nuevo pide lo mismo que la pantalla Casos (componente y etiquetas incluidos), Ctrl+Intro en un
+    // paso crea otro debajo, y con «Crear otro después» se abre otro vacío al crearlo.
+    void theNewCaseDialogUsesTheSameFormAsTheCasesScreen() {
+        WindowFixture f;
+        const QString planId = f.app.plans.activeId();
+        f.app.run.startSequence(f.app.plans.orderedCaseIds(planId), QStringLiteral("Regresión"), planId);
+        f.window->navigate(Screen::Run);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        f.window->findChild<QPushButton*>(QStringLiteral("runTabNewCase"))->click();
+        auto* dialog = f.window->findChild<CaseCreateDialog*>();
+        QVERIFY(dialog);
+        QVERIFY(!dialog->findChild<QComboBox*>(QStringLiteral("caseStatus")));   // uno nuevo siempre está Listo
+        dialog->findChild<TextArea*>(QStringLiteral("caseTitle"))->setPlainText(QStringLiteral("Cupón vencido"));
+        auto* component = dialog->findChild<QLineEdit*>(QStringLiteral("caseComponent"));
+        auto* tags = dialog->findChild<QLineEdit*>(QStringLiteral("caseTags"));
+        QVERIFY(component && tags);
+        QTest::keyClicks(component, QStringLiteral("Carrito"));
+        QTest::keyClicks(tags, QStringLiteral("smoke, pagos"));
+        auto* action = dialog->findChild<TextArea*>(QStringLiteral("caseAction-1"));
+        action->setPlainText(QStringLiteral("Aplicar el cupon"));
+        action->setFocus();
+        QTest::keyClick(action, Qt::Key_Return, Qt::ControlModifier);
+        auto* second = dialog->findChild<TextArea*>(QStringLiteral("caseAction-2"));
+        QVERIFY(second);
+        QTRY_VERIFY(second->hasFocus());
+        second->setPlainText(QStringLiteral("Pagar"));
+        const TestCase written = dialog->testCase();
+        QCOMPARE(written.component, QStringLiteral("Carrito"));
+        QCOMPARE(written.tags, (QStringList{QStringLiteral("smoke"), QStringLiteral("pagos")}));
+        QCOMPARE(written.steps.size(), 2);
+        QCOMPARE(written.steps[1].action, QStringLiteral("Pagar"));
+
+        dialog->findChild<QCheckBox*>(QStringLiteral("caseCreateAnother"))->setChecked(true);
+        dialog->findChild<QPushButton*>(QStringLiteral("caseCreateAccept"))->click();
+        QCOMPARE(f.app.store.cases().last().component, QStringLiteral("Carrito"));
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QTRY_VERIFY(f.window->findChild<CaseCreateDialog*>() && f.window->findChild<CaseCreateDialog*>() != dialog);
+        auto* next = f.window->findChild<CaseCreateDialog*>();
+        QVERIFY(next->findChild<TextArea*>(QStringLiteral("caseTitle"))->toPlainText().isEmpty());
+        next->reject();
+    }
+
+    // Los pasos se reordenan arrastrándolos por su asa: soltar el primero debajo del tercero lo deja
+    // tercero, y soltarlo en su propio hueco no cambia nada.
+    void stepsAreReorderedByDragAndDrop() {
+        WindowFixture f;
+        f.window->resize(1200, 800);
+        f.window->navigate(Screen::Casos);
+        const QString id = f.app.store.selectedId();
+        const QList<TestStep> before = f.app.store.find(id)->steps;
+        QVERIFY(before.size() >= 3);
+        auto* list = f.window->findChild<QWidget*>(QStringLiteral("caseSteps"));
+        QVERIFY(list);
+        QTRY_VERIFY(list->isVisible() && list->height() > 0);
+        QVERIFY(f.window->findChild<QWidget*>(QStringLiteral("caseStepGrip-1")));
+        const auto rowCenter = [&](int n) {
+            for (auto* w : list->findChildren<QWidget*>(QStringLiteral("caseStep-%1").arg(n)))
+                if (w->isVisible()) return w->geometry().center();
+            return QPoint();
+        };
+        const auto drop = [&](int from, QPoint at) {
+            QMimeData mime;
+            mime.setData(QStringLiteral("application/x-qaflow-step"), QByteArray::number(from));
+            QDragEnterEvent enter(at, Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(list, &enter);
+            QVERIFY(enter.isAccepted());
+            QDropEvent dropped(QPointF(at), Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(list, &dropped);
+            QVERIFY(dropped.isAccepted());
+            QCoreApplication::processEvents();
+        };
+
+        drop(0, rowCenter(3) + QPoint(0, 5));   // por debajo de la mitad del tercero: el hueco tras él
+        const QList<TestStep> after = f.app.store.find(id)->steps;
+        QCOMPARE(after[0].action, before[1].action);
+        QCOMPARE(after[1].action, before[2].action);
+        QCOMPARE(after[2].action, before[0].action);
+
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QTRY_VERIFY(!rowCenter(1).isNull());
+        drop(0, rowCenter(1) + QPoint(0, 5));   // su propio hueco
+        QCOMPARE(f.app.store.find(id)->steps[0].action, after[0].action);
+
+        // Llevado al borde de abajo, el editor se desplaza solo hasta poder soltarlo al final; y soltarlo
+        // fuera de la lista (por debajo del último paso) lo deja el último.
+        f.window->resize(1100, 520);
+        auto* editor = f.window->findChild<QScrollArea*>(QStringLiteral("caseEditorScroll"));
+        QVERIFY(editor);
+        QTRY_VERIFY(editor->verticalScrollBar()->maximum() > 0);
+        editor->verticalScrollBar()->setValue(0);
+        QWidget* viewport = editor->viewport();
+        QMimeData mime;
+        mime.setData(QStringLiteral("application/x-qaflow-step"), QByteArray::number(0));
+        const QPoint edge(viewport->width() / 2, viewport->height() - 4);
+        QDragEnterEvent enter(edge, Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(viewport, &enter);
+        QVERIFY(enter.isAccepted());
+        QTRY_COMPARE(editor->verticalScrollBar()->value(), editor->verticalScrollBar()->maximum());
+        QDragLeaveEvent leave;
+        QApplication::sendEvent(viewport, &leave);
+        const int scrolled = editor->verticalScrollBar()->value();
+        QTest::qWait(60);
+        QCOMPARE(editor->verticalScrollBar()->value(), scrolled);   // al salir deja de desplazarse
+
+        const QString first = f.app.store.find(id)->steps[0].action;
+        const QPoint bottom(viewport->width() / 2, viewport->height() - 2);
+        // Como en un arrastre de verdad: se vuelve a entrar antes de soltar (Qt entrega el Drop a quien
+        // aceptó la entrada).
+        QDragEnterEvent back(bottom, Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(viewport, &back);
+        QVERIFY(back.isAccepted());
+        QDropEvent dropped(QPointF(bottom), Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(viewport, &dropped);
+        QVERIFY(dropped.isAccepted());
+        QCoreApplication::processEvents();
+        QCOMPARE(f.app.store.find(id)->steps.last().action, first);
+    }
+
+    // Un título o un paso largo se ve entero: el campo crece con su texto (hasta un tope, y a partir de
+    // ahí se desplaza por dentro) en vez de cortarlo en dos líneas.
+    void longTitlesAndStepsGrowWithTheirText() {
+        WindowFixture f;
+        f.window->resize(1200, 800);
+        f.window->navigate(Screen::Casos);
+        const QString id = f.app.store.selectedId();
+        // Al rehacer los pasos los de antes se borran más tarde: se busca el que se ve.
+        const auto shown = [&](const char* name) -> TextArea* {
+            for (auto* t : f.window->findChildren<TextArea*>(QString::fromLatin1(name)))
+                if (t->isVisible()) return t;
+            return nullptr;
+        };
+        auto* title = shown("caseTitle");
+        auto* action = shown("caseAction-1");
+        QVERIFY(title && action);
+        QTRY_VERIFY(action->isVisible() && action->height() > 0);
+        const int titleShort = title->height();
+        const int actionShort = action->height();
+        const QString words = QStringLiteral("Abrir el detalle del pedido y comprobar el importe ").repeated(6);
+        f.app.store.updateCase(id, [&](TestCase& c) { c.title = words; c.steps[0].action = words; });
+        title = shown("caseTitle");
+        action = shown("caseAction-1");
+        QTRY_VERIFY(shown("caseAction-1"));
+        action = shown("caseAction-1");
+        QTRY_VERIFY2(title->height() > titleShort * 1.5, qPrintable(QStringLiteral("%1 -> %2").arg(titleShort).arg(title->height())));
+        QTRY_VERIFY2(action->height() > actionShort * 1.5, qPrintable(QStringLiteral("%1 -> %2").arg(actionShort).arg(action->height())));
+        QTRY_COMPARE(action->verticalScrollBar()->maximum(), 0);   // se ve entero
+        // Muchísimo texto: llega a su tope y se desplaza por dentro.
+        f.app.store.updateCase(id, [&](TestCase& c) { c.steps[0].action = words.repeated(10); });
+        QTRY_VERIFY(shown("caseAction-1") && shown("caseAction-1")->verticalScrollBar()->maximum() > 0);
+        action = shown("caseAction-1");
+        QVERIFY(action->height() < 400);
     }
 
     void theBackButtonUndoesDrillDownsAndRailNavigation() {
@@ -4028,6 +4188,28 @@ private slots:
         QCOMPARE(cycle->continuations, 1);
         QCOMPARE(f.app.run.state().caseId, QStringLiteral("TC-102"));
         QCOMPARE(f.app.history.report(planRunId).passed, 1);
+    }
+
+    // Una columna del tablero se pliega a una franja con su recuento, para dejar sitio a las demás, y un
+    // clic en la franja la despliega. Lo plegado se recuerda.
+    void aBoardColumnFoldsAndUnfolds() {
+        WindowFixture f;
+        f.app.issues.createIssue(QStringLiteral("Exportar pedidos"));
+        f.window->navigate(Screen::Issues);
+        const auto body = [&f] { return f.window->findChild<QWidget*>(QStringLiteral("issueColumn-0")); };
+        const auto strip = [&f] { return f.window->findChild<QPushButton*>(QStringLiteral("issueColumnStrip-0")); };
+        QVERIFY(body()->isVisible());
+        QVERIFY(!strip()->isVisible());
+
+        f.window->findChild<QPushButton*>(QStringLiteral("issueColumnFold-0"))->click();
+        QVERIFY(!body()->isVisible());
+        QVERIFY(strip()->isVisible());
+        QVERIFY(QSettings().value(QStringLiteral("issues/collapsedColumns")).toStringList().contains(QStringLiteral("0")));
+
+        strip()->click();
+        QVERIFY(body()->isVisible());
+        QVERIFY(!strip()->isVisible());
+        QVERIFY(QSettings().value(QStringLiteral("issues/collapsedColumns")).toStringList().isEmpty());
     }
 
     // La tarjeta del issue se maneja sin salir del tablero: su botón hace lo siguiente que toca, su menú

@@ -399,11 +399,16 @@ QWidget* CasesView::buildEditor() {
     auto* histBlock = new QWidget;
     auto* hv2 = ui::vbox(histBlock, 0, 6);
     hv2->setContentsMargins(0, 10, 0, 0);
-    auto* histHead = new QWidget;
-    auto* hhh = ui::hbox(histHead, 0, 8);
-    hhh->addWidget(ui::label(tr("Últimas ejecuciones"), "h3"));
+    // En una línea si cabe y, si no (un editor estrecho, una letra más ancha), una cosa debajo de otra:
+    // en una sola fila, su ancho mínimo sería la suma de todo y sacaría el editor por la derecha.
+    auto* histHead = new WrapRow(8);
+    auto* hhh = histHead->row();
+    auto* histTitle = new QWidget;
+    auto* hth = ui::hbox(histTitle, 0, 8);
+    hth->addWidget(ui::label(tr("Últimas ejecuciones"), "h3"));
     m_historyCount = ui::label(QString(), "muted");
-    hhh->addWidget(m_historyCount);
+    hth->addWidget(m_historyCount);
+    hhh->addWidget(histTitle);
     m_lastRun = ui::label(QString());
     m_lastRun->setWordWrap(true);
     hhh->addWidget(m_lastRun, 1);

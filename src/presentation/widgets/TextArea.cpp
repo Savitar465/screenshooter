@@ -166,9 +166,11 @@ qreal layoutHeight(const QString& paragraph, const QFont& font, qreal width) {
     layout.beginLayout();
     qreal height = 0;
     for (QTextLine line = layout.createLine(); line.isValid(); line = layout.createLine()) {
+        // Como QPlainTextDocumentLayout: con el interlineado dentro del alto de la línea. Sin él, con una
+        // letra que lo tiene (Segoe UI, en Windows) el campo se queda corto y se desplaza por dentro.
+        line.setLeadingIncluded(true);
         line.setLineWidth(width);
         height += line.height();
-        if (line.leadingIncluded()) height += std::max<qreal>(0, line.leading());
     }
     layout.endLayout();
     return height;

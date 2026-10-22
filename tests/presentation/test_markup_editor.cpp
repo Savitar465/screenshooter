@@ -5,7 +5,10 @@
 #include "presentation/widgets/MarkupEditorDialog.h"
 #include "presentation/widgets/TextArea.h"
 
+#include <QFontDatabase>
 #include <QPlainTextEdit>
+#include <QScrollBar>
+#include <QVBoxLayout>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTextBrowser>
@@ -76,6 +79,31 @@ private slots:
         TextArea rich(2);
         rich.enableMarkupEditor(QStringLiteral("Paso 1 · Acción"));
         QVERIFY(rich.findChild<QPushButton*>(QStringLiteral("markupButton")));
+    }
+
+    /// El alto que se pide para el texto cuenta el interlineado de la letra, como lo coloca el campo: con
+    /// una letra que lo tiene (Segoe UI, la de Windows) el texto se quedaba corto y se desplazaba por dentro.
+    void autoHeightFitsTheTextWithAFontThatHasLeading() {
+        QFont font;
+        for (const QString& family : QFontDatabase::families()) {
+            QFont candidate(family);
+            candidate.setPixelSize(13);
+            if (QFontMetrics(candidate).leading() > 0) { font = candidate; break; }
+        }
+        if (QFontMetrics(font).leading() <= 0) QSKIP("No hay ninguna letra con interlineado instalada");
+        // En un layout, como en el formulario del caso: es él quien le da el alto que pide para su ancho.
+        QWidget container;
+        auto* layout = new QVBoxLayout(&container);
+        auto* area = new TextArea(2);
+        area->setFont(font);
+        area->setAutoHeight(1, 12);
+        area->setPlainText(QStringLiteral("Abrir el detalle del pedido y comprobar el importe ").repeated(6));
+        layout->addWidget(area);
+        layout->addStretch(1);
+        container.resize(320, 600);
+        container.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+        QTRY_COMPARE(area->verticalScrollBar()->maximum(), 0);   // se ve entero
     }
 };
 

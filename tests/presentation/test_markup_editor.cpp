@@ -84,11 +84,20 @@ private slots:
     /// El alto que se pide para el texto cuenta el interlineado de la letra, como lo coloca el campo: con
     /// una letra que lo tiene (Segoe UI, la de Windows) el texto se quedaba corto y se desplazaba por dentro.
     void autoHeightFitsTheTextWithAFontThatHasLeading() {
+        // La de Windows si está; si no, la letra latina con más interlineado (no una de símbolos, que ni
+        // siquiera tiene las letras del texto): cuanto más tiene, más se nota si no se cuenta.
         QFont font;
-        for (const QString& family : QFontDatabase::families()) {
-            QFont candidate(family);
-            candidate.setPixelSize(13);
-            if (QFontMetrics(candidate).leading() > 0) { font = candidate; break; }
+        const QStringList families = QFontDatabase::families(QFontDatabase::Latin);
+        if (families.contains(QStringLiteral("Segoe UI"))) {
+            font = QFont(QStringLiteral("Segoe UI"));
+            font.setPixelSize(13);
+        } else {
+            for (const QString& family : families) {
+                if (QFontDatabase::isPrivateFamily(family)) continue;
+                QFont candidate(family);
+                candidate.setPixelSize(13);
+                if (QFontMetrics(candidate).leading() > QFontMetrics(font).leading()) font = candidate;
+            }
         }
         if (QFontMetrics(font).leading() <= 0) QSKIP("No hay ninguna letra con interlineado instalada");
         // En un layout, como en el formulario del caso: es él quien le da el alto que pide para su ancho.
@@ -96,7 +105,8 @@ private slots:
         auto* layout = new QVBoxLayout(&container);
         auto* area = new TextArea(2);
         area->setFont(font);
-        area->setAutoHeight(1, 12);
+        // Sin un tope que el texto alcance: pasado el tope, desplazarse por dentro es lo esperado.
+        area->setAutoHeight(1, 60);
         area->setPlainText(QStringLiteral("Abrir el detalle del pedido y comprobar el importe ").repeated(6));
         layout->addWidget(area);
         layout->addStretch(1);

@@ -205,12 +205,15 @@ QCheckBox::indicator:checked { background: @blue; border-color: @blue; }
 /* ---- Scroll ---- */
 QScrollArea { border: none; background: transparent; }
 QScrollArea > QWidget > QWidget { background: transparent; }
-QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
-QScrollBar::handle:vertical { background: @border; border-radius: 5px; min-height: 30px; }
+/* El hueco de 2 px va en el tirador y no en la barra: con margin en la barra, su sizeHint() no cuenta el
+   margen con algunos estilos (Windows) y QScrollArea reserva menos sitio del que ocupa, y el contenido
+   queda unos px más ancho que lo visible. */
+QScrollBar:vertical { background: transparent; width: 14px; margin: 0; }
+QScrollBar::handle:vertical { background: @border; border-radius: 5px; min-height: 30px; margin: 2px; }
 QScrollBar::handle:vertical:hover { background: @scroll-hover; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
-QScrollBar::handle:horizontal { background: @border; border-radius: 5px; min-width: 30px; }
+QScrollBar:horizontal { background: transparent; height: 14px; margin: 0; }
+QScrollBar::handle:horizontal { background: @border; border-radius: 5px; min-width: 30px; margin: 2px; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 
 /* ---- Progreso ---- */

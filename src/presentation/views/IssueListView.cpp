@@ -2,6 +2,7 @@
 
 #include "application/AppContext.h"
 #include "presentation/theme/Theme.h"
+#include "presentation/views/RequirementWindow.h"
 #include "presentation/widgets/Ui.h"
 
 #include <QHeaderView>
@@ -14,7 +15,7 @@
 namespace qaflow {
 
 namespace {
-enum Col { ColIssue, ColRequirement, ColTitle, ColProject, ColState, ColRevision, ColTracker, ColUpdated, ColFinished, ColCount };
+enum Col { ColIssue, ColRequirement, ColTitle, ColProject, ColState, ColGesreq, ColRevision, ColTracker, ColUpdated, ColFinished, ColCount };
 constexpr int kProjectRole = Qt::UserRole + 1;
 constexpr int kIssueRole = Qt::UserRole + 2;
 constexpr int kMinTitleWidth = 260;
@@ -48,7 +49,7 @@ IssueListView::IssueListView(const AppContext& ctx, QWidget* parent)
     auto* root = ui::vbox(this, 0, 0);
     m_table = new QTableWidget(0, ColCount);
     m_table->setObjectName(QStringLiteral("issueListTable"));
-    m_table->setHorizontalHeaderLabels({tr("Issue"), tr("GREQ"), tr("Título"), tr("Proyecto"), tr("Estado de QA"), tr("Revisión"),
+    m_table->setHorizontalHeaderLabels({tr("Issue"), tr("GREQ"), tr("Título"), tr("Proyecto"), tr("Estado de QA"), tr("Estado GESREQ"), tr("Revisión"),
                                         tr("Gestor"), tr("Actualizado"), tr("Finalizado")});
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -179,6 +180,12 @@ void IssueListView::refresh() {
         }
         QTableWidgetItem* state = set(ColState, label(issue.state), static_cast<int>(issue.state));
         state->setForeground(QColor(stateColor(issue.state)));
+        // El estado en GESREQ, con el color del primero (el que manda), como en las tarjetas del tablero.
+        const QStringList gesreqStates = issue.isImported() ? requirement::currentStates(issue.requirement) : QStringList{};
+        QStringList gesreqText;
+        for (const QString& s : gesreqStates) gesreqText << requirement::sentenceCase(s);
+        QTableWidgetItem* gesreq = set(ColGesreq, gesreqText.isEmpty() ? QStringLiteral("—") : gesreqText.join(QStringLiteral(" + ")));
+        if (!gesreqStates.isEmpty()) gesreq->setForeground(QColor(requirement::stateColor(gesreqStates.first())));
         const int revision = issue.currentRevisionNumber();
         QString revisionText = QStringLiteral("—");
         if (revision > 0) {

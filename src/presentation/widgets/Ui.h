@@ -38,6 +38,11 @@ QScrollArea* scrollable(QWidget* content, QWidget* parent = nullptr);
 /// que tendría el layout del diálogo entero.
 QVBoxLayout* scrollingBody(QWidget* dialog, int margin, int spacing, QVBoxLayout** footer);
 
+/// Botón pequeño con el icono de copiar: pone `text` en el portapapeles y lo confirma con un tooltip.
+/// `size` es el lado del botón; el texto se cambia después con `setCopyText`.
+QPushButton* copyButton(const QString& text, int size = 28);
+void setCopyText(QPushButton* button, const QString& text);
+
 void clearLayout(QLayout* layout);
 QString elide(const QString& s, int max);
 

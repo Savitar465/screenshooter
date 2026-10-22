@@ -85,7 +85,7 @@ struct BugReport {
     /// Prioridad de Jira sugerida a partir de la severidad ("Bloqueante" → "Highest"…).
     static QString jiraPriorityFor(const QString& severity);
 
-    /// Descripción en formato wiki de Jira.
+    /// Descripción para Jira, en texto plano: su campo de descripción no interpreta las marcas wiki.
     QString jiraDescription() const;
     /// Descripción en Markdown (GitHub, GitLab). `attachmentLinks` se añaden al final si hay.
     QString markdownDescription(const QStringList& attachmentLinks = {}) const;

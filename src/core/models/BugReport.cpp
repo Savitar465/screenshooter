@@ -132,22 +132,25 @@ QString BugReport::jiraPriorityFor(const QString& severity) {
 }
 
 QString BugReport::jiraDescription() const {
+    // Texto plano: el campo de descripción del Jira donde se publica no interpreta las marcas wiki, que
+    // saldrían tal cual ("h3.", "#"). Los datos, uno por línea; las secciones, con su título y dos puntos.
     QString d;
-    d += QCoreApplication::translate("core", "h3. Entorno\n%1\n\n").arg(environmentLabel(environment));
-    d += QCoreApplication::translate("core", "h3. Severidad\n%1\n\n").arg(severityLabel(severity));
-    d += QCoreApplication::translate("core", "h3. Clasificación\n%1\n\n").arg(classificationLabel(classification));
-    d += QCoreApplication::translate("core", "h3. Caso vinculado\n%1\n\n").arg(linkedCaseId.isEmpty() ? QStringLiteral("—") : linkedCaseId);
-    if (!linkedStoryKey.isEmpty()) d += QCoreApplication::translate("core", "h3. Historia relacionada\n%1\n\n").arg(linkedStoryKey);
+    d += QCoreApplication::translate("core", "Entorno: %1\n").arg(environmentLabel(environment));
+    d += QCoreApplication::translate("core", "Severidad: %1\n").arg(severityLabel(severity));
+    d += QCoreApplication::translate("core", "Clasificación: %1\n").arg(classificationLabel(classification));
+    d += QCoreApplication::translate("core", "Caso vinculado: %1\n").arg(linkedCaseId.isEmpty() ? QStringLiteral("—") : linkedCaseId);
+    if (!linkedStoryKey.isEmpty()) d += QCoreApplication::translate("core", "Historia relacionada: %1\n").arg(linkedStoryKey);
     if (const QList<TestUser> users = filled(testUsers); !users.isEmpty()) {
         QStringList lines;
-        for (const auto& u : users) lines << QStringLiteral("* ") + userLine(u);
-        d += QCoreApplication::translate("core", "h3. Usuarios utilizados\n%1\n\n").arg(lines.join(QLatin1Char('\n')));
+        for (const auto& u : users) lines << QStringLiteral("- ") + userLine(u);
+        d += QCoreApplication::translate("core", "\nUsuarios utilizados:\n%1\n").arg(lines.join(QLatin1Char('\n')));
     }
     QStringList steps;
-    for (const auto& st : filled(stepsToReproduce)) steps << QStringLiteral("# ") + st;
-    d += QCoreApplication::translate("core", "h3. Pasos para reproducir\n%1\n\n").arg(steps.isEmpty() ? QStringLiteral("—") : steps.join(QLatin1Char('\n')));
-    d += QCoreApplication::translate("core", "h3. Resultado esperado\n%1\n\n").arg(expected);
-    d += QCoreApplication::translate("core", "h3. Resultado actual\n%1\n").arg(actual);
+    const QStringList filledSteps = filled(stepsToReproduce);
+    for (int i = 0; i < filledSteps.size(); ++i) steps << QStringLiteral("%1. %2").arg(i + 1).arg(filledSteps[i]);
+    d += QCoreApplication::translate("core", "\nPasos para reproducir:\n%1\n").arg(steps.isEmpty() ? QStringLiteral("—") : steps.join(QLatin1Char('\n')));
+    d += QCoreApplication::translate("core", "\nResultado esperado:\n%1\n").arg(expected);
+    d += QCoreApplication::translate("core", "\nResultado actual:\n%1\n").arg(actual);
     return d;
 }
 

@@ -307,6 +307,9 @@ QWidget* GreqsView::row(const ExternalRequirement& r, bool assigned) {
     auto* number = ui::label(QStringLiteral("GREQ %1").arg(r.id), "mono-muted");
     number->setTextInteractionFlags(Qt::TextSelectableByMouse);
     th->addWidget(number);
+    auto* copy = ui::copyButton(r.id, 20);
+    copy->setObjectName(QStringLiteral("greqCopy-%1").arg(r.id));
+    th->addWidget(copy);
     if (!r.systemCode.isEmpty()) th->addWidget(ui::pill(r.systemCode, theme::tint(theme::Muted, 26), theme::Muted));
     if (!r.priority.isEmpty()) th->addWidget(ui::pill(r.priority.toUpper(), theme::tint(theme::Amber, 30), theme::AmberSoft));
     for (const auto& state : r.states) th->addWidget(ui::pill(state, theme::tint(theme::Cyan, 26), theme::Cyan));

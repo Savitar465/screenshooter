@@ -4190,6 +4190,115 @@ private slots:
         QCOMPARE(f.app.history.report(planRunId).passed, 1);
     }
 
+    // La tarjeta avisa con un reloj de que venció el plazo de QA de GESREQ: el de la bandeja o, si no lo
+    // trae, el de la ficha. Uno finalizado ya no tiene plazo.
+    void theIssueCardMarksAnOverdueQaPeriod() {
+        WindowFixture f;
+        const QDate today = QDate::currentDate();
+        auto requirementOf = [](const QString& id) {
+            ExternalRequirement r;
+            r.id = id;
+            r.systemCode = QStringLiteral("SUMA2");
+            r.summary = QStringLiteral("Requerimiento %1").arg(id);
+            return r;
+        };
+        ExternalRequirement late = requirementOf(QStringLiteral("2026001"));
+        late.assignedFrom = today.addDays(-20);
+        late.assignedUntil = today.addDays(-10);
+        ExternalRequirement onTime = requirementOf(QStringLiteral("2026002"));
+        onTime.assignedFrom = today.addDays(-2);
+        onTime.assignedUntil = today.addDays(14);
+        ExternalRequirement lateInDetail = requirementOf(QStringLiteral("2026003"));
+        ExternalRequirement done = late;
+        done.id = QStringLiteral("2026004");
+        f.app.issues.importRequirements({late, onTime, lateInDetail, done}, QStringLiteral("http://gesreq.test:7401/greq"));
+        QMap<QString, QString> ids;
+        for (const auto& issue : f.app.issues.issues()) ids[issue.requirement.data.id] = issue.id;
+        f.app.issues.updateIssue(ids[QStringLiteral("2026003")], [&](Issue& i) {
+            i.requirement.detail.id = QStringLiteral("2026003");
+            i.requirement.detail.sections = {{QStringLiteral("Datos Control de Calidad Asignado"),
+                                              {{QStringLiteral("Fecha Desde - Hasta"),
+                                                QStringLiteral("%1 - %2").arg(today.addDays(-30).toString(QStringLiteral("dd/MM/yyyy")),
+                                                                             today.addDays(-15).toString(QStringLiteral("dd/MM/yyyy")))}}}};
+        });
+        f.app.issues.updateIssue(ids[QStringLiteral("2026004")], [](Issue& i) { i.state = IssueState::Done; });
+        f.window->navigate(Screen::Issues);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        const auto overdue = [&f, &ids](const QString& greq) {
+            return f.window->findChild<QLabel*>(QStringLiteral("issueOverdue-") + ids[greq]) != nullptr;
+        };
+        QVERIFY(overdue(QStringLiteral("2026001")));
+        QVERIFY(!overdue(QStringLiteral("2026002")));
+        QVERIFY(overdue(QStringLiteral("2026003")));
+        QVERIFY(!overdue(QStringLiteral("2026004")));
+    }
+
+    // El panel del issue resume el requerimiento: el GREQ, sus estados en GESREQ y el plazo de QA, con el
+    // aviso si venció. El número se copia con un botón desde la tarjeta, el panel y el detalle.
+    void theIssueDrawerSummarisesTheGreq() {
+        WindowFixture f;
+        const QDate today = QDate::currentDate();
+        ExternalRequirement r;
+        r.id = QStringLiteral("2026001");
+        r.systemCode = QStringLiteral("SUMA2");
+        r.summary = QStringLiteral("Requerimiento vencido");
+        r.states = {QStringLiteral("CONTROL DE CALIDAD OBSERVADO")};
+        r.assignedFrom = today.addDays(-20);
+        r.assignedUntil = today.addDays(-10);
+        f.app.issues.importRequirements({r}, QStringLiteral("http://gesreq.test:7401/greq"));
+        const QString id = f.app.issues.issues().first().id;
+        f.app.issues.select(id);
+        f.window->navigate(Screen::Issues);
+
+        QVERIFY(f.window->findChild<QFrame*>(QStringLiteral("issueDrawerRequirement")));
+        QCOMPARE(f.liveLabel("issueDrawerGesreqState")->text(), QStringLiteral("Control de calidad observado"));
+        const QString deadline = f.liveLabel("issueDrawerDeadline")->text();
+        QVERIFY2(deadline.contains(QStringLiteral("vencido hace")), qPrintable(deadline));
+
+        QApplication::clipboard()->clear();
+        f.liveButton(QStringLiteral("issueDrawerCopyGreq"))->click();
+        QCOMPARE(QApplication::clipboard()->text(), r.id);
+
+        QApplication::clipboard()->clear();
+        auto* card = f.liveButton(QStringLiteral("issueRow-") + id);
+        QTRY_VERIFY(card->isVisible());   // las tarjetas nuevas se enseñan en diferido
+        auto* cardCopy = card->findChild<QPushButton*>(QStringLiteral("cardCopy"));
+        QVERIFY(cardCopy && cardCopy->isVisible());   // la tarjeta elegida lo enseña sin pasar el ratón
+        cardCopy->click();
+        QCOMPARE(QApplication::clipboard()->text(), r.id);
+        QCOMPARE(f.app.issues.selectedId(), id);
+
+        QApplication::clipboard()->clear();
+        f.window->openIssue(id);
+        f.liveButton(QStringLiteral("issueRequirementCopy"))->click();
+        QCOMPARE(QApplication::clipboard()->text(), r.id);
+    }
+
+    // La lista dice en qué estado está cada requerimiento en GESREQ, como las tarjetas del tablero.
+    void theIssueListShowsTheGesreqState() {
+        WindowFixture f;
+        ExternalRequirement requirement;
+        requirement.id = QStringLiteral("2026997");
+        requirement.systemCode = QStringLiteral("SUMA2");
+        requirement.summary = QStringLiteral("Integración de nuevos servicios");
+        requirement.states = {QStringLiteral("CONTROL DE CALIDAD OBSERVADO"), QStringLiteral("CONTROL FUNCIONAL")};
+        f.app.issues.importRequirements({requirement}, QStringLiteral("http://gesreq.test:7401/greq"));
+        f.app.issues.createIssue(QStringLiteral("A mano"));
+        f.window->navigate(Screen::Issues);
+        auto* issuesView = f.window->findChild<IssuesView*>();
+        issuesView->setListMode(true);
+        auto* table = f.window->findChild<QTableWidget*>(QStringLiteral("issueListTable"));
+        int column = -1;
+        for (int c = 0; c < table->columnCount(); ++c)
+            if (table->horizontalHeaderItem(c)->text() == QStringLiteral("Estado GESREQ")) column = c;
+        QVERIFY(column >= 0);
+        QStringList states;
+        for (int r = 0; r < table->rowCount(); ++r) states << table->item(r, column)->text();
+        states.sort();
+        QCOMPARE(states, (QStringList{QStringLiteral("Control de calidad observado + Control funcional"), QStringLiteral("—")}));
+        issuesView->setListMode(false);
+    }
+
     // Una columna del tablero se pliega a una franja con su recuento, para dejar sitio a las demás, y un
     // clic en la franja la despliega. Lo plegado se recuerda.
     void aBoardColumnFoldsAndUnfolds() {
@@ -4212,7 +4321,7 @@ private slots:
         QVERIFY(QSettings().value(QStringLiteral("issues/collapsedColumns")).toStringList().isEmpty());
     }
 
-    // La tarjeta del issue se maneja sin salir del tablero: su botón hace lo siguiente que toca, su menú
+    // La tarjeta del issue se maneja sin salir del tablero: su menú
     // cambia el estado de QA y soltarla en otra columna también (menos en la de fallidos, que es calculada).
     void theIssueCardActsFromTheBoard() {
         WindowFixture f;
@@ -4222,19 +4331,11 @@ private slots:
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         const auto card = [&f, &issueId] { return f.window->findChild<QPushButton*>(QStringLiteral("issueRow-") + issueId); };
 
-        // Sin plan, lo siguiente es crearlo, y el botón de la tarjeta elegida lo hace.
-        auto* quick = f.window->findChild<QPushButton*>(QStringLiteral("issueCardAction-") + issueId);
-        QVERIFY(quick);
-        // El layout de la tarjeta recién hecha se aplica en diferido.
-        QTRY_COMPARE(card()->childAt(quick->mapTo(card(), quick->rect().center())), quick);
-        QCOMPARE(quick->text(), QStringLiteral("Crear plan"));
-        quick->click();
-        QVERIFY(!f.app.issues.find(issueId)->planId.isEmpty());
-        QCOMPARE(f.window->currentScreen(), Screen::Plan);
+        // La tarjeta no lleva el botón de lo siguiente que toca: eso está en el panel del issue.
+        QVERIFY(card());
+        QVERIFY(!f.window->findChild<QPushButton*>(QStringLiteral("issueCardAction-") + issueId));
 
         // El menú de la tarjeta cambia el estado de QA.
-        f.window->navigate(Screen::Issues);
-        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         emit card()->customContextMenuRequested(QPoint(4, 4));
         auto* menu = f.window->findChild<QMenu*>(QStringLiteral("issueCardMenu"));
         QVERIFY(menu);

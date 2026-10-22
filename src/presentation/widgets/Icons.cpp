@@ -236,6 +236,17 @@ void drawCopy(QPainter& p) {
     p.drawPath(back);
 }
 
+/// Reloj con una exclamación al lado: el plazo ya pasó.
+void drawOverdue(QPainter& p) {
+    p.drawEllipse(QPointF(10, 12), 7, 7);
+    p.drawLine(QPointF(10, 12), QPointF(10, 8));
+    p.drawLine(QPointF(10, 12), QPointF(12.8, 13.4));
+    p.drawLine(QPointF(20.5, 6), QPointF(20.5, 14));
+    p.setBrush(p.pen().color());
+    p.drawEllipse(QPointF(20.5, 18), 1.1, 1.1);
+    p.setBrush(Qt::NoBrush);
+}
+
 void drawChevronRight(QPainter& p) {
     p.drawLine(QPointF(10, 6.5), QPointF(15.5, 12));
     p.drawLine(QPointF(15.5, 12), QPointF(10, 17.5));
@@ -285,6 +296,7 @@ QPixmap pixmap(Glyph g, const QString& color, int size) {
         case Glyph::ChevronRight: drawChevronRight(p); break;
         case Glyph::ChevronDown: drawChevronDown(p); break;
         case Glyph::Copy: drawCopy(p); break;
+        case Glyph::Overdue: drawOverdue(p); break;
     }
     return pm;
 }

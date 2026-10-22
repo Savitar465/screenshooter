@@ -191,9 +191,7 @@ private:
     struct NextAction {
         QString title;    // «Continuar lo fallado», «Generar el acta (R-213)»…
         QString why;      // por qué toca
-        QString hint;     // en pocas palabras, para la tarjeta
         QString button;   // el botón del panel
-        QString shortButton;   // el de la tarjeta, que es estrecha
         std::function<void(QWidget*)> run;   // vacía si no hay nada que lanzar desde aquí
         /// Lo otro razonable que se puede hacer ahora, al lado de lo que toca: con la ronda cerrada,
         /// volver a probar **sólo lo que se rompió** en vez de repetir el plan entero. Vacío si no hay.
@@ -220,6 +218,9 @@ private:
     static Column foreignColumnOf(const Issue& issue);
     QWidget* foreignCard(const IssueDirectory::Entry& entry);
     /// El panel de un issue de otro proyecto: lo que guarda y cómo seguir con él.
+    /// El bloque del requerimiento en el panel: el GREQ (con su botón de copiar), sus estados en GESREQ y el
+    /// plazo de QA, con el aviso si venció. Nulo si el issue no viene de GESREQ.
+    QWidget* requirementSummary(const Issue& issue);
     void refreshForeignDrawer(const IssueDirectory::Entry& entry);
     void showForeignMenu(const QString& projectId, const QString& issueId, const QPoint& globalPos);
     /// Elige en el tablero un issue de otro proyecto (vacío: ninguno).
@@ -246,7 +247,7 @@ private:
     void refreshList();
     /// El panel del issue elegido en el tablero.
     void refreshDrawer();
-    QWidget* boardCard(const Issue& issue, const RevisionSnapshot& snapshot, Column column);
+    QWidget* boardCard(const Issue& issue, const RevisionSnapshot& snapshot);
     /// Pasa del tablero al detalle del issue elegido (o vuelve).
     void showDetail(bool on);
     /// Pone el panel lateral del detalle a la derecha o, si la ventana es estrecha, debajo.
@@ -438,6 +439,7 @@ private:
     QPushButton* m_phasesButton;
     QWidget* m_requirementCard;
     QLabel* m_requirementId;
+    QPushButton* m_requirementCopy = nullptr;
     // El plazo de QA, lo primero de la tarjeta: cuánto queda, la barra del periodo y sus dos fechas.
     QWidget* m_deadline;
     QLabel* m_deadlineValue;

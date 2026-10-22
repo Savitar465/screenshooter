@@ -1,6 +1,12 @@
 #include "Ui.h"
 
+#include "presentation/theme/Theme.h"
+#include "presentation/widgets/Icons.h"
 #include "presentation/widgets/LayoutButton.h"
+
+#include <QApplication>
+#include <QClipboard>
+#include <QToolTip>
 
 #include <QCoreApplication>
 #include <QPainter>
@@ -26,6 +32,31 @@ void setFlag(QWidget* w, const char* name, bool value) {
     if (w->property(name).toBool() == value && w->property(name).isValid()) return;
     w->setProperty(name, value);
     repolish(w);
+}
+
+QPushButton* copyButton(const QString& text, int size) {
+    auto* b = new QPushButton;
+    b->setObjectName(QStringLiteral("copyButton"));
+    b->setIcon(QIcon(icons::pixmap(icons::Glyph::Copy, theme::Muted, size >= 24 ? 16 : 13)));
+    b->setFixedSize(size, size);
+    b->setCursor(Qt::PointingHandCursor);
+    b->setFocusPolicy(Qt::NoFocus);
+    b->setAccessibleName(QCoreApplication::translate("ui", "Copiar"));
+    // Estilo propio y completo: también va dentro de otros botones (la tarjeta), donde el de la app no llega.
+    b->setStyleSheet(QStringLiteral("QPushButton{background:transparent;border:none;border-radius:6px;padding:0;}"
+                                    "QPushButton:hover{background:%1;}")
+                         .arg(theme::tint(theme::Muted, 50)));
+    setCopyText(b, text);
+    QObject::connect(b, &QPushButton::clicked, b, [b]() {
+        QApplication::clipboard()->setText(b->property("copyText").toString());
+        QToolTip::showText(b->mapToGlobal(QPoint(0, b->height())), QCoreApplication::translate("ui", "Copiado"), b);
+    });
+    return b;
+}
+
+void setCopyText(QPushButton* button, const QString& text) {
+    button->setProperty("copyText", text);
+    button->setToolTip(QCoreApplication::translate("ui", "Copiar «%1»").arg(elide(text, 60)));
 }
 
 QLabel* label(const QString& text, const char* role, QWidget* parent) {

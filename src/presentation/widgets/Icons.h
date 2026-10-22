@@ -15,7 +15,9 @@ enum class Glyph {
     // Acciones pequeñas de las listas: abrir, ver, reintentar, quitar y plegar o desplegar.
     Open, Eye, Retry, Close, ChevronRight, ChevronDown,
     // Copiar un dato al portapapeles.
-    Copy
+    Copy,
+    // Reloj con una exclamación: el plazo venció.
+    Overdue
 };
 
 /// Glifo `g` dibujado en `color` sobre un lienzo cuadrado de `size` puntos, listo para HiDPI.

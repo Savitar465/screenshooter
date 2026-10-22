@@ -315,6 +315,11 @@ bool IssuesView::eventFilter(QObject* watched, QEvent* event) {
     // La tarjeta de un issue de otro proyecto: un clic la elige (lo hace su `clicked`) y el doble clic
     // sigue con él, que es cambiar de proyecto y se pregunta antes. No se arrastra: su estado es de allí.
     if (const QString foreign = watched->property("foreignIssue").toString(); !foreign.isEmpty()) {
+        if (event->type() == QEvent::Enter || event->type() == QEvent::Leave) {
+            const bool show = event->type() == QEvent::Enter ||
+                              (foreign == m_foreignIssue && watched->property("foreignProject").toString() == m_foreignProject);
+            if (auto* copy = watched->findChild<QWidget*>(QStringLiteral("cardCopy"))) copy->setVisible(show);
+        }
         if (event->type() == QEvent::MouseButtonDblClick) {
             const QString project = watched->property("foreignProject").toString();
             selectForeign(project, foreign);
@@ -348,6 +353,7 @@ bool IssuesView::eventFilter(QObject* watched, QEvent* event) {
                 // Con el ratón encima, la tarjeta enseña su menú; la elegida lo enseña siempre.
                 const bool show = event->type() == QEvent::Enter || id == m_issues.selectedId();
                 if (auto* actions = watched->findChild<QWidget*>(QStringLiteral("cardActions"))) actions->setVisible(show);
+                if (auto* copy = watched->findChild<QWidget*>(QStringLiteral("cardCopy"))) copy->setVisible(show);
                 break;
             }
             default: break;
@@ -605,14 +611,30 @@ QLabel* cardTitle(const QString& text, const QString& color) {
     return title;
 }
 
-/// La revisión y su fase, arriba a la derecha de la tarjeta: se recorta si la tarjeta es estrecha en vez
-/// de ensancharla.
-QLabel* cardRevision(const QString& text) {
-    auto* rev = new ElidedLabel(text);
-    rev->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-    rev->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    rev->setStyleSheet(QStringLiteral("color:%1;font-weight:700;font-size:10.5px;").arg(theme::Cyan));
-    return rev;
+/// El botón de copiar el número del GREQ, junto a él en la tarjeta: se ve en la elegida o con el ratón
+/// encima, y oculto conserva su sitio para que la tarjeta no salte. Nulo si el issue no viene de GESREQ.
+QPushButton* cardCopy(const Issue& issue, bool visible) {
+    if (!issue.isImported()) return nullptr;
+    auto* copy = ui::copyButton(issue.requirement.data.id, 18);
+    copy->setObjectName(QStringLiteral("cardCopy"));
+    QSizePolicy keep = copy->sizePolicy();
+    keep.setRetainSizeWhenHidden(true);
+    copy->setSizePolicy(keep);
+    copy->setVisible(visible);
+    return copy;
+}
+
+/// El aviso de que venció el plazo de QA que da GESREQ, junto al número de la tarjeta; nulo si no venció.
+/// Un issue finalizado ya no tiene plazo que vigilar.
+QLabel* overdueMark(const Issue& issue, const QString& objectName) {
+    if (!issue.isImported() || issue.state == IssueState::Done) return nullptr;
+    const auto period = requirement::qaPeriod(issue.requirement, QDate::currentDate());
+    if (!period.valid || period.left >= 0) return nullptr;
+    auto* mark = new QLabel;
+    mark->setObjectName(objectName);
+    mark->setPixmap(icons::pixmap(icons::Glyph::Overdue, theme::Red, 18));
+    mark->setToolTip(IssuesView::tr("Plazo de QA vencido hace %n día(s) hábil(es)", nullptr, -period.left));
+    return mark;
 }
 
 /// Las etiquetas de la tarjeta en una fila que salta de línea cuando no caben, en vez de recortarse.
@@ -632,20 +654,11 @@ QLabel* cardTag(const QString& text, const QString& bg, const QString& fg) {
     return tag;
 }
 
-/// Los estados vigentes del requerimiento en GESREQ: los de la bandeja o, si ya salió de ella y se leyó
-/// la ficha después, el de la ficha.
-QStringList requirementStates(const RequirementLink& link) {
-    const bool staleDetail = !link.detailFetchedAt.isValid() || link.detailFetchedAt <= link.fetchedAt;
-    QStringList states = link.data.states;
-    if ((states.isEmpty() || (link.missing && !staleDetail)) && !link.detail.state.isEmpty()) states = {link.detail.state};
-    return states;
-}
-
 /// Una etiqueta por cada estado del requerimiento en GESREQ, con su color.
 QList<QLabel*> stateTags(const Issue& issue) {
     QList<QLabel*> tags;
     if (!issue.isImported()) return tags;
-    for (const QString& state : requirementStates(issue.requirement)) {
+    for (const QString& state : requirement::currentStates(issue.requirement)) {
         const QString color = requirement::stateColor(state);
         tags << cardTag(requirement::sentenceCase(state), theme::tint(color, 38), color);
     }
@@ -928,7 +941,7 @@ void IssuesView::buildDrawer(QSplitter* root) {
     root->addWidget(pane);
 }
 
-QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Column column) {
+QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s) {
     auto* card = ui::button(QString(), "board-card");
     card->setObjectName(QStringLiteral("issueRow-%1").arg(issue.id));
     card->setProperty("issueId", issue.id);
@@ -948,13 +961,13 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     // Arriba, lo que lo identifica; el sistema va con las demás etiquetas, que tienen sitio para saltar
     // de línea en vez de recortarse junto al número.
     th->addWidget(ui::label(issue.isImported() ? issue.requirement.data.id : issue.id, "mono-muted"));
+    const bool active = issue.id == m_issues.selectedId();
+    QPushButton* copy = cardCopy(issue, active);
+    if (copy) th->addWidget(copy);
+    if (auto* overdue = overdueMark(issue, QStringLiteral("issueOverdue-%1").arg(issue.id))) th->addWidget(overdue);
     th->addStretch(1);
-    if (!issue.revisions.isEmpty()) {
-        th->addWidget(cardRevision(tr("REV %1 · %2").arg(s.number).arg(s.phaseApproved ? s.upcoming : s.phase)));
-    }
     // El «⋯» de su menú, en la tarjeta elegida o con el ratón encima; oculto conserva su sitio, así que
     // la tarjeta no salta al pasar por encima.
-    const bool active = issue.id == m_issues.selectedId();
     auto* more = smallButton(QStringLiteral("⋯"), "ghost", tr("Más acciones"));
     more->setObjectName(QStringLiteral("issueCardMore-%1").arg(issue.id));
     more->setFixedSize(30, 22);
@@ -1000,35 +1013,13 @@ QWidget* IssuesView::boardCard(const Issue& issue, const RevisionSnapshot& s, Co
     if (!issue.requirement.changes.isEmpty()) tags << cardTag(tr("CAMBIOS"), theme::tint(theme::Amber, 46), theme::AmberSoft);
     v->addWidget(cardTags(tags));
 
-    // La tarjeta elegida enseña al pie el botón de lo siguiente que toca. Reanudar no va aquí: se hace
-    // desde su menú o desde el panel del issue.
-    const NextAction next = active && !pausedSince(issue).isValid() ? nextActionOf(issue, s, column) : NextAction{};
-    QWidget* bottom = nullptr;
-    if (next.run) {
-        bottom = new QWidget;
-        auto* ah = ui::hbox(bottom, 0, 6);
-        auto* go = smallButton(next.shortButton, "primary", next.title);
-        go->setObjectName(QStringLiteral("issueCardAction-%1").arg(issue.id));
-        // Estilo propio y completo: dentro de otro botón (la tarjeta) el del rol no llega a pintar el fondo.
-        go->setStyleSheet(QStringLiteral("QPushButton{background:%1;color:%2;border:none;border-radius:7px;padding:3px 9px;"
-                                         "font-size:11.5px;font-weight:700;}QPushButton:hover{background:%3;}")
-                              .arg(theme::Blue, theme::OnAccent, theme::TextSoft));
-        connect(go, &QPushButton::clicked, this, [go, run = next.run]() { run(go); });
-        ah->addWidget(go);
-        ah->addStretch(1);
-        v->addWidget(bottom);
-    }
-
-    // El resto no atiende al ratón: el clic, el doble clic y el arrastre son de la tarjeta. Los botones sí,
-    // y por eso ni ellos ni las filas que los contienen se tocan: un widget transparente al ratón lo es con
-    // todos sus hijos. Esas filas dejan pasar a la tarjeta los clics que no caen en un botón.
-    const QList<QWidget*> rows = {top, actions, bottom};
-    for (auto* child : card->findChildren<QWidget*>()) {
-        const bool interactive = std::any_of(rows.begin(), rows.end(), [child, top](QWidget* row) {
-            return row && (child == row || (row != top && row->isAncestorOf(child)));
-        });
-        if (!interactive) child->setAttribute(Qt::WA_TransparentForMouseEvents);
-    }
+    // El resto no atiende al ratón: el clic, el doble clic y el arrastre son de la tarjeta. El «⋯» y el
+    // botón de copiar sí, y por eso ni ellos ni las filas que los contienen se tocan: un widget
+    // transparente al ratón lo es con todos sus hijos. Esas filas dejan pasar a la tarjeta los clics que
+    // no caen en un botón.
+    for (auto* child : card->findChildren<QWidget*>())
+        if (child != top && child != copy && child != actions && !actions->isAncestorOf(child))
+            child->setAttribute(Qt::WA_TransparentForMouseEvents);
 
     card->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(card, &QWidget::customContextMenuRequested, this, [this, card, id = issue.id](const QPoint& pos) {
@@ -1069,50 +1060,40 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
         a.title = tr("Reanudar la ejecución");
         a.why = tr("El ciclo %1 está en pausa desde el %2: se sigue en el caso y el paso donde se dejó.")
                     .arg(paused, when(pausedSince(issue)));
-        a.hint = tr("Reanudar la ejecución");
         a.button = tr("▶ Reanudar (%1)").arg(paused);
-        a.shortButton = tr("▶ Reanudar");
         a.run = [this, paused](QWidget*) { emit resumeCycleRequested(paused); };
     } else if (column == Column::Broken && s.open && !s.continuable.isEmpty()) {
         const int broken = int(continuationOf(m_history.report(s.continuable)).size());
         a.title = tr("Continuar lo fallado");
         a.why = tr("%1 dejó %2 fallido(s) y %3 bloqueado(s): se repiten desde el paso que se rompió, en la misma revisión.")
                     .arg(s.continuable).arg(s.progress.failed).arg(s.progress.blocked);
-        a.hint = tr("Continuar lo fallado");
         a.button = tr("▶ Continuar lo fallado (%1)").arg(broken);
-        a.shortButton = tr("▶ Continuar (%1)").arg(broken);
         a.run = [this, cycle = s.continuable](QWidget*) { emit continueCycleRequested(cycle); };
     } else switch (s.nextStep) {
         case 1:
             a.title = tr("Preparar el plan de pruebas");
             a.why = issue.planId.isEmpty() ? tr("El requerimiento todavía no tiene plan") : tr("El plan todavía no tiene casos: ábrelo y añádeselos.");
-            a.hint = issue.planId.isEmpty() ? tr("Crear el plan") : tr("Añadir casos al plan");
-            a.button = a.shortButton = issue.planId.isEmpty() ? tr("Crear plan") : tr("Abrir plan");
+            a.button = issue.planId.isEmpty() ? tr("Crear plan") : tr("Abrir plan");
             if (issue.planId.isEmpty()) a.run = [this](QWidget*) { createPlan(); };
             else a.run = [this, planId = issue.planId](QWidget*) { emit openPlanRequested(planId); };
             break;
         case 2:
             a.title = tr("Ejecutar el plan");
             a.why = tr("%1 de %2 casos ejecutados en esta revisión").arg(s.progress.executed).arg(s.progress.cases);
-            a.hint = s.progress.notRun() > 0 ? tr("%n caso(s) sin ejecutar", nullptr, s.progress.notRun()) : tr("Ejecutar el plan");
             a.button = tr("▶ Ejecutar plan…");
-            a.shortButton = tr("▶ Ejecutar");
             a.run = [this](QWidget*) { runPlan(); };
             break;
         case 3:
             a.title = tr("Revisar los bugs reportados");
             a.why = tr("%n bug(s) abierto(s): con alguno abierto el requerimiento no queda conforme.", nullptr, s.openBugs);
-            a.hint = tr("%n bug(s) abierto(s)", nullptr, s.openBugs);
             // Si el reintento ya pasó el paso de alguno, lo que toca es cerrarlo en el gestor.
             if (!s.verifiedBugs.isEmpty() && m_bugs && m_bugs->canCloseBugs()) {
                 a.why += QLatin1Char(' ') + tr("%n ya pasó el reintento y se puede cerrar.", nullptr, int(s.verifiedBugs.size()));
                 a.button = tr("Cerrar verificados (%1)…").arg(s.verifiedBugs.size());
-                a.shortButton = tr("Cerrar (%1)").arg(s.verifiedBugs.size());
                 a.run = [this, keys = s.verifiedBugs](QWidget*) { closeVerifiedBugs(keys); };
                 break;
             }
             a.button = tr("Ver los bugs");
-            a.shortButton = tr("Ver bugs");
             a.run = [this](QWidget*) { showDetail(true); };
             break;
         case 4:
@@ -1121,17 +1102,13 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
                                    .arg(s.number)
                                    .arg(outcomeText(issue, issue.lastOutcome(), s.phase))
                              : tr("Con lo del requerimiento, la ejecución elegida y los bugs de la revisión");
-            a.hint = tr("Generar el acta");
             a.button = tr("Generar acta…");
-            a.shortButton = tr("Generar acta");
             a.run = [this](QWidget*) { generateRecord(); };
             break;
         case 5:
             a.title = tr("Cerrar la revisión");
             a.why = tr("Se propone «%1»").arg(outcomeText(issue, s.progress.suggested, s.phase));
-            a.hint = tr("Cerrar la revisión");
             a.button = tr("Cerrar revisión…");
-            a.shortButton = tr("Cerrar");
             a.run = [this](QWidget*) { closeRevision(); };
             break;
         case 6:
@@ -1140,9 +1117,7 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
                         .arg(s.number)
                         .arg(outcomeText(issue, issue.lastOutcome(), s.phase))
                         .arg(pendingText(issue, s.number));
-            a.hint = tr("Publicar el resultado");
             a.button = tr("Publicar…");
-            a.shortButton = tr("Publicar");
             if (m_revisionPublish) a.run = [this](QWidget*) { publishRevision(); };
             break;
         default:
@@ -1151,16 +1126,13 @@ IssuesView::NextAction IssuesView::nextActionOf(const Issue& issue, const Revisi
             if (s.phaseApproved) {
                 a.title = tr("Probar en %1").arg(s.upcoming);
                 a.why = tr("%1 aprobada en la revisión %2: la ronda siguiente es de %3").arg(s.phase).arg(s.number).arg(s.upcoming);
-                a.hint = tr("Toca %1").arg(s.upcoming);
                 a.button = tr("▶ Empezar %1…").arg(s.upcoming);
-                a.shortButton = tr("▶ %1").arg(s.upcoming);
                 a.run = [this](QWidget*) { runPlan(); };
                 break;
             }
             a.title = issue.lastOutcome() == QaOutcome::Observado ? tr("Volver a probar") : tr("Nada pendiente");
             a.why = tr("Revisión %1 cerrada como %2").arg(s.number).arg(outcomeText(issue, issue.lastOutcome(), s.phase));
-            a.hint = tr("%1 · publicado").arg(outcomeText(issue, issue.lastOutcome(), s.phase));
-            a.button = a.shortButton = tr("Nueva revisión");
+            a.button = tr("Nueva revisión");
             a.run = [this](QWidget*) { openRevision(); };
             break;
     }
@@ -1340,7 +1312,7 @@ void IssuesView::refreshList() {
         const Column column = columnOf(issue, s);
         const int i = static_cast<int>(column);
         ++counts[i];
-        m_columns[i]->addWidget(boardCard(issue, s, column));
+        m_columns[i]->addWidget(boardCard(issue, s));
     }
     // Debajo de los del proyecto, en cada columna, los de los demás: la vista general.
     int shownOthers = 0;
@@ -1401,10 +1373,8 @@ void IssuesView::refreshDrawer() {
     auto* top = new QWidget;
     auto* th = ui::hbox(top, 0, 8);
     // Se ajusta al ancho del panel en vez de ensancharlo: al lado va el botón del menú.
-    auto* identity = ui::label(issue.isImported() ? QStringLiteral("%1 · GREQ %2 · %3").arg(issue.id, issue.requirement.data.id,
-                                                                                          issue.requirement.data.systemCode)
-                                                  : issue.id,
-                               "eyebrow-mono");
+    // El GREQ va en su bloque, debajo, con su botón de copiar.
+    auto* identity = ui::label(issue.id, "eyebrow-mono");
     identity->setWordWrap(true);
     identity->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     th->addWidget(identity, 1);
@@ -1446,6 +1416,7 @@ void IssuesView::refreshDrawer() {
         chh->addWidget(pill(p.status.isEmpty() ? p.key : QStringLiteral("%1 · %2").arg(p.key, p.status), theme::tint(theme::Blue, 30), theme::Blue));
     }
     m_drawerLayout->addWidget(chips);
+    if (QWidget* requirement = requirementSummary(issue)) m_drawerLayout->addWidget(requirement);
 
     // Lo siguiente: el paso que toca de la revisión, con su acción a mano.
     auto* next = ui::card("card-flat");
@@ -1654,13 +1625,10 @@ QWidget* IssuesView::foreignCard(const IssueDirectory::Entry& entry) {
     auto* top = new QWidget;
     auto* th = ui::hbox(top, 0, 6);
     th->addWidget(ui::label(issue.isImported() ? issue.requirement.data.id : issue.id, "mono-muted"));
+    QPushButton* copy = cardCopy(issue, entry.projectId == m_foreignProject && issue.id == m_foreignIssue);
+    if (copy) th->addWidget(copy);
+    if (auto* overdue = overdueMark(issue, QStringLiteral("issueOverdue-%1-%2").arg(entry.projectId, issue.id))) th->addWidget(overdue);
     th->addStretch(1);
-    if (!issue.revisions.isEmpty()) {
-        // De otro proyecto no se tienen sus fases: se enseña la que guardó la ronda, si la tiene.
-        const QString phase = issue.revisions.last().phase;
-        th->addWidget(cardRevision(phase.isEmpty() ? tr("REV %1").arg(issue.currentRevisionNumber())
-                                                   : tr("REV %1 · %2").arg(issue.currentRevisionNumber()).arg(phase)));
-    }
     v->addWidget(top);
 
     // Atenuado: se ve, pero no compite con el trabajo del proyecto abierto.
@@ -1675,7 +1643,9 @@ QWidget* IssuesView::foreignCard(const IssueDirectory::Entry& entry) {
     if (!issue.requirement.changes.isEmpty()) tags << cardTag(tr("CAMBIOS"), theme::tint(theme::Amber, 46), theme::AmberSoft);
     v->addWidget(cardTags(tags));
 
-    for (auto* child : card->findChildren<QWidget*>()) child->setAttribute(Qt::WA_TransparentForMouseEvents);
+    // Todo es de la tarjeta menos el botón de copiar (y la fila que lo lleva, que deja pasar el resto).
+    for (auto* child : card->findChildren<QWidget*>())
+        if (child != top && child != copy) child->setAttribute(Qt::WA_TransparentForMouseEvents);
     card->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(card, &QWidget::customContextMenuRequested, this, [this, card, projectId = entry.projectId, id = issue.id](const QPoint& pos) {
         showForeignMenu(projectId, id, card->mapToGlobal(pos));
@@ -1703,15 +1673,78 @@ void IssuesView::showForeignMenu(const QString& projectId, const QString& issueI
     menu->popup(globalPos);
 }
 
+QWidget* IssuesView::requirementSummary(const Issue& issue) {
+    if (!issue.isImported()) return nullptr;
+    const RequirementLink& link = issue.requirement;
+    auto* box = ui::card("card-flat");
+    box->setObjectName(QStringLiteral("issueDrawerRequirement"));
+    auto* v = ui::vbox(box, 0, 8);
+    v->setContentsMargins(14, 10, 14, 12);
+
+    // El número, con su botón de copiar, y el sistema.
+    auto* head = new QWidget;
+    auto* hh = ui::hbox(head, 0, 4);
+    auto* number = ui::label(QStringLiteral("GREQ %1").arg(link.data.id), "mono-muted");
+    number->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    hh->addWidget(number);
+    auto* copy = ui::copyButton(link.data.id, 22);
+    copy->setObjectName(QStringLiteral("issueDrawerCopyGreq"));
+    hh->addWidget(copy);
+    hh->addStretch(1);
+    if (!link.data.systemCode.isEmpty()) {
+        auto* system = new ElidedLabel(link.data.systemCode);
+        system->setProperty("role", QStringLiteral("muted-sm"));
+        system->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        hh->addWidget(system, 1);
+    }
+    v->addWidget(head);
+
+    // Sus estados en GESREQ.
+    for (const QString& state : requirement::currentStates(link)) {
+        auto* row = new QWidget;
+        auto* h = ui::hbox(row, 0, 8);
+        h->addWidget(ui::dot(requirement::stateColor(state), 8), 0, Qt::AlignVCenter);
+        auto* text = ui::label(requirement::sentenceCase(state));
+        text->setObjectName(QStringLiteral("issueDrawerGesreqState"));
+        text->setWordWrap(true);
+        h->addWidget(text, 1);
+        v->addWidget(row);
+    }
+
+    // El plazo de QA y, salvo finalizado, cómo va: vencido, con el reloj de la tarjeta.
+    if (const auto period = requirement::qaPeriod(link, QDate::currentDate()); period.valid) {
+        const auto status = issue.state == IssueState::Done ? requirement::DeadlineStatus{} : requirement::deadlineStatus(period);
+        auto* row = new QWidget;
+        auto* h = ui::hbox(row, 0, 6);
+        if (status.overdue) {
+            auto* mark = new QLabel;
+            mark->setPixmap(icons::pixmap(icons::Glyph::Overdue, theme::Red, 16));
+            h->addWidget(mark, 0, Qt::AlignTop);
+        }
+        const QString dates = QStringLiteral("%1 – %2").arg(period.from.toString(period.from.year() == period.until.year() ? QStringLiteral("dd/MM")
+                                                                                                                         : QStringLiteral("dd/MM/yyyy")),
+                                                           period.until.toString(QStringLiteral("dd/MM/yyyy")));
+        QString text = tr("Plazo de QA: %1").arg(dates).toHtmlEscaped();
+        if (!status.text.isEmpty())
+            text += QStringLiteral(" · <span style='color:%1;font-weight:%2;'>%3</span>")
+                        .arg(status.color, status.overdue ? QStringLiteral("700") : QStringLiteral("400"), status.text.toHtmlEscaped());
+        auto* label = ui::label(text, "muted-sm");
+        label->setObjectName(QStringLiteral("issueDrawerDeadline"));
+        label->setTextFormat(Qt::RichText);
+        label->setWordWrap(true);
+        h->addWidget(label, 1);
+        v->addWidget(row);
+    }
+    return box;
+}
+
 void IssuesView::refreshForeignDrawer(const IssueDirectory::Entry& entry) {
     const Issue& issue = entry.issue;
     const QString project = projectName(entry.projectId);
     const ColumnInfo info = columnInfo(foreignColumnOf(issue));
 
-    auto* identity = ui::label(issue.isImported() ? QStringLiteral("%1 · GREQ %2 · %3").arg(issue.id, issue.requirement.data.id,
-                                                                                          issue.requirement.data.systemCode)
-                                                  : issue.id,
-                               "eyebrow-mono");
+    // El GREQ va en su bloque, debajo, con su botón de copiar.
+    auto* identity = ui::label(issue.id, "eyebrow-mono");
     identity->setWordWrap(true);
     identity->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     m_drawerLayout->addWidget(identity);
@@ -1735,6 +1768,7 @@ void IssuesView::refreshForeignDrawer(const IssueDirectory::Entry& entry) {
         chh->addWidget(ui::pill(p.status.isEmpty() ? p.key : QStringLiteral("%1 · %2").arg(p.key, p.status), theme::tint(theme::Blue, 30), theme::Blue));
     }
     m_drawerLayout->addWidget(chips);
+    if (QWidget* requirement = requirementSummary(issue)) m_drawerLayout->addWidget(requirement);
 
     // Lo que se puede hacer con él: seguir en su proyecto, que es donde están sus planes y sus ciclos.
     auto* elsewhere = ui::card("card-flat");
@@ -2100,6 +2134,9 @@ void IssuesView::buildDetail(QVBoxLayout* root) {
     m_requirementCard = requirementCard;
     m_requirementId = ui::label(QString(), "mono-muted");
     requirementHead->addWidget(m_requirementId);
+    m_requirementCopy = ui::copyButton(QString(), 22);
+    m_requirementCopy->setObjectName(QStringLiteral("issueRequirementCopy"));
+    requirementHead->addWidget(m_requirementCopy);
 
     m_deadline = ui::card("card-flat");
     m_deadline->setObjectName(QStringLiteral("issueRequirementDeadline"));
@@ -3214,6 +3251,7 @@ void IssuesView::refreshRequirement(const Issue& issue) {
         });
     }
     m_requirementId->setText(QStringLiteral("GREQ %1").arg(r.id));
+    ui::setCopyText(m_requirementCopy, r.id);
 
     // El plazo de QA: lo que queda en grande y el periodo en una barra de diez tramos. Fuera de la
     // bandeja el control ya terminó, así que no hay plazo que vigilar.
@@ -3254,7 +3292,7 @@ void IssuesView::refreshRequirement(const Issue& issue) {
     m_requirementTitle->setText(d.reference.trimmed().isEmpty() ? r.summary : d.reference);
     m_requirementTitle->setVisible(!m_requirementTitle->text().trimmed().isEmpty());
     ui::clearLayout(m_requirementStates);
-    const QStringList states = requirementStates(link);
+    const QStringList states = requirement::currentStates(link);
     for (const QString& state : states) {
         auto* row = new QWidget;
         auto* h = ui::hbox(row, 0, 8);

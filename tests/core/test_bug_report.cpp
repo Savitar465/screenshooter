@@ -55,7 +55,7 @@ private slots:
     void theClassificationTravelsInTheDescription() {
         BugReport b = sample();
         b.classification = QStringLiteral("C");
-        QVERIFY(b.jiraDescription().contains(QStringLiteral("h3. Clasificación\nC · Estético/Forma")));
+        QVERIFY(b.jiraDescription().contains(QStringLiteral("Clasificación: C · Estético/Forma")));
         QVERIFY(b.markdownDescription().contains(QStringLiteral("**Clasificación:** C · Estético/Forma")));
         QVERIFY(b.htmlDescription().contains(QStringLiteral("<b>Clasificación:</b> C · Estético/Forma")));
     }
@@ -63,12 +63,13 @@ private slots:
     void jiraDescriptionHasSectionsAndLinkedStory() {
         BugReport b = sample();
         const QString plain = b.jiraDescription();
-        QVERIFY(plain.contains(QStringLiteral("h3. Resultado actual\nse rompe")));
-        QVERIFY(plain.contains(QStringLiteral("h3. Severidad\nCrítica")));
+        QVERIFY(plain.contains(QStringLiteral("Resultado actual:\nse rompe")));
+        QVERIFY(plain.contains(QStringLiteral("Severidad: Crítica")));
         QVERIFY(plain.contains(QStringLiteral("TC-104")));
+        QVERIFY(!plain.contains(QStringLiteral("h3.")));   // texto plano: el Jira no interpreta las marcas wiki
         QVERIFY(!plain.contains(QStringLiteral("Historia relacionada")));
         b.linkedStoryKey = QStringLiteral("SHOP-12");
-        QVERIFY(b.jiraDescription().contains(QStringLiteral("h3. Historia relacionada\nSHOP-12")));
+        QVERIFY(b.jiraDescription().contains(QStringLiteral("Historia relacionada: SHOP-12")));
     }
 
     void markdownDescriptionListsAttachmentLinks() {
@@ -84,15 +85,15 @@ private slots:
         BugReport b = sample();
         b.stepsToReproduce << QStringLiteral("  ");   // una fila vacía no cuenta
         b.testUsers = {TestUser{QStringLiteral("qa.cajero"), QStringLiteral("Cajero")}, TestUser{QStringLiteral("qa.admin"), {}}};
-        QVERIFY(b.jiraDescription().contains(QStringLiteral("h3. Pasos para reproducir\n# abrir\n# pagar\n\n")));
-        QVERIFY(b.jiraDescription().contains(QStringLiteral("h3. Usuarios utilizados\n* qa.cajero (Cajero)\n* qa.admin\n")));
+        QVERIFY(b.jiraDescription().contains(QStringLiteral("Pasos para reproducir:\n1. abrir\n2. pagar\n\n")));
+        QVERIFY(b.jiraDescription().contains(QStringLiteral("Usuarios utilizados:\n- qa.cajero (Cajero)\n- qa.admin\n")));
         QVERIFY(b.markdownDescription().contains(QStringLiteral("### Usuarios utilizados\n- qa.cajero (Cajero)\n- qa.admin")));
         QVERIFY(b.htmlDescription().contains(QStringLiteral("<h3>Pasos para reproducir</h3><ol><li>abrir</li><li>pagar</li></ol>")));
         QVERIFY(b.htmlDescription().contains(QStringLiteral("<ul><li>qa.cajero (Cajero)</li><li>qa.admin</li></ul>")));
         b.testUsers.clear();
         b.stepsToReproduce.clear();
         QVERIFY(!b.jiraDescription().contains(QStringLiteral("Usuarios utilizados")));
-        QVERIFY(b.jiraDescription().contains(QStringLiteral("h3. Pasos para reproducir\n—")));
+        QVERIFY(b.jiraDescription().contains(QStringLiteral("Pasos para reproducir:\n—")));
     }
 
     /// Cada proyecto llama al bug a su manera: se propone el que tiene, con su ortografía.

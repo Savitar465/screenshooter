@@ -52,6 +52,8 @@ QaPeriod qaPeriod(const ExternalRequirement& r, const QDate& today) {
     QaPeriod p;
     if (!r.assignedFrom.isValid() || !r.assignedUntil.isValid() || r.assignedUntil < r.assignedFrom) return p;
     p.valid = true;
+    p.from = r.assignedFrom;
+    p.until = r.assignedUntil;
     p.started = today >= r.assignedFrom;
     const QDate dayBefore = r.assignedFrom.addDays(-1);
     p.total = std::max(workingDaysTo(dayBefore, r.assignedUntil), 1);
@@ -61,6 +63,30 @@ QaPeriod qaPeriod(const ExternalRequirement& r, const QDate& today) {
     if (today > r.assignedUntil) p.left = std::min(p.left, -1);
     if (!p.started) p.untilStart = std::max(workingDaysTo(today, r.assignedFrom), 1);
     return p;
+}
+
+DeadlineStatus deadlineStatus(const QaPeriod& period) {
+    auto days = [](int n) { return n == 1 ? RequirementWindow::tr("1 día") : RequirementWindow::tr("%1 días").arg(n); };
+    DeadlineStatus status{QString(), theme::Muted, false};
+    if (!period.valid) return status;
+    if (!period.started) {
+        status.text = RequirementWindow::tr("empieza en %1").arg(days(period.untilStart));
+    } else if (period.left < 0) {
+        status = {RequirementWindow::tr("vencido hace %1").arg(days(-period.left)), theme::RedSoft, true};
+    } else if (period.left == 0) {
+        status = {RequirementWindow::tr("vence hoy"), theme::AmberSoft, false};
+    } else {
+        status.text = period.left == 1 ? RequirementWindow::tr("falta 1 día") : RequirementWindow::tr("faltan %1 días").arg(period.left);
+        status.color = period.left <= 3 ? theme::AmberSoft : theme::Muted;
+    }
+    return status;
+}
+
+QStringList currentStates(const RequirementLink& link) {
+    const bool staleDetail = !link.detailFetchedAt.isValid() || link.detailFetchedAt <= link.fetchedAt;
+    QStringList states = link.data.states;
+    if ((states.isEmpty() || (link.missing && !staleDetail)) && !link.detail.state.isEmpty()) states = {link.detail.state};
+    return states;
 }
 
 QString stateColor(const QString& state) {
@@ -148,6 +174,21 @@ QList<QDate> datesIn(const QString& text) {
     return dates;
 }
 
+} // namespace
+
+requirement::QaPeriod requirement::qaPeriod(const RequirementLink& link, const QDate& today) {
+    if (link.missing) return {};
+    ExternalRequirement r = link.data;
+    if (!r.assignedFrom.isValid()) {
+        const QList<QDate> dates = datesIn(requirement::blockField(link.detail, requirement::Block::QaAssignment, QStringLiteral("fecha desde")));
+        r.assignedFrom = dates.value(0);
+        r.assignedUntil = dates.value(1);
+    }
+    return qaPeriod(r, today);
+}
+
+namespace {
+
 /// Un periodo escrito por GESREQ ("18/09/2026 - 23/09/2026", con o sin horas) en corto: "18/09 – 23/09/2026".
 QString span(const QDate& from, const QDate& until) {
     if (!from.isValid()) return {};
@@ -222,14 +263,8 @@ bool unbreakable(const QString& value) {
 }
 
 QPushButton* copyButton(const QString& value) {
-    auto* b = new QPushButton;
+    auto* b = ui::copyButton(value);
     b->setObjectName(QStringLiteral("requirementCopy"));
-    b->setIcon(QIcon(icons::pixmap(icons::Glyph::Copy, theme::Muted, 16)));
-    b->setFixedSize(28, 28);
-    b->setCursor(Qt::PointingHandCursor);
-    b->setToolTip(RequirementWindow::tr("Copiar «%1»").arg(ui::elide(value, 60)));
-    b->setAccessibleName(RequirementWindow::tr("Copiar"));
-    QObject::connect(b, &QPushButton::clicked, b, [value]() { QApplication::clipboard()->setText(value); });
     return b;
 }
 
@@ -400,16 +435,21 @@ void RequirementWindow::buildRail() {
 
     QStringList identity{QStringLiteral("GREQ %1").arg(r.id)};
     if (!r.systemCode.isEmpty()) identity << r.systemCode;
-    m_rail->addWidget(ui::label(identity.join(QStringLiteral(" · ")), "mono-muted"));
+    auto* identityRow = new QWidget;
+    auto* ih = ui::hbox(identityRow, 0, 4);
+    ih->addWidget(ui::label(identity.join(QStringLiteral(" · ")), "mono-muted"));
+    auto* copyId = ui::copyButton(r.id, 22);
+    copyId->setObjectName(QStringLiteral("requirementCopyId"));
+    ih->addWidget(copyId);
+    ih->addStretch(1);
+    m_rail->addWidget(identityRow);
     auto* title = wrapped(d.reference.trimmed().isEmpty() ? r.summary : d.reference);
     title->setObjectName(QStringLiteral("requirementTitle"));
     title->setStyleSheet(QStringLiteral("font-size:16px;font-weight:700;"));
     m_rail->addWidget(title);
 
     // Fuera de la bandeja vale el estado de la ficha, si se leyó después de la última vez que se vio allí.
-    const bool freshDetail = m_link.detailFetchedAt.isValid() && m_link.detailFetchedAt > m_link.fetchedAt;
-    QStringList states = r.states;
-    if ((states.isEmpty() || (m_link.missing && freshDetail)) && !d.state.isEmpty()) states = {d.state};
+    const QStringList states = requirement::currentStates(m_link);
     if (!states.isEmpty()) {
         auto* list = new QWidget;
         auto* lv = ui::vbox(list, 0, 6);
@@ -426,21 +466,10 @@ void RequirementWindow::buildRail() {
     auto* facts = new QWidget;
     auto* fv = ui::vbox(facts, 0, 12);
     if (const auto period = requirement::qaPeriod(r, QDate::currentDate()); period.valid) {
-        auto days = [](int n) { return n == 1 ? tr("1 día") : tr("%1 días").arg(n); };
-        QString left;
-        QString color = theme::Muted;
-        if (m_link.missing) left.clear();
-        else if (!period.started) left = tr("empieza en %1").arg(days(period.untilStart));
-        else if (period.left < 0) {
-            left = tr("vencido hace %1").arg(days(-period.left));
-            color = theme::RedSoft;
-        } else if (period.left == 0) {
-            left = tr("vence hoy");
-            color = theme::AmberSoft;
-        } else {
-            left = period.left == 1 ? tr("falta 1 día") : tr("faltan %1 días").arg(period.left);
-            color = period.left <= 3 ? theme::AmberSoft : theme::Muted;
-        }
+        // Fuera de la bandeja el control ya terminó: se enseñan las fechas, sin lo que falta.
+        const auto status = m_link.missing ? requirement::DeadlineStatus{} : requirement::deadlineStatus(period);
+        const QString left = status.text;
+        const QString color = status.color;
         auto* value = new QWidget;
         auto* v = ui::vbox(value, 0, 6);
         auto* dates = wrapped(span(r.assignedFrom, r.assignedUntil));

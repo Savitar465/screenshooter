@@ -28,11 +28,28 @@ struct QaPeriod {
     int elapsed = 0;      // días ya transcurridos, entre 0 y `total`
     int left = 0;         // días hasta el último del periodo
     int untilStart = 0;   // días hasta el primero, si aún no empieza
+    QDate from;           // el periodo, tal cual
+    QDate until;
 };
 /// Días hábiles (de lunes a viernes) de `from` a `to`, sin contar `from`: negativo si `to` es anterior.
 int workingDaysTo(const QDate& from, const QDate& to);
 QaPeriod qaPeriod(const ExternalRequirement& r, const QDate& today);
+/// El periodo de QA del requerimiento: el de la bandeja o, si no lo trae, el de la ficha ("Datos Control de
+/// Calidad Asignado"). Fuera de la bandeja el control ya terminó: no hay periodo que vigilar (inválido).
+QaPeriod qaPeriod(const RequirementLink& link, const QDate& today);
 
+/// Cómo va el plazo en pocas palabras ("vencido hace 3 días", "vence hoy", "faltan 5 días") y su color:
+/// rojo vencido, ámbar si vence en tres días o menos.
+struct DeadlineStatus {
+    QString text;
+    QString color;
+    bool overdue = false;
+};
+DeadlineStatus deadlineStatus(const QaPeriod& period);
+
+/// Los estados vigentes del requerimiento en GESREQ: los de la bandeja o, si ya salió de ella y se leyó
+/// la ficha después, el de la ficha.
+QStringList currentStates(const RequirementLink& link);
 /// Color del estado de GESREQ: observado en ámbar, conforme en verde, el resto en azul.
 QString stateColor(const QString& state);
 /// Color de la prioridad tal cual la escribe GESREQ ("ALTA").

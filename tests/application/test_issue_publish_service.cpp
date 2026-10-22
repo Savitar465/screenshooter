@@ -92,6 +92,8 @@ private slots:
         QCOMPARE(draft.summary, QStringLiteral("QA - 2025175 - Desarrollo complementario del laboratorio"));
         QVERIFY2(draft.description.contains(QStringLiteral("GESREQ 2025175")), qPrintable(draft.description));
         QVERIFY(draft.description.contains(QStringLiteral("SUMA TRANSITO")));
+        // Texto plano: el Jira no interpreta las marcas wiki, que saldrían tal cual.
+        QVERIFY2(!draft.description.contains(QStringLiteral("* ")), qPrintable(draft.description));
         QVERIFY(draft.description.contains(QStringLiteral("CONTROL CALIDAD ASIGNADO")));
         QVERIFY(draft.description.contains(QStringLiteral("11/08/2025 – 27/01/2026")));
         QVERIFY(draft.description.contains(QStringLiteral("Probar con el usuario de calidad")));

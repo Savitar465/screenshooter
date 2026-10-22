@@ -59,8 +59,9 @@ IssueDraft IssuePublishService::draftFor(const Issue& issue) const {
     if (issue.isImported()) {
         const ExternalRequirement& r = issue.requirement.data;
         lines << tr("Requerimiento GESREQ %1").arg(r.id);
+        // Texto plano, un dato por línea: el campo de descripción del Jira no interpreta las marcas wiki.
         auto line = [&lines](const QString& name, const QString& value) {
-            if (!value.trimmed().isEmpty()) lines << QStringLiteral("* %1: %2").arg(name, value.trimmed());
+            if (!value.trimmed().isEmpty()) lines << QStringLiteral("%1: %2").arg(name, value.trimmed());
         };
         line(tr("Sistema"), r.system.isEmpty() ? r.systemCode : r.system);
         line(tr("Estado en GESREQ"), r.states.join(QStringLiteral(" + ")));
